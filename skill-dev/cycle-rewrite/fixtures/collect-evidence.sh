@@ -50,6 +50,14 @@ dump() { # $1=repo-name $2=run-dir(iteration-N からの相対)
     test -d "$dir/src" && echo YES || echo NO
     echo "--- tests/ exists? ---"
     test -d "$dir/tests" && echo YES || echo NO
+    echo "--- lib/ (昇格モジュール) ---"
+    if [ -d "$dir/lib" ]; then (cd "$dir" && find lib -type f | sort); else echo "(none)"; fi
+    echo "--- docs/modules/ (インターフェース契約) ---"
+    if compgen -G "$dir/docs/modules/*.md" > /dev/null; then
+      for f in "$dir"/docs/modules/*.md; do echo "[$f]"; cat "$f"; done
+    else
+      echo "(none)"
+    fi
     echo "--- GitHub labels ---"
     gh label list -R "$r" --json name --jq '.[].name'
     echo "--- GitHub milestones (all states) ---"
