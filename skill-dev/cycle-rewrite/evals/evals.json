@@ -82,7 +82,7 @@
       "id": 4,
       "eval_name": "cycle-start",
       "prompt": "次のサイクルを始めたい。今回は検索の作り直しと、複数端末で使えるようにするのをやりたい",
-      "expected_output": "cycle-start モード: git タグから N=2 を導出しマイルストーン cycle-2 を作成、インプットは蒸留済み docs のみ(close 済みの旧 issue を読まない)、grilling を開始して仕様と業務的な完了条件を詰める。grilling 完了前に PRODUCT.md 更新・実装ルート確定・実装着手をしない",
+      "expected_output": "cycle-start モード: git タグから N=2 を導出しマイルストーン cycle-2 を作成、インプットは蒸留済み docs のみ(close 済みの旧 issue を読まない)、grilling を開始して仕様と業務的な完了条件を詰める。grilling 完了前に PRODUCT.md 更新・実装着手をせず、実装ルートは cycle-start では確定しない(実装セッションに委ねる)",
       "files": [],
       "fixture_repo": "cycle-rewrite-eval-start-{config}",
       "assertions": [
@@ -92,7 +92,7 @@
         "仕様を詰める grilling を開始している(深掘りの質問を自ら行う、または /grill-with-docs の起動を案内する)。質問なしで仕様を確定して先へ進んでいない",
         "このサイクルの業務的な完了条件(「何がどう動けばこのサイクルは完成か」のドメイン語の受け入れシナリオ)が、grilling で人間と合意すべき項目として扱われている(質問に含まれる、または完了条件の合意まで grilling を終えない方針が示されている)",
         "grilling 完了前に docs/PRODUCT.md を書き換えていない(ユーザーの2行の要望から推測で先回り更新しない、の否定チェック)",
-        "実装ルート(to-prd → to-issues → implement / prototype / 直接実装)を grilling 前に断定していない(ルート判断は仕様が詰まった後、サイクルの性質に応じて合意する)",
+        "実装ルート(to-prd → to-issues → implement / prototype / 直接実装)を cycle-start で確定していない — ルート選択は実装セッションに委ねる設計であり、特定ルートを既定として断定していない(人間がルートへの制約を明示した場合に指示文へ制約として載せるのは正)",
         "grilling 完了前に src/ の実装コードを書き始めていない"
       ]
     }
