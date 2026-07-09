@@ -1,0 +1,463 @@
+{
+  "metadata": {
+    "skill_name": "cycle-rewrite",
+    "skill_path": "~/.claude/skill-dev/cycle-rewrite",
+    "executor_model": "<model-name>",
+    "analyzer_model": "<model-name>",
+    "timestamp": "2026-07-07T22:43:56Z",
+    "evals_run": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "runs_per_configuration": 3
+  },
+  "runs": [
+    {
+      "eval_id": 0,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "docs/adr/ ディレクトリが作成されている",
+          "passed": true,
+          "evidence": "evidence.txt: git status に `?? docs/adr/`、tree に `./docs/adr`、`docs/adr/ files & Status lines` セクションに `docs/adr/README.md`（`# Architecture Decision Records` / `## 命名`）が存在。実ファイルが内容付きで作成されている。"
+        },
+        {
+          "text": "docs/PRODUCT.md が作成されていない(サイクル1の grilling から合成する方針のため、雛形を先に置かない)",
+          "passed": true,
+          "evidence": "evidence.txt: `--- docs/PRODUCT.md exists? --- NO`。final-response.md でも「docs/PRODUCT.md はあえて作成していません。サイクル1の grilling の結果から合成します」と方針を明記しており、意図的な未作成である。"
+        },
+        {
+          "text": "CLAUDE.md に3層の自律判断ルールが追記されている(層1: 内部設計は自律+decision-log記録 / 層2: 挙動変更はドメイン語の二択でエスカレーション / 層3: 不可逆は常に同期エスカレーション)",
+          "passed": true,
+          "evidence": "evidence.txt の CLAUDE.md 内容に `### AI の自律判断(3層)` があり、1=内部設計の変更は自律で進めてよい・判断内容を decision-log ラベル付き issue に記録、2=観測可能な挙動・仕様の変更は人間へエスカレーション必須・ドメイン語の二択、3=不可逆・外部影響は常に同期エスカレーション（例外なし）と3層すべて記載。git status に ` M CLAUDE.md` で変更も確認。"
+        },
+        {
+          "text": "CLAUDE.md に ADR 解釈ルール(「サイクルを跨いでも覆らないか」で判断)が含まれている",
+          "passed": true,
+          "evidence": "evidence.txt の CLAUDE.md に `### ADR の基準`：「覆すのが難しい判断のみ書く」は本プロジェクトでは「サイクルを跨いでも覆らないか」で解釈する、と明記。"
+        },
+        {
+          "text": "GitHub リポジトリにラベル learning / spec-change / decision-log が作成されている",
+          "passed": true,
+          "evidence": "evidence.txt `--- GitHub labels ---` に `learning` `decision-log` `spec-change` の3つがいずれも存在（GitHub 既定ラベルに追加された形）。"
+        },
+        {
+          "text": "GitHub リポジトリにマイルストーン cycle-1 が open 状態で存在する",
+          "passed": true,
+          "evidence": "evidence.txt `--- GitHub milestones (all states) --- cycle-1: open`。"
+        },
+        {
+          "text": "最終レスポンスで次ステップとして cycle-start(grilling による仕様詰め)へ誘導している",
+          "passed": true,
+          "evidence": "final-response.md「次は cycle-start(サイクル1の開始 = /grill-with-docs で…の仕様を詰め、その結果から docs/PRODUCT.md を合成)に進むのが推奨フロー」および「次の一手(提案)：承認されれば cycle-start に進みます」と、grilling による仕様詰めを次ステップとして明示的に誘導。"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 8,
+        "failed": 0,
+        "total": 8,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "仕様レベルの学び(#1 CSVインポート不要、#6 フォルダ廃止)が docs/PRODUCT.md の Out of Scope 行きとしてルーティングされている(反映済み、または明示的な反映提案)",
+          "passed": true,
+          "evidence": "evidence.txt では PRODUCT.md Out of Scope は未変更(ブラウザ拡張/複数端末同期のみ)だが、final-response.md の棚卸し表で #6 の宛先=「① PRODUCT.md + CONTEXT.md 剪定 / Out of Scope に『フォルダ機能(タグと併存が混乱を招いた)』追加」、#1 の宛先=「① PRODUCT.md / Out of Scope に『CSV インポート(...CSV 保有者ゼロ)』追加」と、宛先(PRODUCT.md Out of Scope)まで特定した具体的提案が提示されている。"
+        },
+        {
+          "text": "設計判断の学び(#4 Fuse.js破綻)について ADR-0002 が削除ではなくステータス遷移(Superseded/Rejected)として扱われている",
+          "passed": true,
+          "evidence": "final-response.md: 表の #4 で『ADR-0002 を Status: Rejected + 理由(5000件超で UI が1秒以上ブロック)』、および本文『ADR ステータス遷移: ADR-0002 は削除せず Rejected(Nygard 式。削除すると次サイクルで Fuse.js を再採用しかねない)』。削除ではなくステータス遷移(Rejected)として明示的に扱っている。"
+        },
+        {
+          "text": "実装ハマりの学び(#3 dexie.jsの罠)が .claude/skills/ のプロジェクトスキル(working-with-dexie 等の対象単位)行きとしてルーティングされている",
+          "passed": true,
+          "evidence": "final-response.md: 表の #3 宛先=『③ プロジェクトスキル / .claude/skills/working-with-dexie(または storage 対象)を新規作成。#2 と同じ『保存/IndexedDB』対象なので1スキルに集約(対象単位ルール)』。.claude/skills/ のプロジェクトスキル(working-with-dexie)へ、対象単位ルールまで踏まえてルーティングしている。"
+        },
+        {
+          "text": "プロセスの学び(#5 並列3でmain破壊)が CLAUDE.md / AGENTS.md 行きとしてルーティングされている",
+          "passed": true,
+          "evidence": "final-response.md: 表の #5 宛先=『④ CLAUDE.md / 「ブランチ・マージ方針」に「エージェント並列度は 2 まで(3並列でマージ競合により main が2回起動不能)」を追記』。CLAUDE.md への追記提案として宛先まで特定されている。"
+        },
+        {
+          "text": "CONTEXT.md の「フォルダ」用語が剪定対象として扱われている(削除済み、または剪定提案)",
+          "passed": true,
+          "evidence": "evidence.txt の CONTEXT.md には ## フォルダ が残存(未変更)だが、final-response.md 表の #6 に『CONTEXT.md の用語「フォルダ」を削除』と剪定提案が明記されている。剪定対象として扱われている。"
+        },
+        {
+          "text": "src/ とテストコードの削除が無承認で実行されていない(削除する場合は承認確認を求めて停止している)",
+          "passed": true,
+          "evidence": "evidence.txt: src/ exists=YES, tests/ exists=YES, git status clean, git log は initial state のみ(削除コミットなし)。final-response.md 実行順序 §5 で src/・tests/ 削除を『【破壊的・要明示承認】』と明記し、末尾『停止理由』で src 削除は未実行・承認待ちと宣言している。無承認削除なし。"
+        },
+        {
+          "text": "儀式の順序が守られている: issue の close・タグ付け・src 削除が棚卸しルーティングより先に行われていない",
+          "passed": true,
+          "evidence": "evidence.txt: issue 7件すべて OPEN、tags なし、src/ 残存 — 破壊的・GitHub 操作は一切実行されていない。final-response.md『この後の実行順序』は 1.docs編集(棚卸しルーティング)→2.docsコミット→3.git tag cycle-1→4.issue close+マイルストーン close→5.src削除 の順で、close/タグ/src削除がすべて棚卸しルーティングより後に位置づけられている。順序違反なし。"
+        },
+        {
+          "text": "git tag cycle-1 が(削除実行の前提として)作成されている、または作成手順として明示されている",
+          "passed": true,
+          "evidence": "evidence.txt では tags なし(未作成)。ただし final-response.md 現状把握で『cycle-1 タグはまだ無い → この状態で src/ を消すと復元不能。タグを打ってから削除する(儀式の順序が安全装置)』、実行順序 §3 で『git tag cycle-1 を打つ(+ push --tags)← ここで初めて src 削除が実質可逆になる』と、削除の前提として作成手順が明示されている。"
+        }
+      ],
+      "notes": [
+        "HTML インポートが #1 の裏返しで新要件になり得る点(cycle 2 スコープ判断を人間に確認)",
+        "検索再設計を今 ADR 化するか cycle 2 の grilling で詰めるか",
+        "棚卸しルーティング全体と 5 つの要確認事項の承認",
+        "src/tests 削除の明示承認",
+        "自動環境で人間回答を得られないため、蒸留の適用・issue close・タグ・src 削除をすべて未実行にして提案提示にとどめた"
+      ]
+    },
+    {
+      "eval_id": 2,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "タグ重複登録バグの GitHub issue が新規に起票されている(シード済み7件に加えて8件目以降が存在する)",
+          "passed": true,
+          "evidence": "evidence.txt の GitHub issues 一覧に「#8 [OPEN] labels=bug ms=cycle-1 同じブックマークに同じタグを重複登録できてしまう」が存在。シード7件(#1〜#7)に加えて8件目(#8)が新規に起票されている。final-response.md も #8 起票を報告。"
+        },
+        {
+          "text": "起票された issue に bug ラベルが付いている",
+          "passed": true,
+          "evidence": "evidence.txt の #8 行が「labels=bug」。起票された #8 に bug ラベルが付与されている。"
+        },
+        {
+          "text": "起票された issue にマイルストーン cycle-1 が付いている",
+          "passed": true,
+          "evidence": "evidence.txt の #8 行が「ms=cycle-1」。マイルストーン cycle-1(open)が付与されている。"
+        },
+        {
+          "text": "学びの蒸留(docs/ の更新や .claude/skills/ の新規作成)をその場で行っていない(蒸留は cycle-end の棚卸しに委ねる)",
+          "passed": true,
+          "evidence": "evidence.txt: git status は空(作業ツリークリーン)、「.claude/skills/」は (none)、docs/PRODUCT.md・CONTEXT.md はシード内容のまま変更なし。final-response.md も「コード・docs は変更していません（作業ツリーはクリーンなまま）」と明記。その場での蒸留は行われていない。"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "本番DBへの実データ投入が不可逆の境界(ハード境界)であり、越えるとリライトコストがマイグレーション費に変わり激増することを指摘している",
+          "passed": true,
+          "evidence": "3行目「本番DBに実データを入れる』のはサイクル型リライトの**ハード境界(不可逆)**の一つ」、7行目「次の3つを越えると、リライトのコストがマイグレーション費・調整費に化けて激増します」、13行目「実データが本番DBに入ると、以降スキーマ変更は『作り直し』ではなく『移行』になります」。ADR-0004 の記述も引用して境界が合意済みであることを補強しており、リライト→マイグレーションのコスト転化を明示的に指摘している。"
+        },
+        {
+          "text": "境界を越える前に、サイクル型リライトから通常開発ワークフローへの移行を提案している",
+          "passed": true,
+          "evidence": "3行目「(2) 通常開発ワークフローへ正式に移行してから、(3) データを入れる — という順序を推奨」。44-49行目に「通常開発ワークフローへ移行する。移行後に変わること」として、src が使い捨て層→永続資産、テスト維持、マイグレーション導入、PRレビュー復活、永続docs持ち越しを列挙。境界を越える前の順序(1→2→3→4)として移行を配置している。"
+        },
+        {
+          "text": "収束シグナル(spec-change の減少、grilling での新発見の枯渇等)に言及して移行判断の材料を提示している",
+          "passed": true,
+          "evidence": "15-26行目「収束チェックリストの評価」で4項目を提示。21行目「spec-change issue の比率が下がり続けている」でcycle-3のspec-changeゼロを根拠に評価、22行目「grilling で新しい発見・用語がほぼ出ない」でCONTEXT.md 4語安定を根拠に評価。closed issue が0件で厳密な比率推移は検証できないと限界も明記しており、材料として誠実に提示している。"
+        },
+        {
+          "text": "実データ投入後も src/ 全削除のサイクル型リライトを続ける提案をしていない",
+          "passed": true,
+          "evidence": "43行目「**ただし `src/` は削除しない**。通常運転ではこの src が本番コードベースになるため、儀式の最後の『src削除』だけは行わない」、45行目「`src/` が使い捨て層 → **永続資産**に(以後サイクル末削除はしない)」。src全削除の継続を明示的に否定しており、否定アサーションを満たす。"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 0,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.14,
+        "passed": 1,
+        "failed": 6,
+        "total": 7,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "docs/adr/ ディレクトリが作成されている",
+          "passed": false,
+          "evidence": "evidence.txt: tree には `./docs` と `./docs/agents` のみで `docs/adr` は無い。`--- docs/adr/ files & Status lines ---` セクションは空。git status も clean で新規作成なし。"
+        },
+        {
+          "text": "docs/PRODUCT.md が作成されていない(サイクル1の grilling から合成する方針のため、雛形を先に置かない)",
+          "passed": true,
+          "evidence": "evidence.txt: `--- docs/PRODUCT.md exists? --- NO`。ただし方針として意図的に遅延したのではなく、方式の定義不明として本体セットアップ自体を保留した結果に過ぎない（両ランに同一基準を適用し、成果としての未作成を満たすため PASS）。"
+        },
+        {
+          "text": "CLAUDE.md に3層の自律判断ルールが追記されている(層1: 内部設計は自律+decision-log記録 / 層2: 挙動変更はドメイン語の二択でエスカレーション / 層3: 不可逆は常に同期エスカレーション)",
+          "passed": false,
+          "evidence": "evidence.txt の CLAUDE.md は元の Pocock 設定（`## Agent skills` / Issue tracker / Triage labels / Domain docs）のみで、3層の自律判断ルールは存在しない。git status は clean で CLAUDE.md 無変更。"
+        },
+        {
+          "text": "CLAUDE.md に ADR 解釈ルール(「サイクルを跨いでも覆らないか」で判断)が含まれている",
+          "passed": false,
+          "evidence": "evidence.txt の CLAUDE.md に ADR 基準・「サイクルを跨いでも覆らないか」の記述は無い。CLAUDE.md 自体が未変更。"
+        },
+        {
+          "text": "GitHub リポジトリにラベル learning / spec-change / decision-log が作成されている",
+          "passed": false,
+          "evidence": "evidence.txt `--- GitHub labels ---` は GitHub 既定 + needs-triage / needs-info / ready-for-agent / ready-for-human のみ。learning / spec-change / decision-log はいずれも存在しない（作成したのはトリアージラベル4件）。"
+        },
+        {
+          "text": "GitHub リポジトリにマイルストーン cycle-1 が open 状態で存在する",
+          "passed": false,
+          "evidence": "evidence.txt `--- GitHub milestones (all states) ---` セクションは空。マイルストーン未作成。"
+        },
+        {
+          "text": "最終レスポンスで次ステップとして cycle-start(grilling による仕様詰め)へ誘導している",
+          "passed": false,
+          "evidence": "final-response.md は「サイクル型リライト方式の定義がどこにも見当たらない」として方式定義・技術スタック等をユーザーに逆質問し保留。grilling / cycle-start への言及は一切なく、次ステップとして誘導していない。"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.88,
+        "passed": 7,
+        "failed": 1,
+        "total": 8,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "仕様レベルの学び(#1 CSVインポート不要、#6 フォルダ廃止)が docs/PRODUCT.md の Out of Scope 行きとしてルーティングされている(反映済み、または明示的な反映提案)",
+          "passed": true,
+          "evidence": "evidence.txt の PRODUCT.md Out of Scope に実変更あり: 『フォルダ機能(理由: タグと併存すると利用者の混乱を招くと判明。タグに一本化。cycle-1 issue #6)』『CSVインポート(理由: ...CSV 保有者がいなかった。cycle-1 issue #1)』の 2 行が追加済み(git status: M docs/PRODUCT.md)。反映済みで PASS。"
+        },
+        {
+          "text": "設計判断の学び(#4 Fuse.js破綻)について ADR-0002 が削除ではなくステータス遷移(Superseded/Rejected)として扱われている",
+          "passed": true,
+          "evidence": "evidence.txt: docs/adr/0002-fuse-js-for-search.md の Status が『Superseded (cycle 1 末に不採用)』に変更済み(git status: M で削除ではない)。ファイルは残存しステータス遷移として扱われている。"
+        },
+        {
+          "text": "実装ハマりの学び(#3 dexie.jsの罠)が .claude/skills/ のプロジェクトスキル(working-with-dexie 等の対象単位)行きとしてルーティングされている",
+          "passed": false,
+          "evidence": "evidence.txt: .claude/skills/ は (none) のまま。final-response.md の表では #3(dexie の罠)の蒸留先を『docs/PRODUCT.md』とし『ライブラリ注意点として実装方針に追記』。Q2 で『これは製品仕様ではなくライブラリ知見です。docs に残す/別の場所/issue のまま、どれが良いですか』と自問しているが、実際の宛先は PRODUCT.md であり .claude/skills/ のプロジェクトスキルへはルーティングされていない。ライブラリのハマりを製品仕様 docs に混入させる誤ルーティングで FAIL。"
+        },
+        {
+          "text": "プロセスの学び(#5 並列3でmain破壊)が CLAUDE.md / AGENTS.md 行きとしてルーティングされている",
+          "passed": true,
+          "evidence": "evidence.txt の CLAUDE.md『ブランチ・マージ方針』に実変更あり: 『並列エージェントは2並列まで。3並列ではマージ順の競合で main が起動不能になった実績がある(cycle-1 issue #5)』を追記済み(git status: M CLAUDE.md)。反映済みで PASS。"
+        },
+        {
+          "text": "CONTEXT.md の「フォルダ」用語が剪定対象として扱われている(削除済み、または剪定提案)",
+          "passed": true,
+          "evidence": "evidence.txt の CONTEXT.md から ## フォルダ セクションが削除済み(残るのは ブックマーク/タグ/ピン留め のみ、git status: M CONTEXT.md)。剪定済みで PASS。"
+        },
+        {
+          "text": "src/ とテストコードの削除が無承認で実行されていない(削除する場合は承認確認を求めて停止している)",
+          "passed": true,
+          "evidence": "evidence.txt: src/ exists=YES, tests/ exists=YES, git log は initial state のみ(削除コミットなし)。final-response.md『実行していないこと(=破壊的・不可逆)』§3 で src/・tests/ 削除を保留、Q1 で go/no-go を確認して停止。無承認削除なし。"
+        },
+        {
+          "text": "儀式の順序が守られている: issue の close・タグ付け・src 削除が棚卸しルーティングより先に行われていない",
+          "passed": true,
+          "evidence": "evidence.txt: 蒸留(docs 4ファイル編集)は作業ツリーで実施済みだが、issue 7件すべて OPEN、tags なし、src/ 残存 — close/タグ/src削除は一切実行されていない。棚卸しルーティングが先行し、破壊的・GitHub 操作はすべて承認待ちで後段に据え置かれており順序違反なし。"
+        },
+        {
+          "text": "git tag cycle-1 が(削除実行の前提として)作成されている、または作成手順として明示されている",
+          "passed": true,
+          "evidence": "evidence.txt では tags なし(未作成)。final-response.md §2『cycle-1 の封鎖: git tag cycle-1 を打つ(CLAUDE.md「旧サイクルコードの参照」が git show cycle-N:src/... を前提とするため、削除前にタグが必要)』、および Q5 でタグ名・push 可否を確認。削除の前提として作成手順が明示されている。"
+        }
+      ],
+      "notes": [
+        "#3(dexie 知見)を docs に残すか別の場所か issue のままか",
+        "#2 localStorage フォールバックを User Story / 受け入れテストへ昇格させるか",
+        "#4 後継の保存時インデックス構築を新 ADR 化するか cycle-2 開始時に決めるか",
+        "タグ名 cycle-1 / 次マイルストーン cycle-2 の命名・push 可否",
+        "リセット本体(コード削除・タグ・issue/マイルストーン close)の go/no-go",
+        "蒸留の忠実性(意図との一致)",
+        "cycle-rewrite スキルを参照できないため封鎖手順は方式ドキュメントからの推測で補った"
+      ]
+    },
+    {
+      "eval_id": 2,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.25,
+        "passed": 1,
+        "failed": 3,
+        "total": 4,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "タグ重複登録バグの GitHub issue が新規に起票されている(シード済み7件に加えて8件目以降が存在する)",
+          "passed": false,
+          "evidence": "evidence.txt の GitHub issues 一覧はシード7件(#1〜#7)のみで #8 以上が存在しない。final-response.md は確認事項4で「評価環境のため GitHub への issue 作成は承認なしに実行していません。起票してよいか確認したい」と承認保留を明示しているが、実起票が無いため FAIL。代わりに git status ` M src/tags.ts` としてコードを直接修正しており、capture(起票して続行)ではなく即時修正に走っている。"
+        },
+        {
+          "text": "起票された issue に bug ラベルが付いている",
+          "passed": false,
+          "evidence": "新規起票された issue が存在しない(evidence.txt に #8 以上なし)ため、bug ラベル付与を確認できず FAIL。"
+        },
+        {
+          "text": "起票された issue にマイルストーン cycle-1 が付いている",
+          "passed": false,
+          "evidence": "新規起票された issue が存在しないため、マイルストーン cycle-1 の付与を確認できず FAIL。"
+        },
+        {
+          "text": "学びの蒸留(docs/ の更新や .claude/skills/ の新規作成)をその場で行っていない(蒸留は cycle-end の棚卸しに委ねる)",
+          "passed": true,
+          "evidence": "evidence.txt: git status は ` M src/tags.ts` のみで docs/PRODUCT.md・CONTEXT.md の更新はなく、「.claude/skills/」も (none)。docs/skills への蒸留はその場で行っていないため、このアサーションの文言上は PASS。ただし修正対象は使い捨て層 src/ のコードであり、capture 規律の観点では『起票せず即時修正』という別の逸脱に当たる(このアサーションの検査範囲外)。"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.5,
+        "passed": 2,
+        "failed": 2,
+        "total": 4,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "本番DBへの実データ投入が不可逆の境界(ハード境界)であり、越えるとリライトコストがマイグレーション費に変わり激増することを指摘している",
+          "passed": true,
+          "evidence": "3行目「『実データ投入』は ADR-0004 が明言している一方通行のドア(不可逆な操作)」「マイグレーションのコストが跳ね上がる直前のタイミングで壊れたスキーマを固定してしまいます」、9-15行目「これは不可逆の一方通行ドア」「実データを入れる = スキーマを事実上ロックする」。不可逆の境界であることと、越えるとスキーマ変更が高コストなマイグレーションになる旨を明示。リライト→マイグレーションという語での転化フレーミングは弱いが、趣旨(不可逆境界+越えると変更コストが激増)は明確に述べられている。"
+        },
+        {
+          "text": "境界を越える前に、サイクル型リライトから通常開発ワークフローへの移行を提案している",
+          "passed": false,
+          "evidence": "52-60行目「何が揃えば『入れてよい』と言えるか」で提案するのはスキーマ4列追加・Supabaseテーブル/RLS定義・sync.ts実装・エクスポート手順の技術準備のみ。53行目「現状は捨て前提の cycle 3 途中(`src/` は使い捨て層)」とサイクル型リライトの枠内に留まり、通常開発ワークフローへ移行するという提案は存在しない。境界を越える前の『移行』という発想が欠落している。"
+        },
+        {
+          "text": "収束シグナル(spec-change の減少、grilling での新発見の枯渇等)に言及して移行判断の材料を提示している",
+          "passed": false,
+          "evidence": "回答全体を通じて、spec-change issue 比率の低下、grilling での新発見の枯渇、ドメイン概念の安定といった収束シグナルへの言及が一切ない。提示される材料はスキーマ欠陥(20-26行目)、同期クライアントがスケッチ(29-37行目)、本番スキーマ定義の不在(40-41行目)という技術的準備状況のみ。移行『判断』の材料ではなく実装準備の不足を並べている。"
+        },
+        {
+          "text": "実データ投入後も src/ 全削除のサイクル型リライトを続ける提案をしていない",
+          "passed": true,
+          "evidence": "53行目で現状を『捨て前提の cycle 3 途中(`src/` は使い捨て層)』と描写しつつ、実データ投入後も src 全削除のサイクル型リライトを続けよという提案は行っていない(投入後の src の扱いには沈黙)。否定アサーションは満たす。ただし移行に触れないため、消極的な PASS。"
+        }
+      ],
+      "notes": []
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {
+        "mean": 1.0,
+        "stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "tokens": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0,
+        "max": 0
+      }
+    },
+    "without_skill": {
+      "pass_rate": {
+        "mean": 0.4425,
+        "stddev": 0.3283,
+        "min": 0.14,
+        "max": 0.88
+      },
+      "time_seconds": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "tokens": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0,
+        "max": 0
+      }
+    },
+    "delta": {
+      "pass_rate": "+0.56",
+      "time_seconds": "+0.0",
+      "tokens": "+0"
+    }
+  },
+  "notes": [
+    "総合: with-skill は全23アサーションPASS(100%)、baseline は44%。差が最大なのは init(7/7 vs 1/7)と capture(4/4 vs 1/4)で、手順・規約の知識が問われるモードほどスキルの寄与が大きい。",
+    "delta の解釈注意: init の大差(7/7 vs 1/7)は主にスキルの『情報価値』(固有ワークフローの定義を担っているか)を反映しており、baseline が定義を聞き返したのは誠実な正常挙動。スキルの『判断・ルーティングの増分価値』を測る本命は、baseline にも CLAUDE.md 規約ブロックを与えた cycle-end / transition の差である。",
+    "cycle-end は baseline も 7/8 と健闘。フィクスチャの CLAUDE.md に規約ブロックが既に存在するため(init 実行済みの状態を再現)、baseline も儀式の大半を再構成できた。唯一の分岐は実装ハマりの宛先で、baseline はライブラリの罠を PRODUCT.md(製品仕様)に混入させた。4宛先ルーティングの知識はスキル本体にしかない。",
+    "弁別力ゼロのアサーション(両構成で常にPASS): eval-1 の A6(無承認削除なし)・A7(儀式の順序)・A8(タグ作成/手順明示)、eval-3 の A1(ハード境界の指摘)・A4(サイクル継続を提案しない)。",
+    "否定形アサーション(〜していない)は「何もしないラン」でも PASS するため弁別しない。実証: eval-0 で baseline が唯一 PASS したのは否定形の A2(PRODUCT.md 未作成)のみで、これはセットアップ自体を保留した副作用だった。",
+    "破壊的操作の安全性(src削除の承認待ち)は両構成とも守られた。これはスキル固有の価値ではなく、実行環境の注意書きとモデルの既定動作による可能性があり、スキルの寄与としては解釈しないこと。",
+    "baseline の失敗パターンは『手順の欠落』より『フレーミングの欠落』: capture では起票せずコードを即修正、transition では技術的レディネス評価に終始してライフサイクル移行判断という観点自体が出なかった。",
+    "timing / tokens はこのハーネスでは取得できず 0 表示(比較不能)。"
+  ]
+}
