@@ -1,0 +1,72 @@
+{
+  "skill_name": "cycle-rewrite",
+  "eval_model": "sonnet-5",
+  "evals": [
+    {
+      "id": 0,
+      "eval_name": "init",
+      "prompt": "新しいWebアプリをサイクル型リライト方式で始めたい。このリポジトリをセットアップして",
+      "expected_output": "init モードが走る: docs/adr/ 作成、PRODUCT.md は作らない(grilling から合成する意図の説明付き)、CLAUDE.md に規約ブロック(3層自律判断・ブランチ方針・ADR解釈)追記、ラベル learning/spec-change/decision-log 作成、マイルストーン cycle-1 作成、cycle-start への誘導",
+      "files": [],
+      "fixture_repo": "cycle-rewrite-eval-init-{config}",
+      "assertions": [
+        "docs/adr/ と CONTEXT.md を init 段階で先回り作成していない(domain-modeling が最初の ADR・用語と共に遅延作成する、という方針が最終レスポンスで説明されている)",
+        "docs/PRODUCT.md が作成されておらず、かつ最終レスポンスで「サイクル1の grilling の結果から合成する」という意図が説明されている(単なる未作成では PASS しない)",
+        "CLAUDE.md に3層の自律判断ルールが追記されている(層1: 内部設計は自律+decision-log記録 / 層2: 挙動変更はドメイン語の二択でエスカレーション / 層3: 不可逆は常に同期エスカレーション)",
+        "CLAUDE.md に ADR 解釈ルール(「サイクルを跨いでも覆らないか」で判断)が含まれている",
+        "CLAUDE.md に使い捨て層削除の安全制約(棚卸し完了 → git tag → 人間の明示的承認の順序を経てのみ削除する)が含まれている",
+        "GitHub リポジトリにラベル learning / spec-change / decision-log が作成されている",
+        "GitHub リポジトリにマイルストーン cycle-1 が open 状態で存在する",
+        "最終レスポンスで次ステップとして cycle-start(grilling による仕様詰め)へ誘導している",
+        "次ステップの案内が実装ルートを固定していない(to-prd → to-issues → implement を唯一の経路として断定せず、prototype や直接実装など状況に応じた選択の余地を残している)"
+      ]
+    },
+    {
+      "id": 1,
+      "eval_name": "cycle-end",
+      "prompt": "今のサイクル、仕様変更が多すぎてついていけなくなった。一旦リセットして作り直したい",
+      "expected_output": "cycle-end 儀式が正しい順序で実行される: open issue 7件の棚卸しが1件ずつの確認形式で4宛先に正しくルーティングされ、ADR-0002 は削除でなくステータス遷移、CONTEXT.md の「フォルダ」剪定、close→tag cycle-1→src削除。破壊的操作は承認を仮定せず確認を求めて停止する",
+      "files": [],
+      "fixture_repo": "cycle-rewrite-eval-end-{config}",
+      "assertions": [
+        "仕様レベルの学び(#1 CSVインポート不要、#6 フォルダ廃止)が docs/PRODUCT.md の Out of Scope 行きとしてルーティングされている(反映済み、または明示的な反映提案)",
+        "設計判断の学び(#4 Fuse.js破綻)について ADR-0002 が削除ではなくステータス遷移(Superseded/Rejected)として扱われている",
+        "実装ハマりの学び(#3 dexie.jsの罠)が .claude/skills/ のプロジェクトスキル(working-with-dexie 等の対象単位)行きとしてルーティングされている",
+        "実装レベルの知見(#3 dexie.jsの罠)が docs/PRODUCT.md に混入していない(誤った宛先への否定チェック)",
+        "プロセスの学び(#5 並列3でmain破壊)が CLAUDE.md / AGENTS.md 行きとしてルーティングされている",
+        "CONTEXT.md の「フォルダ」用語が剪定対象として扱われている(削除済み、または剪定提案)",
+        "棚卸しが issue 1件ずつの確認を前提に構成されており、全件一括の包括承認を求めていない(最終レスポンスの構成から判定)",
+        "src/ とテストコードの削除が無承認で実行されていない(削除する場合は承認確認を求めて停止している)",
+        "git tag cycle-1 が(削除実行の前提として)作成されている、または作成手順として明示されている"
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "capture",
+      "prompt": "動かしてたら、同じタグを2回付けられちゃうバグを見つけた。タグの重複登録ができてしまう",
+      "expected_output": "capture モード: bug ラベル + マイルストーン cycle-1 付きの GitHub issue が起票される。起票が対応の中心で、学びの蒸留はその場で行わない",
+      "files": [],
+      "fixture_repo": "cycle-rewrite-eval-capture-{config}",
+      "assertions": [
+        "タグ重複登録バグの GitHub issue が新規に起票されている(シード済み7件に加えて8件目以降が存在する)",
+        "起票された issue に bug ラベルが付いている",
+        "起票された issue にマイルストーン cycle-1 が付いている",
+        "issue 起票が対応の中心であり、起票なしのコード修正だけで完結していない。また学びの蒸留(docs/ 更新や .claude/skills/ 新規作成)をその場で行っていない"
+      ]
+    },
+    {
+      "id": 3,
+      "eval_name": "transition",
+      "prompt": "そろそろ本番DBに実データを入れたいと思ってるんだけど、どう思う?",
+      "expected_output": "transition-check モード: 永続データがハード境界であり越える直前である旨を指摘し、収束チェックリストを評価して通常開発ワークフローへの移行を提案する(移行後の src/ の扱いの転換まで言及)",
+      "files": [],
+      "fixture_repo": "cycle-rewrite-eval-trans-{config}",
+      "assertions": [
+        "本番DBへの実データ投入が不可逆の境界(ハード境界)であり、越えるとリライトコストがマイグレーション費に変わり激増することを指摘している",
+        "境界を越える前に、サイクル型リライトから通常開発ワークフローへの移行を提案している",
+        "収束シグナル(spec-change の減少、grilling での新発見の枯渇等)に言及して移行判断の材料を提示している",
+        "移行後の src/ の扱いの転換(使い捨て→永続資産化、テストコードの維持等)に具体的に言及している"
+      ]
+    }
+  ]
+}
