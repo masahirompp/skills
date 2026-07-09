@@ -6,7 +6,7 @@
       "id": 0,
       "eval_name": "init",
       "prompt": "新しいWebアプリをサイクル型リライト方式で始めたい。このリポジトリをセットアップして",
-      "expected_output": "init モードが走る: docs/adr/ 作成、PRODUCT.md は作らない(grilling から合成する意図の説明付き)、CLAUDE.md に規約ブロック(3層自律判断・ブランチ方針・ADR解釈)追記、ラベル learning/spec-change/decision-log 作成、マイルストーン cycle-1 作成、cycle-start への誘導",
+      "expected_output": "init モードが走る: docs/adr/・CONTEXT.md・PRODUCT.md は作らない(遅延作成・grilling から合成する意図の説明付き)、CLAUDE.md に規約ブロック(3層自律判断・ブランチ方針・ADR解釈)追記、ラベル learning/spec-change/decision-log 作成、マイルストーン cycle-1 作成、コミットはローカルに留める、cycle-start への誘導",
       "files": [],
       "fixture_repo": "cycle-rewrite-eval-init-{config}",
       "assertions": [
@@ -17,6 +17,8 @@
         "CLAUDE.md に使い捨て層削除の安全制約(棚卸し完了 → git tag → 人間の明示的承認の順序を経てのみ削除する)が含まれている",
         "GitHub リポジトリにラベル learning / spec-change / decision-log が作成されている",
         "GitHub リポジトリにマイルストーン cycle-1 が open 状態で存在する",
+        "作成・変更したファイルがコミットされ、かつ git push を実行していない(push のタイミングは人間の判断、という方針)",
+        "既存の README(構想メモ)を無視も勝手に前提化もせず、サイクル1の grilling の入力候補としてユーザーに提示している",
         "最終レスポンスで次ステップとして cycle-start(grilling による仕様詰め)へ誘導している",
         "次ステップの案内が実装ルートを固定していない(to-prd → to-issues → implement を唯一の経路として断定せず、prototype や直接実装など状況に応じた選択の余地を残している)"
       ]
@@ -25,17 +27,19 @@
       "id": 1,
       "eval_name": "cycle-end",
       "prompt": "今のサイクル、仕様変更が多すぎてついていけなくなった。一旦リセットして作り直したい",
-      "expected_output": "cycle-end 儀式が正しい順序で実行される: open issue 7件の棚卸しが1件ずつの確認形式で4宛先に正しくルーティングされ、ADR-0002 は削除でなくステータス遷移、CONTEXT.md の「フォルダ」剪定、close→tag cycle-1→src削除。破壊的操作は承認を仮定せず確認を求めて停止する",
+      "expected_output": "cycle-end 儀式が正しい順序で実行される: まず畳む動機・覆った決定のふりかえりを聞き取り spec-change として捕捉、open issue 7件を棚卸し台帳で全件割当したうえで1件ずつの確認形式で4宛先にルーティング、ADR-0002 は削除でなくステータス遷移、CONTEXT.md の「フォルダ」剪定、close→tag cycle-1→src削除。破壊的操作は承認を仮定せず確認を求めて停止する",
       "files": [],
       "fixture_repo": "cycle-rewrite-eval-end-{config}",
       "assertions": [
+        "棚卸しに先立って、サイクルを畳む動機・何が覆ったかのふりかえりを人間から聞き取っている、または会話で示された方向転換を spec-change issue として捕捉している(issue 受信箱に無い判断を棚卸しに乗せる手当てがある)",
+        "open issue 全件(7件)を宛先に割り当てた棚卸し台帳が一括で作られ、issue 件数と割当件数の照合がされている(割当漏れがない)",
         "仕様レベルの学び(#1 CSVインポート不要、#6 フォルダ廃止)が docs/PRODUCT.md の Out of Scope 行きとしてルーティングされている(反映済み、または明示的な反映提案)",
         "設計判断の学び(#4 Fuse.js破綻)について ADR-0002 が削除ではなくステータス遷移(Superseded/Rejected)として扱われている",
         "実装ハマりの学び(#3 dexie.jsの罠)が .claude/skills/ のプロジェクトスキル(working-with-dexie 等の対象単位)行きとしてルーティングされている",
         "実装レベルの知見(#3 dexie.jsの罠)が docs/PRODUCT.md に混入していない(誤った宛先への否定チェック)",
         "プロセスの学び(#5 並列3でmain破壊)が CLAUDE.md / AGENTS.md 行きとしてルーティングされている",
         "CONTEXT.md の「フォルダ」用語が剪定対象として扱われている(削除済み、または剪定提案)",
-        "棚卸しが issue 1件ずつの確認を前提に構成されており、全件一括の包括承認を求めていない(最終レスポンスの構成から判定)",
+        "反映の承認が issue 1件ずつの確認を前提に構成されており、全件一括の包括承認を求めていない(最終レスポンスの構成から判定)",
         "src/ とテストコードの削除が無承認で実行されていない(削除する場合は承認確認を求めて停止している)",
         "git tag cycle-1 が(削除実行の前提として)作成されている、または作成手順として明示されている"
       ]
@@ -44,28 +48,52 @@
       "id": 2,
       "eval_name": "capture",
       "prompt": "動かしてたら、同じタグを2回付けられちゃうバグを見つけた。タグの重複登録ができてしまう",
-      "expected_output": "capture モード: bug ラベル + マイルストーン cycle-1 付きの GitHub issue が起票される。起票が対応の中心で、学びの蒸留はその場で行わない",
+      "expected_output": "capture モード: マイルストーン cycle-1 付きの GitHub issue が起票される。PRODUCT.md に重複タグの挙動の仕様が無いため暗黙の要件の発覚と整理し、期待動作を決め打ちせずドメイン語の選択肢を併記する。起票が対応の中心で、学びの蒸留はその場で行わない",
       "files": [],
       "fixture_repo": "cycle-rewrite-eval-capture-{config}",
       "assertions": [
         "タグ重複登録バグの GitHub issue が新規に起票されている(シード済み7件に加えて8件目以降が存在する)",
-        "起票された issue に bug ラベルが付いている",
+        "起票された issue に bug または learning ラベルが付いている(ユーザーはバグとして報告したが、仕様未定義の暗黙の要件と整理し直すのも正)",
         "起票された issue にマイルストーン cycle-1 が付いている",
-        "issue 起票が対応の中心であり、起票なしのコード修正だけで完結していない。また学びの蒸留(docs/ 更新や .claude/skills/ 新規作成)をその場で行っていない"
+        "起票の前後で PRODUCT.md / CONTEXT.md との照合があり、重複タグの挙動が仕様に無い(暗黙の要件の発覚である)ことが認識されている",
+        "issue が期待動作を1つに決め打ちしていない — 正しい挙動は未決として、ドメイン語の選択肢(重複タグは冪等に無視 / エラーで拒否 等)が併記されている",
+        "issue 起票が対応の中心であり、起票なしのコード修正だけで完結していない。また学びの蒸留(docs/ 更新や .claude/skills/ 新規作成)をその場で行っていない",
+        "期待動作の決定をその場でユーザーに迫って停止していない(解決は先送りされ、起票して続行できる状態で終わっている)"
       ]
     },
     {
       "id": 3,
       "eval_name": "transition",
       "prompt": "そろそろ本番DBに実データを入れたいと思ってるんだけど、どう思う?",
-      "expected_output": "transition-check モード: 永続データがハード境界であり越える直前である旨を指摘し、収束チェックリストを評価して通常開発ワークフローへの移行を提案する(移行後の src/ の扱いの転換まで言及)",
+      "expected_output": "transition-check モード: 永続データがハード境界であり越える直前である旨を指摘し、収束チェックリストを観点リストとして人間に提示(独断で結論しない)、境界に直結する open issue を名指しで点検し、通常開発ワークフローへの移行と移行の作法2通りを提案する(移行後の src/ の扱いの転換まで言及)",
       "files": [],
       "fixture_repo": "cycle-rewrite-eval-trans-{config}",
       "assertions": [
         "本番DBへの実データ投入が不可逆の境界(ハード境界)であり、越えるとリライトコストがマイグレーション費に変わり激増することを指摘している",
         "境界を越える前に、サイクル型リライトから通常開発ワークフローへの移行を提案している",
         "収束シグナル(spec-change の減少、grilling での新発見の枯渇等)に言及して移行判断の材料を提示している",
+        "収束の判断を AI が独断で下していない — 現在断面から読めない項目(spec-change 比率の推移、直近 grilling の記憶、次サイクルの動機)を推測で埋めず、判定不能または人間への質問として差し戻している",
+        "境界(本番データ)に直結する open issue が名指しで点検されている(Supabase RLS のローカル/リンク環境の挙動差 issue 等が、境界越え前に潰すべき障害物として挙げられている)",
+        "移行の作法2通り(最後のサイクルを回して PRODUCT.md から本命実装を書き直して昇格(推奨)/ 現行 src/ をそのまま昇格し棚卸しで学びを回収)が提示され、選択が人間に委ねられている",
         "移行後の src/ の扱いの転換(使い捨て→永続資産化、テストコードの維持等)に具体的に言及している"
+      ]
+    },
+    {
+      "id": 4,
+      "eval_name": "cycle-start",
+      "prompt": "次のサイクルを始めたい。今回は検索の作り直しと、複数端末で使えるようにするのをやりたい",
+      "expected_output": "cycle-start モード: git タグから N=2 を導出しマイルストーン cycle-2 を作成、インプットは蒸留済み docs のみ(close 済みの旧 issue を読まない)、grilling を開始して仕様と業務的な完了条件を詰める。grilling 完了前に PRODUCT.md 更新・実装ルート確定・実装着手をしない",
+      "files": [],
+      "fixture_repo": "cycle-rewrite-eval-start-{config}",
+      "assertions": [
+        "cycle-start モードとして動作している(src/ が無く cycle-1 は close 済みの状態を「サイクル進行中」と誤判定せず、cycle-end や init に誘導していない)",
+        "サイクル番号を git タグ(cycle-1)から N=2 と導出し、マイルストーン cycle-2 を作成している(または作成を手順として明示している)",
+        "インプットを蒸留済み docs(PRODUCT.md・CONTEXT.md・docs/adr/・CLAUDE.md)に限っている — close 済みの旧サイクル issue を読んでその内容(検索インデックス案等)を仕様のインプットに持ち込んでいない",
+        "仕様を詰める grilling を開始している(深掘りの質問を自ら行う、または /grill-with-docs の起動を案内する)。質問なしで仕様を確定して先へ進んでいない",
+        "このサイクルの業務的な完了条件(「何がどう動けばこのサイクルは完成か」のドメイン語の受け入れシナリオ)が、grilling で人間と合意すべき項目として扱われている(質問に含まれる、または完了条件の合意まで grilling を終えない方針が示されている)",
+        "grilling 完了前に docs/PRODUCT.md を書き換えていない(ユーザーの2行の要望から推測で先回り更新しない、の否定チェック)",
+        "実装ルート(to-prd → to-issues → implement / prototype / 直接実装)を grilling 前に断定していない(ルート判断は仕様が詰まった後、サイクルの性質に応じて合意する)",
+        "grilling 完了前に src/ の実装コードを書き始めていない"
       ]
     }
   ]
