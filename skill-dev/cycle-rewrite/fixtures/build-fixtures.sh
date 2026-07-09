@@ -11,7 +11,7 @@ OWNER="masahirompp"
 SUFFIX="${1:-}"   # 例: -i2 (イテレーションごとに新しい使い捨てリポを作る)
 
 rm -rf "$TPL" "$REPOS"
-mkdir -p "$TPL"/{init,midcycle,converging} "$REPOS"
+mkdir -p "$TPL"/{init,midcycle,converging,postend} "$REPOS"
 
 # ---------------------------------------------------------------
 # 共通: docs/agents/ (setup-matt-pocock-skills 実行済み相当)
@@ -492,6 +492,104 @@ export async function search(query: string): Promise<Bookmark[]> {
 EOF
 
 # ---------------------------------------------------------------
+# テンプレート 4: postend (Shiori、サイクル1の儀式完了直後) — cycle-start 用
+# 儀式の成果を反映済み: src/tests 削除、CONTEXT.md からフォルダ剪定、
+# Out of Scope に CSV/フォルダ、ADR-0002 は Rejected、dexie スキル抽出、並列2ルール
+# ---------------------------------------------------------------
+P="$TPL/postend"
+mkdir -p "$P/docs/adr" "$P/.claude/skills/working-with-dexie"
+seed_agents_docs "$P"
+cp "$M/README.md" "$P/README.md"
+cp "$M/docs/adr/0001-client-side-only.md" "$P/docs/adr/0001-client-side-only.md"
+cp "$C/.claude/skills/working-with-dexie/SKILL.md" "$P/.claude/skills/working-with-dexie/SKILL.md"
+cp "$M/.prettierrc" "$P/.prettierrc"
+
+printf '%s\n\n%s\n\n### プロセスルール(cycle 1 の学び)\n\n- エージェントの並列作業は2並列まで(3並列以上で main が壊れた実績があるため)\n' \
+  "$AGENT_SKILLS_BLOCK" "$CYCLE_REWRITE_BLOCK" > "$P/CLAUDE.md"
+
+cat > "$P/CONTEXT.md" <<'EOF'
+# CONTEXT
+
+## ブックマーク
+
+保存された URL + タイトル + メモの1件。
+
+## タグ
+
+ブックマークに付ける自由記述の分類ラベル。1件のブックマークに複数付けられる。
+
+## ピン留め
+
+ブックマークを一覧の先頭に固定する印。
+EOF
+
+cat > "$P/docs/PRODUCT.md" <<'EOF'
+# Shiori
+
+<!-- last updated: cycle 1 -->
+
+## Problem Statement
+
+ブラウザのブックマークが増えすぎて、目的のページを再発見できない。
+
+## Solution
+
+タグとピン留めで整理でき、全文検索で再発見できるクライアントサイドのブックマーク管理Webアプリ。
+
+## User Stories
+
+1. As a ブックマーク利用者, I want URLとタイトルを保存できる, so that あとで読み返せる
+2. As a ブックマーク利用者, I want ブックマークにタグを付けられる, so that テーマ別に整理できる
+3. As a ブックマーク利用者, I want タグで絞り込める, so that 目的のページをすぐ見つけられる
+4. As a ブックマーク利用者, I want よく使うブックマークをピン留めできる, so that 一覧の先頭に固定できる
+5. As a ブックマーク利用者, I want タイトルとメモを全文検索できる, so that タグを覚えていなくても見つけられる
+
+## Implementation Decisions
+
+- クライアントサイドのみ、サーバーなし(ADR-0001)
+- 保存は IndexedDB(dexie.js)
+- 全文検索の方式は未決 — Fuse.js のインメモリ検索は cycle 1 で不採用(ADR-0002 Rejected。5000件超でUIブロック)。次サイクルで再設計する
+
+## Testing Decisions
+
+- 外部から観測できる振る舞いのみをテストする
+- シナリオ:
+  - ブックマークを保存すると一覧に表示される
+  - タグで絞り込むと該当ブックマークのみ表示される
+  - 検索語を入力するとタイトル一致が上位に表示される
+  - IndexedDB が使えない環境(Safari プライベートブラウズ)では localStorage にフォールバックして保存できる
+
+## Out of Scope
+
+- ブラウザ拡張(理由: まず Web アプリで価値検証する)
+- 複数端末同期(理由: サイクル1では単一端末で十分)
+- CSVインポート(理由: ユーザーはブラウザのブックマークHTMLエクスポートしか使わない)
+- フォルダ機能(理由: cycle 1 のユーザーテストでタグとの併存が混乱を招いた。タグに一本化)
+
+## Further Notes
+
+なし
+EOF
+
+cat > "$P/docs/adr/0002-fuse-js-for-search.md" <<'EOF'
+# ADR-0002: 全文検索は Fuse.js を使う
+
+Status: Rejected
+
+## Context
+
+クライアントサイドのみ(ADR-0001)のため、検索もブラウザ内で完結する必要がある。
+
+## Decision
+
+Fuse.js によるインメモリのあいまい検索を採用する。
+
+## Consequences
+
+cycle 1 の計測で 5000 件超で UI が1秒以上ブロックすることが判明し、不採用となった。代替方式は次サイクルで設計する。
+EOF
+
+# ---------------------------------------------------------------
 # リポジトリ生成
 # ---------------------------------------------------------------
 create_repo() { # $1=template $2=repo-name
@@ -579,6 +677,24 @@ for name in "cycle-rewrite-eval-trans-with$SUFFIX" "cycle-rewrite-eval-trans-bas
   create_milestone "$name" cycle-2 closed >/dev/null
   create_milestone "$name" cycle-3 >/dev/null
   seed_converging_issues "$name"
+done
+
+# --- postend 用 (cycle-start) ---
+# タグ cycle-1・マイルストーン close・issue 全 close の「儀式完了直後」状態。
+# close 済み issue に旧サイクルの情報(検索インデックス案等)を意図的に残し、
+# cycle-start が旧 issue を読まない規律を検証できるようにする
+for name in "cycle-rewrite-eval-start-with$SUFFIX" "cycle-rewrite-eval-start-base$SUFFIX"; do
+  create_repo postend "$name"
+  cd "$REPOS/$name"
+  git tag cycle-1
+  git push -q --tags
+  seed_workflow_labels "$name"
+  MS_NUM=$(create_milestone "$name" cycle-1)
+  seed_midcycle_issues "$name"
+  for n in $(gh issue list -R "$OWNER/$name" --json number --jq '.[].number'); do
+    gh issue close "$n" -R "$OWNER/$name" >/dev/null
+  done
+  gh api -X PATCH "repos/$OWNER/$name/milestones/$MS_NUM" -f state=closed --jq .state >/dev/null
 done
 
 echo "done"
