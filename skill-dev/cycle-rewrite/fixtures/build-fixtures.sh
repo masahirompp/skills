@@ -91,7 +91,7 @@ printf '%s\n' "$AGENT_SKILLS_BLOCK" > "$TPL/init/CLAUDE.md"
 # テンプレート 2: midcycle (Shiori、サイクル1進行中) — cycle-end / capture 用
 # ---------------------------------------------------------------
 M="$TPL/midcycle"
-mkdir -p "$M/docs/adr" "$M/src" "$M/tests"
+mkdir -p "$M/docs/adr" "$M/src/import" "$M/tests"
 seed_agents_docs "$M"
 
 cat > "$M/README.md" <<'EOF'
@@ -143,12 +143,14 @@ cat > "$M/docs/PRODUCT.md" <<'EOF'
 4. As a ブックマーク利用者, I want ブックマークをフォルダに整理できる, so that 階層で管理できる
 5. As a ブックマーク利用者, I want よく使うブックマークをピン留めできる, so that 一覧の先頭に固定できる
 6. As a ブックマーク利用者, I want タイトルとメモを全文検索できる, so that タグを覚えていなくても見つけられる
+7. As a ブックマーク利用者, I want ブラウザからエクスポートしたブックマークHTMLをインポートできる, so that 既存のブックマークを一括で移行できる
 
 ## Implementation Decisions
 
 - クライアントサイドのみ、サーバーなし(ADR-0001)
 - 保存は IndexedDB(dexie.js)
 - 全文検索は Fuse.js のインメモリ検索(ADR-0002)
+- ブックマークHTMLのパーサーは自前実装。Chrome / Firefox / Safari の実エクスポートで検証済み
 
 ## Testing Decisions
 
@@ -157,6 +159,7 @@ cat > "$M/docs/PRODUCT.md" <<'EOF'
   - ブックマークを保存すると一覧に表示される
   - タグで絞り込むと該当ブックマークのみ表示される
   - 検索語を入力するとタイトル一致が上位に表示される
+  - ChromeからエクスポートしたブックマークHTMLをインポートすると、全ブックマークが一覧に表示される
 
 ## Out of Scope
 
@@ -253,9 +256,66 @@ export async function search(query: string): Promise<Bookmark[]> {
 }
 EOF
 
+cat > "$M/src/import/bookmark-html.ts" <<'EOF'
+// ブラウザのブックマークエクスポート(Netscape Bookmark File Format)のパーサー。
+// Chrome / Firefox / Safari の実エクスポートで検証済み(cycle 1)。
+// 使い捨て層に依存しない純関数。db やアプリの型を import しないこと。
+
+export interface ParsedBookmark {
+  url: string;
+  title: string;
+  addedAt?: Date;
+}
+
+export function parseBookmarkHtml(html: string): ParsedBookmark[] {
+  const results: ParsedBookmark[] = [];
+  const anchor = /<DT><A[^>]*HREF="([^"]*)"(?:[^>]*ADD_DATE="(\d+)")?[^>]*>([\s\S]*?)<\/A>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = anchor.exec(html)) !== null) {
+    const [, url, addDate, rawTitle] = m;
+    if (!url || url.startsWith("place:")) continue; // Firefox の内部エントリ(place:)を除外
+    results.push({
+      url,
+      title: decodeEntities(rawTitle.trim()) || url,
+      addedAt: addDate ? new Date(Number(addDate) * 1000) : undefined,
+    });
+  }
+  return results;
+}
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+EOF
+
+cat > "$M/tests/bookmark-html.test.ts" <<'EOF'
+import { describe, it, expect } from "vitest";
+import { parseBookmarkHtml } from "../src/import/bookmark-html";
+
+describe("parseBookmarkHtml", () => {
+  it("parses a Chrome export anchor", () => {
+    const html =
+      '<DT><A HREF="https://example.com" ADD_DATE="1700000000">Example &amp; Co</A>';
+    const [b] = parseBookmarkHtml(html);
+    expect(b.url).toBe("https://example.com");
+    expect(b.title).toBe("Example & Co");
+  });
+
+  it("skips Firefox place: entries", () => {
+    expect(parseBookmarkHtml('<DT><A HREF="place:type=6">Recent</A>')).toEqual([]);
+  });
+});
+EOF
+
 cat > "$M/src/main.ts" <<'EOF'
 import { db } from "./db";
 import { search } from "./search";
+import { parseBookmarkHtml } from "./import/bookmark-html";
 
 async function render() {
   const list = await db.bookmarks.orderBy("pinned").reverse().toArray();
@@ -266,6 +326,16 @@ async function render() {
 document.querySelector("#q")?.addEventListener("input", async (e) => {
   const hits = await search((e.target as HTMLInputElement).value);
   console.log(hits);
+});
+
+document.querySelector("#import")?.addEventListener("change", async (e) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  const parsed = parseBookmarkHtml(await file.text());
+  await db.bookmarks.bulkPut(
+    parsed.map((p) => ({ url: p.url, title: p.title, note: "", tags: [], pinned: false })),
+  );
+  render();
 });
 
 render();
