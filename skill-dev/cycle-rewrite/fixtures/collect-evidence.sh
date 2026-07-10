@@ -21,7 +21,7 @@ dump() { # $1=repo-name $2=run-dir(iteration-N からの相対)
   {
     echo "=== repo: $1 ==="
     echo "--- git status ---"
-    git -C "$dir" status --short
+    git -C "$dir" status -sb
     echo "--- git log ---"
     git -C "$dir" log --oneline
     echo "--- git tags ---"
@@ -32,9 +32,9 @@ dump() { # $1=repo-name $2=run-dir(iteration-N からの相対)
     test -f "$dir/docs/PRODUCT.md" && echo YES || echo NO
     echo "--- docs/PRODUCT.md full content ---"
     test -f "$dir/docs/PRODUCT.md" && cat "$dir/docs/PRODUCT.md"
-    echo "--- docs/adr/ files & Status lines ---"
+    echo "--- docs/adr/ full contents ---"
     for f in "$dir"/docs/adr/*.md; do
-      test -f "$f" && { echo "[$f]"; grep -m2 -E '^(#|Status)' "$f"; }
+      test -f "$f" && { echo "[$f]"; cat "$f"; echo; }
     done
     echo "--- CONTEXT.md ---"
     test -f "$dir/CONTEXT.md" && cat "$dir/CONTEXT.md" || echo "(none)"
@@ -60,8 +60,9 @@ dump() { # $1=repo-name $2=run-dir(iteration-N からの相対)
     fi
     echo "--- GitHub labels ---"
     gh label list -R "$r" --json name --jq '.[].name'
-    echo "--- GitHub milestones (all states) ---"
-    gh api "repos/$r/milestones?state=all" --jq '.[] | "\(.title): \(.state)"'
+    echo "--- GitHub milestones (all states, with issue counts & timestamps) ---"
+    # open/closed の実数と作成時刻まで出す: 「作成した」と申告しつつ実行していないケースを、申告ではなく実体で検証するため
+    gh api "repos/$r/milestones?state=all" --jq '.[] | "\(.title): \(.state) open=\(.open_issues) closed=\(.closed_issues) created_at=\(.created_at)"'
     echo "--- GitHub issues (all states) ---"
     gh issue list -R "$r" --state all --limit 50 --json number,title,state,labels,milestone \
       --jq '.[] | "#\(.number) [\(.state)] labels=\([.labels[].name] | join(",")) ms=\(.milestone.title // "none") \(.title)"'
