@@ -736,11 +736,16 @@ seed_converging_history() { # $1=repo-name
     "手動マージUIは過剰と判明。競合解決はlast-write-winsに簡素化する。"
   issue "$r" cycle-1 learning "エージェント3並列でmainが2回壊れた" \
     "並列度は2までに制限すべき。プロセスルールとして残したい。"
-  # 過去サイクル分は棚卸し済みの体で close する
-  gh issue list -R "$OWNER/$r" --milestone cycle-1 --json number --jq '.[].number' \
-    | xargs -I{} gh issue close {} -R "$OWNER/$r" -c "cycle-1 棚卸し済み" >/dev/null
-  gh issue list -R "$OWNER/$r" --milestone cycle-2 --json number --jq '.[].number' \
-    | xargs -I{} gh issue close {} -R "$OWNER/$r" -c "cycle-2 棚卸し済み" >/dev/null
+  # 過去サイクル分は棚卸し済みの体で close する。
+  # issue list は作成直後に反映が遅れることがあるため、open が 0 になるまで再試行する
+  for ms in cycle-1 cycle-2; do
+    for _ in 1 2 3 4 5; do
+      nums=$(gh issue list -R "$OWNER/$r" --milestone "$ms" --state open --json number --jq '.[].number')
+      [ -z "$nums" ] && break
+      echo "$nums" | xargs -I{} gh issue close {} -R "$OWNER/$r" -c "$ms 棚卸し済み" >/dev/null
+      sleep 2
+    done
+  done
 }
 
 # --- init 用 (シードは repo のみ。ラベル・マイルストーンは init モードが作るのが期待動作) ---
