@@ -722,6 +722,27 @@ seed_converging_issues() { # $1=repo-name
     "supabase start のローカル環境では通るRLSポリシーが、リンクした環境では拒否されるケースがあった。ポリシーはリンク環境でも検証が必要。"
 }
 
+# spec-change 減少トレンドの履歴(cycle-1: 3件 → cycle-2: 1件 → cycle-3: 0件)。
+# transition-check の「spec-change 比率の推移」を issue 履歴から実際に点検できるようにする
+seed_converging_history() { # $1=repo-name
+  local r="$1"
+  issue "$r" cycle-1 spec-change "フォルダ機能は廃止、タグに一本化" \
+    "ユーザーテストでフォルダとタグの併存が混乱を招いた。タグに一本化する。"
+  issue "$r" cycle-1 spec-change "CSVインポートは不要と判明" \
+    "全員がブラウザのブックマークHTMLエクスポートを使っていた。CSVはやらない。"
+  issue "$r" cycle-1 spec-change "全文検索は事前構築インデックス方式に変更" \
+    "Fuse.jsのインメモリ検索が5000件超で破綻。保存時にインデックスを構築する方式へ仕様変更。"
+  issue "$r" cycle-2 spec-change "同期の競合解決はlast-write-winsに変更" \
+    "手動マージUIは過剰と判明。競合解決はlast-write-winsに簡素化する。"
+  issue "$r" cycle-1 learning "エージェント3並列でmainが2回壊れた" \
+    "並列度は2までに制限すべき。プロセスルールとして残したい。"
+  # 過去サイクル分は棚卸し済みの体で close する
+  gh issue list -R "$OWNER/$r" --milestone cycle-1 --json number --jq '.[].number' \
+    | xargs -I{} gh issue close {} -R "$OWNER/$r" -c "cycle-1 棚卸し済み" >/dev/null
+  gh issue list -R "$OWNER/$r" --milestone cycle-2 --json number --jq '.[].number' \
+    | xargs -I{} gh issue close {} -R "$OWNER/$r" -c "cycle-2 棚卸し済み" >/dev/null
+}
+
 # --- init 用 (シードは repo のみ。ラベル・マイルストーンは init モードが作るのが期待動作) ---
 create_repo init "cycle-rewrite-eval-init-with$SUFFIX"
 create_repo init "cycle-rewrite-eval-init-base$SUFFIX"
@@ -745,9 +766,12 @@ for name in "cycle-rewrite-eval-trans-with$SUFFIX" "cycle-rewrite-eval-trans-bas
   git commit -q --allow-empty -m "cycle 3 wip"
   git push -q && git push -q --tags
   seed_workflow_labels "$name"
-  create_milestone "$name" cycle-1 closed >/dev/null
-  create_milestone "$name" cycle-2 closed >/dev/null
+  MS1=$(create_milestone "$name" cycle-1)
+  MS2=$(create_milestone "$name" cycle-2)
   create_milestone "$name" cycle-3 >/dev/null
+  seed_converging_history "$name"
+  gh api -X PATCH "repos/$OWNER/$name/milestones/$MS1" -f state=closed --jq .state >/dev/null
+  gh api -X PATCH "repos/$OWNER/$name/milestones/$MS2" -f state=closed --jq .state >/dev/null
   seed_converging_issues "$name"
 done
 
