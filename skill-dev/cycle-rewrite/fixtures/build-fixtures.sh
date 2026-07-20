@@ -662,6 +662,331 @@ cycle 1 の計測で 5000 件超で UI が1秒以上ブロックすることが�
 EOF
 
 # ---------------------------------------------------------------
+# テンプレート 5: audit-c1 / audit-c2 (Shiori、cycle-audit 用)
+# audit-c1 = サイクル1終了時点(蒸留済み docs + cycle-1 の src。タグ cycle-1 になる)
+# audit-c2 = サイクル2の上書き(grilling 反映済み docs + cycle-2 の src)
+# 仕込んだ差分(cycle-1 にあって cycle-2 に無い挙動)と正解分類:
+#   A 意図した変更   = フォルダ機能(Out of Scope + closed spec-change issue に証跡)
+#   B 意図した先送り = ピン留め(docs に仕様あり・サイクル2完了条件の範囲外)
+#   C 実装漏れ       = localStorage フォールバック(完了条件の範囲内なのに未実装)
+#   D 蒸留漏れ       = Firefox place: 内部エントリの除外(docs のどこにも痕跡なし)
+# ---------------------------------------------------------------
+A1="$TPL/audit-c1"
+mkdir -p "$A1/docs/adr" "$A1/src/import" "$A1/tests" "$A1/.claude/skills/working-with-dexie"
+seed_agents_docs "$A1"
+cp "$M/README.md" "$A1/README.md"
+cp "$P/CLAUDE.md" "$A1/CLAUDE.md"
+cp "$P/CONTEXT.md" "$A1/CONTEXT.md"
+cp "$P/docs/PRODUCT.md" "$A1/docs/PRODUCT.md"
+cp "$M/docs/adr/0001-client-side-only.md" "$A1/docs/adr/0001-client-side-only.md"
+cp "$P/docs/adr/0002-fuse-js-for-search.md" "$A1/docs/adr/0002-fuse-js-for-search.md"
+cp "$C/.claude/skills/working-with-dexie/SKILL.md" "$A1/.claude/skills/working-with-dexie/SKILL.md"
+cp "$M/.prettierrc" "$A1/.prettierrc"
+cp "$M/package.json" "$A1/package.json"
+cp "$M/tsconfig.json" "$A1/tsconfig.json"
+cp "$M/src/tags.ts" "$A1/src/tags.ts"
+cp "$M/src/search.ts" "$A1/src/search.ts"
+cp "$M/src/import/bookmark-html.ts" "$A1/src/import/bookmark-html.ts"
+cp "$M/tests/bookmark-html.test.ts" "$A1/tests/bookmark-html.test.ts"
+cp "$M/tests/search.test.ts" "$A1/tests/search.test.ts"
+
+cat > "$A1/src/db.ts" <<'EOF'
+import Dexie, { type Table } from "dexie";
+
+export interface Bookmark {
+  id?: number;
+  url: string;
+  title: string;
+  note: string;
+  tags: string[];
+  folder?: string;
+  pinned: boolean;
+}
+
+export class ShioriDB extends Dexie {
+  bookmarks!: Table<Bookmark>;
+  constructor() {
+    super("shiori");
+    this.version(1).stores({ bookmarks: "++id, title, *tags, folder, pinned" });
+  }
+}
+
+export const db = new ShioriDB();
+EOF
+
+cat > "$A1/src/folders.ts" <<'EOF'
+import { db, type Bookmark } from "./db";
+
+// フォルダ機能: ブックマークは1つのフォルダに入れられる(タグと併存)。動けばOK品質
+export async function moveToFolder(bookmark: Bookmark, folder: string) {
+  bookmark.folder = folder;
+  await db.bookmarks.put(bookmark);
+}
+
+export async function listByFolder(folder: string): Promise<Bookmark[]> {
+  return db.bookmarks.where("folder").equals(folder).toArray();
+}
+
+export async function listFolders(): Promise<string[]> {
+  const all = await db.bookmarks.toArray();
+  return [...new Set(all.map((b) => b.folder).filter((f): f is string => !!f))];
+}
+EOF
+
+cat > "$A1/src/storage.ts" <<'EOF'
+import { db, type Bookmark } from "./db";
+
+// Safari プライベートブラウズでは IndexedDB の open が例外を投げる。
+// 起動時に検出して localStorage フォールバックに切り替える(動けばOK品質)
+let idbAvailable = true;
+
+export async function detectStorage() {
+  try {
+    await db.open();
+  } catch {
+    idbAvailable = false;
+  }
+}
+
+export async function saveBookmark(b: Bookmark) {
+  if (idbAvailable) {
+    await db.bookmarks.put(b);
+    return;
+  }
+  const all = loadLocal();
+  all.push(b);
+  localStorage.setItem("shiori:bookmarks", JSON.stringify(all));
+}
+
+export async function listBookmarks(): Promise<Bookmark[]> {
+  if (idbAvailable) return db.bookmarks.toArray();
+  return loadLocal();
+}
+
+function loadLocal(): Bookmark[] {
+  return JSON.parse(localStorage.getItem("shiori:bookmarks") ?? "[]");
+}
+EOF
+
+cat > "$A1/src/main.ts" <<'EOF'
+import { detectStorage, listBookmarks, saveBookmark } from "./storage";
+import { search } from "./search";
+import { parseBookmarkHtml } from "./import/bookmark-html";
+
+async function render() {
+  // ピン留めを一覧の先頭に固定する
+  const list = (await listBookmarks()).sort((a, b) => Number(b.pinned) - Number(a.pinned));
+  const ul = document.querySelector("#list")!;
+  ul.innerHTML = list.map((b) => `<li>${b.title}</li>`).join("");
+}
+
+document.querySelector("#q")?.addEventListener("input", async (e) => {
+  const hits = await search((e.target as HTMLInputElement).value);
+  console.log(hits);
+});
+
+document.querySelector("#import")?.addEventListener("change", async (e) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  for (const p of parseBookmarkHtml(await file.text())) {
+    await saveBookmark({ url: p.url, title: p.title, note: "", tags: [], pinned: false });
+  }
+  render();
+});
+
+detectStorage().then(render);
+EOF
+
+A2="$TPL/audit-c2"
+mkdir -p "$A2/docs/adr" "$A2/src/import" "$A2/tests"
+cp "$C/docs/adr/0003-prebuilt-search-index.md" "$A2/docs/adr/0003-prebuilt-search-index.md"
+cp "$M/src/tags.ts" "$A2/src/tags.ts"
+
+cat > "$A2/docs/PRODUCT.md" <<'EOF'
+# Shiori
+
+<!-- last updated: cycle 2 -->
+
+## Problem Statement
+
+ブラウザのブックマークが増えすぎて、目的のページを再発見できない。
+
+## Solution
+
+タグとピン留めで整理でき、全文検索で再発見できるクライアントサイドのブックマーク管理Webアプリ。
+
+## User Stories
+
+1. As a ブックマーク利用者, I want URLとタイトルを保存できる, so that あとで読み返せる
+2. As a ブックマーク利用者, I want ブックマークにタグを付けられる, so that テーマ別に整理できる
+3. As a ブックマーク利用者, I want タグで絞り込める, so that 目的のページをすぐ見つけられる
+4. As a ブックマーク利用者, I want よく使うブックマークをピン留めできる, so that 一覧の先頭に固定できる
+5. As a ブックマーク利用者, I want タイトルとメモを全文検索できる, so that タグを覚えていなくても見つけられる
+6. As a ブックマーク利用者, I want ブラウザからエクスポートしたブックマークHTMLをインポートできる, so that 既存のブックマークを一括で移行できる
+
+## Implementation Decisions
+
+- クライアントサイドのみ、サーバーなし(ADR-0001)
+- 保存は IndexedDB(dexie.js)
+- 全文検索は保存時に構築する検索インデックスを IndexedDB に持つ(ADR-0003。Fuse.js 案は ADR-0002 で不採用)
+
+## Testing Decisions
+
+- 外部から観測できる振る舞いのみをテストする
+- シナリオ:
+  - ブックマークを保存すると一覧に表示される
+  - タグで絞り込むと該当ブックマークのみ表示される
+  - 検索語を入力するとタイトル一致が上位に表示される
+  - ChromeからエクスポートしたブックマークHTMLをインポートすると、全ブックマークが一覧に表示される
+  - IndexedDB が使えない環境(Safari プライベートブラウズ)では localStorage にフォールバックして保存できる
+  - よく使うブックマークをピン留めすると一覧の先頭に固定される
+- サイクル2の完了条件(grilling で合意): 上記のうち保存・タグ絞り込み・検索(インデックス方式)・HTMLインポート・localStorage フォールバックの5シナリオ。ピン留めはサイクル2では実装せず、次サイクルへ先送りする
+
+## Out of Scope
+
+- ブラウザ拡張(理由: まず Web アプリで価値検証する)
+- 複数端末同期(理由: 検索の作り直しを優先。サイクル3以降で検討)
+- CSVインポート(理由: ユーザーはブラウザのブックマークHTMLエクスポートしか使わない)
+- フォルダ機能(理由: cycle 1 のユーザーテストでタグとの併存が混乱を招いた。タグに一本化)
+
+## Further Notes
+
+なし
+EOF
+
+cat > "$A2/src/db.ts" <<'EOF'
+import Dexie, { type Table } from "dexie";
+
+export interface Bookmark {
+  id?: number;
+  url: string;
+  title: string;
+  note: string;
+  tags: string[];
+}
+
+export interface IndexEntry {
+  id?: number;
+  token: string;
+  bookmarkId: number;
+}
+
+export class ShioriDB extends Dexie {
+  bookmarks!: Table<Bookmark>;
+  searchIndex!: Table<IndexEntry>;
+  constructor() {
+    super("shiori");
+    this.version(1).stores({
+      bookmarks: "++id, title, *tags",
+      searchIndex: "++id, token, bookmarkId",
+    });
+  }
+}
+
+export const db = new ShioriDB();
+EOF
+
+cat > "$A2/src/search-index.ts" <<'EOF'
+import { db, type Bookmark } from "./db";
+
+// 保存時にトークン化した検索インデックスを構築する(ADR-0003)。動けばOK品質
+export async function indexBookmark(b: Bookmark) {
+  const tokens = `${b.title} ${b.note}`.toLowerCase().split(/\s+/).filter(Boolean);
+  await db.searchIndex.bulkPut(tokens.map((token) => ({ token, bookmarkId: b.id! })));
+}
+
+export async function saveBookmark(b: Bookmark) {
+  const id = await db.bookmarks.put(b);
+  await indexBookmark({ ...b, id: Number(id) });
+}
+EOF
+
+cat > "$A2/src/search.ts" <<'EOF'
+import { db, type Bookmark } from "./db";
+
+// 検索はインデックス参照のみで行う(ADR-0003)
+export async function search(query: string): Promise<Bookmark[]> {
+  const entries = await db.searchIndex.where("token").startsWith(query.toLowerCase()).toArray();
+  const ids = [...new Set(entries.map((e) => e.bookmarkId))];
+  return (await db.bookmarks.bulkGet(ids)).filter((b): b is Bookmark => !!b);
+}
+EOF
+
+cat > "$A2/src/import/bookmark-html.ts" <<'EOF'
+// ブックマークHTML(Netscape Bookmark File Format)のパーサー。cycle 2 で書き直し
+export interface ParsedBookmark {
+  url: string;
+  title: string;
+}
+
+export function parseBookmarkHtml(html: string): ParsedBookmark[] {
+  const results: ParsedBookmark[] = [];
+  const anchor = /<DT><A[^>]*HREF="([^"]*)"[^>]*>([\s\S]*?)<\/A>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = anchor.exec(html)) !== null) {
+    results.push({ url: m[1], title: m[2].trim() || m[1] });
+  }
+  return results;
+}
+EOF
+
+cat > "$A2/src/main.ts" <<'EOF'
+import { db } from "./db";
+import { saveBookmark } from "./search-index";
+import { search } from "./search";
+import { parseBookmarkHtml } from "./import/bookmark-html";
+
+async function render() {
+  const list = await db.bookmarks.toArray();
+  const ul = document.querySelector("#list")!;
+  ul.innerHTML = list.map((b) => `<li>${b.title}</li>`).join("");
+}
+
+document.querySelector("#q")?.addEventListener("input", async (e) => {
+  const hits = await search((e.target as HTMLInputElement).value);
+  console.log(hits);
+});
+
+document.querySelector("#import")?.addEventListener("change", async (e) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  for (const p of parseBookmarkHtml(await file.text())) {
+    await saveBookmark({ url: p.url, title: p.title, note: "", tags: [] });
+  }
+  render();
+});
+
+render();
+EOF
+
+cat > "$A2/tests/search.test.ts" <<'EOF'
+import { describe, it, expect } from "vitest";
+import { search } from "../src/search";
+
+describe("search", () => {
+  it("returns empty for empty db", async () => {
+    expect(await search("foo")).toEqual([]);
+  });
+});
+EOF
+
+cat > "$A2/package.json" <<'EOF'
+{
+  "name": "shiori",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo 'build ok'",
+    "lint": "echo 'lint ok'",
+    "test": "echo 'tests ok'"
+  },
+  "dependencies": {
+    "dexie": "^4.0.0"
+  }
+}
+EOF
+
+# ---------------------------------------------------------------
 # リポジトリ生成
 # ---------------------------------------------------------------
 create_repo() { # $1=template $2=repo-name
@@ -796,6 +1121,43 @@ for name in "cycle-rewrite-eval-start-with$SUFFIX" "cycle-rewrite-eval-start-bas
     gh issue close "$n" -R "$OWNER/$name" >/dev/null
   done
   gh api -X PATCH "repos/$OWNER/$name/milestones/$MS_NUM" -f state=closed --jq .state >/dev/null
+done
+
+# --- audit 用 (cycle-audit) ---
+# git 履歴で「cycle-1 実装+蒸留済み docs(タグ cycle-1)→ src 削除 → cycle-2 grilling + 実装」を再現する。
+# サイクル2の実装完了直後・cycle-end 前の状態。issue は cycle-1 分が棚卸し済み close、
+# cycle-2 分に実装計画ジャーナル(decision-log)と学び1件が open で残る
+for name in "cycle-rewrite-eval-audit-with$SUFFIX" "cycle-rewrite-eval-audit-base$SUFFIX"; do
+  dir="$REPOS/$name"
+  rm -rf "$dir"
+  cp -R "$TPL/audit-c1" "$dir"
+  cd "$dir"
+  git init -q -b main
+  git add -A && git commit -qm "docs: cycle 1 棚卸し"
+  git tag cycle-1
+  rm -rf src tests
+  git add -A && git commit -qm "chore: cycle 1 end — reset disposable layer"
+  cp -R "$TPL/audit-c2/." "$dir"
+  git add -A && git commit -qm "docs: cycle 2 grilling 反映 + cycle 2 実装"
+  gh repo create "$OWNER/$name" --private --source . --push >/dev/null
+  git push -q --tags
+  echo "created $OWNER/$name"
+  seed_workflow_labels "$name"
+  MS1=$(create_milestone "$name" cycle-1)
+  seed_midcycle_issues "$name"
+  # cycle-1 の issue は棚卸し済みの体で close(フォルダ廃止の spec-change を closed の証跡として残す)
+  for _ in 1 2 3 4 5; do
+    nums=$(gh issue list -R "$OWNER/$name" --milestone cycle-1 --state open --json number --jq '.[].number')
+    [ -z "$nums" ] && break
+    echo "$nums" | xargs -I{} gh issue close {} -R "$OWNER/$name" -c "cycle-1 棚卸し済み" >/dev/null
+    sleep 2
+  done
+  gh api -X PATCH "repos/$OWNER/$name/milestones/$MS1" -f state=closed --jq .state >/dev/null
+  create_milestone "$name" cycle-2 >/dev/null
+  issue "$name" cycle-2 decision-log "実装計画: 検索インデックス→保存/一覧→タグ→インポートの順で実装" \
+    "サイクル2の実装計画ジャーナル。検索インデックス(ADR-0003)を最初に作り、保存/一覧、タグ絞り込み、HTMLインポートの順で進める。完了条件は PRODUCT.md の Testing Decisions のサイクル2の5シナリオ。"
+  issue "$name" cycle-2 learning "IndexedDBのcompound indexはSafari 16以前で未対応" \
+    "検索インデックスのスキーマ設計中に判明。compound indexを避けてtokenの単一インデックスにした。"
 done
 
 echo "done"
