@@ -1,0 +1,181 @@
+{
+  "metadata": {
+    "skill_name": "cycle-rewrite",
+    "skill_path": "~/ghq/github.com/masahirompp/skills/cycle-rewrite",
+    "skill_version": "cycle-audit モード新設(26055b5)+ cycle-audit eval 追加(b8a5a8a)",
+    "executor_model": "sonnet_with_skill = claude-sonnet-5 / haiku_with_skill = claude-haiku-4-5",
+    "analyzer_model": "claude-fable-5",
+    "timestamp": "2026-07-20T14:40:00Z",
+    "evals_run": [
+      5
+    ],
+    "runs_per_configuration": 1,
+    "note": "新設 eval-5(cycle-audit)のみのスコープ実行。eval 0-4 は未実行(スキル該当部の変更なし)"
+  },
+  "runs": [
+    {
+      "eval_id": 5,
+      "configuration": "haiku_with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.5385,
+        "passed": 7,
+        "failed": 6,
+        "total": 13,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "前サイクル(タグ cycle-1)と現サイクルの比較が、観測可能な挙動の単位(ドメイン語の機能・挙動の目録)で報告されている(ファイル単位・行数単位・ライブラリ単位のコード diff の列挙だけでは PASS しない)",
+          "passed": true,
+          "evidence": "報告の主構成は完了条件5シナリオの充足表と機能単位の喪失(フォールバック・タグ絞り込み・ピン留め・フォルダ)で、挙動の単位が主。ファイル名(storage.ts 等)への言及とコード片は補足の位置づけに留まる。"
+        },
+        {
+          "text": "検出された差分が「意図した変更 / 意図した先送り / 実装漏れ / 蒸留漏れ」の4分類(またはそれに相当する区別)で台帳として一括提示され、各差分に判定根拠となる証跡の出典(Out of Scope・ADR・spec-change issue・完了条件等)が添えられている",
+          "passed": false,
+          "evidence": "区別は「重大な問題(未実装・機能喪失)」と「正当な変更」の実質2分類で、蒸留漏れ(docs に痕跡が無い喪失)というカテゴリが分類体系ごと欠落している。証跡(ADR-0003、PRODUCT.md の先送り記述、issue #6)は個別に添えられているが、監査対象外のテストカバレッジを「重大な問題」に混入させており、4分類相当の台帳とは言えない。"
+        },
+        {
+          "text": "フォルダ機能の不在が意図した変更として扱われている — PRODUCT.md の Out of Scope または closed の spec-change issue が証跡として示され、復活の提案・issue 起票がされていない(真空成立は PASS しない)",
+          "passed": true,
+          "evidence": "「folder フィールド削除: issue #6『フォルダ機能は廃止、タグに一本化』で spec-change ✅ 正当」と証跡付きで明示的に扱い、復活提案なし。evidence.txt でも新規 issue は無い。差分一覧が実在しフォルダを明示的に扱っているため真空成立ではない。"
+        },
+        {
+          "text": "ピン留めの不在が意図した先送り(現 docs に仕様あり・サイクル2の完了条件の範囲外)として報告のみで扱われ、蒸留漏れとして起票されていない(台帳でピン留めが明示的に扱われている場合にのみ PASS)",
+          "passed": true,
+          "evidence": "「pinned フィールド削除: PRODUCT.md で『ピン留めは cycle 3 へ先送り』と明記 ✅ 正当」と証跡付きで明示的に扱い、報告のみで閉じている。起票なし(evidence.txt で新規 issue なし)。"
+        },
+        {
+          "text": "localStorage フォールバック(Safari プライベートブラウズ)の不在が実装漏れとして検出されている — 現 docs の Testing Decisions に仕様がありサイクル2の完了条件の範囲内なのに未実装、という根拠づけがされ、蒸留漏れと区別されている",
+          "passed": true,
+          "evidence": "完了条件5シナリオ表の#5で「localStorage フォールバック ❌ 機能喪失」と検出し、完了条件(PRODUCT.md)を根拠に「重大な問題」1件目として詳述。docs に痕跡の無い喪失(D)とは扱いが混同されていない(D 概念自体は欠くが、本件を仕様未記載の喪失として扱う誤りは無い)。"
+        },
+        {
+          "text": "実装漏れ(フォールバック)について「今サイクルで直す / 先送りを確定する」に相当する二択で人間に確認しており、確認前に勝手にコード修正して解決していない(層2規律)",
+          "passed": false,
+          "evidence": "コード修正は行っていない(evidence.txt の git status clean)が、「推奨される対応: cycle-end 前に以下を実装すべき」と実装を一方的に処方するだけで、「今サイクルで直す / 先送りを確定する」の二択の確認が無い。先送りの選択肢が提示されておらず、層2の二択エスカレーションの形になっていない。"
+        },
+        {
+          "text": "Firefox の place: 内部エントリを除外する挙動の喪失が蒸留漏れとして検出されている(cycle-1 のパーサーとテストにあり、現 docs のどこにも痕跡が無い)",
+          "passed": false,
+          "evidence": "HTMLインポートは完了条件表で「✅ 実装済」とされ、パーサーの解析範囲縮小(place: 除外・エンティティデコード・追加日時)の喪失には一切触れていない。仕込まれた蒸留漏れを検出できていない。"
+        },
+        {
+          "text": "蒸留漏れについて spec-change issue が起票済みである(マイルストーン cycle-2 付き。起票の許可待ち・回答待ちで保留されたまま終わっていれば PASS しない)",
+          "passed": false,
+          "evidence": "evidence.txt の issue 一覧はシード済みの #1〜#9 のみで、新規起票が存在しない。蒸留漏れ自体が未検出のため起票も行われていない。"
+        },
+        {
+          "text": "起票された蒸留漏れ issue の本文が「次サイクルで復活させる / 廃止を確定する」に相当するドメイン語の二択を併記し、復活(または廃止)を決め打ちしていない",
+          "passed": false,
+          "evidence": "蒸留漏れの issue が起票されていないため、二択併記の本文も存在しない。"
+        },
+        {
+          "text": "このモードで docs(PRODUCT.md・CONTEXT.md・docs/adr/・CLAUDE.md)を直接編集していない — 出口が issue 起票に一本化されている(リポジトリ状態のチェック)",
+          "passed": true,
+          "evidence": "evidence.txt の git status は clean、git log は fixture の3コミットのまま。PRODUCT.md の内容が fixture 原本と一致することも diff で確認済み。docs への直接編集は無い。"
+        },
+        {
+          "text": "内部設計だけの違い(検索の実装方式・モジュール構成・ライブラリ選定の変更)を蒸留漏れとして起票していない(検索方式の変更は ADR-0003 に証跡がある意図した変更)",
+          "passed": true,
+          "evidence": "「Fuse.js → prebuilt index: ADR-0003 で正式決定 ✅ 正当」と意図した変更として扱い、起票していない(evidence.txt で新規 issue なし)。"
+        },
+        {
+          "text": "旧サイクルのコードの参照が作業ツリー外で行われている — 作業ツリーに cycle-1 の src が残っておらず(状態チェック)、最終レスポンスも旧コードのコード片の引用ではなくドメイン語の挙動の記述で構成されている",
+          "passed": false,
+          "evidence": "リポジトリ状態は問題なし(worktree は main の1件のみ、git status clean)。しかし final-response に「cycle-1 のコード (main.ts): detectStorage().then(render);」と旧コードのコード片を現行コードと並べて直接引用しており、挙動の記述への変換を経ていない。サブエージェント隔離の言及も無い。"
+        },
+        {
+          "text": "差分への確認が実装漏れと蒸留漏れに絞られている — 全差分への一括確認や、A・B への個別の復活確認を求めていない",
+          "passed": true,
+          "evidence": "「全部戻しますか」型の一括確認や A・B(フォルダ・ピン留め)への復活確認は無い。正当な変更は報告で閉じている(確認そのものが無い点は別 assertion で減点済み)。"
+        }
+      ]
+    },
+    {
+      "eval_id": 5,
+      "configuration": "sonnet_with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1,
+        "passed": 13,
+        "failed": 0,
+        "total": 13,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "前サイクル(タグ cycle-1)と現サイクルの比較が、観測可能な挙動の単位(ドメイン語の機能・挙動の目録)で報告されている(ファイル単位・行数単位・ライブラリ単位のコード diff の列挙だけでは PASS しない)",
+          "passed": true,
+          "evidence": "final-response の分類台帳はフォルダ機能・ピン留め・タグ絞り込み・localStorage フォールバック・検索ランキング・HTMLインポートの解析範囲という挙動の単位で構成され、ファイル名は補足に留まる。冒頭で「観測可能な挙動目録を抽出」と明記し、実際にサブエージェント隔離で目録抽出を行ったと報告している。"
+        },
+        {
+          "text": "検出された差分が「意図した変更 / 意図した先送り / 実装漏れ / 蒸留漏れ」の4分類(またはそれに相当する区別)で台帳として一括提示され、各差分に判定根拠となる証跡の出典(Out of Scope・ADR・spec-change issue・完了条件等)が添えられている",
+          "passed": true,
+          "evidence": "8行の分類台帳が A/B/C/D の4分類で一括提示され、各行に証跡列(issue #6/#1/#4、ADR-0002/0003、PRODUCT.md Out of Scope、Testing Decisions の先送り記述、完了条件シナリオ)が添えられている。"
+        },
+        {
+          "text": "フォルダ機能の不在が意図した変更として扱われている — PRODUCT.md の Out of Scope または closed の spec-change issue が証跡として示され、復活の提案・issue 起票がされていない(真空成立は PASS しない)",
+          "passed": true,
+          "evidence": "台帳 #1 で「A: 意図した削除」、証跡は「issue #6(spec-change, closed)、PRODUCT.md Out of Scope」。「A・B は監査通過です」と明言し復活提案なし。evidence.txt の issue 一覧でもフォルダ関連の新規起票は無い。台帳が実在しフォルダを明示的に扱っているため真空成立ではない。"
+        },
+        {
+          "text": "ピン留めの不在が意図した先送り(現 docs に仕様あり・サイクル2の完了条件の範囲外)として報告のみで扱われ、蒸留漏れとして起票されていない(台帳でピン留めが明示的に扱われている場合にのみ PASS)",
+          "passed": true,
+          "evidence": "台帳 #4 で「B: 意図した先送り」、証跡は Testing Decisions の「ピン留めはサイクル2では実装せず、次サイクルへ先送りする」。報告のみで確認・起票なし。evidence.txt の新規 issue は #10(HTMLインポート)のみでピン留めの起票は無い。"
+        },
+        {
+          "text": "localStorage フォールバック(Safari プライベートブラウズ)の不在が実装漏れとして検出されている — 現 docs の Testing Decisions に仕様がありサイクル2の完了条件の範囲内なのに未実装、という根拠づけがされ、蒸留漏れと区別されている",
+          "passed": true,
+          "evidence": "台帳 #6 で「C: 実装漏れ」、証跡は「PRODUCT.md 完了条件5シナリオの1つ『IndexedDB が使えない環境では localStorage にフォールバックして保存できる』」。D(#8 の HTMLインポート)とは分類・出口とも明確に区別されている。"
+        },
+        {
+          "text": "実装漏れ(フォールバック)について「今サイクルで直す / 先送りを確定する」に相当する二択で人間に確認しており、確認前に勝手にコード修正して解決していない(層2規律)",
+          "passed": true,
+          "evidence": "「C(#5〜7)は人間の判断が要ります。完了条件の未達なので『今サイクルで直す』か『先送りを確定する』かを選んでください」と二択で確認し、推奨を添えつつ決定は人間に委ねている。evidence.txt の git status は clean でコード修正は行われていない。"
+        },
+        {
+          "text": "Firefox の place: 内部エントリを除外する挙動の喪失が蒸留漏れとして検出されている(cycle-1 のパーサーとテストにあり、現 docs のどこにも痕跡が無い)",
+          "passed": true,
+          "evidence": "台帳 #8 で「HTMLインポートの解析範囲縮小(HTMLエンティティデコード・Firefox内部エントリ place: の除外・追加日時抽出)」を「D: 蒸留漏れ」、証跡「docs・issue のいずれにも記載なし」として検出している。"
+        },
+        {
+          "text": "蒸留漏れについて spec-change issue が起票済みである(マイルストーン cycle-2 付き。起票の許可待ち・回答待ちで保留されたまま終わっていれば PASS しない)",
+          "passed": true,
+          "evidence": "evidence.txt に「#10 [OPEN] labels=spec-change ms=cycle-2 cycle-audit: HTMLインポートの解析仕様…がcycle-1から消失」が実在。final-response も「起票は承認不要の記録操作なので先に済ませました。回答は不要ですが…」と、回答待ちにせず起票済みで報告している。"
+        },
+        {
+          "text": "起票された蒸留漏れ issue の本文が「次サイクルで復活させる / 廃止を確定する」に相当するドメイン語の二択を併記し、復活(または廃止)を決め打ちしていない",
+          "passed": true,
+          "evidence": "evidence.txt の #10 本文に「## 正しい扱いは未決」として「次サイクルで復活させる」「廃止を確定する」の二択がドメイン語で併記され、どちらにも決め打ちしていない。証跡照合の結果(docs に縮小・廃止の意図の記載なし)も本文に反映されている。"
+        },
+        {
+          "text": "このモードで docs(PRODUCT.md・CONTEXT.md・docs/adr/・CLAUDE.md)を直接編集していない — 出口が issue 起票に一本化されている(リポジトリ状態のチェック)",
+          "passed": true,
+          "evidence": "evidence.txt の git status は「## main...origin/main」のみ(変更ファイルなし)、git log も fixture の3コミットのまま。PRODUCT.md・CONTEXT.md・ADR の内容も fixture 原本と一致。出口は issue #10 の起票のみ。"
+        },
+        {
+          "text": "内部設計だけの違い(検索の実装方式・モジュール構成・ライブラリ選定の変更)を蒸留漏れとして起票していない(検索方式の変更は ADR-0003 に証跡がある意図した変更)",
+          "passed": true,
+          "evidence": "検索方式の変更は台帳 #3 で「A: 意図した変更」(証跡 ADR-0002 Rejected・ADR-0003 Accepted)と分類され、「蒸留パイプラインが機能している証拠」とまで報告。D 起票は #10(観測可能な挙動の喪失)のみで層1の起票は無い。"
+        },
+        {
+          "text": "旧サイクルのコードの参照が作業ツリー外で行われている — 作業ツリーに cycle-1 の src が残っておらず(状態チェック)、最終レスポンスも旧コードのコード片の引用ではなくドメイン語の挙動の記述で構成されている",
+          "passed": true,
+          "evidence": "evidence.txt の git worktree list は main の1件のみ、git status clean で旧コードの残置なし。final-response は「サブエージェントに隔離して読ませ…旧コードを本体セッションに読み込ませない規律を維持」と明記し、本文に旧コードのコード片の引用は無い(参照は git show コマンドのポインタ提示のみ)。"
+        },
+        {
+          "text": "差分への確認が実装漏れと蒸留漏れに絞られている — 全差分への一括確認や、A・B への個別の復活確認を求めていない",
+          "passed": true,
+          "evidence": "確認要求は C 3件の「今直す/先送り確定」と D issue への任意の方向づけのみ。A・B は「監査通過です」と報告で閉じ、「全部戻しますか」型の一括確認は無い。"
+        }
+      ]
+    }
+  ]
+}
