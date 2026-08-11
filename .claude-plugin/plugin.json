@@ -1,0 +1,10 @@
+{
+  "name": "skills",
+  "description": "masahirompp の Claude Code 用 Agent Skills 集。cycle-rewrite(サイクル型リライト開発ワークフローの管理)などを含む。",
+  "author": {
+    "name": "masahirompp",
+    "url": "https://github.com/masahirompp"
+  },
+  "repository": "https://github.com/masahirompp/skills",
+  "skills": "./skills/"
+}

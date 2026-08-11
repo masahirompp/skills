@@ -1,0 +1,14 @@
+{
+  "name": "masahirompp",
+  "owner": {
+    "name": "masahirompp",
+    "url": "https://github.com/masahirompp"
+  },
+  "plugins": [
+    {
+      "name": "skills",
+      "source": "./",
+      "description": "masahirompp の Claude Code 用 Agent Skills 集。cycle-rewrite(サイクル型リライト開発ワークフローの管理)などを含む。"
+    }
+  ]
+}
