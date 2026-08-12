@@ -1,9 +1,0 @@
-{
-  "name": "cycle-rewrite",
-  "description": "サイクル型リライト開発ワークフローの管理。PoC/プロトタイプをサイクル単位でゼロから書き直し、仕様と学び(PRODUCT.md・ADR・CONTEXT.md・プロジェクトスキル)を永続資産として積み上げる開発方式のオーケストレーション。",
-  "author": {
-    "name": "masahirompp",
-    "url": "https://github.com/masahirompp"
-  },
-  "repository": "https://github.com/masahirompp/skills"
-}
