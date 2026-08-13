@@ -4,8 +4,7 @@
       "Bash(gh issue create *)",
       "Bash(gh issue edit *)",
       "Bash(gh issue close *)",
-      "Bash(gh label create *)",
-      "Bash(gh api *)"
+      "Bash(gh label create *)"
     ]
   }
 }
