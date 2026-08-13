@@ -18,10 +18,14 @@ mkdir -p "$TPL"/{init,midcycle,converging,postend} "$REPOS"
 # ---------------------------------------------------------------
 seed_agents_docs() {
   local dir="$1"
+  # setup-matt-pocock-skills はプラグイン配布に移行済み — キャッシュ内の最新バージョンを使う
+  local mps
+  mps="$(ls -d "$HOME/.claude/plugins/cache/mattpocock/mattpocock-skills"/*/skills/engineering/setup-matt-pocock-skills 2>/dev/null | sort -V | tail -1)"
+  [ -n "$mps" ] || { echo "setup-matt-pocock-skills が見つからない (mattpocock-skills プラグインをインストールすること)" >&2; exit 1; }
   mkdir -p "$dir/docs/agents"
-  cp "$HOME/.claude/skills/setup-matt-pocock-skills/issue-tracker-github.md" "$dir/docs/agents/issue-tracker.md"
-  cp "$HOME/.claude/skills/setup-matt-pocock-skills/triage-labels.md" "$dir/docs/agents/triage-labels.md"
-  cp "$HOME/.claude/skills/setup-matt-pocock-skills/domain.md" "$dir/docs/agents/domain.md"
+  cp "$mps/issue-tracker-github.md" "$dir/docs/agents/issue-tracker.md"
+  cp "$mps/triage-labels.md" "$dir/docs/agents/triage-labels.md"
+  cp "$mps/domain.md" "$dir/docs/agents/domain.md"
 }
 
 AGENT_SKILLS_BLOCK='## Agent skills
