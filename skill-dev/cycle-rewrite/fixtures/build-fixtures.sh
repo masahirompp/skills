@@ -48,12 +48,12 @@ CYCLE_REWRITE_BLOCK='## サイクル型リライト開発(cycle-rewrite)
 
 ### 層の定義
 
-- 永続層: `docs/`(PRODUCT.md、adr/)、`CONTEXT.md`、`.claude/skills/`、CLAUDE.md、昇格済みモジュール: `lib/` — 厳格に維持する
+- 永続層: `docs/`(PRODUCT.md、adr/)、`CONTEXT.md`、`.claude/skills/`、CLAUDE.md — 厳格に維持する
 - 使い捨て層: `src/` とテストコード — サイクル末に全削除する。品質は「動けばOK」
 
 パスは init で確定した値。cycle-end の削除対象はこの定義を正とする。コードは雑に、ドキュメントは厳格に。
 
-仕様が収束したモジュールは、cycle-end で人間の承認を経て `lib/` に昇格し、以後は永続層として厳格に維持する(テストを持ち越し、インターフェース契約を docs に置く)。依存方向は使い捨て層 → 昇格モジュールの一方向のみ。
+サイクルを跨いで残すコードは、cycle-end で人間の承認と ADR への記録を経て永続層へ昇格したものに限る。
 
 **使い捨て層の削除は cycle-end の儀式の中でのみ行う**: issue 棚卸しの完了 → `git tag cycle-N` の作成 → 人間の明示的な承認、を必ずこの順で経ること。タグ前・承認前の削除は、学びと復元手段を同時に失う。
 

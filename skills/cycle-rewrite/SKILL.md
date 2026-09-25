@@ -17,12 +17,12 @@ AI 開発ではコード生成速度が人間の理解速度を上回り、人�
 
 | 層 | 中身 | 扱い |
 | --- | --- | --- |
-| 永続層 | `docs/PRODUCT.md`、`docs/adr/`、`CONTEXT.md`、`.claude/skills/`、`CLAUDE.md` / `AGENTS.md`、昇格済みモジュール(`lib/`) | 厳格に維持し、サイクルを跨いで積み上げる |
+| 永続層 | `docs/PRODUCT.md`、`docs/adr/`、`CONTEXT.md`、`.claude/skills/`、`CLAUDE.md` / `AGENTS.md`、cycle-end で昇格したコード | 厳格に維持し、サイクルを跨いで積み上げる |
 | 使い捨て層 | `src/` とテストコード | 品質は「動けばOK」。サイクル末に全削除 |
 
 コードは雑に、ドキュメントは厳格に。捨てていいのはコードだけで、学びを捨てるとサイクルが収束しない。
 
-層の実パスは init で確定し、CLAUDE.md の規約ブロック「層の定義」に記録する。以降の全モード(特に cycle-end の削除対象)はそこを正とする。本スキルの `src/`・`lib/` はその略記。
+層の実パスは init で確定し、CLAUDE.md の規約ブロック「層の定義」に記録する。以降の全モード(特に cycle-end の削除対象)はそこを正とする。本スキルの `src/` はその略記。
 
 前提: mattpocock-skills の grilling・domain-modeling(補助に prototype)と GitHub(issue・マイルストーン・gh CLI)。仕様詰めは grilling を domain-modeling と併用して行う(ユーザー起動の /grill-with-docs と同じ組み合わせ。/grill-with-docs は Claude からは起動できない)。本スキルは grilling を再実装せず、起動のタイミングと前提整備を担う。
 
@@ -46,7 +46,7 @@ CLAUDE.md に cycle-rewrite 規約が無く、ユーザーが導入を求めて�
 | 実装・動作確認中に学び/バグ/仕様変更/ハマりが出た | capture | 下記 [capture](#capture) |
 | 実装完了後、前サイクルから失われた仕様・機能がないか点検したい | cycle-audit | [references/cycle-audit.md](references/cycle-audit.md) |
 | サイクルを畳む・リセットする・作り直す | cycle-end | [references/cycle-end-ceremony.md](references/cycle-end-ceremony.md) |
-| 次サイクルに行くべきか、通常開発に移るべきかの相談 | transition-check | [references/transition-check.md](references/transition-check.md) |
+| 次サイクルに行くべきか、通常開発に移るべきか、移行後に一部で再開するかの相談 | transition-check | [references/transition-check.md](references/transition-check.md) |
 
 「リセットしたい」「作り直したい」は cycle-end(儀式を経てから次へ)。判別に迷えばユーザーに確認する。
 
@@ -80,8 +80,8 @@ init が CLAUDE.md に書き込むルール。
 
 ## 全モード共通の規律
 
-- **テスト**: 人間が手動確認できる規模の間は省略してよい。追いつかなくなったら PRODUCT.md の Testing Decisions から再生成する。使い捨て層のテストコードはサイクル間で流用しない(精査コストが再利用の利益を上回る)。昇格済みモジュールのテストは例外で、持ち越して維持する
-- **昇格済みモジュール(`lib/`)**: 依存は使い捨て層 → 昇格モジュールの一方向のみ(逆依存があると src/ 削除で main が壊れる)。実装セッションはインターフェース契約 docs 経由で使い、中身は読まない
+- **テスト**: 人間が手動確認できる規模の間は省略してよい。追いつかなくなったら PRODUCT.md の Testing Decisions から再生成する。使い捨て層のテストコードはサイクル間で流用しない(精査コストが再利用の利益を上回る)。昇格したコードのテストは例外で、持ち越して維持する
+- **昇格したコード**: 依存は使い捨て層 → 昇格したコードの一方向のみ(逆依存があると src/ 削除で main が壊れる)
 - **コンテキスト汚染防止**: 旧サイクルのコードを作業ツリーに置かない(AI が読んで流用する)。参照は `git show cycle-N:src/...` か作業ツリー外の `git worktree`
 - **PR は使わない**: コード単位の人間レビューをしない本方式では PR は空のゲートで、PR コメントは issue → docs の捕捉経路の外に学びを漏らす。短命ブランチ(worktree)で作業し、ローカルチェック通過を条件にローカルで main にマージする。クラウドのリモートエージェント併用時のみ PR を統合点として許容する
 - **不変条件は「main は常に起動する」のみ**

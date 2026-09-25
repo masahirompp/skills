@@ -4,7 +4,7 @@
 
 1. **前提確認**: git リポジトリであること、`gh auth status` が通ること。issue トラッカー等の設定(`docs/agents/issue-tracker.md` 等)が無ければ、先に /setup-matt-pocock-skills を促す(issue トラッカーは GitHub。目的は grilling と capture の前提整備)。既存の README や構想メモがあれば、サイクル1の grilling の入力候補として提示し、扱いを人間に確認する
 2. **`docs/adr/`・`CONTEXT.md`・`docs/PRODUCT.md` は作らない。** 空の器を先に置くと grilling 前に推測で埋められ、仕様が汚染される。`docs/adr/` と `CONTEXT.md` は grilling と併用する domain-modeling が最初の ADR・用語と共に作り、PRODUCT.md はサイクル1の grilling の結果から合成する
-3. **層のパスを確定し、CLAUDE.md に規約ブロックを追記する**(下記テンプレート)。既定(使い捨て層 = `src/` とテストコード、昇格置き場 = `lib/`)で足りるなら聞かずに進む。monorepo や `src/` を使わない構成など既定が合わないときだけ、削除対象パスを人間と合意する
+3. **層のパスを確定し、CLAUDE.md に規約ブロックを追記する**(下記テンプレート)。既定(使い捨て層 = `src/` とテストコード)で足りるなら聞かずに進む。monorepo や `src/` を使わない構成など既定が合わないときだけ、削除対象パスを人間と合意する
 4. **ラベルとマイルストーン**: `learning` / `spec-change` / `decision-log` と `cycle-1` を作る(`bug` は GitHub 既定)。ラベル = 種別、マイルストーン = サイクル区分
 5. **コミット**: ローカルに留める。push のタイミングは人間が決める
 6. **報告**: cycle-start に進むことを提案する。未作成の docs は作り忘れと区別がつかないので、意図的に作らなかったことと理由を報告に含める
@@ -36,16 +36,14 @@ CLAUDE.md の末尾に追記する(CLAUDE.md が無く AGENTS.md があればそ
 
 ### 層の定義
 
-- 永続層: `docs/`(PRODUCT.md、adr/)、`CONTEXT.md`、`.claude/skills/`、CLAUDE.md、昇格済みモジュール: `lib/` — 厳格に維持する
+- 永続層: `docs/`(PRODUCT.md、adr/)、`CONTEXT.md`、`.claude/skills/`、CLAUDE.md — 厳格に維持する
 - 使い捨て層: `src/` とテストコード — サイクル末に全削除する。品質は「動けばOK」
 
 パスは init で確定した値。cycle-end の削除対象はこの定義を正とする。コードは雑に、ドキュメントは厳格に。
 
+サイクルを跨いで残すコードは、cycle-end で人間の承認と ADR への記録を経て永続層へ昇格したものに限る。
+
 **使い捨て層の削除は cycle-end の儀式の中でのみ行う**: issue 棚卸しの完了 → `git tag cycle-N` の作成 → 人間の明示的な承認、を必ずこの順で経ること。タグ前・承認前の削除は、学びと復元手段を同時に失う。
-
-### 昇格済みモジュール
-
-仕様が収束したモジュールは、cycle-end で人間の承認を経て `lib/` に昇格し、以後は永続層として厳格に維持する(テストを持ち越し、インターフェース契約を docs に置く)。依存方向は使い捨て層 → 昇格モジュールの一方向のみ。実装セッションは契約 docs 経由で使い、中身のコードは読まない。
 
 ### AI の自律判断(3層)
 
