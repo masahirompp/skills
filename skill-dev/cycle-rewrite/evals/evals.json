@@ -36,7 +36,7 @@
         "シード済みの全 open issue(ふりかえりで起票した分も含む)に宛先または close が割り当てられており、割当漏れの issue がない(件数はふりかえり起票の有無で7〜8件になりうる。照合の書式は問わず、実際に全件が扱われているかで判定する)",
         "#1(CSVインポート不要)が docs/PRODUCT.md の Out of Scope 行きとしてルーティングされている(反映済み、または明示的な反映提案)",
         "#6(フォルダ廃止・タグ一本化)が docs/PRODUCT.md の Out of Scope 行き(User Stories の該当項目の削除を含む)としてルーティングされている(反映済み、または明示的な反映提案。宛先が「仕様更新」等の曖昧な表現で Out of Scope への配置が読み取れない場合は PASS しない)",
-        "設計判断の学び(#4 Fuse.js破綻)について ADR-0002 が削除ではなくステータス遷移(Superseded/Rejected)として扱われている",
+        "設計判断の学び(#4 Fuse.js破綻)について ADR-0002 が削除ではなくステータス遷移(superseded / deprecated。旧書式の Rejected も可)として扱われている",
         "実装ハマりの学び(#3 dexie.jsの罠)が .claude/skills/ のプロジェクトスキル(working-with-dexie 等の対象単位)行きとしてルーティングされている",
         "実装レベルの知見(#3 dexie.jsの罠)が docs/PRODUCT.md に混入していない(誤った宛先への否定チェック)",
         "プロセスの学び(#5 並列3でmain破壊)が CLAUDE.md / AGENTS.md 行きとしてルーティングされている",

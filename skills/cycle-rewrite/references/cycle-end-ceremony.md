@@ -48,9 +48,11 @@
 
 覆った ADR は削除せずステータスを遷移させる(Nygard 式)。削除すると「なぜ捨てたか」が消え、同じ案が再採用される。遷移前に ADR 本文を読み、覆す issue と対応づける。対応づく issue の無い ADR には触らない。
 
-- 新しい判断が置き換えた → `Status: Superseded by ADR-XXXX` と新 ADR
-- 不採用と確定した → `Status: Rejected` と理由
-- 注記を足して Accepted のまま残すのは遷移ではない。読み手は Status を見て尊重の要否を判断する
+ステータスは domain-modeling の ADR 形式に合わせ、frontmatter の `status` に書く(値は `proposed | accepted | deprecated | superseded by ADR-NNNN`)。status の無い ADR は accepted とみなし、遷移時に frontmatter を足す。既存 ADR が本文の `Status:` 行を使っていれば、その書式に合わせてよい。
+
+- 新しい判断が置き換えた → `superseded by ADR-NNNN` とし、新 ADR を起票する
+- 後継なしで覆った(採用をやめた) → `deprecated` とし、理由を本文に追記する
+- 注記を足して accepted のまま残すのは遷移ではない。読み手は status を見て尊重の要否を判断する
 
 ## 4. CONTEXT.md と Memory の剪定
 
