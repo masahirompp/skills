@@ -4,7 +4,7 @@ masahirompp の Claude Code 用 [Agent Skills](https://docs.claude.com/en/docs/a
 
 ## 構成
 
-`skills/` 配下の各ディレクトリが1スキル。[Agent Skills の仕様](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/skill-authoring-best-practices)に従い、`SKILL.md`（YAML frontmatter の `name` はディレクトリ名と一致、`description` は 1024 文字以内）と、必要に応じて `references/` などの補助ファイルを置く。スキルを追加するときは `skills/` にディレクトリを足すだけでプラグインに含まれる。
+`skills/` 配下の各ディレクトリが1スキル。[Agent Skills の仕様](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/skill-authoring-best-practices)に従い、`SKILL.md`（YAML frontmatter の `name` はディレクトリ名と一致、`description` は 1024 文字以内。`description` に `: ` などを含む場合は `>-` のブロックスカラーで書く。Claude Code は寛容に読むが、`npx skills` は厳密な YAML パーサーを使うため、そのままだと読み込みに失敗する）と、必要に応じて `references/` などの補助ファイルを置く。スキルを追加するときは `skills/` にディレクトリを足すだけでプラグインに含まれる。
 
 ```
 .claude-plugin/
@@ -25,6 +25,18 @@ skills/
 | [cycle-rewrite](skills/cycle-rewrite/SKILL.md) | サイクル型リライト開発ワークフローの管理。PoC/プロトタイプをサイクル単位でゼロから書き直し、仕様と学び（PRODUCT.md・ADR・CONTEXT.md・プロジェクトスキル）を永続資産として積み上げる開発方式のオーケストレーション |
 
 ## インストール
+
+### skills CLI（Claude Code 以外のエージェントにも対応）
+
+[skills](https://github.com/vercel-labs/skills) CLI でインストールする:
+
+```bash
+npx skills add masahirompp/skills
+```
+
+特定のスキルだけ入れる場合は `--skill <name>`、含まれるスキルの一覧は `--list` で確認できる。
+
+### Claude Code プラグイン
 
 Claude Code のプラグインとしてインストールする:
 
