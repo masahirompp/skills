@@ -6,5 +6,6 @@
     "url": "https://github.com/masahirompp"
   },
   "repository": "https://github.com/masahirompp/skills",
-  "skills": "./skills/"
+  "skills": "./skills/",
+  "license": "MIT"
 }

@@ -63,3 +63,7 @@ ln -s ../../ghq/github.com/masahirompp/skills/skills/cycle-rewrite ~/.claude/ski
 - `history/iteration-N/` — 過去イテレーションのベンチマーク結果とフィードバック
 
 実行時の作業ディレクトリ（fixture リポのクローンや eval 出力）は `~/.claude/skill-dev/cycle-rewrite-workspace/` に作られる（`CYCLE_REWRITE_WS` で変更可）。生成物はコミットせず、結果の要約（benchmark.md 等）だけを `history/` に取り込む。
+
+## ライセンス
+
+[MIT](LICENSE)
