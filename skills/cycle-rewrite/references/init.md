@@ -1,6 +1,13 @@
-# init セットアップの詳細
+# init の手順
 
-`docs/adr/`・`CONTEXT.md`・`docs/PRODUCT.md` は作らない(SKILL.md init 手順2参照)。init が用意するのは CLAUDE.md 追記・ラベル・マイルストーンのみ。
+新規プロジェクト(グリーンフィールド)のセットアップ。
+
+1. **前提確認**: git リポジトリであること、`gh auth status` が通ること。issue トラッカー等の設定(`docs/agents/issue-tracker.md` 等)が無ければ、先に /setup-matt-pocock-skills を促す(issue トラッカーは GitHub。目的は grilling と capture の前提整備)。既存の README や構想メモがあれば、サイクル1の grilling の入力候補として提示し、扱いを人間に確認する
+2. **`docs/adr/`・`CONTEXT.md`・`docs/PRODUCT.md` は作らない。** 空の器を先に置くと grilling 前に推測で埋められ、仕様が汚染される。`docs/adr/` と `CONTEXT.md` は domain-modeling(/grill-with-docs 経由)が最初の ADR・用語と共に作り、PRODUCT.md はサイクル1の grilling の結果から合成する
+3. **層のパスを確定し、CLAUDE.md に規約ブロックを追記する**(下記テンプレート)。既定(使い捨て層 = `src/` とテストコード、昇格置き場 = `lib/`)で足りるなら聞かずに進む。monorepo や `src/` を使わない構成など既定が合わないときだけ、削除対象パスを人間と合意する
+4. **ラベルとマイルストーン**: `learning` / `spec-change` / `decision-log` と `cycle-1` を作る(`bug` は GitHub 既定)。ラベル = 種別、マイルストーン = サイクル区分
+5. **コミット**: ローカルに留める。push のタイミングは人間が決める
+6. **報告**: cycle-start に進むことを提案する。未作成の docs は作り忘れと区別がつかないので、意図的に作らなかったことと理由を報告に含める
 
 ## gh コマンド
 
@@ -20,7 +27,7 @@ gh api -X POST "repos/{owner}/{repo}/milestones" -f title=cycle-1
 
 ## CLAUDE.md 追記ブロック
 
-CLAUDE.md の末尾に追記する(CLAUDE.md が無く AGENTS.md があればそちらに。どちらも無ければ CLAUDE.md を作成)。**層の定義のパス(`src/`・`lib/`)は init で確定した実パスに置き換える** — 既定で足りるならそのまま、monorepo 等ではプロジェクトの実構成に合わせる。プロジェクトに合わせて文言を調整してよいが、**3層自律判断と ADR 解釈ルールは省略しない** — この2つはセッションを跨いで確実に効かせる必要があり、毎セッション読まれる CLAUDE.md だけがそれを保証できる。
+CLAUDE.md の末尾に追記する(CLAUDE.md が無く AGENTS.md があればそちらに、どちらも無ければ CLAUDE.md を作成)。層の定義のパスは確定した実パスに置き換える。文言はプロジェクトに合わせて調整してよいが、3層自律判断と ADR 解釈ルールは省略しない。この2つはセッションを跨いで確実に効かせる必要があり、それを保証できるのは毎セッション読まれる CLAUDE.md だけ。
 
 ```markdown
 ## サイクル型リライト開発(cycle-rewrite)
