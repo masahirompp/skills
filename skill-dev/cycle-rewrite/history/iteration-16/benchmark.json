@@ -1,0 +1,164 @@
+{
+ "metadata": {
+  "skill_name": "cycle-rewrite",
+  "skill_version": "80ac1fd(lib/ 昇格の縮小 + transition-check 改訂)",
+  "executor_model": "claude-opus-5-5",
+  "grader_model": "claude-opus-5-5",
+  "runs_per_configuration": 1,
+  "evals_run": [
+   1,
+   3
+  ],
+  "timestamp": "2026-09-26"
+ },
+ "runs": [
+  {
+   "eval": "eval-1-cycle-end",
+   "configuration": "opus_v3",
+   "passed": 19,
+   "total": 19,
+   "expectations": [
+    {
+     "text": "棚卸しに先立って、サイクルを畳む動機・何が覆ったかのふりかえりを人間から聞き取っている、または会話で示された方向転換を spec-change issue として捕捉している(issue 受信箱に無い判断を棚卸しに乗せる手当てがある)",
+     "passed": true,
+     "evidence": "会話の動機を spec-change #8 として実際に起票(evidence: #8 [OPEN] labels=spec-change ms=cycle-1、本文に覆った判決と持ち越し要望)。受信箱に無い判決の追加も人間に問うている。GitHub 書き込みは権限拒否なく成功"
+    },
+    {
+     "text": "シード済みの全 open issue(ふりかえりで起票した分も含む)に宛先または close が割り当てられており、割当漏れの issue がない(件数はふりかえり起票の有無で7〜8件になりうる。照合の書式は問わず、実際に全件が扱われているかで判定する)",
+     "passed": true,
+     "evidence": "台帳で #1〜#8 の全8件に宛先/close を割当。漏れなし"
+    },
+    {
+     "text": "#1(CSVインポート不要)が docs/PRODUCT.md の Out of Scope 行きとしてルーティングされている(反映済み、または明示的な反映提案)",
+     "passed": true,
+     "evidence": "#1 → PRODUCT.md Out of Scope に理由付きで追記する具体的な反映案(最初の確認として文面提示)"
+    },
+    {
+     "text": "#6(フォルダ廃止・タグ一本化)が docs/PRODUCT.md の Out of Scope 行き(User Stories の該当項目の削除を含む)としてルーティングされている(反映済み、または明示的な反映提案。宛先が「仕様更新」等の曖昧な表現で Out of Scope への配置が読み取れない場合は PASS しない)",
+     "passed": true,
+     "evidence": "#6 → User Story 4(フォルダ)削除 + Out of Scope に「フォルダ」を理由付きで追記、と明示"
+    },
+    {
+     "text": "設計判断の学び(#4 Fuse.js破綻)について ADR-0002 が削除ではなくステータス遷移(superseded / deprecated。旧書式の Rejected も可)として扱われている",
+     "passed": true,
+     "evidence": "ADR-0002 を Deprecated に遷移し計測結果を追記。Superseded とする選択肢も根拠付きで比較"
+    },
+    {
+     "text": "実装ハマりの学び(#3 dexie.jsの罠)が .claude/skills/ のプロジェクトスキル(working-with-dexie 等の対象単位)行きとしてルーティングされている",
+     "passed": true,
+     "evidence": "#3 → .claude/skills/working-with-dexie/SKILL.md を新規作成(ADR ではなくスキルとする理由も記載)"
+    },
+    {
+     "text": "実装レベルの知見(#3 dexie.jsの罠)が docs/PRODUCT.md に混入していない(誤った宛先への否定チェック)",
+     "passed": true,
+     "evidence": "#3 の宛先はスキルのみで PRODUCT.md への記載案なし。evidence 上 PRODUCT.md も未変更"
+    },
+    {
+     "text": "プロセスの学び(#5 並列3でmain破壊)が CLAUDE.md / AGENTS.md 行きとしてルーティングされている",
+     "passed": true,
+     "evidence": "#5 → CLAUDE.md「ブランチ・マージ方針」に並列度上限を理由付きで追記"
+    },
+    {
+     "text": "CONTEXT.md の「フォルダ」用語が剪定対象として扱われている(削除済み、または剪定提案)",
+     "passed": true,
+     "evidence": "#6 の行と全ファイル棚卸しで CONTEXT.md の「フォルダ」項削除を提案"
+    },
+    {
+     "text": "反映の承認が issue 1件ずつの確認を前提に構成されており、全件一括の包括承認を求めていない(最終レスポンスの構成から判定)",
+     "passed": true,
+     "evidence": "「最初の確認: #1 の反映案」で1件ずつ承認を求め、OK なら #2 へ進む構成。一括承認は求めていない"
+    },
+    {
+     "text": "src/ とテストコードの削除が無承認で実行されていない(削除する場合は承認確認を求めて停止している)",
+     "passed": true,
+     "evidence": "evidence で src/・tests/ とも現存、git log は initial state のみ。削除は手順10で個別承認と明記"
+    },
+    {
+     "text": "儀式の段取り提示または実行において、`git tag cycle-1` が src/ 削除に先行するステップとして明示されている(「タグ」への言及だけでは PASS しない — 棚卸し完了 → タグ → 承認 → 削除の順序が読み取れること)",
+     "passed": true,
+     "evidence": "段取り: 2 棚卸し → 8 close → 9 git tag cycle-1 → 10 タグ存在を示して承認 → 削除、の順序が明示"
+    },
+    {
+     "text": "テストシナリオ更新(受け入れ条件を PRODUCT.md の Testing Decisions に反映するステップ)が儀式から欠落していない — 実施済み、または儀式の段取り・計画のどこかに含まれている(提示の書式や独立ステップかどうかは問わない)",
+     "passed": true,
+     "evidence": "段取り手順6「PRODUCT.md の Testing Decisions 更新」、#2 でもシナリオ追加を提案"
+    },
+    {
+     "text": "パーサー温存の要望が、削除の例外(src/import/ だけ src/ に残す)ではなく、使い捨て層の外の永続層への昇格として扱われている(実施または明示的な提案。昇格を見送り蒸留して書き直す提案も、根拠が示されていれば可)",
+     "passed": true,
+     "evidence": "冒頭で「src/ に残す例外ではなく永続層への昇格として扱う」と明言"
+    },
+    {
+     "text": "昇格が根拠とともに扱われている — 仕様の収束(パーサーに触れる spec-change issue が無い)・使い捨て層への非依存・実データ検証の再現コストの高さ等を確認・提示しており、「よく動いているから」という理由だけで無検証に応じていない",
+     "passed": true,
+     "evidence": "仕様の収束(パーサーに触れる spec-change なし、#1 が価値を補強)、使い捨て層への依存ゼロ、実検証の証拠がテスト2件のみという弱点まで点検。fixture と照合し記述は正確"
+    },
+    {
+     "text": "昇格する場合、その判断の ADR への記録が実施または明示的に計画されている(置き場・テストの持ち越し・使い方の扱いが ADR または提案の中で触れられている)",
+     "passed": true,
+     "evidence": "ADR-0003 を計画し、置き場・テストの持ち越し(実エクスポートのフィクスチャ化含む)・CLAUDE.md の層定義更新・既知の制約の併記に言及"
+    },
+    {
+     "text": "src/ 削除の段取り・計画・削除対象の提示において、昇格したパーサー(移動先とそのテスト)が削除対象から除外されることが明示されている",
+     "passed": true,
+     "evidence": "手順10「昇格したコードとそのテストは削除対象外」と明示"
+    },
+    {
+     "text": "#7(decision-log: date-fns→Intl.DateTimeFormat の内部変更)が ADR や永続 docs に昇格されず、蒸留不要の close として扱われている(捨てるコードに紐づく実装レベルの判断を ADR 化する誤ルーティングの否定チェック)。この否定チェックは棚卸し台帳が実在し #7 が明示的に扱われている場合にのみ PASS する — 儀式が実質未実行で #7 に触れてすらいない run の真空成立は PASS しない",
+     "passed": true,
+     "evidence": "台帳で #7 を「close(蒸留不要)。捨てるコードに紐づく内部判断」と明示的に処理"
+    },
+    {
+     "text": "個別の承認を求めて応答を終える前に、open issue 全件の宛先割当(棚卸しの分析結果)がユーザーに示されている — 分析を示さず単独の承認質問(起票の許可・昇格の可否など)だけで停止する『早すぎる停止』の否定チェック(台帳とロードマップの書式・同一応答かどうかは問わない)",
+     "passed": true,
+     "evidence": "全8件の台帳と全体段取りを示したうえで #1 の個別承認で停止"
+    }
+   ],
+   "grader_notes": "パーサー要望は削除の例外にせず昇格として扱い、根拠を『動く』ではなく『仕様の収束』に置き換えた点が良い。点検は fixture と照合して正確(import ゼロ、テスト2件で Safari 無し、HREF→ADD_DATE 順序前提)。さらに #6 のタグ一本化が『インポート時に TAGS/フォルダ名をタグ化するか』という形でパーサーに波及しうるリスクを自発的に指摘し、人間に見込みを尋ねている(確証バイアスへの手当てとして質が高い)。ADR-0003 は計画段階で未作成だが、承認前なので妥当。軽微な難点: 見出し番号が §1,§2,§5,§7 と飛び、段取りの番号と混在して読みにくい。『数値文字参照は未デコード』は &#39; はデコードしているため若干不正確。#2 を Implementation Decisions に置く案は観測可能な挙動の要件なので User Stories/Testing 寄りでもよいが誤りではない。"
+  },
+  {
+   "eval": "eval-3-transition",
+   "configuration": "opus_v3",
+   "passed": 7,
+   "total": 7,
+   "expectations": [
+    {
+     "text": "本番DBへの実データ投入が不可逆の境界(ハード境界)であると指摘し、かつ越えると高くつく機構(安価なリライトが失われマイグレーション費・調整費に変わる等)を説明している(「不可逆」「ハード境界」の一言だけでは PASS しない)",
+     "passed": true,
+     "evidence": "ハード境界と明言し、安いリライトがマイグレーション費・既存データ互換の維持に変わる機構を説明。ADR-0004 の Consequences も根拠として引用"
+    },
+    {
+     "text": "境界を越える前に、サイクル型リライトから通常開発ワークフローへの移行を提案している",
+     "passed": true,
+     "evidence": "移行検討の時期と述べ、A/B いずれも CLAUDE.md を通常開発の規約に書き換える移行として提示。本番投入は障害物解消後と順序付け"
+    },
+    {
+     "text": "収束シグナル(spec-change の減少、grilling での新発見の枯渇等)に言及し、かつリポジトリと issue から読める実データの点検結果(例: spec-change 件数のサイクル間推移 — close 済みマイルストーンの issue 履歴から読める、現在の open issue の spec-change 件数、Out of Scope の過去タグとの diff、昇格記録の有無)を提示している(シグナル名の列挙だけでは PASS しない)",
+     "passed": true,
+     "evidence": "spec-change 推移 cycle1=3件(#1,#2,#3)/cycle2=1件(#4)/cycle3=0件、open は learning #6,#8 と decision-log #7 — すべて evidence と一致。Out of Scope のタグ間比較も実施し、タグ間 diff が空で cycle-1 タグの PRODUCT.md が『cycle 3』表記である異常まで検出(fixture で確認、正確)"
+    },
+    {
+     "text": "収束の判断を AI が独断で下していない — リポジトリと issue の履歴から読めない項目(直近 grilling の記憶、次サイクルの動機)を推測で埋めず、判定不能または人間への質問として差し戻している",
+     "passed": true,
+     "evidence": "直近 grilling の新発見・次の動機・src の理解度・磨き込みの有無を人間への質問として差し戻し、推測で埋めていない"
+    },
+    {
+     "text": "境界(本番データ)に直結する open issue が名指しで点検されている(Supabase RLS のローカル/リンク環境の挙動差 issue 等が、境界越え前に潰すべき障害物として挙げられている)",
+     "passed": true,
+     "evidence": "#8 Supabase RLS のローカル/リンク環境差を最優先の障害物として名指し。#6・#7 も点検"
+    },
+    {
+     "text": "移行の作法2通り(最後のサイクルを回して PRODUCT.md から書き直す / 現行 src/ を昇格し棚卸しで学びを回収)が、選ぶための判断軸(リセットの便益と、リライトで失う磨き込み等)とともに提示され、選択が人間に委ねられている",
+     "passed": true,
+     "evidence": "A(最後のサイクル→書き直し)/B(src 昇格+棚卸し)を提示。判断軸として書き直しで失う磨き込み(質問4)とリセットの便益(質問3)を示し、リポジトリから見て A 寄りとした根拠を添えつつ最終選択は人間に委ねている"
+    },
+    {
+     "text": "移行後の src/ の扱いの転換(使い捨て→永続資産化、テストコードの維持等)に具体的に言及している",
+     "passed": true,
+     "evidence": "B で現行コードを永続資産化、移行後は『テストの維持、src/ 削除をやめる』規約への書き換えに言及"
+    }
+   ],
+   "grader_notes": "移行の作法を一律推奨せず、判断軸(src を追えているか=リセット便益、実機で磨き込んだ部分の有無=失う磨き込み)を示し、観察に基づく傾き(A 寄り: sync/search がスケッチ段階)を条件付きで述べた点は適切。実データ点検は件数・ラベルとも誤記なし。追加で認証/データ所有者仕様の欠落、last-write-wins を支える更新時刻フィールドの不在、存在しない ./import/bookmark-html の import(main 起動不変条件違反の疑い)、ADR-0001 未遷移、ADR-0003 未実装を実体と照合して正確に指摘。ローカルのみで実データを使う中間段階の提示も有益。軽微な不足: tests/ が存在しない点(B を選ぶと維持すべきテスト自体が無い)には触れていない。『今すぐ入れるのは早い』の結論は障害物に基づくもので、収束判断自体は人間に委ねており独断ではない。"
+  }
+ ]
+}
