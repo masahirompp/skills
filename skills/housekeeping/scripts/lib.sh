@@ -51,8 +51,11 @@ hk_process_cwds() {
 
 # hk_path_in_use <path> <process-cwds>: path 以下をカレントにしているプロセスを1つ返す
 hk_path_in_use() {
-  printf '%s\n' "$2" | awk -F'\t' -v p="$1" -v self="$$" '
-    $1 != self && ($3 == p || index($3, p "/") == 1) { print $1 " " $2; exit }'
+  # 入力を最後まで読む(途中で exit するとパイプの書き手が SIGPIPE で失敗し、pipefail で結果ごと失われる)
+  awk -F'\t' -v p="$1" -v self="$$" '
+    !found && $1 != self && ($3 == p || index($3, p "/") == 1) { print $1 " " $2; found = 1 }' <<EOF
+$2
+EOF
 }
 
 # hk_in_progress_op <worktree-path>: 進行中の rebase / merge / cherry-pick / revert / bisect を返す

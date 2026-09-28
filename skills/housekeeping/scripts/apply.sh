@@ -30,7 +30,7 @@ skip() {
 rows() { awk -F'\t' -v k="$1" '$2 == k && $1 != "keep"' "$input"; }
 
 # 1. ディレクトリが消えた worktree の管理情報
-if rows worktree | awk -F'\t' '$1 == "prune"' | grep -q .; then
+if [ -n "$(rows worktree | awk -F'\t' '$1 == "prune"')" ]; then
   git worktree prune && ok "worktree prune"
 fi
 

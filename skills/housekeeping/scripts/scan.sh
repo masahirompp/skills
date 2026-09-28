@@ -91,7 +91,7 @@ classify_branch() {
     printf 'keep\tオープン PR %s のベースブランチ\n' "$stacked"
     return
   fi
-  read -r st num oid <<EOF
+  IFS=' ' read -r st num oid <<EOF
 $(pr_info "$name")
 EOF
   case $st in
@@ -103,8 +103,9 @@ EOF
         printf 'keep\tPR なし・%s に未取り込みのコミットがある\n' "$default"
       elif ! grep -qxF "$sha" "$tmp/first-parent"; then
         printf 'delete\tPR なし・merge コミットで %s に取り込み済み\n' "$default"
-      elif git reflog show --format=%gs "refs/heads/$name" -- 2>/dev/null |
-        grep -qE '^(commit|cherry-pick|revert|merge .*Merge made)'; then
+      elif grep -qE '^(commit|cherry-pick|revert|merge .*Merge made)' <<EOF; then
+$(git reflog show --format=%gs "refs/heads/$name" -- 2>/dev/null)
+EOF
         printf 'delete\tPR なし・%s に取り込み済み(このブランチでコミットした記録がある)\n' "$default"
       else
         printf 'ask\tPR なし・%s に含まれるが、作成後にコミットした記録がない(未着手の可能性)\n' "$default"
@@ -143,8 +144,10 @@ handle_wt() {
     action=keep reason="プロセスがカレントディレクトリとして使用中(pid $proc)"
   elif op=$(hk_in_progress_op "$path") && [ -n "$op" ]; then
     action=keep reason="進行中の操作がある($op)"
-  elif dirty=$(git -C "$path" status --porcelain 2>/dev/null | wc -l | tr -d ' ') && [ "$dirty" != 0 ]; then
-    action=keep reason="未コミットの変更・未追跡ファイルが ${dirty} 件ある"
+  elif ! dirty=$(git -C "$path" status --porcelain 2>/dev/null); then
+    action=keep reason="git status を読めない"
+  elif [ -n "$dirty" ]; then
+    action=keep reason="未コミットの変更・未追跡ファイルが $(printf '%s\n' "$dirty" | wc -l | tr -d ' ') 件ある"
   elif [ -n "$branch" ]; then
     IFS=$'\t' read -r action reason <<EOF
 $(classify_branch "$branch" "$head")
@@ -156,7 +159,7 @@ EOF
   fi
   if [ "$action" != keep ]; then
     ign=$(git -C "$path" status --porcelain --ignored 2>/dev/null | sed -n 's/^!! //p' | head -5 | paste -sd, -)
-    [ -n "$ign" ] && reason="$reason。一緒に消える ignored ファイル: $ign"
+    [ -n "$ign" ] && reason="${reason}。一緒に消える ignored ファイル: $ign"
   fi
   emit "$action" worktree "$name" "$head" "$path" "$reason"
   [ -n "$branch" ] && printf '%s\t%s\t%s\n' "$branch" "$action" "$path" >>"$tmp/wt-branches"
@@ -190,7 +193,7 @@ while IFS=$'\t' read -r name sha track; do
       IFS=$'\t' read -r action reason <<EOF
 $(classify_branch "$name" "$sha")
 EOF
-      reason="worktree $wt_path と一緒に消す。$reason"
+      reason="worktree ${wt_path} と一緒に消す。${reason}"
       ;;
     *)
       IFS=$'\t' read -r action reason <<EOF
@@ -198,7 +201,7 @@ $(classify_branch "$name" "$sha")
 EOF
       ;;
   esac
-  case $track in *gone*) [ "$action" != keep ] && reason="$reason(追跡先のリモートブランチは削除済み)" ;; esac
+  case $track in *gone*) [ "$action" != keep ] && reason="${reason}(追跡先のリモートブランチは削除済み)" ;; esac
   emit "$action" branch "$name" "$sha" "" "$reason"
 done < <(git for-each-ref --format='%(refname:lstrip=2)%09%(objectname)%09%(upstream:track)' refs/heads/)
 
@@ -208,7 +211,7 @@ while IFS=$'\t' read -r name sha; do
   [ "$name" = HEAD ] && continue
   hk_is_protected "$name" "$default" && continue
   [ -n "$(open_pr_based_on "$name")" ] && continue
-  read -r st num oid <<EOF
+  IFS=' ' read -r st num oid <<EOF
 $(pr_info "$name")
 EOF
   [ "$st" = MERGED ] || continue
