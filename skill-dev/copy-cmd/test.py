@@ -11,7 +11,41 @@ import unittest
 
 SCRIPT = os.path.join(os.path.dirname(__file__), "../../skills/copy-cmd/scripts/copy_cmd.py")
 sys.path.insert(0, os.path.dirname(SCRIPT))
-from copy_cmd import normalize  # noqa: E402
+from copy_cmd import normalize, parse, render_all  # noqa: E402
+
+
+class RenderAll(unittest.TestCase):
+    """まとめてコピーする内容: && でつながっていた行だけ行末に && を残す。"""
+
+    def render(self, src):
+        return render_all(*parse(src))
+
+    def test_and_kept_at_line_end(self):
+        self.assertEqual(self.render("! cd app && npm i && npm test"), "cd app &&\nnpm i &&\nnpm test")
+
+    def test_separate_commands_not_chained(self):
+        self.assertEqual(self.render("```\nnpm ci\n```\n```\nnpm run build\n```"), "npm ci\nnpm run build")
+
+    def test_mixed(self):
+        src = "brew install jq\ncorepack enable && \\\n  corepack prepare pnpm --activate"
+        self.assertEqual(self.render(src), "brew install jq\ncorepack enable &&\ncorepack prepare pnpm --activate")
+
+    def test_trailing_and_without_backslash(self):
+        self.assertEqual(self.render("make &&\nmake install"), "make &&\nmake install")
+
+    def test_heredoc_line_and_not_split(self):
+        src = "cat > a <<'EOF' && echo ok\nbody\nEOF"
+        self.assertEqual(normalize(src), [src])
+        self.assertEqual(self.render(src), src)
+
+    def test_stops_on_failure_in_bash(self):
+        # 行末の && で次の行に続き、失敗したらそこで止まることを実際の bash で確かめる
+        text = self.render("false && echo should-not-run")
+        r = subprocess.run(["bash", "-c", text + "\necho after"], capture_output=True, text=True)
+        self.assertEqual(r.stdout, "after\n")
+        text = self.render("true && echo ran")
+        r = subprocess.run(["bash", "-c", text], capture_output=True, text=True)
+        self.assertEqual(r.stdout, "ran\n")
 
 
 class Normalize(unittest.TestCase):
@@ -76,7 +110,7 @@ class Normalize(unittest.TestCase):
         self.check('git commit -m "line1\n\nline2" && git push', 'git commit -m "line1\n\nline2"', "git push")
 
     def test_herestring_not_heredoc(self):
-        self.check("cat <<< hi && echo x", "cat <<< hi", "echo x")
+        self.check("cat <<< hi && echo x\nhi\necho y", "cat <<< hi", "echo x", "hi", "echo y")
 
 
 class Cli(unittest.TestCase):
@@ -103,7 +137,7 @@ class Cli(unittest.TestCase):
     def test_set_next_line_all(self):
         r, clip = self.run_cli("set", stdin="! a && b && c\n")
         self.assertEqual(r.returncode, 0)
-        self.assertEqual(clip, "a\nb\nc")  # 末尾に改行を付けない(貼った瞬間に実行されないように)
+        self.assertEqual(clip, "a &&\nb &&\nc")  # 末尾に改行を付けない(貼った瞬間に実行されないように)
         _, clip = self.run_cli("next")
         self.assertEqual(clip, "a")
         r, clip = self.run_cli("next")
@@ -118,7 +152,7 @@ class Cli(unittest.TestCase):
         _, clip = self.run_cli("next")
         self.assertEqual(clip, "c")
         _, clip = self.run_cli("all")
-        self.assertEqual(clip, "a\nb\nc")
+        self.assertEqual(clip, "a &&\nb &&\nc")
 
     def test_empty_input_fails(self):
         r, _ = self.run_cli("set", stdin="```\n# only comment\n```\n")

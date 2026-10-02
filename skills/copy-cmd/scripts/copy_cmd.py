@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """会話から抜き出したコマンドを整形してクリップボードに入れる。
 
-  copy_cmd.py set  [--session ID]   # 標準入力のコマンドを整形・保存し、全行をコピー
-  copy_cmd.py next [--session ID]   # 保存済みの次の1行をコピー
+  copy_cmd.py set  [--session ID]   # 標準入力のコマンドを整形・保存し、全コマンドをコピー
+  copy_cmd.py next [--session ID]   # 保存済みの次の1コマンドをコピー
   copy_cmd.py line N [--session ID] # 保存済みの N 番目(1始まり)をコピー
-  copy_cmd.py all  [--session ID]   # 保存済みの全行をコピーし直す
-  copy_cmd.py normalize             # 整形結果を標準出力に出すだけ(テスト用)
+  copy_cmd.py all  [--session ID]   # 保存済みの全コマンドをコピーし直す
+  copy_cmd.py normalize             # まとめてコピーする内容を標準出力に出すだけ(テスト用)
 
 整形の規則:
   - 行末の \\ による継続行は1行につなぐ
-  - トップレベルの && で分割して1コマンド1行にする(|| ; | はそのまま)
+  - トップレベルの && で分けて1コマンド1行にする(|| ; | はそのまま)。
+    まとめてコピーするときは行末に && を残して改行する。シェルは行末の && で次の行に続くので、
+    途中で失敗すればそこで止まる。1つずつコピーするときは && を付けない
   - 各行頭の `!`(Claude Code の bash モード)と `$ `(プロンプト)を外す
   - コードフェンス、空行、行全体のコメントを捨てる
   - クォート・$( )・ヒアドキュメントの中身はそのまま残す
@@ -30,7 +32,10 @@ HEREDOC_RE = re.compile(r"<<(-?)[ \t]*(['\"]?)([A-Za-z0-9_.-]+)\2")
 
 
 def split_commands(text):
-    """シェルのクォートとネストを追いながら、論理行と && で区切ったコマンドの一覧を返す。"""
+    """シェルのクォートとネストを追いながら、論理行と && で区切ったコマンドを返す。
+
+    要素は [コマンド, 次のコマンドと && でつながっていたか]。
+    """
     out = []
     buf = []
     pending_heredocs = []  # (delimiter, strip_tabs)
@@ -38,10 +43,10 @@ def split_commands(text):
     quote = None  # "'", '"', '`'
     depth = 0  # $( ) や ( ) の深さ
 
-    def flush():
+    def flush(chained=False):
         cmd = "".join(buf).strip()
         if cmd:
-            out.append(cmd)
+            out.append([cmd, chained])
         buf.clear()
 
     def at_word_start():
@@ -98,7 +103,12 @@ def split_commands(text):
                 i += 1
             continue
 
-        if c == "<" and text.startswith("<<", i) and not text.startswith("<<<", i):
+        if text.startswith("<<<", i):  # ヒアストリング。ヒアドキュメントと取り違えない
+            buf.append("<<<")
+            i += 3
+            continue
+
+        if text.startswith("<<", i):
             m = HEREDOC_RE.match(text, i)
             if m:
                 pending_heredocs.append((m.group(3), m.group(1) == "-"))
@@ -133,8 +143,9 @@ def split_commands(text):
             i += 1
             continue
 
-        if c == "&" and text.startswith("&&", i) and depth == 0:
-            flush()
+        if c == "&" and text.startswith("&&", i) and depth == 0 and not pending_heredocs:
+            # ヒアドキュメントと同じ行の && は分けない(本文の後ろに && を置けないため)
+            flush(chained=True)
             i += 2
             continue
 
@@ -151,11 +162,27 @@ def strip_prefix(cmd):
     return cmd.strip()
 
 
-def normalize(text):
+def parse(text):
+    """コマンドの一覧と、各コマンドが次と && でつながっていたかの一覧を返す。"""
     text = text.replace("\r\n", "\n")
     lines = [l for l in text.split("\n") if not re.match(r"^\s*(```|~~~)", l)]
-    cmds = [strip_prefix(c) for c in split_commands("\n".join(lines))]
-    return [c for c in cmds if c]
+    cmds, chain = [], []
+    for cmd, chained in split_commands("\n".join(lines)):
+        cmd = strip_prefix(cmd)
+        if cmd:
+            cmds.append(cmd)
+            chain.append(chained)
+    if chain:
+        chain[-1] = False
+    return cmds, chain
+
+
+def normalize(text):
+    return parse(text)[0]
+
+
+def render_all(cmds, chain):
+    return "\n".join(c + (" &&" if ch else "") for c, ch in zip(cmds, chain))
 
 
 def state_path(session):
@@ -203,24 +230,25 @@ def main():
     a = p.parse_args()
 
     if a.mode == "normalize":
-        print("\n".join(normalize(sys.stdin.read())))
+        print(render_all(*parse(sys.stdin.read())))
         return
 
     if a.mode == "set":
-        lines = normalize(sys.stdin.read())
+        lines, chain = parse(sys.stdin.read())
         if not lines:
             sys.exit("copy-cmd: コマンドが見つからない")
-        save_state(a.session, {"lines": lines, "cursor": 0})
-        copy("\n".join(lines))
-        report(lines, f"[copied all {len(lines)} command(s)]")
-        return
+        state = {"lines": lines, "chain": chain, "cursor": 0}
+        save_state(a.session, state)
+    else:
+        state = load_state(a.session)
+        lines = state["lines"]
+        chain = state.get("chain", [False] * len(lines))
 
-    state = load_state(a.session)
-    lines = state["lines"]
-
-    if a.mode == "all":
-        copy("\n".join(lines))
-        report(lines, f"[copied all {len(lines)} command(s)]")
+    if a.mode in ("set", "all"):
+        text = render_all(lines, chain)
+        copy(text)
+        print(f"[copied all {len(lines)} command(s)]")
+        print(text)
         return
 
     if a.mode == "line":
