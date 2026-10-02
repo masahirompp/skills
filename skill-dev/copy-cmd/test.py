@@ -9,52 +9,28 @@ import sys
 import tempfile
 import unittest
 
+sys.dont_write_bytecode = True  # skills/ の中に __pycache__ を作らない
 SCRIPT = os.path.join(os.path.dirname(__file__), "../../skills/copy-cmd/scripts/copy_cmd.py")
 sys.path.insert(0, os.path.dirname(SCRIPT))
-from copy_cmd import normalize, parse, render_all  # noqa: E402
+from copy_cmd import parse, render_all  # noqa: E402
 
 
-class RenderAll(unittest.TestCase):
-    """まとめてコピーする内容: && でつながっていた行だけ行末に && を残す。"""
-
-    def render(self, src):
-        return render_all(*parse(src))
-
-    def test_and_kept_at_line_end(self):
-        self.assertEqual(self.render("! cd app && npm i && npm test"), "cd app &&\nnpm i &&\nnpm test")
-
-    def test_separate_commands_not_chained(self):
-        self.assertEqual(self.render("```\nnpm ci\n```\n```\nnpm run build\n```"), "npm ci\nnpm run build")
-
-    def test_mixed(self):
-        src = "brew install jq\ncorepack enable && \\\n  corepack prepare pnpm --activate"
-        self.assertEqual(self.render(src), "brew install jq\ncorepack enable &&\ncorepack prepare pnpm --activate")
-
-    def test_trailing_and_without_backslash(self):
-        self.assertEqual(self.render("make &&\nmake install"), "make &&\nmake install")
-
-    def test_heredoc_line_and_not_split(self):
-        src = "cat > a <<'EOF' && echo ok\nbody\nEOF"
-        self.assertEqual(normalize(src), [src])
-        self.assertEqual(self.render(src), src)
-
-    def test_stops_on_failure_in_bash(self):
-        # 行末の && で次の行に続き、失敗したらそこで止まることを実際の bash で確かめる
-        text = self.render("false && echo should-not-run")
-        r = subprocess.run(["bash", "-c", text + "\necho after"], capture_output=True, text=True)
-        self.assertEqual(r.stdout, "after\n")
-        text = self.render("true && echo ran")
-        r = subprocess.run(["bash", "-c", text], capture_output=True, text=True)
-        self.assertEqual(r.stdout, "ran\n")
+def bash(script):
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True).stdout
 
 
-class Normalize(unittest.TestCase):
+class Split(unittest.TestCase):
+    """1つずつコピーするときの単位(&& を付けないコマンド単体)。"""
+
     def check(self, src, *expected):
-        self.assertEqual(normalize(src), list(expected))
+        self.assertEqual([cmd for cmd, _ in parse(src)], list(expected))
 
     def test_bang_prefix(self):
         self.check("! gh auth login", "gh auth login")
         self.check("!gh auth login", "gh auth login")
+
+    def test_bang_after_and_is_negation(self):
+        self.check("true && ! false", "true", "! false")
 
     def test_prompt_prefix(self):
         self.check("$ npm install", "npm install")
@@ -62,7 +38,6 @@ class Normalize(unittest.TestCase):
 
     def test_and_split(self):
         self.check("cd app && npm install && npm test", "cd app", "npm install", "npm test")
-        self.check("! cd app && npm test", "cd app", "npm test")
 
     def test_other_operators_kept(self):
         self.check("make || echo failed; ls | wc -l", "make || echo failed; ls | wc -l")
@@ -81,6 +56,11 @@ class Normalize(unittest.TestCase):
 
     def test_continuation_without_space(self):
         self.check("foo\\\nbar", "foobar")
+
+    def test_continuation_inside_quotes_keeps_spaces(self):
+        src = 'echo "abc \\\n   def"'
+        self.check(src, 'echo "abc    def"')
+        self.assertEqual(bash(render_all(parse(src))), bash(src))
 
     def test_continuation_then_and(self):
         self.check(
@@ -106,11 +86,66 @@ class Normalize(unittest.TestCase):
         src = "cat > a.txt <<'EOF'\nfoo && bar\n  \\\nEOF\necho done"
         self.check(src, "cat > a.txt <<'EOF'\nfoo && bar\n  \\\nEOF", "echo done")
 
+    def test_fence_inside_heredoc_kept(self):
+        src = "cat > README.md <<'EOF'\n```sh\nnpm i\n```\nEOF"
+        self.check(src, src)
+
     def test_multiline_quote_kept(self):
         self.check('git commit -m "line1\n\nline2" && git push', 'git commit -m "line1\n\nline2"', "git push")
 
     def test_herestring_not_heredoc(self):
         self.check("cat <<< hi && echo x\nhi\necho y", "cat <<< hi", "echo x", "hi", "echo y")
+
+    def test_for_loop_is_one_command(self):
+        src = "for f in a b; do\n  echo $f && echo ok\ndone\necho end"
+        self.check(src, "for f in a b; do\n  echo $f && echo ok\ndone", "echo end")
+
+    def test_if_and_brace_group(self):
+        self.check("if true; then\n  echo y\nfi", "if true; then\n  echo y\nfi")
+        self.check("{\n  echo a\n  echo b\n} > out.txt", "{\n  echo a\n  echo b\n} > out.txt")
+
+    def test_nested_and_case(self):
+        src = "while read l; do\n  case $l in\n    a) echo A;;\n  esac\ndone < f"
+        self.check(src, src)
+
+    def test_keyword_as_argument_ignored(self):
+        self.check("echo if do {\necho done", "echo if do {", "echo done")
+
+
+class RenderAll(unittest.TestCase):
+    """まとめてコピーする内容: && でつながっていた行だけ行末に && を残す。"""
+
+    def render(self, src):
+        return render_all(parse(src))
+
+    def test_and_kept_at_line_end(self):
+        self.assertEqual(self.render("! cd app && npm i && npm test"), "cd app &&\nnpm i &&\nnpm test")
+
+    def test_separate_commands_not_chained(self):
+        self.assertEqual(self.render("```\nnpm ci\n```\n```\nnpm run build\n```"), "npm ci\nnpm run build")
+
+    def test_mixed(self):
+        src = "brew install jq\ncorepack enable && \\\n  corepack prepare pnpm --activate"
+        self.assertEqual(self.render(src), "brew install jq\ncorepack enable &&\ncorepack prepare pnpm --activate")
+
+    def test_trailing_and_without_backslash(self):
+        self.assertEqual(self.render("make &&\nmake install"), "make &&\nmake install")
+
+    def test_heredoc_line_and_not_split(self):
+        src = "cat > a <<'EOF' && echo ok\nbody\nEOF"
+        self.assertEqual(self.render(src), src)
+
+    def test_same_behavior_as_original_in_bash(self):
+        # 整形の前後で bash の実行結果が変わらないこと(! を外す行頭以外)
+        for src in [
+            "false && echo should-not-run\necho after",
+            "true && echo ran",
+            "true && ! false && echo negated",
+            "for f in a b; do\n  echo $f && echo ok\ndone",
+            'echo "x \\\n  y" && echo z',
+        ]:
+            with self.subTest(src=src):
+                self.assertEqual(bash(self.render(src)), bash(src))
 
 
 class Cli(unittest.TestCase):
@@ -125,12 +160,12 @@ class Cli(unittest.TestCase):
         if os.path.exists(path):
             os.unlink(path)
 
-    def run_cli(self, *args, stdin=""):
-        env = dict(os.environ, COPY_CMD_SINK=self.sink)
-        r = subprocess.run(
-            [sys.executable, SCRIPT, *args, "--session", self.session],
-            input=stdin, capture_output=True, text=True, env=env,
-        )
+    def run_cli(self, *args, stdin="", session=True):
+        env = dict(os.environ, COPY_CMD_SINK=self.sink, PYTHONDONTWRITEBYTECODE="1")
+        env.pop("CLAUDE_CODE_SESSION_ID", None)
+        if session:
+            env["CLAUDE_CODE_SESSION_ID"] = self.session
+        r = subprocess.run([sys.executable, SCRIPT, *args], input=stdin, capture_output=True, text=True, env=env)
         with open(self.sink) as f:
             return r, f.read()
 
@@ -160,6 +195,11 @@ class Cli(unittest.TestCase):
 
     def test_next_without_state_fails(self):
         r, _ = self.run_cli("next")
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_without_session_fails(self):
+        # セッションを区別できないまま共有ファイルに書かない
+        r, _ = self.run_cli("set", stdin="ls", session=False)
         self.assertNotEqual(r.returncode, 0)
 
 

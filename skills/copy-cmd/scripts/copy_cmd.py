@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """会話から抜き出したコマンドを整形してクリップボードに入れる。
 
-  copy_cmd.py set  [--session ID]   # 標準入力のコマンドを整形・保存し、全コマンドをコピー
-  copy_cmd.py next [--session ID]   # 保存済みの次の1コマンドをコピー
-  copy_cmd.py line N [--session ID] # 保存済みの N 番目(1始まり)をコピー
-  copy_cmd.py all  [--session ID]   # 保存済みの全コマンドをコピーし直す
-  copy_cmd.py normalize             # まとめてコピーする内容を標準出力に出すだけ(テスト用)
+  copy_cmd.py set     # 標準入力のコマンドを整形・登録し、全コマンドをまとめてコピー
+  copy_cmd.py next    # 登録済みの次の1コマンドをコピー
+  copy_cmd.py line N  # 登録済みの N 番目(1始まり)をコピー
+  copy_cmd.py all     # 登録済みの全コマンドをまとめてコピーし直す
 
 整形の規則:
-  - 行末の \\ による継続行は1行につなぐ
+  - 行末の \\ による継続行は1行につなぐ(クォートの中では \\<改行> を消すだけで空白は残す)
   - トップレベルの && で分けて1コマンド1行にする(|| ; | はそのまま)。
     まとめてコピーするときは行末に && を残して改行する。シェルは行末の && で次の行に続くので、
     途中で失敗すればそこで止まる。1つずつコピーするときは && を付けない
-  - 各行頭の `!`(Claude Code の bash モード)と `$ `(プロンプト)を外す
+  - 行頭の `!`(Claude Code の bash モード)と `$ `(プロンプト)を外す。&& の後ろの ! は否定なので残す
   - コードフェンス、空行、行全体のコメントを捨てる
-  - クォート・$( )・ヒアドキュメントの中身はそのまま残す
+  - クォート・$( )・ヒアドキュメント・if / for / case / { } などの複合コマンドは分けずに1コマンドとして残す
 
+登録はセッションごと(環境変数 CLAUDE_CODE_SESSION_ID、--session で上書き可)の一時ファイルに保存する。
 環境変数 COPY_CMD_SINK にファイルパスを入れると、クリップボードの代わりにそのファイルへ書く(テスト用)。
 """
 
@@ -29,31 +29,53 @@ import sys
 import tempfile
 
 HEREDOC_RE = re.compile(r"<<(-?)[ \t]*(['\"]?)([A-Za-z0-9_.-]+)\2")
+FENCE_RE = re.compile(r"[ \t]*(```|~~~)[^\n]*(\n|$)")
+KEYWORD_RE = re.compile(r"(if|then|else|elif|fi|case|esac|for|select|while|until|do|done|\{|\}|!)(?=[\s;&|()]|$)")
+OPENERS = {"if", "case", "do", "{"}
+CLOSERS = {"fi", "esac", "done", "}"}
+# この語の次の語もコマンドの位置にある
+KEEPS_CMD_POS = {"if", "then", "else", "elif", "while", "until", "do", "{", "!"}
 
 
-def split_commands(text):
+def parse(text):
     """シェルのクォートとネストを追いながら、論理行と && で区切ったコマンドを返す。
 
-    要素は [コマンド, 次のコマンドと && でつながっていたか]。
+    要素は (コマンド, 次のコマンドと && でつながっていたか)。
     """
+    text = text.replace("\r\n", "\n")
     out = []
     buf = []
     pending_heredocs = []  # (delimiter, strip_tabs)
     i, n = 0, len(text)
     quote = None  # "'", '"', '`'
     depth = 0  # $( ) や ( ) の深さ
+    block = 0  # if/fi, do/done, case/esac, { } の深さ
+    cmd_pos = True  # 次の語がコマンドの位置にあるか(予約語の判定に使う)
+    line_start = True  # 今のコマンドが論理行の先頭から始まったか(&& の後ろではないか)
 
     def flush(chained=False):
+        nonlocal cmd_pos, line_start
         cmd = "".join(buf).strip()
+        if cmd and line_start:
+            cmd = re.sub(r"^!\s*", "", cmd)
+            cmd = re.sub(r"^\$\s+", "", cmd).strip()
         if cmd:
-            out.append([cmd, chained])
+            out.append((cmd, chained))
         buf.clear()
+        cmd_pos = True
+        line_start = not chained
 
     def at_word_start():
-        return not buf or buf[-1] in " \t;|&()"
+        return not buf or buf[-1] in " \t\n;|&()"
 
     while i < n:
         c = text[i]
+
+        if quote is None and (i == 0 or text[i - 1] == "\n"):
+            m = FENCE_RE.match(text, i)
+            if m:
+                i = m.end()
+                continue
 
         if quote == "'":
             buf.append(c)
@@ -64,19 +86,22 @@ def split_commands(text):
 
         if c == "\\" and i + 1 < n:
             if text[i + 1] == "\n":
+                i += 2
+                if quote is not None:
+                    continue  # クォートの中では \<改行> を消すだけ
                 # 継続行: \<改行> を消し、前後に空白があれば1つにまとめる
                 had_ws = bool(buf) and buf[-1] in " \t"
                 while buf and buf[-1] in " \t":
                     buf.pop()
-                i += 2
                 j = i
                 while i < n and text[i] in " \t":
                     i += 1
-                if (had_ws or i > j) and quote is None:
+                if had_ws or i > j:
                     buf.append(" ")
                 continue
             buf.append(c + text[i + 1])
             i += 2
+            cmd_pos = False
             continue
 
         if quote is not None:  # '"' か '`'
@@ -90,12 +115,8 @@ def split_commands(text):
             quote = c
             buf.append(c)
             i += 1
+            cmd_pos = False
             continue
-
-        if c == "(":
-            depth += 1
-        elif c == ")" and depth > 0:
-            depth -= 1
 
         if c == "#" and at_word_start():
             # コメントは行末まで捨てる
@@ -133,60 +154,80 @@ def split_commands(text):
                         if not pending_heredocs:
                             break
                     buf.append("\n")
-                flush()
+                if depth == 0 and block == 0:
+                    flush()
+                else:
+                    buf.append("\n")
+                    cmd_pos = True
                 continue
-            if depth > 0:
-                buf.append(c)
-                i += 1
-                continue
-            flush()
             i += 1
+            if depth > 0 or block > 0:
+                buf.append(c)
+                cmd_pos = True
+            else:
+                flush()
             continue
 
-        if c == "&" and text.startswith("&&", i) and depth == 0 and not pending_heredocs:
+        if c == "&" and text.startswith("&&", i):
             # ヒアドキュメントと同じ行の && は分けない(本文の後ろに && を置けないため)
-            flush(chained=True)
+            if depth == 0 and block == 0 and not pending_heredocs:
+                flush(chained=True)
+            else:
+                buf.append("&&")
+                cmd_pos = True
             i += 2
             continue
 
+        if c in " \t":
+            buf.append(c)
+            i += 1
+            continue
+
+        if c in ";|&(":
+            if c == "(":
+                depth += 1
+            buf.append(c)
+            i += 1
+            cmd_pos = True
+            continue
+
+        if c == ")":
+            if depth > 0:
+                depth -= 1
+            buf.append(c)
+            i += 1
+            cmd_pos = False
+            continue
+
+        if cmd_pos and at_word_start():
+            m = KEYWORD_RE.match(text, i)
+            if m:
+                word = m.group(1)
+                if word in OPENERS:
+                    block += 1
+                elif word in CLOSERS and block > 0:
+                    block -= 1
+                buf.append(word)
+                i = m.end()
+                cmd_pos = word in KEEPS_CMD_POS
+                continue
+
         buf.append(c)
         i += 1
+        cmd_pos = False
 
     flush()
+    if out:
+        out[-1] = (out[-1][0], False)
     return out
 
 
-def strip_prefix(cmd):
-    cmd = re.sub(r"^!\s*", "", cmd)
-    cmd = re.sub(r"^\$\s+", "", cmd)
-    return cmd.strip()
-
-
-def parse(text):
-    """コマンドの一覧と、各コマンドが次と && でつながっていたかの一覧を返す。"""
-    text = text.replace("\r\n", "\n")
-    lines = [l for l in text.split("\n") if not re.match(r"^\s*(```|~~~)", l)]
-    cmds, chain = [], []
-    for cmd, chained in split_commands("\n".join(lines)):
-        cmd = strip_prefix(cmd)
-        if cmd:
-            cmds.append(cmd)
-            chain.append(chained)
-    if chain:
-        chain[-1] = False
-    return cmds, chain
-
-
-def normalize(text):
-    return parse(text)[0]
-
-
-def render_all(cmds, chain):
-    return "\n".join(c + (" &&" if ch else "") for c, ch in zip(cmds, chain))
+def render_all(cmds):
+    return "\n".join(cmd + (" &&" if chained else "") for cmd, chained in cmds)
 
 
 def state_path(session):
-    key = re.sub(r"[^A-Za-z0-9_-]", "_", session or "") or "default"
+    key = re.sub(r"[^A-Za-z0-9_-]", "_", session)
     return os.path.join(tempfile.gettempdir(), f"copy-cmd-{key}.json")
 
 
@@ -195,7 +236,7 @@ def load_state(session):
         with open(state_path(session)) as f:
             return json.load(f)
     except FileNotFoundError:
-        sys.exit("copy-cmd: 保存済みのコマンドがない。先に set でコマンドを登録する")
+        sys.exit("copy-cmd: 登録済みのコマンドがない。先に set でコマンドを登録する")
 
 
 def save_state(session, state):
@@ -216,56 +257,49 @@ def copy(text):
     sys.exit("copy-cmd: クリップボードに書くコマンド(pbcopy / wl-copy / xclip / xsel)が見つからない")
 
 
-def report(lines, label):
-    print(label)
-    for line in lines:
-        print(line)
-
-
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("mode", choices=["set", "next", "line", "all", "normalize"])
+    p.add_argument("mode", choices=["set", "next", "line", "all"])
     p.add_argument("n", nargs="?", type=int)
-    p.add_argument("--session", default="")
+    p.add_argument("--session", default=os.environ.get("CLAUDE_CODE_SESSION_ID", ""))
     a = p.parse_args()
-
-    if a.mode == "normalize":
-        print(render_all(*parse(sys.stdin.read())))
-        return
+    if not a.session:
+        # セッションを区別できないと、別のセッションの登録を next で拾ってしまう
+        sys.exit("copy-cmd: セッション ID が分からない。--session で指定する")
 
     if a.mode == "set":
-        lines, chain = parse(sys.stdin.read())
-        if not lines:
+        cmds = parse(sys.stdin.read())
+        if not cmds:
             sys.exit("copy-cmd: コマンドが見つからない")
-        state = {"lines": lines, "chain": chain, "cursor": 0}
+        state = {"cmds": cmds, "cursor": 0}
         save_state(a.session, state)
     else:
         state = load_state(a.session)
-        lines = state["lines"]
-        chain = state.get("chain", [False] * len(lines))
+        cmds = state["cmds"]
 
     if a.mode in ("set", "all"):
-        text = render_all(lines, chain)
+        text = render_all(cmds)
         copy(text)
-        print(f"[copied all {len(lines)} command(s)]")
+        print(f"[copied all {len(cmds)} command(s)]")
         print(text)
         return
 
     if a.mode == "line":
-        if a.n is None or not 1 <= a.n <= len(lines):
-            sys.exit(f"copy-cmd: 番号は 1〜{len(lines)} で指定する")
+        if a.n is None or not 1 <= a.n <= len(cmds):
+            sys.exit(f"copy-cmd: 番号は 1〜{len(cmds)} で指定する")
         idx = a.n - 1
     else:  # next
         idx = state["cursor"]
-        if idx >= len(lines):
-            sys.exit(f"copy-cmd: 全 {len(lines)} コマンドをコピー済み。最初からなら line 1")
+        if idx >= len(cmds):
+            sys.exit(f"copy-cmd: 全 {len(cmds)} コマンドをコピー済み。最初からなら line 1")
 
-    copy(lines[idx])
+    copy(cmds[idx][0])
     state["cursor"] = idx + 1
     save_state(a.session, state)
-    report([lines[idx]], f"[copied {idx + 1}/{len(lines)}]")
-    if idx + 1 < len(lines):
-        print(f"[next] {lines[idx + 1]}")
+    print(f"[copied {idx + 1}/{len(cmds)}]")
+    print(cmds[idx][0])
+    if idx + 1 < len(cmds):
+        print(f"[next] {cmds[idx + 1][0]}")
 
 
 if __name__ == "__main__":

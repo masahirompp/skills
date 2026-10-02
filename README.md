@@ -22,9 +22,9 @@ skills/
 
 | スキル | 概要 |
 | --- | --- |
+| [copy-cmd](skills/copy-cmd/SKILL.md) | 会話でユーザーに実行を求めたシェルコマンドだけをクリップボードに入れる。行頭の `!` を外し、`&&` は行末に残して1行ずつに分け、`` の折り返しは1行につなぐ。`next` で1つずつコピーし直せる |
 | [cycle-rewrite](skills/cycle-rewrite/SKILL.md) | サイクル型リライト開発ワークフローの管理。PoC/プロトタイプをサイクル単位でゼロから書き直し、仕様と学び（PRODUCT.md・ADR・CONTEXT.md・プロジェクトスキル）を永続資産として積み上げる開発方式のオーケストレーション |
 | [housekeeping](skills/housekeeping/SKILL.md) | git リポジトリの後片付け。PR マージ済み・ローカルでマージ済みのブランチと worktree をまとめて削除する。作業中のものと監査用ブランチ（entire.io の `entire/*`）は残す |
-| [copy-cmd](skills/copy-cmd/SKILL.md) | 会話でユーザーに実行を求めたシェルコマンドだけをクリップボードに入れる。行頭の `!` を外し、`&&` は行末に残して1行ずつに分け、`\` の折り返しは1行につなぐ。`next` で1つずつコピーし直せる |
 
 ## インストール
 
