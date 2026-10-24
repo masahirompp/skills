@@ -212,8 +212,22 @@ def summarize_denials(denials):
     return "; ".join(out)
 
 
+def new_tokens():
+    return {"input": 0, "cache_read": 0, "output": 0}
+
+
+def add_tokens(tokens, data):
+    """子の使ったトークン数を足す。usage はサブエージェントの分を含まず、空のこともあるので、モデルごとの
+    累計である modelUsage を使う。input はキャッシュの書き込みと読み込みを含む入力の全体。"""
+    for m in (data.get("modelUsage") or {}).values():
+        tokens["input"] += (m.get("inputTokens", 0) + m.get("cacheCreationInputTokens", 0)
+                            + m.get("cacheReadInputTokens", 0))
+        tokens["cache_read"] += m.get("cacheReadInputTokens", 0)
+        tokens["output"] += m.get("outputTokens", 0)
+
+
 def check_result(label, rc, base, attempt, structured=False):
-    """子の結果を読んで費用を attempt に足し、成功の条件を全て満たすか確かめる。結果の JSON を返す。"""
+    """子の結果を読んでトークン数を attempt に足し、成功の条件を全て満たすか確かめる。結果の JSON を返す。"""
     try:
         with open(base + ".stdout.json", encoding="utf-8") as f:
             data = json.load(f)
@@ -221,7 +235,7 @@ def check_result(label, rc, base, attempt, structured=False):
         with open(base + ".stderr.txt", encoding="utf-8", errors="replace") as f:
             err = f.read().strip()[-1000:]
         raise AttemptFailed("child_error", label, f"結果の JSON を読めない(終了コード {rc})。stderr: {err}{sandbox_hint(err)}")
-    attempt["cost_usd"] += data.get("total_cost_usd") or 0.0
+    add_tokens(attempt["tokens"], data)
     denials = data.get("permission_denials") or []
     if denials:
         raise AttemptFailed("permission_denied", label, summarize_denials(denials))
@@ -364,7 +378,7 @@ def valid_state(s):
                 and isinstance(lock["running"], bool) and isinstance(lock.get("sha") or "", str)
                 and all(isinstance(a["result"], str) and isinstance(a["at"], str)
                         and isinstance(a.get("sha") or "", str) and isinstance(a.get("reason") or "", str)
-                        and isinstance(a.get("cost_usd", 0), (int, float))
+                        and all(isinstance(v, int) for v in (a.get("tokens") or {}).values())
                         for a in s["attempts"])
                 and (prev is None or (isinstance(prev["run_id"], str) and isinstance(prev["iterations"], int))))
     except (KeyError, TypeError, ValueError, AttributeError):
@@ -444,6 +458,11 @@ def new_state(previous=None):
     }
 
 
+def man(n):
+    """トークン数を 1.2万 のように短く書く。"""
+    return f"{n / 10000:.1f}万" if n >= 10000 else str(n)
+
+
 def cell(text):
     """表のセルに入れる値を、表を壊さず(| と改行)、HTML として解釈されず(<)、メンションにならない(@)形にする。"""
     return text.replace("|", "\\|").replace("\n", " ").replace("<", "&lt;").replace("@", "@\u200b")
@@ -462,14 +481,16 @@ def render(state):
     if prev:
         lines += [f"直前のシリーズ: run {prev['run_id']}(反復 {prev['iterations']})", ""]
     if state["attempts"]:
-        lines += ["| SHA | 時刻 | 結果 | 費用 |", "|---|---|---|---|"]
+        lines += ["| SHA | 時刻 | 結果 | 入力トークン | 出力トークン |", "|---|---|---|---|---|"]
         for a in state["attempts"]:
             result = a["result"] + (f"(反復 {a['iter']})" if a.get("iter") else "")
             if a.get("reason"):
                 result += f": {a['reason'][:100]}"
-            lines.append(f"| {cell((a['sha'] or '')[:7])} | {cell(a['at'])} | {cell(result)} | "
-                         f"${a.get('cost_usd', 0):.2f} |")
-        lines += ["", "失敗した試行の費用は、途中で止めた子の分を含まない(下限)。", ""]
+            t = a.get("tokens")
+            tin = f"{man(t['input'])}(うちキャッシュ読み込み {man(t['cache_read'])})" if t else "—"
+            tout = man(t["output"]) if t else "—"
+            lines.append(f"| {cell((a['sha'] or '')[:7])} | {cell(a['at'])} | {cell(result)} | {tin} | {tout} |")
+        lines += ["", "失敗した試行のトークン数は、途中で止めた子の分を含まない(下限)。", ""]
     lines.append("<sub>review-loop のスクリプトが更新するコメント。手で編集しても上書きされる。</sub>")
     return "\n".join(lines)
 
@@ -491,7 +512,7 @@ def acquire_lock(sc, head, new_run):
             raise Precondition(f"別の試行が実行中(開始 {state['lock']['started_at']})。二重起動の可能性がある")
         log(f"warn: 古いロックが残っていた(開始 {state['lock']['started_at']})。前回の試行を interrupted として記録する")
         state["attempts"].append({"sha": state["lock"].get("sha"), "at": state["lock"]["started_at"],
-                                  "result": "interrupted", "reason": "stale_lock", "cost_usd": 0})
+                                  "result": "interrupted", "reason": "stale_lock", "tokens": new_tokens()})
         state["consecutive_failures"] += 1
     if state is None:
         state = new_state()
@@ -650,7 +671,7 @@ def iterate(worktree, new_run, ctx):
         if state["consecutive_failures"] >= MAX_CONSECUTIVE_FAILURES:
             raise Precondition(f"連続失敗が {MAX_CONSECUTIVE_FAILURES} 回に達した。原因を取り除いてから、利用者の指示で --new-run する")
 
-        attempt = {"sha": start["head"], "at": state["lock"]["started_at"], "result": "failed", "cost_usd": 0.0}
+        attempt = {"sha": start["head"], "at": state["lock"]["started_at"], "result": "failed", "tokens": new_tokens()}
         ctx["attempt"] = attempt
         ctx["workdir"] = make_workdir(start, state["run_id"], len(state["attempts"]) + 1)
         log(f"作業ディレクトリ: {ctx['workdir']}")
@@ -678,7 +699,6 @@ def iterate(worktree, new_run, ctx):
         ignore_signals()
         children.kill_all()
         if attempt is not None:
-            attempt["cost_usd"] = round(attempt["cost_usd"], 4)
             state["attempts"].append(attempt)
         if nonce is not None and not release_lock(sc, state, nonce) and attempt is not None:
             log("warn: この試行の結果を状態コメントに記録できなかった"
@@ -740,7 +760,9 @@ def main():
     try:
         verdict = iterate(args.worktree, args.new_run, ctx)
         print(json.dumps(verdict, ensure_ascii=False, indent=2), flush=True)
-        log(f"完了: 反復 {ctx['attempt']['iter']}、費用 ${ctx['attempt']['cost_usd']:.2f}")
+        t = ctx["attempt"]["tokens"]
+        log(f"完了: 反復 {ctx['attempt']['iter']}、入力 {man(t['input'])}(うちキャッシュ読み込み {man(t['cache_read'])})、"
+            f"出力 {man(t['output'])} トークン")
     except BaseException as e:
         ignore_signals()
         kind, detail = classify(e)

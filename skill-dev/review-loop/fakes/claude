@@ -27,7 +27,11 @@ def record(kind, **extra):
 
 def result(text, **extra):
     d = {"type": "result", "subtype": "success", "is_error": False, "result": text,
-         "permission_denials": [], "total_cost_usd": 0.5}
+         "permission_denials": [], "total_cost_usd": 0.5,
+         # usage はサブエージェントの分を含まないので、modelUsage と食い違わせておく
+         "usage": {"input_tokens": 1, "output_tokens": 1},
+         "modelUsage": {"m": {"inputTokens": 500, "cacheCreationInputTokens": 1000, "cacheReadInputTokens": 2000,
+                              "outputTokens": 300}}}
     d.update(extra)
     print(json.dumps(d, ensure_ascii=False))
 

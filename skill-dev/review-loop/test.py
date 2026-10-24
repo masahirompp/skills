@@ -137,7 +137,10 @@ check(verdict.get("recommendation", {}).get("continue") is True, "標準出力�
 s = state()
 check(s and s["iter"] == 1 and s["attempts"][0]["result"] == "completed", "状態コメントに反復1が記録される")
 check(s and s["lock"]["running"] is False, "ロックが解除される")
-check(s and abs(s["attempts"][0]["cost_usd"] - 2.0) < 1e-9, "費用はレビュー役3つと判定役の合計")
+check(s and s["attempts"][0]["tokens"] == {"input": 4 * 3500, "cache_read": 4 * 2000, "output": 4 * 300},
+      "トークン数はレビュー役3つと判定役の modelUsage の合計(入力はキャッシュを含む)")
+body = comments()[0]["body"]
+check("| 1.4万(うちキャッシュ読み込み 8000) | 1200 |" in body, "入力と出力のトークン数を別の列に出す")
 workdir = err.rstrip().splitlines()[-1]
 check(os.path.isfile(os.path.join(workdir, "verdict.json")), "stderr の最後の行は作業ディレクトリ")
 check(workdir.startswith(os.path.join(root, "review-loop", "o_r", "7")), "作業ディレクトリは <tmp>/review-loop/<リポジトリ>/<PR>/<run>/<試行>")
@@ -417,7 +420,7 @@ rc, _, err = run(wt)
 check(rc == 2 and "安全上限" in err, "反復が安全上限に達したら止まる")
 check(state() is not None and next(c for c in comments() if c["id"] == 1)["edits"] == 0, "他人のコメントは触らない")
 s = state()
-s["attempts"].append({"sha": "abc", "at": "2026-01-01T00:00:00Z", "result": "failed", "reason": "x @someone", "cost_usd": 0})
+s["attempts"].append({"sha": "abc", "at": "2026-01-01T00:00:00Z", "result": "failed", "reason": "x @someone"})
 s["iter"] = 0
 write_state(s)
 run(wt)
