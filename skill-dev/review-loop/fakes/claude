@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+# テスト用の偽 claude。振る舞いは環境変数で切り替える。
+#   FAKE_DIR                 呼び出しの記録(calls.jsonl)を置く場所
+#   FAKE_SKILLS              init で返すスキル(カンマ区切り。既定は観点スキル全部)
+#   FAKE_PREFLIGHT_DELAY     init を返すまでの秒数
+#   FAKE_REVIEW_<観点>       ok(既定) / deny / fail / empty / dirty / hang / slow / bg(孫を残して終わる)
+#                            / remote(PR のブランチにだけ別のコミットを push する)
+#                            / switch(作業ツリーはクリーンのまま、別のブランチに切り替える)
+#                            <観点> は英数字以外を _ にしたもの(例: FAKE_REVIEW_code_review)
+#   FAKE_JUDGE               ok(既定) / noso / retries
+import json
+import os
+import re
+import sys
+import time
+
+args = sys.argv[1:]
+fake_dir = os.environ["FAKE_DIR"]
+
+
+def record(kind, **extra):
+    with open(os.path.join(fake_dir, "calls.jsonl"), "a") as f:
+        f.write(json.dumps({"kind": kind, "pid": os.getpid(), "cwd": os.getcwd(), "args": args,
+                            "env_job_dir": "CLAUDE_JOB_DIR" in os.environ,
+                            "env_session_id": "CLAUDE_CODE_SESSION_ID" in os.environ,
+                            "guard": os.environ.get("REVIEW_LOOP_ACTIVE"), **extra}) + "\n")
+
+
+def result(text, **extra):
+    d = {"type": "result", "subtype": "success", "is_error": False, "result": text,
+         "permission_denials": [], "total_cost_usd": 0.5,  # 本体は読まないが、本物の出力に合わせて残す
+         # usage はサブエージェントの分を含まないので、modelUsage と食い違わせておく
+         "usage": {"input_tokens": 1, "output_tokens": 1},
+         "modelUsage": {"m": {"inputTokens": 500, "cacheCreationInputTokens": 1000, "cacheReadInputTokens": 2000,
+                              "outputTokens": 300}}}
+    d.update(extra)
+    print(json.dumps(d, ensure_ascii=False))
+
+
+if "stream-json" in args:
+    record("preflight")
+    skills = os.environ.get("FAKE_SKILLS", "code-review,mattpocock-skills:code-review").split(",")
+    print(json.dumps({"type": "system", "subtype": "hook_started"}), flush=True)
+    time.sleep(float(os.environ.get("FAKE_PREFLIGHT_DELAY", "0")))
+    print(json.dumps({"type": "system", "subtype": "init", "cwd": os.getcwd(), "skills": skills,
+                      "slash_commands": skills + ["security-review", "clear"]}), flush=True)
+    time.sleep(60)  # 止められるはず
+    record("preflight-not-killed")
+    sys.exit(0)
+
+if "--json-schema" in args:
+    stdin = sys.stdin.read()
+    record("judge", stdin=stdin)
+    mode = os.environ.get("FAKE_JUDGE", "ok")
+    if mode == "noso":
+        result("done")
+    elif mode == "retries":
+        result("", subtype="error_max_structured_output_retries", is_error=True)
+    else:
+        verdict = {"findings": [{"id": "F1", "perspectives": ["code-review"], "file": "a.txt", "line": 1,
+                                 "summary": "s", "rationale": "r", "behavior_change": True,
+                                 "category": "defect", "conflict": None}],
+                   "conflicts": [], "recommendation": {"continue": True, "reason": "F1"}}
+        result(json.dumps(verdict), structured_output=verdict)
+    sys.exit(0)
+
+name = args[-1].split()[0].lstrip("/")
+record("review", name=name)
+mode = os.environ.get("FAKE_REVIEW_" + re.sub(r"[^A-Za-z0-9]", "_", name), "ok")
+if mode == "deny":
+    result("読めなかった", permission_denials=[{"tool_name": "Bash", "tool_use_id": "x",
+                                               "tool_input": {"command": "gh pr diff 7"}}])
+elif mode == "fail":
+    print("boom", file=sys.stderr)
+    sys.exit(1)
+elif mode == "empty":
+    result("")
+elif mode == "dirty":
+    open("stray.txt", "w").write("x")
+    result(f"{name}: 指摘なし")
+elif mode == "hang":
+    time.sleep(120)
+    record("review-not-killed", name=name)
+elif mode == "remote":  # 作業ツリーには触れず、PR のブランチにだけ別のコミットを push する
+    import subprocess
+    sha = subprocess.run(["git", "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "remote"],
+                         capture_output=True, text=True).stdout.strip()
+    subprocess.run(["git", "push", "-q", "origin", f"{sha}:refs/heads/feature"], capture_output=True)
+    result(f"{name}: 指摘なし")
+elif mode == "switch":  # 作業ツリーはクリーンのまま、別のブランチに切り替える
+    import subprocess
+    subprocess.run(["git", "switch", "-q", "-c", "other"], capture_output=True)
+    result(f"{name}: 指摘なし")
+elif mode == "bg":
+    import subprocess
+    g = subprocess.Popen(["sleep", "120"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    record("grandchild", name=name, grandchild=g.pid)
+    result(f"{name}: 指摘なし")
+elif mode == "slow":
+    time.sleep(3)
+    result(f"{name}: 指摘1件")
+else:
+    result(f"{name}: 指摘1件")
