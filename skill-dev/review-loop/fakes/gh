@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+# テスト用の偽 gh。review_loop.py が使う呼び出しだけを真似る。
+# PR の head は origin の同名ブランチの先端、コメントは FAKE_DIR/comments.json に置く。
+import json
+import os
+import subprocess
+import sys
+
+args = sys.argv[1:]
+store = os.path.join(os.environ["FAKE_DIR"], "comments.json")
+ME = "me"
+
+
+def load():
+    try:
+        with open(store) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
+
+
+def save(cs):
+    with open(store, "w") as f:
+        json.dump(cs, f, ensure_ascii=False)
+
+
+if args[:2] == ["pr", "view"]:
+    if os.environ.get("FAKE_NO_PR"):
+        print("no pull requests found for branch", file=sys.stderr)
+        sys.exit(1)
+    branch = subprocess.run(["git", "symbolic-ref", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
+    out = subprocess.run(["git", "ls-remote", "origin", f"refs/heads/{branch}"], capture_output=True, text=True).stdout
+    print(json.dumps({"number": 7, "headRefOid": out.split()[0] if out else ""}))
+elif args[:2] == ["api", "user"]:
+    print(ME)
+elif args[0] == "api" and "--paginate" in args:
+    for c in load():
+        print(json.dumps({"id": c["id"], "login": c["login"], "created_at": c["created_at"], "body": c["body"]},
+                         ensure_ascii=False))
+elif args[0] == "api" and "-X" in args:
+    method = args[args.index("-X") + 1]
+    body = json.load(sys.stdin)["body"]
+    cs = load()
+    if method == "POST":
+        cid = max([c["id"] for c in cs], default=100) + 1
+        cs.append({"id": cid, "login": ME, "created_at": f"2026-10-25T00:00:{len(cs):02d}Z", "body": body, "edits": 0})
+    else:
+        cid = int(args[args.index("-X") + 2].rsplit("/", 1)[1])
+        c = next(c for c in cs if c["id"] == cid)
+        c["body"] = body
+        c["edits"] += 1
+    save(cs)
+    print(cid)
+else:
+    print(f"fake gh: 未対応の呼び出し {args}", file=sys.stderr)
+    sys.exit(1)

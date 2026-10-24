@@ -24,6 +24,7 @@ skills/
 | --- | --- |
 | [cycle-rewrite](skills/cycle-rewrite/SKILL.md) | サイクル型リライト開発ワークフローの管理。PoC/プロトタイプをサイクル単位でゼロから書き直し、仕様と学び（PRODUCT.md・ADR・CONTEXT.md・プロジェクトスキル）を永続資産として積み上げる開発方式のオーケストレーション |
 | [housekeeping](skills/housekeeping/SKILL.md) | git リポジトリの後片付け。PR マージ済み・ローカルでマージ済みのブランチと worktree をまとめて削除する。作業中のものと監査用ブランチ（entire.io の `entire/*`）は残す |
+| [review-loop](skills/review-loop/SKILL.md) | 自分の PR のレビューループ。観点別のレビュースキルを `claude -p` で並列に実行し、判定役が突き合わせて競合を裁定した結果をもとに修正する、を収束するまで回す。状態は PR のコメント1つで管理する |
 
 ## インストール
 
@@ -66,6 +67,8 @@ ln -s ../../ghq/github.com/masahirompp/skills/skills/cycle-rewrite ~/.claude/ski
 実行時の作業ディレクトリ（fixture リポのクローンや eval 出力）は `~/.claude/skill-dev/cycle-rewrite-workspace/` に作られる（`CYCLE_REWRITE_WS` で変更可）。生成物はコミットせず、結果の要約（benchmark.md 等）だけを `history/` に取り込む。
 
 housekeeping は判定と削除をスクリプトで行うので、スクリプトのテストで検証する。`skill-dev/housekeeping/test.sh` を実行すると、使い捨てのリポジトリを作り、そこでマージ済み・作業中・監査用などの各ケースを走査・削除して結果を照合する。origin にはローカルの bare リポジトリを、PR 一覧には偽の JSON を使うので、GitHub には触れない。
+
+review-loop も、スクリプトの振る舞い(前提チェック、ロック、失敗の判定、子の停止、状態コメントの更新)をテストで検証する。`python3 skill-dev/review-loop/test.py` を実行すると、`skill-dev/review-loop/fakes/` の偽の `claude` と `gh` を PATH の先頭に置いて各ケースを実行する。GitHub にも API にも触れない。
 
 ## ライセンス
 
