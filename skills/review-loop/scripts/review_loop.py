@@ -21,6 +21,7 @@ import queue
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -30,13 +31,17 @@ import traceback
 import uuid
 
 # --- 設定 ------------------------------------------------------------------
-# 観点スキル。先頭の `/` を除いたスキル名と、必要ならその引数を書く(PR 番号は末尾に足される)。
-# プラグインのスキルは `plugin:name` の形式。組み込みの code-review は、レベルを指定しないと
-# 利用者が最後に使ったレベルを引き継ぎ、反復ごとに深さが変わりうるので固定する。
+# 観点スキル。先頭の `/` を除いたスキル名と、その引数を書く。プラグインのスキルは `plugin:name` の形式。
+# 引数の {pr} は PR 番号に、{base} は PR のベースブランチ名に置き換わる。引数の意味はスキルごとに違うので、
+# PR 番号を自動では足さない。
+# - 組み込みの code-review は、レベルを指定しないと利用者が最後に使ったレベルを引き継ぎ、反復ごとに
+#   深さが変わりうるので固定する
+# - mattpocock-skills:code-review は、引数を比較の起点(commit や branch)として読む。PR 番号を渡すと
+#   短い SHA と取り違えうるので、起点と仕様の在りかを分けて書く
 PERSPECTIVES = [
-    "code-review high",
+    "code-review high {pr}",
     "security-review",
-    "mattpocock-skills:code-review",
+    "mattpocock-skills:code-review origin/{base}(仕様は PR #{pr} の本文)",
 ]
 
 SAFETY_MAX_ITER = 10          # シリーズあたりの反復の上限
@@ -128,7 +133,8 @@ def ignore_signals():
 # --- 子プロセス --------------------------------------------------------------
 def kill_group(p):
     """子をプロセスグループごと止める。子自身が終わっていても、グループに残った孫(バックグラウンドの
-    シェルなど)を止めるために送る。"""
+    シェルなど)を止めるために送る。子が終わってから時間が経つと、PID が再利用されて無関係な
+    グループに届きうるので、終わった子には終わりを検知した直後に一度だけ使う(Children.finish)。"""
     for sig in (signal.SIGTERM, signal.SIGKILL):
         try:
             os.killpg(p.pid, sig)
@@ -151,19 +157,28 @@ class Children:
         self.procs = []
 
     def spawn(self, args, timeout, cwd, env, stdin, stdout, stderr):
-        watch = [sys.executable, os.path.abspath(__file__), "_watch", str(os.getpid()),
-                 str(timeout + WATCHDOG_GRACE), "--", *args]
         try:
-            p = subprocess.Popen(watch, cwd=cwd, env=env, stdin=stdin, stdout=stdout, stderr=stderr,
-                                 start_new_session=True)
+            p = subprocess.Popen(watched(args, timeout), cwd=cwd, env=env, stdin=stdin, stdout=stdout,
+                                 stderr=stderr, start_new_session=True)
         except OSError as e:
             raise AttemptFailed("spawn_error", args[0], str(e))
         self.procs.append(p)
         return p
 
+    def finish(self, p):
+        """子が終わった(または止める)ときに、グループの残りを止めて以後は触らない。"""
+        kill_group(p)
+        self.procs.remove(p)
+
     def kill_all(self):
-        for p in self.procs:
-            kill_group(p)
+        for p in list(self.procs):
+            self.finish(p)
+
+
+def watched(args, timeout):
+    """args を見張り役(`_watch`)経由で起動するコマンドにする。"""
+    return [sys.executable, os.path.abspath(__file__), "_watch", str(os.getpid()),
+            str(timeout + WATCHDOG_GRACE), "--", *args]
 
 
 def watch_main(parent_pid, limit, cmd):
@@ -228,6 +243,9 @@ def check_tools():
         raise Precondition(f"コマンドが見つからない: {', '.join(missing)}")
     if PREFLIGHT_TIMEOUT + REVIEW_TIMEOUT + JUDGE_TIMEOUT + MARGIN > BASH_TIMEOUT or BASH_TIMEOUT > BASH_TIMEOUT_MAX:
         raise Precondition("タイムアウトの合計が Bash ツールの制限時間を超えている(スクリプト冒頭の設定を見直す)")
+    names = [skill_name(s) for s in PERSPECTIVES]
+    if len(set(names)) != len(names):  # 出力ファイルと結果を観点の名前で分けているため
+        raise Precondition(f"PERSPECTIVES に同じスキルが重複している: {', '.join(names)}")
 
 
 def normalize_worktree(path):
@@ -247,7 +265,7 @@ def git_status(wt):
 
 
 def pr_view(wt):
-    r = run(["gh", "pr", "view", "--json", "number,headRefOid,state,author,url"], cwd=wt, check=False)
+    r = run(["gh", "pr", "view", "--json", "number,headRefOid,baseRefName,state,author,url"], cwd=wt, check=False)
     if r.returncode != 0:
         raise Precondition(f"このブランチの PR を取得できない: {r.stderr.strip()}")
     return json.loads(r.stdout)
@@ -259,6 +277,7 @@ def snapshot(wt):
     m = re.match(r"https?://[^/]+/([^/]+)/([^/]+)/pull/", pr.get("url") or "")
     return {
         "number": pr["number"],
+        "base": pr["baseRefName"],
         "repo": f"{m.group(1)}_{m.group(2)}" if m else "unknown",
         "state": pr.get("state"),
         "author": (pr.get("author") or {}).get("login"),
@@ -272,7 +291,8 @@ def preflight(wt, env):
     """子を1回だけ起動し、init を受け取ったらすぐ止める。API を呼ぶ前に止まるので費用はほぼかからない。"""
     err_file = tempfile.TemporaryFile(mode="w+")
     try:
-        p = subprocess.Popen(["claude", "-p", "--output-format", "stream-json", "--verbose", "ok"],
+        p = subprocess.Popen(watched(["claude", "-p", "--output-format", "stream-json", "--verbose", "ok"],
+                                     PREFLIGHT_TIMEOUT),
                              cwd=wt, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                              stderr=err_file, text=True, start_new_session=True)
     except OSError as e:
@@ -323,14 +343,19 @@ def preflight(wt, env):
 
 # --- PR の状態コメント -------------------------------------------------------
 def valid_state(s):
-    """状態コメントの JSON が、このスクリプトの書いた形をしているか。"""
+    """状態コメントの JSON が、このスクリプトの書いた形をしているか(render と acquire_lock が読むものを全て)。"""
     try:
-        return (isinstance(s, dict) and bool(RUN_ID_RE.match(s["run_id"]))
+        lock, prev = s["lock"], s.get("previous_run")
+        if lock["running"]:
+            parse_iso(lock["started_at"])
+        return (bool(RUN_ID_RE.match(s["run_id"]))
                 and isinstance(s["iter"], int) and isinstance(s["consecutive_failures"], int)
-                and isinstance(s["attempts"], list) and all(isinstance(a, dict) for a in s["attempts"])
-                and isinstance(s["lock"], dict) and isinstance(s["lock"].get("running"), bool)
-                and (not s["lock"]["running"] or isinstance(s["lock"].get("started_at"), str)))
-    except (KeyError, TypeError):
+                and isinstance(lock["running"], bool)
+                and all(isinstance(a["result"], str) and isinstance(a["at"], str)
+                        and isinstance(a.get("sha") or "", str) and isinstance(a.get("cost_usd", 0), (int, float))
+                        for a in s["attempts"])
+                and (prev is None or (isinstance(prev["run_id"], str) and isinstance(prev["iterations"], int))))
+    except (KeyError, TypeError, ValueError, AttributeError):
         return False
 
 
@@ -431,7 +456,10 @@ def render(state):
 
 
 def acquire_lock(sc, head, new_run):
-    """ロックを取り、状態と nonce を返す。二重起動を検出するためのもので、厳密な排他制御ではない。"""
+    """ロックを取り、状態と nonce を返す。
+
+    誤って二重に起動したことを検出するためのもので、厳密な排他制御ではない。ループを駆動する親は
+    1つだけなので、gh の書き込みが遅れて両方が通る程度の取りこぼしは許容する。"""
     state = sc.read()
     if state is not None and state["lock"]["running"]:
         age = (now() - parse_iso(state["lock"]["started_at"])).total_seconds()
@@ -478,14 +506,15 @@ def safe_name(s):
     return re.sub(r"[^A-Za-z0-9_.-]", "_", s)
 
 
-def run_reviews(wt, env, pr_number, workdir, children, attempt):
+def run_reviews(wt, env, pr, workdir, children, attempt):
     """観点別レビューを並列に実行し、{観点: result} を返す。1つでも失敗したら残りを止める。"""
     running = {}
     for spec in PERSPECTIVES:
         base = os.path.join(workdir, f"review-{safe_name(skill_name(spec))}")
+        prompt = "/" + spec.replace("{pr}", str(pr["number"])).replace("{base}", pr["base"])
         with open(base + ".stdout.json", "w") as out, open(base + ".stderr.txt", "w") as err:
             p = children.spawn(["claude", "-p", "--output-format", "json", "--append-system-prompt",
-                                REVIEW_CONSTRAINT, f"/{spec} {pr_number}"],
+                                REVIEW_CONSTRAINT, prompt],
                                REVIEW_TIMEOUT, cwd=wt, env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=err)
         running[skill_name(spec)] = (p, base, time.monotonic())
     results = {}
@@ -497,6 +526,7 @@ def run_reviews(wt, env, pr_number, workdir, children, attempt):
                     raise AttemptFailed("timeout", f"review {name}", f"{REVIEW_TIMEOUT // 60} 分を超えた")
                 continue
             del running[name]
+            children.finish(p)
             data = check_result(f"review {name}", rc, base, attempt)
             results[name] = data["result"]
             log(f"review {name}: 完了")
@@ -534,6 +564,7 @@ def run_judge(wt, env, pr_number, reviews, workdir, children, attempt):
         p.wait(JUDGE_TIMEOUT)
     except subprocess.TimeoutExpired:
         raise AttemptFailed("timeout", "judge", f"{JUDGE_TIMEOUT // 60} 分を超えた")
+    children.finish(p)
     data = check_result("judge", p.returncode, base, attempt, structured=True)
     return data["structured_output"]
 
@@ -578,11 +609,10 @@ def iterate(worktree, new_run, ctx):
     preflight(wt, env)
 
     sc = StateComment(wt, start["number"], me)
-    state, nonce = acquire_lock(sc, start["head"], new_run)
-    # ここから先は、どこで終わってもロックを解除する
     children = Children()
     attempt = None
-    try:
+    state, nonce = acquire_lock(sc, start["head"], new_run)
+    try:  # ここから先は、どこで終わってもロックを解除する
         if state["iter"] >= SAFETY_MAX_ITER:
             raise Precondition(f"反復が安全上限({SAFETY_MAX_ITER} 回)に達した")
         if state["consecutive_failures"] >= MAX_CONSECUTIVE_FAILURES:
@@ -590,39 +620,27 @@ def iterate(worktree, new_run, ctx):
 
         attempt = {"sha": start["head"], "at": state["lock"]["started_at"], "result": "failed", "cost_usd": 0.0}
         ctx["attempt"] = attempt
-        ctx["workdir"] = os.path.join(tempfile.gettempdir(), "review-loop", start["repo"], str(start["number"]),
-                                      state["run_id"], str(len(state["attempts"]) + 1))
-        os.makedirs(ctx["workdir"], exist_ok=True)
+        ctx["workdir"] = make_workdir(start, state["run_id"], len(state["attempts"]) + 1)
         log(f"作業ディレクトリ: {ctx['workdir']}")
-        try:
-            reviews = run_reviews(wt, env, start["number"], ctx["workdir"], children, attempt)
-            verdict = run_judge(wt, env, start["number"], reviews, ctx["workdir"], children, attempt)
-            children.kill_all()
-            check_contamination(wt, start)
-        except Interrupted as e:
-            raise AttemptFailed("interrupted", str(e))
+        reviews = run_reviews(wt, env, start, ctx["workdir"], children, attempt)
+        verdict = run_judge(wt, env, start["number"], reviews, ctx["workdir"], children, attempt)
+        children.kill_all()
+        check_contamination(wt, start)
+        with open(os.path.join(ctx["workdir"], "verdict.json"), "w", encoding="utf-8") as f:
+            json.dump(verdict, f, ensure_ascii=False, indent=2)
+        ignore_signals()  # ここから先は成功の記録だけなので、中断させない
         state["iter"] += 1
         state["consecutive_failures"] = 0
         attempt.update(result="completed", iter=state["iter"])
-        with open(os.path.join(ctx["workdir"], "verdict.json"), "w", encoding="utf-8") as f:
-            json.dump(verdict, f, ensure_ascii=False, indent=2)
         return verdict
     except BaseException as e:
         ignore_signals()
         if attempt is not None:
-            if isinstance(e, AttemptFailed):
-                attempt["reason"] = e.reason
-                detail = e.detail
-            elif isinstance(e, Precondition):  # git や gh の呼び出しが途中で失敗した
-                attempt["reason"] = "command_error"
-                detail = str(e)
-            else:
-                attempt["reason"] = "internal_error"
-                detail = "".join(traceback.format_exception(type(e), e, e.__traceback__))
+            attempt["reason"], detail = classify(e)
             state["consecutive_failures"] += 1
-            with open(os.path.join(ctx["workdir"], "failure.txt"), "w", encoding="utf-8") as f:
-                f.write(f"{attempt['reason']}\n{detail}\n")
-            ctx["detail"] = detail
+            if ctx["workdir"]:
+                with open(os.path.join(ctx["workdir"], "failure.txt"), "w", encoding="utf-8") as f:
+                    f.write(f"{attempt['reason']}\n{detail}\n")
         raise
     finally:
         ignore_signals()
@@ -631,6 +649,35 @@ def iterate(worktree, new_run, ctx):
             attempt["cost_usd"] = round(attempt["cost_usd"], 4)
             state["attempts"].append(attempt)
         release_lock(sc, state, nonce)
+
+
+def make_workdir(start, run_id, attempt_no):
+    """<一時ディレクトリ>/review-loop/<owner>_<repo>/<PR番号>/<run_id>/<試行>/ を新しく作る。
+
+    共有の一時ディレクトリ(TMPDIR のない Linux の /tmp)で他人に先回りされないよう、起点を
+    自分だけが使えるディレクトリにする。試行のディレクトリが既にあれば、前の出力と混ざるので失敗にする。"""
+    top = os.path.join(tempfile.gettempdir(), "review-loop")
+    os.makedirs(top, mode=0o700, exist_ok=True)
+    st = os.lstat(top)
+    if stat.S_ISLNK(st.st_mode) or st.st_uid != os.getuid() or st.st_mode & 0o077:
+        raise AttemptFailed("workdir_error", "", f"{top} が自分だけのディレクトリではない(所有者か権限を確かめてほしい)")
+    path = os.path.join(top, start["repo"], str(start["number"]), run_id, str(attempt_no))
+    try:
+        os.makedirs(path)
+    except FileExistsError:
+        raise AttemptFailed("workdir_error", "", f"作業ディレクトリが既にある: {path}")
+    return path
+
+
+def classify(e):
+    """例外を (失敗の種類, 詳細) にする。状態コメントへの記録と stderr への出力で同じ分類を使う。"""
+    if isinstance(e, AttemptFailed):
+        return e.reason, e.detail
+    if isinstance(e, Interrupted):
+        return f"interrupted: {e}", f"シグナル {e} で止められた"
+    if isinstance(e, Precondition):  # 前提チェックの失敗、または試行中の git や gh の失敗
+        return "command_error", str(e)
+    return "internal_error", "".join(traceback.format_exception(type(e), e, e.__traceback__))
 
 
 def on_signal(signum, _frame):
@@ -657,20 +704,15 @@ def main():
         verdict = iterate(args.worktree, args.new_run, ctx)
         print(json.dumps(verdict, ensure_ascii=False, indent=2), flush=True)
         log(f"完了: 反復 {ctx['attempt']['iter']}、費用 ${ctx['attempt']['cost_usd']:.2f}")
-    except Precondition as e:
-        log(f"error: {e}")
-        code = 1 if ctx["attempt"] is not None else 2
     except BaseException as e:
         ignore_signals()
-        # 試行を始めていれば(attempt があれば)状態に記録済み
-        recorded = ctx["attempt"] is not None
-        if isinstance(e, AttemptFailed):
-            log(f"failed: {e.reason}\n{e.detail}".rstrip())
-        elif isinstance(e, Interrupted):
-            log(f"error: シグナル {e} で止められた" + ("" if recorded else "(試行の開始前。記録していない)"))
+        kind, detail = classify(e)
+        if ctx["attempt"] is not None:  # 試行を始めていれば、状態コメントに記録済み
+            log(f"failed: {kind}\n{detail}".rstrip())
+            code = 1
         else:
-            log("error: 内部エラー\n" + (ctx.get("detail") or traceback.format_exc()).rstrip())
-        code = 1 if recorded else 2
+            log(f"error: {detail}" + ("(試行の開始前。記録していない)" if isinstance(e, Interrupted) else ""))
+            code = 2
     log(ctx["workdir"])
     return code
 

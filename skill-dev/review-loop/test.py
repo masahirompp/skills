@@ -22,7 +22,6 @@ RUNNER = """
 import json, os, sys
 sys.path.insert(0, sys.argv[1])
 import review_loop as r
-r.PERSPECTIVES = ["code-review high", "security-review", "mattpocock-skills:code-review"]
 r.LOCK_SETTLE_SECONDS = 0
 r.POLL_SECONDS = 0.1
 for k, v in json.loads(os.environ.get("OVERRIDES", "{}")).items():
@@ -152,7 +151,9 @@ check(judge and "===== 観点: security-review =====" in judge[0]["stdin"], "判
 check(judge and '"enum"' in judge[0]["args"][judge[0]["args"].index("--json-schema") + 1],
       "--json-schema にはスキーマの中身を渡す")
 check(all("--append-system-prompt" in c["args"] for c in reviews + judge), "運用上の制約を渡す")
-check(any(c["args"][-1] == "/code-review high 7" for c in reviews), "レビュー役のプロンプトは /<観点と引数> <PR番号>")
+prompts = {c["args"][-1] for c in reviews}
+check(prompts == {"/code-review high 7", "/security-review", "/mattpocock-skills:code-review origin/main(仕様は PR #7 の本文)"},
+      f"レビュー役のプロンプトは /<観点と引数>({{pr}} と {{base}} を展開)。{prompts}")
 
 # 2回目: 同じコメントを編集で更新する
 rc, out, err = run(wt)
@@ -250,6 +251,11 @@ rc, _, err = run(wt)
 check(rc == 2 and "実行中" in err and state()["lock"]["nonce"] == "n", "実行中のロックがあれば撤退する")
 
 s["lock"]["started_at"] = "2026-01-01T00:00:00Z"
+s["consecutive_failures"] = 2
+write_state(s)
+rc, _, err = run(wt)
+check(rc == 2 and "連続失敗" in err and state()["attempts"][-1]["result"] == "interrupted",
+      "古いロックの interrupted も連続失敗に数え、上限に達すれば止まる(片付けは記録される)")
 s["consecutive_failures"] = 0
 write_state(s)
 n = len(s["attempts"])
@@ -309,6 +315,36 @@ write_state(s)
 rc, _, err = run(wt)
 check(rc == 0 and state()["run_id"] != "../../escape" and not os.path.exists(os.path.join(root, "escape")),
       "run_id の形を検証し、作業ディレクトリのパスに外の値を使わない")
+
+s = state()
+s["attempts"][0].pop("at")
+write_state(s)
+rc, _, err = run(wt)
+check(rc == 0 and "読めない" in err and state()["iter"] == 1, "試行の記録の形が崩れていても、新しいシリーズとして上書きする")
+
+# 事前確認の最中にスクリプトが SIGKILL されても、事前確認の子は残らない
+env = env_for(OVERRIDES="{}", FAKE_PREFLIGHT_DELAY="60")
+n_pre = len([c for c in calls() if c["kind"] == "preflight"])
+p = subprocess.Popen([sys.executable, "-c", RUNNER, SCRIPTS, "iterate", wt], env=env,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+deadline = time.time() + 20
+while time.time() < deadline and len([c for c in calls() if c["kind"] == "preflight"]) == n_pre:
+    time.sleep(0.2)
+pre = [c for c in calls() if c["kind"] == "preflight"][-1]
+p.kill()
+p.wait()
+time.sleep(3)
+check(not alive(pre["pid"]), "事前確認の子も見張り役が止める")
+
+rc, _, err = run(wt, overrides={"PERSPECTIVES": ["code-review high", "code-review max"]})
+check(rc == 2 and "重複" in err, "同じスキルを重複して並べると拒否する")
+
+# 試行の作業ディレクトリが既にあれば、前の出力と混ざらないよう失敗にする(failed: <種類> の行を出す)
+s = state()
+os.makedirs(os.path.join(root, "review-loop", "o_r", "7", s["run_id"], str(len(s["attempts"]) + 1)))
+rc, _, err = run(wt)
+check(rc == 1 and "failed: workdir_error" in err, "作業ディレクトリが既にあれば失敗にし、failed: の行に種類を出す")
+run(wt, "--new-run")
 
 # 同時にコメントを作った場合、負けた側は自分のコメントを消して撤退する
 os.remove(os.path.join(root, "fake", "comments.json"))

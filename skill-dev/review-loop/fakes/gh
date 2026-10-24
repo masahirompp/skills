@@ -31,7 +31,7 @@ if args[:2] == ["pr", "view"]:
     branch = subprocess.run(["git", "symbolic-ref", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
     out = subprocess.run(["git", "ls-remote", "origin", f"refs/heads/{branch}"], capture_output=True, text=True).stdout
     print(json.dumps({"number": 7, "headRefOid": out.split()[0] if out else "",
-                      "state": os.environ.get("FAKE_PR_STATE", "OPEN"),
+                      "baseRefName": "main", "state": os.environ.get("FAKE_PR_STATE", "OPEN"),
                       "author": {"login": os.environ.get("FAKE_PR_AUTHOR", ME)},
                       "url": "https://github.com/o/r/pull/7"}))
 elif args[:2] == ["api", "user"]:
