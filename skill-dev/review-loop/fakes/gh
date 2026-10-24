@@ -58,6 +58,12 @@ elif args[0] == "api" and "-X" in args:
         cid = max([c["id"] for c in cs], default=100) + 1
         cs.append({"id": cid, "login": ME, "created_at": f"2026-10-25T00:00:{len(cs):02d}Z", "body": body, "edits": 0})
     else:
+        n = int(open(os.path.join(os.environ["FAKE_DIR"], "patches")).read() or 0) \
+            if os.path.exists(os.path.join(os.environ["FAKE_DIR"], "patches")) else 0
+        open(os.path.join(os.environ["FAKE_DIR"], "patches"), "w").write(str(n + 1))
+        if os.environ.get("FAKE_FAIL_PATCH_FROM") and n + 1 >= int(os.environ["FAKE_FAIL_PATCH_FROM"]):
+            print("HTTP 502: Bad Gateway", file=sys.stderr)
+            sys.exit(1)
         cid = int(args[args.index("-X") + 2].rsplit("/", 1)[1])
         c = next(c for c in cs if c["id"] == cid)
         c["body"] = body

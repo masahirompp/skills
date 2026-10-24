@@ -429,6 +429,16 @@ check(rc == 1 and "gh pr diff" in err and "gh pr diff" not in body, "失敗の�
 check(os.path.isfile(os.path.join(err.rstrip().splitlines()[-1], "failure.txt")), "失敗の詳細を作業ディレクトリに残す")
 run(wt, "--new-run")
 
+# 状態コメントへの書き込み(ロックの解除)に失敗したら、成功でもそう伝える(F10)
+patches = os.path.join(root, "fake", "patches")
+if os.path.exists(patches):
+    os.remove(patches)
+rc, _, err = run(wt, FAKE_FAIL_PATCH_FROM="2")  # 1回目(ロックの取得)は通し、2回目(解除)から失敗させる
+check(rc == 0 and "記録できなかった" in err and "反復回数が進んでいない" in err, "成功でも記録できなければ警告する")
+s = state()
+s["lock"] = {"running": False, "started_at": None, "sha": None, "nonce": None}
+write_state(s)
+
 # --- 安全上限と他人のコメント -------------------------------------------------
 s = state()
 s["iter"] = 10

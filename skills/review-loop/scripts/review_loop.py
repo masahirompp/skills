@@ -10,7 +10,9 @@
 終了コード:
   0  成功。標準出力は判定 JSON だけ
   1  試行が失敗した。状態コメントに記録済み
-  2  試行を始めなかった(前提を満たさない、ロックを取れない、上限に達した、開始前に中断された)。記録しない
+  2  試行を始めなかった(前提を満たさない、ロックを取れない、上限に達した、開始前に中断された)。試行は記録しない
+     (ただし、残っていた古いロックを interrupted として片付けた記録は残る)
+0 と 1 でも、状態コメントへの書き込みに失敗したときは記録されていない(stderr にそう出る)。
 どの場合も stderr の最後の行は作業ディレクトリのパス(作る前に終わったときは空行)。
 """
 import argparse
@@ -37,7 +39,8 @@ import uuid
 # - 組み込みの code-review は、レベルを指定しないと利用者が最後に使ったレベルを引き継ぎ、反復ごとに
 #   深さが変わりうるので固定する
 # - mattpocock-skills:code-review は、引数を比較の起点(commit や branch)として読む。数字だけを渡すと
-#   起点として解決できず推測に頼るので、「PR #番号」と書く。起点には PR のベースを、仕様には PR 本文を使う
+#   起点として解決できず推測に頼るので、「PR #番号」と書く。スキルが PR からベースを起点に決め(ローカルの
+#   main か origin/main になる)、PR 本文を仕様として使う
 PERSPECTIVES = [
     "code-review high {pr}",
     "security-review",
@@ -295,17 +298,35 @@ def pr_view(wt):
     return json.loads(r.stdout)
 
 
+def pr_view_retrying(wt, attempts=3, wait=5):
+    """pr_view を、一時的な失敗に備えて数回試す。長い試行の最後の確認で、判定を捨てないようにする。"""
+    for i in range(attempts):
+        try:
+            return pr_view(wt)
+        except Precondition:
+            if i == attempts - 1:
+                raise
+            time.sleep(wait)
+
+
+def local_refs(wt):
+    """(HEAD の SHA, ブランチ名) を返す。detached HEAD ならブランチ名は空。"""
+    return (run(["git", "rev-parse", "HEAD"], cwd=wt).stdout.strip(),
+            run(["git", "symbolic-ref", "--quiet", "--short", "HEAD"], cwd=wt, check=False).stdout.strip())
+
+
 def snapshot(wt):
     """HEAD の SHA、ブランチ名、PR の head などを返す。混入の検出に使う。"""
     pr = pr_view(wt)
     m = re.match(r"https?://[^/]+/([^/]+)/([^/]+)/pull/", pr.get("url") or "")
+    head, branch = local_refs(wt)
     return {
         "number": pr["number"],
         "repo": f"{m.group(1)}_{m.group(2)}" if m else "unknown",
         "state": pr.get("state"),
         "author": (pr.get("author") or {}).get("login"),
-        "head": run(["git", "rev-parse", "HEAD"], cwd=wt).stdout.strip(),
-        "branch": run(["git", "symbolic-ref", "--quiet", "--short", "HEAD"], cwd=wt, check=False).stdout.strip(),
+        "head": head,
+        "branch": branch,
         "pr_head": pr["headRefOid"],
     }
 
@@ -650,14 +671,13 @@ def find_contamination(wt, start):
     if status.strip():
         problems.append("作業ツリーがクリーンでない:\n" + status.rstrip())
     # ブランチが切り替わっていると gh pr view が失敗するので、git で分かるものを先に見る
-    head = run(["git", "rev-parse", "HEAD"], cwd=wt).stdout.strip()
-    branch = run(["git", "symbolic-ref", "--quiet", "--short", "HEAD"], cwd=wt, check=False).stdout.strip()
+    head, branch = local_refs(wt)
     for label, before, after in (("HEAD", start["head"], head), ("ブランチ", start["branch"], branch)):
         if before != after:
             problems.append(f"{label} が変わった: {before} → {after}")
     if problems:
         return "contamination", "\n".join(problems) + "\n(変更は元に戻していない)"
-    pr_head = pr_view(wt)["headRefOid"]
+    pr_head = pr_view_retrying(wt)["headRefOid"]
     if pr_head != start["pr_head"]:
         # 外からの push と、子がローカルを変えずに直接 push したものは区別できない
         return "head_changed", (f"試行中に PR の head が変わった: {start['pr_head']} → {pr_head}。"
@@ -758,17 +778,19 @@ def make_workdir(start, run_id, attempt_no):
     読まれたりしないよう、起点は自分が所有するディレクトリに限り、権限を 0700 に絞って使う。
     試行のディレクトリが既にあれば、前の出力と混ざるので失敗にする。"""
     top = os.path.join(tempfile.gettempdir(), "review-loop")
-    os.makedirs(top, mode=0o700, exist_ok=True)
-    st = os.lstat(top)
-    if stat.S_ISLNK(st.st_mode) or st.st_uid != os.getuid():
-        raise AttemptFailed("workdir_error", "", f"{top} が自分の所有するディレクトリではない")
-    if st.st_mode & 0o077:  # umask などで広い権限で作られていたら絞る
-        os.chmod(top, 0o700)
     path = os.path.join(top, start["repo"], str(start["number"]), run_id, str(attempt_no))
     try:
+        os.makedirs(top, mode=0o700, exist_ok=True)
+        st = os.lstat(top)
+        if stat.S_ISLNK(st.st_mode) or st.st_uid != os.getuid():
+            raise AttemptFailed("workdir_error", "", f"{top} が自分の所有するディレクトリではない")
+        if st.st_mode & 0o077:  # umask などで広い権限で作られていたら絞る
+            os.chmod(top, 0o700)
         os.makedirs(path)
     except FileExistsError:
         raise AttemptFailed("workdir_error", "", f"作業ディレクトリが既にある: {path}")
+    except OSError as e:
+        raise AttemptFailed("workdir_error", "", f"作業ディレクトリを作れない: {e}")
     return path
 
 
