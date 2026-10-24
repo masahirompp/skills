@@ -39,7 +39,7 @@ import uuid
 # - mattpocock-skills:code-review は、引数を比較の起点(commit や branch)として読む。PR 番号を渡すと
 #   短い SHA と取り違えうるので、起点と仕様の在りかを分けて書く。起点には、ローカルの追跡ブランチ
 #   (fetch していなければ古い)ではなく、GitHub 上のベースの SHA を使う
-# {base_sha} は PR のベースの先端の SHA(ローカルになければ前提チェックで止まる)、{base} はベースブランチ名。
+# {base_sha} は PR のベースの先端の SHA に置き換わる(ローカルになければ前提チェックで止まる)。
 PERSPECTIVES = [
     "code-review high {pr}",
     "security-review",
@@ -242,8 +242,7 @@ def skill_name(spec):
 
 
 def expand(spec, pr):
-    return (spec.replace("{pr}", str(pr["number"])).replace("{base_sha}", pr["base_sha"])
-            .replace("{base}", pr["base"]))
+    return spec.replace("{pr}", str(pr["number"])).replace("{base_sha}", pr["base_sha"])
 
 
 def check_tools():
@@ -362,9 +361,10 @@ def valid_state(s):
             parse_iso(lock["started_at"])
         return (bool(RUN_ID_RE.match(s["run_id"]))
                 and isinstance(s["iter"], int) and isinstance(s["consecutive_failures"], int)
-                and isinstance(lock["running"], bool)
+                and isinstance(lock["running"], bool) and isinstance(lock.get("sha") or "", str)
                 and all(isinstance(a["result"], str) and isinstance(a["at"], str)
-                        and isinstance(a.get("sha") or "", str) and isinstance(a.get("cost_usd", 0), (int, float))
+                        and isinstance(a.get("sha") or "", str) and isinstance(a.get("reason") or "", str)
+                        and isinstance(a.get("cost_usd", 0), (int, float))
                         for a in s["attempts"])
                 and (prev is None or (isinstance(prev["run_id"], str) and isinstance(prev["iterations"], int))))
     except (KeyError, TypeError, ValueError, AttributeError):
@@ -378,9 +378,10 @@ class StateComment:
         self.me = me
         self.id = None
         self.created = None  # このプロセスが作ったコメントの id
+        self.unreadable = False  # 状態コメントはあるが、読めない形だった
 
     def read(self):
-        """状態を返す。コメントがない、または読めない形なら None(読めないコメントは上書きする)。"""
+        """状態を返す。コメントがない、または読めない形なら None(読めないときは unreadable を立てる)。"""
         r = run(["gh", "api", "--paginate", f"repos/{{owner}}/{{repo}}/issues/{self.pr}/comments",
                  "--jq", ".[] | {id, login: .user.login, created_at, body}"], cwd=self.wt)
         found = []
@@ -389,6 +390,7 @@ class StateComment:
                 c = json.loads(line)
                 if c["login"] == self.me and (c["body"] or "").startswith(f"<!-- {MARKER} "):
                     found.append(c)
+        self.unreadable = False
         if not found:
             self.id = None
             return None
@@ -402,7 +404,7 @@ class StateComment:
         except (AttributeError, ValueError):
             state = None
         if not valid_state(state):
-            log(f"warn: 状態コメント {self.id} の JSON を読めない。新しいシリーズとして上書きする")
+            self.unreadable = True
             return None
         return state
 
@@ -442,6 +444,11 @@ def new_state(previous=None):
     }
 
 
+def cell(text):
+    """表のセルに入れる値を、表を壊さず(| と改行)、HTML として解釈されず(<)、メンションにならない(@)形にする。"""
+    return text.replace("|", "\\|").replace("\n", " ").replace("<", "&lt;").replace("@", "@\u200b")
+
+
 def render(state):
     raw = json.dumps(state, ensure_ascii=False, separators=(",", ":"))
     # HTML コメントを閉じないよう、また @ がメンションにならないようにエスケープする(JSON としては等価)
@@ -459,9 +466,9 @@ def render(state):
         for a in state["attempts"]:
             result = a["result"] + (f"(反復 {a['iter']})" if a.get("iter") else "")
             if a.get("reason"):
-                reason = a["reason"][:100].replace("|", "\\|").replace("<", "&lt;").replace("@", "@​")
-                result += f": {reason}"
-            lines.append(f"| {(a['sha'] or '')[:7]} | {a['at']} | {result} | ${a.get('cost_usd', 0):.2f} |")
+                result += f": {a['reason'][:100]}"
+            lines.append(f"| {cell((a['sha'] or '')[:7])} | {cell(a['at'])} | {cell(result)} | "
+                         f"${a.get('cost_usd', 0):.2f} |")
         lines += ["", "失敗した試行の費用は、途中で止めた子の分を含まない(下限)。", ""]
     lines.append("<sub>review-loop のスクリプトが更新するコメント。手で編集しても上書きされる。</sub>")
     return "\n".join(lines)
@@ -473,6 +480,11 @@ def acquire_lock(sc, head, new_run):
     誤って二重に起動したことを検出するためのもので、厳密な排他制御ではない。ループを駆動する親は
     1つだけなので、gh の書き込みが遅れて両方が通る程度の取りこぼしは許容する。"""
     state = sc.read()
+    if sc.unreadable:
+        if not new_run:
+            raise Precondition(f"状態コメント {sc.id} を読めない(手で編集された可能性がある)。反復回数と連続失敗の"
+                               "上限を黙って外さないよう、ここで止める。利用者の指示があれば --new-run で始め直す")
+        log(f"warn: 状態コメント {sc.id} を読めないので、新しいシリーズとして上書きする")
     if state is not None and state["lock"]["running"]:
         age = (now() - parse_iso(state["lock"]["started_at"])).total_seconds()
         if age < STALE_LOCK_AFTER:
@@ -669,20 +681,22 @@ def iterate(worktree, new_run, ctx):
             attempt["cost_usd"] = round(attempt["cost_usd"], 4)
             state["attempts"].append(attempt)
         if nonce is not None and not release_lock(sc, state, nonce) and attempt is not None:
-            log("warn: この試行の結果を状態コメントに記録できなかった。連続失敗の回数にも数えられていない")
+            log("warn: この試行の結果を状態コメントに記録できなかった"
+                + ("(反復回数が進んでいない)" if attempt["result"] == "completed" else "(連続失敗にも数えられていない)")
+                + "。ロックが残っていれば、65分たつまで次の起動は「別の試行が実行中」で止まる")
 
 
 def make_workdir(start, run_id, attempt_no):
     """<一時ディレクトリ>/review-loop/<owner>_<repo>/<PR番号>/<run_id>/<試行>/ を新しく作る。
 
     共有の一時ディレクトリ(TMPDIR のない Linux の /tmp)で他人に先回りされたり、レビューの出力を
-    読まれたりしないよう、起点は自分が所有する 0700 のディレクトリに限る。試行のディレクトリが既にあれば、前の出力と混ざるので失敗にする。"""
+    読まれたりしないよう、起点は自分が所有するディレクトリに限り、権限を 0700 に絞って使う。試行のディレクトリが既にあれば、前の出力と混ざるので失敗にする。"""
     top = os.path.join(tempfile.gettempdir(), "review-loop")
     os.makedirs(top, mode=0o700, exist_ok=True)
     st = os.lstat(top)
     if stat.S_ISLNK(st.st_mode) or st.st_uid != os.getuid():
         raise AttemptFailed("workdir_error", "", f"{top} が自分の所有するディレクトリではない")
-    if st.st_mode & 0o077:  # 以前の版が通常の権限(0755)で作ったもの。レビューの出力を他人に読ませない
+    if st.st_mode & 0o077:  # umask などで広い権限で作られていたら絞る
         os.chmod(top, 0o700)
     path = os.path.join(top, start["repo"], str(start["number"]), run_id, str(attempt_no))
     try:

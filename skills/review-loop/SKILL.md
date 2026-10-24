@@ -16,7 +16,7 @@ description: >-
 
 - 対象ブランチに PR がある。worktree の中で作業していて、`gh` が認証済み
 - 観点スキルが使う `gh` や `git` の読み取り系コマンドが、許可ルールで許可されている。`-p` では、許可されていないツールの呼び出しは確認なしで拒否され、その試行は失敗になる
-- 観点スキルの一覧は `scripts/review_loop.py` 冒頭の `PERSPECTIVES` にある。変えるときはそこだけを書き換える。各要素は「スキル名と引数」で、引数の `{pr}` は PR 番号に、`{base_sha}` は PR のベースの先端の SHA に、`{base}` はベースブランチ名に置き換わる(例: `code-review high {pr}` → `/code-review high 12`)。引数の意味はスキルごとに違うので、PR 番号は自動では足さない。たとえば `mattpocock-skills:code-review` は引数を比較の起点として読むので、`{base_sha}` を渡す(ローカルの追跡ブランチは fetch していなければ古い)。組み込みの `code-review` は、レベルを指定しないと利用者が最後に使ったレベルを引き継ぐので、固定してある
+- 観点スキルの一覧は `scripts/review_loop.py` 冒頭の `PERSPECTIVES` にある。変えるときはそこだけを書き換える。各要素は「スキル名と引数」で、引数の `{pr}` は PR 番号に、`{base_sha}` は PR のベースの先端の SHA に置き換わる(例: `code-review high {pr}` → `/code-review high 12`)。引数の意味はスキルごとに違うので、PR 番号は自動では足さない。たとえば `mattpocock-skills:code-review` は引数を比較の起点として読むので、`{base_sha}` を渡す(ローカルの追跡ブランチは fetch していなければ古い)。組み込みの `code-review` は、レベルを指定しないと利用者が最後に使ったレベルを引き継ぐので、固定してある
 - 制限時間・上限回数などの値は、同じファイル冒頭の定数(`REVIEW_TIMEOUT`、`BASH_TIMEOUT`、`STALE_LOCK_AFTER`、`SAFETY_MAX_ITER`、`MAX_CONSECUTIVE_FAILURES`)が正。この文書に書いた値は、その既定値
 
 ## 手順
@@ -33,12 +33,12 @@ Bash ツールの**バックグラウンド実行**で、**制限時間を 90 �
 python3 "${CLAUDE_SKILL_DIR}/scripts/review_loop.py" iterate <worktree の絶対パス>
 ```
 
-- `--new-run` は、利用者から新しいシリーズを始めるよう明示的に指示されたときだけ付ける。直前のシリーズは run_id と反復回数だけに要約され、試行の記録は消える
+- `--new-run` は、利用者から新しいシリーズを始めるよう明示的に指示されたときだけ付ける。直前のシリーズは run_id と反復回数だけに要約され、試行の記録は消える。状態コメントが手で編集されるなどして読めないときも、スクリプトは上限を黙って外さないよう終了コード2で止まる。そのときも `--new-run` は利用者に確認してから付ける
 - 実行中は、あなたも、あなたが起動したエージェントも worktree を編集しない。レビュー役は同じ worktree を読んでいる
 
 ### 3. 結果を受け取る
 
-stderr の最後の行は作業ディレクトリのパス(`<一時ディレクトリ>/review-loop/<owner>_<repo>/<PR番号>/<run_id>/<試行>/`)。各レビューの出力(`review-*.stdout.json` の `result`)、判定役への入力(`judge-input.md`)、判定(`verdict.json`)、失敗したときの詳細(`failure.txt`)がそこに残る。
+stderr の最後の行は作業ディレクトリのパス(`<一時ディレクトリ>/review-loop/<owner>_<repo>/<PR番号>/<run_id>/<試行>/`)。作業ディレクトリを作る前に終わったとき(終了コード2のほとんどと `workdir_error`)は空行で、`failure.txt` もない。各レビューの出力(`review-*.stdout.json` の `result`)、判定役への入力(`judge-input.md`)、判定(`verdict.json`)、失敗したときの詳細(`failure.txt`)がそこに残る。
 
 | 終了コード | 意味 | 次にすること |
 | --- | --- | --- |
@@ -46,7 +46,7 @@ stderr の最後の行は作業ディレクトリのパス(`<一時ディレク�
 | 1 | 試行の失敗。状態コメントに記録済み(stderr に「記録できなかった」と出たときは記録されておらず、連続失敗にも数えられていない。同じ失敗が続くなら、上限を待たずに利用者に報告する) | stderr の理由を読む。後述の「失敗したとき」 |
 | 2 | 試行を始めなかった(前提を満たさない、ロックを取れない、上限に達した、開始前に中断された)。試行は記録されない(ただし、残っていた古いロックを `interrupted` として片付けた記録は残る) | 理由を解消してから再実行するか、利用者に報告する |
 
-失敗の種類は stderr の `failed:` の行の先頭にある: `permission_denied`(権限の拒否)、`timeout`、`child_error`(子の異常終了)、`no_output`(結果が空、構造化出力がない)、`contamination`(混入)、`head_changed`(試行中に PR に別の push があった)、`interrupted`(中断)、`spawn_error`(子を起動できない)、`workdir_error`(作業ディレクトリを作れない)、`command_error` と `internal_error`(git・gh・スクリプト自身の失敗)。種類の正は `review_loop.py` の `AttemptFailed` と `classify`。PR の状態コメントには種類と対象だけを載せ、詳細(拒否されたコマンドなど)は載せない。
+失敗の種類は stderr の `failed:` の行の先頭にある: `permission_denied`(権限の拒否)、`timeout`、`child_error`(子の異常終了)、`no_output`(結果が空、構造化出力がない)、`contamination`(混入)、`head_changed`(試行中に PR に別の push があった)、`interrupted`(中断)、`spawn_error`(見張り役を起動できない。claude 自体が起動できないときは `child_error` になる)、`workdir_error`(作業ディレクトリを作れない)、`command_error` と `internal_error`(git・gh・スクリプト自身の失敗)。種類の正は `review_loop.py` の `AttemptFailed` と `classify`。PR の状態コメントには種類と対象だけを載せ、詳細(拒否されたコマンドなど)は載せない。
 
 ### 4. 判定を読んで方針を決める
 
@@ -90,6 +90,11 @@ stderr の最後の行は作業ディレクトリのパス(`<一時ディレク�
 - 事前確認の失敗(終了コード2で「事前確認」): 観点スキルの名前の誤りか未導入、または claude が起動しない(認証、sandbox、ネットワーク)。sandbox の外で実行する、権限の確認を飛ばすといった回避策は自分では取らず、利用者に伝える
 - 「別の試行が実行中」: 二重起動の疑い。古いロック(`STALE_LOCK_AFTER` の65分を超えたもの)は次の起動で自動的に `interrupted` として片付く。スクリプトが SIGKILL されても、子は見張り役が止めるので動き続けない
 - 「オープンではない」「作成者が自分ではない」: このスキルは自分のオープンな PR だけが対象
+
+## 既知の制約
+
+- 組み込みの `security-review` は引数を取らず、比較の起点を自分で決める(`origin/HEAD` と比べる可能性が高い)。PR のベースが既定ブランチでない、またはローカルの `origin/HEAD` が古いと、PR とは違う差分を見うる。既定ブランチ以外へ向けた PR では、その観点の出力が PR の差分に沿っているか確かめる
+- 混入の検査は、作業ツリー、HEAD、ブランチ名だけを見る。stash のように ref だけを変える操作は検出しない。stash の積み場所は他の worktree やセッションと共有なので、比べると誤検知が出るため
 
 ## PR の状態コメント
 

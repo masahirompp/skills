@@ -20,6 +20,7 @@ FAKES = os.path.join(HERE, "fakes")
 # 待ち時間を縮めて、本物のスクリプトを読み込んで実行する
 RUNNER = """
 import json, os, sys
+sys.dont_write_bytecode = True  # スキルのディレクトリに __pycache__ を作らない
 sys.path.insert(0, sys.argv[1])
 import review_loop as r
 r.LOCK_SETTLE_SECONDS = 0
@@ -306,22 +307,31 @@ p.send_signal(signal.SIGTERM)
 _, err = p.communicate(timeout=30)
 check(p.returncode == 2 and "開始前" in err and json.dumps(state()) == before, "開始前の中断は記録せず終了コード2")
 
-# 読めない形の状態コメントは、新しいシリーズとして上書きする
+# 読めない形の状態コメントは、--new-run の指示があるまで上書きしない(上限を黙って外さない)
 write_state({})
 rc, _, err = run(wt)
+check(rc == 2 and "読めない" in err and "--new-run" in err and state() == {}, "読めない状態コメントでは止まり、上書きしない")
+rc, _, err = run(wt, "--new-run")
 s = state()
-check(rc == 0 and s["iter"] == 1 and "読めない" in err, "読めない状態コメントは新しいシリーズとして上書きする")
+check(rc == 0 and s["iter"] == 1, "--new-run なら読めない状態コメントを上書きして始め直す")
 s["run_id"] = "../../escape"
 write_state(s)
 rc, _, err = run(wt)
-check(rc == 0 and state()["run_id"] != "../../escape" and not os.path.exists(os.path.join(root, "escape")),
+check(rc == 2 and not os.path.exists(os.path.join(root, "escape")),
       "run_id の形を検証し、作業ディレクトリのパスに外の値を使わない")
+s["run_id"] = "20260101T000000"
+s["attempts"][0]["reason"] = 5
+write_state(s)
+rc, _, err = run(wt)
+check(rc == 2 and "読めない" in err, "表に出す値の型も検証する")
+run(wt, "--new-run")
 
 s = state()
 s["attempts"][0].pop("at")
 write_state(s)
 rc, _, err = run(wt)
-check(rc == 0 and "読めない" in err and state()["iter"] == 1, "試行の記録の形が崩れていても、新しいシリーズとして上書きする")
+check(rc == 2 and "読めない" in err, "試行の記録の形が崩れていても止まる")
+run(wt, "--new-run")
 
 # 事前確認の最中にスクリプトが SIGKILL されても、事前確認の子は残らない
 env = env_for(OVERRIDES="{}", FAKE_PREFLIGHT_DELAY="60")
@@ -348,7 +358,7 @@ check(rc == 1 and "failed: workdir_error" in err, "作業ディレクトリが�
 run(wt, "--new-run")
 
 # 起点のディレクトリは、他人が書き込めなければ通常の権限(0755)でも使う
-# 以前の版が通常の権限で作った起点は、自分のものなら 0700 に直して使う
+# 起点が広い権限で作られていても、自分のものなら 0700 に絞って使う
 os.chmod(os.path.join(root, "review-loop"), 0o755)
 rc, _, err = run(wt)
 mode = os.stat(os.path.join(root, "review-loop")).st_mode & 0o777
