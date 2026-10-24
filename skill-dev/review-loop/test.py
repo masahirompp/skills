@@ -156,9 +156,8 @@ check(judge and '"enum"' in judge[0]["args"][judge[0]["args"].index("--json-sche
       "--json-schema にはスキーマの中身を渡す")
 check(all("--append-system-prompt" in c["args"] for c in reviews + judge), "運用上の制約を渡す")
 prompts = {c["args"][-1] for c in reviews}
-main_sha = sh("git", "rev-parse", "origin/main", cwd=wt)
-check(prompts == {"/code-review high 7", "/security-review", f"/mattpocock-skills:code-review {main_sha} (仕様は PR #7 の本文)"},
-      f"レビュー役のプロンプトは /<観点と引数>({{pr}} と {{base_sha}} を展開)。{prompts}")
+check(prompts == {"/code-review high 7", "/security-review", "/mattpocock-skills:code-review PR #7"},
+      f"レビュー役のプロンプトは /<観点と引数>({{pr}} を展開)。{prompts}")
 
 # 2回目: 同じコメントを編集で更新する
 rc, out, err = run(wt)
@@ -250,7 +249,7 @@ check(not alive(hung["pid"]), "SIGTERM で子も止める")
 
 # --- ロック ------------------------------------------------------------------
 s = state()
-s["lock"] = {"running": True, "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "sha": "abc", "nonce": "n"}
+s["lock"] = {"running": True, "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "sha": "abcdef0", "nonce": "n"}
 write_state(s)
 rc, _, err = run(wt)
 check(rc == 2 and "実行中" in err and state()["lock"]["nonce"] == "n", "実行中のロックがあれば撤退する")
@@ -266,7 +265,7 @@ write_state(s)
 n = len(s["attempts"])
 rc, _, err = run(wt)
 s = state()
-check(rc == 0 and s["attempts"][n]["result"] == "interrupted" and s["attempts"][n]["sha"] == "abc",
+check(rc == 0 and s["attempts"][n]["result"] == "interrupted" and s["attempts"][n]["sha"] == "abcdef0",
       "古いロックは interrupted として記録してから取得する")
 
 # --- 後片付けと中断 ----------------------------------------------------------
@@ -360,20 +359,44 @@ rc, _, err = run(wt)
 check(rc == 1 and "failed: workdir_error" in err, "作業ディレクトリが既にあれば失敗にし、failed: の行に種類を出す")
 run(wt, "--new-run")
 
-# 起点のディレクトリは、他人が書き込めなければ通常の権限(0755)でも使う
 # 起点が広い権限で作られていても、自分のものなら 0700 に絞って使う
 os.chmod(os.path.join(root, "review-loop"), 0o755)
 rc, _, err = run(wt)
 mode = os.stat(os.path.join(root, "review-loop")).st_mode & 0o777
 check(rc == 0 and mode == 0o700, f"起点が 0755 なら 0700 に直して使う({oct(mode)}) {err[-200:] if rc else ''}")
 
-# ベースの SHA がローカルになければ、前提チェックで止める
-rc, _, err = run(wt, FAKE_BASE_SHA="0123456789abcdef0123456789abcdef01234567")
-check(rc == 2 and "ローカルにない" in err, "PR のベースがローカルになければ止まる")
+# 失敗した試行でも、子が作業ツリーを変えていれば混入を優先して報告する
+rc, _, err = run(wt, FAKE_REVIEW_code_review="dirty", FAKE_REVIEW_security_review="deny")
+reason = state()["attempts"][-1]["reason"]
+check(rc == 1 and "failed: contamination" in err and "stray.txt" in err and "permission_denied" in err
+      and reason == "contamination", f"失敗した試行でも混入を確かめ、優先して報告する({reason})")
+os.remove(os.path.join(wt, "stray.txt"))
+
+# 子がブランチを切り替えたら(gh pr view が失敗する状態でも)混入として報告する
+rc, _, err = run(wt, FAKE_REVIEW_security_review="switch")
+check(rc == 1 and "failed: contamination" in err and "ブランチ が変わった" in err, "ブランチの切り替えは混入")
+sh("git", "switch", "-q", "feature", cwd=wt)
+sh("git", "branch", "-q", "-D", "other", cwd=wt)
+
+# 状態コメントの表に合計の行を出し、--new-run でも前のシリーズの合計を残す
+body = comments()[0]["body"]
+check("| **合計** |" in body, "表に合計の行を出す")
+rc, _, err = run(wt, "--new-run")
+s = state()
+check(rc == 0 and s["previous_run"]["tokens"]["output"] > 0 and "直前のシリーズ" in comments()[0]["body"],
+      "--new-run でも前のシリーズのトークン数の合計を残す")
+
+# トークン数の記録に欠けたキーがあれば、読めない状態コメントとして扱う
+s["attempts"][0]["tokens"] = {"input": 1}
+write_state(s)
+rc, _, err = run(wt)
+check(rc == 2 and "読めない" in err, "トークン数の記録の形も検証する")
+run(wt, "--new-run")
 
 # 試行中に PR にだけ別の push があったら、混入ではなく head_changed として失敗にする
 rc, _, err = run(wt, FAKE_REVIEW_security_review="remote")
-check(rc == 1 and "failed: head_changed" in err, "試行中の PR への push は head_changed")
+check(rc == 1 and "failed: head_changed" in err and "作者と内容を確かめる" in err,
+      "試行中の PR への push は head_changed とし、子の push の可能性を伝える")
 sh("git", "fetch", "-q", "origin", cwd=wt)
 sh("git", "reset", "-q", "--hard", "origin/feature", cwd=wt)
 
@@ -420,7 +443,7 @@ rc, _, err = run(wt)
 check(rc == 2 and "安全上限" in err, "反復が安全上限に達したら止まる")
 check(state() is not None and next(c for c in comments() if c["id"] == 1)["edits"] == 0, "他人のコメントは触らない")
 s = state()
-s["attempts"].append({"sha": "abc", "at": "2026-01-01T00:00:00Z", "result": "failed", "reason": "x @someone"})
+s["attempts"].append({"sha": "abcdef0", "at": "2026-01-01T00:00:00Z", "result": "failed", "reason": "x @someone"})
 s["iter"] = 0
 write_state(s)
 run(wt)

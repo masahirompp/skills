@@ -5,6 +5,7 @@
 #   FAKE_PREFLIGHT_DELAY     init を返すまでの秒数
 #   FAKE_REVIEW_<観点>       ok(既定) / deny / fail / empty / dirty / hang / slow / bg(孫を残して終わる)
 #                            / remote(PR のブランチにだけ別のコミットを push する)
+#                            / switch(作業ツリーはクリーンのまま、別のブランチに切り替える)
 #                            <観点> は英数字以外を _ にしたもの(例: FAKE_REVIEW_code_review)
 #   FAKE_JUDGE               ok(既定) / noso / retries
 import json
@@ -27,7 +28,7 @@ def record(kind, **extra):
 
 def result(text, **extra):
     d = {"type": "result", "subtype": "success", "is_error": False, "result": text,
-         "permission_denials": [], "total_cost_usd": 0.5,
+         "permission_denials": [], "total_cost_usd": 0.5,  # 本体は読まないが、本物の出力に合わせて残す
          # usage はサブエージェントの分を含まないので、modelUsage と食い違わせておく
          "usage": {"input_tokens": 1, "output_tokens": 1},
          "modelUsage": {"m": {"inputTokens": 500, "cacheCreationInputTokens": 1000, "cacheReadInputTokens": 2000,
@@ -85,6 +86,10 @@ elif mode == "remote":  # 作業ツリーには触れず、PR のブランチに
     sha = subprocess.run(["git", "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "remote"],
                          capture_output=True, text=True).stdout.strip()
     subprocess.run(["git", "push", "-q", "origin", f"{sha}:refs/heads/feature"], capture_output=True)
+    result(f"{name}: 指摘なし")
+elif mode == "switch":  # 作業ツリーはクリーンのまま、別のブランチに切り替える
+    import subprocess
+    subprocess.run(["git", "switch", "-q", "-c", "other"], capture_output=True)
     result(f"{name}: 指摘なし")
 elif mode == "bg":
     import subprocess

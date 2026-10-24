@@ -36,14 +36,12 @@ import uuid
 # PR 番号を自動では足さない。
 # - 組み込みの code-review は、レベルを指定しないと利用者が最後に使ったレベルを引き継ぎ、反復ごとに
 #   深さが変わりうるので固定する
-# - mattpocock-skills:code-review は、引数を比較の起点(commit や branch)として読む。PR 番号を渡すと
-#   短い SHA と取り違えうるので、起点と仕様の在りかを分けて書く。起点には、ローカルの追跡ブランチ
-#   (fetch していなければ古い)ではなく、GitHub 上のベースの SHA を使う
-# {base_sha} は PR のベースの先端の SHA に置き換わる(ローカルになければ前提チェックで止まる)。
+# - mattpocock-skills:code-review は、引数を比較の起点(commit や branch)として読む。数字だけを渡すと
+#   起点として解決できず推測に頼るので、「PR #番号」と書く。起点には PR のベースを、仕様には PR 本文を使う
 PERSPECTIVES = [
     "code-review high {pr}",
     "security-review",
-    "mattpocock-skills:code-review {base_sha} (仕様は PR #{pr} の本文)",
+    "mattpocock-skills:code-review PR #{pr}",
 ]
 
 SAFETY_MAX_ITER = 10          # シリーズあたりの反復の上限
@@ -52,10 +50,11 @@ MAX_CONSECUTIVE_FAILURES = 3  # 連続失敗の上限
 PREFLIGHT_TIMEOUT = 2 * 60    # 事前確認(init を受け取るまで)
 REVIEW_TIMEOUT = 40 * 60      # レビュー役1つあたり
 JUDGE_TIMEOUT = 20 * 60       # 判定役
-MARGIN = 5 * 60               # gh の呼び出しやロックの確認などの余裕
+MARGIN = 5 * 60               # Bash の制限時間に対する余裕(事前確認の後の gh の呼び出しなど)
+LOCK_MARGIN = 15 * 60         # ロックを持ったまま行う git・gh の呼び出し(各 COMMAND_TIMEOUT まで)の余裕
 BASH_TIMEOUT = 90 * 60        # SKILL.md で Bash ツールに指定する制限時間
 BASH_TIMEOUT_MAX = 120 * 60   # Bash ツールの最大制限時間
-STALE_LOCK_AFTER = REVIEW_TIMEOUT + JUDGE_TIMEOUT + MARGIN
+STALE_LOCK_AFTER = REVIEW_TIMEOUT + JUDGE_TIMEOUT + LOCK_MARGIN
 WATCHDOG_GRACE = 60           # 子の見張り役が、親のタイムアウトに加えて待つ時間
 LOCK_SETTLE_SECONDS = 3       # nonce を書いてから読み直すまで
 POLL_SECONDS = 2
@@ -63,6 +62,7 @@ COMMAND_TIMEOUT = 60          # git や gh の1回の呼び出し
 
 MARKER = "review-loop-state"
 RUN_ID_RE = re.compile(r"^\d{8}T\d{6}$")
+SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
 STRIP_ENV = ("CLAUDE_JOB_DIR", "CLAUDE_CODE_SESSION_KIND", "CLAUDE_CODE_SESSION_ID")
 GUARD_ENV = "REVIEW_LOOP_ACTIVE"
 
@@ -256,7 +256,7 @@ def skill_name(spec):
 
 
 def expand(spec, pr):
-    return spec.replace("{pr}", str(pr["number"])).replace("{base_sha}", pr["base_sha"])
+    return spec.replace("{pr}", str(pr["number"]))
 
 
 def check_tools():
@@ -267,7 +267,7 @@ def check_tools():
         raise Precondition(f"コマンドが見つからない: {', '.join(missing)}")
     if PREFLIGHT_TIMEOUT + REVIEW_TIMEOUT + JUDGE_TIMEOUT + MARGIN > BASH_TIMEOUT or BASH_TIMEOUT > BASH_TIMEOUT_MAX:
         raise Precondition("タイムアウトの合計が Bash ツールの制限時間を超えている(スクリプト冒頭の設定を見直す)")
-    names = [skill_name(s) for s in PERSPECTIVES]
+    names = [safe_name(skill_name(s)) for s in PERSPECTIVES]
     if len(set(names)) != len(names):  # 出力ファイルと結果を観点の名前で分けているため
         raise Precondition(f"PERSPECTIVES に同じスキルが重複している: {', '.join(names)}")
 
@@ -289,7 +289,7 @@ def git_status(wt):
 
 
 def pr_view(wt):
-    r = run(["gh", "pr", "view", "--json", "number,headRefOid,baseRefName,baseRefOid,state,author,url"], cwd=wt, check=False)
+    r = run(["gh", "pr", "view", "--json", "number,headRefOid,state,author,url"], cwd=wt, check=False)
     if r.returncode != 0:
         raise Precondition(f"このブランチの PR を取得できない: {r.stderr.strip()}")
     return json.loads(r.stdout)
@@ -301,8 +301,6 @@ def snapshot(wt):
     m = re.match(r"https?://[^/]+/([^/]+)/([^/]+)/pull/", pr.get("url") or "")
     return {
         "number": pr["number"],
-        "base": pr["baseRefName"],
-        "base_sha": pr["baseRefOid"],
         "repo": f"{m.group(1)}_{m.group(2)}" if m else "unknown",
         "state": pr.get("state"),
         "author": (pr.get("author") or {}).get("login"),
@@ -367,6 +365,15 @@ def preflight(wt, env):
 
 
 # --- PR の状態コメント -------------------------------------------------------
+def valid_tokens(t):
+    return t is None or (isinstance(t, dict) and set(t) == set(new_tokens())
+                         and all(isinstance(v, int) for v in t.values()))
+
+
+def valid_sha(v):
+    return v is None or bool(SHA_RE.match(v))
+
+
 def valid_state(s):
     """状態コメントの JSON が、このスクリプトの書いた形をしているか(render と acquire_lock が読むものを全て)。"""
     try:
@@ -375,12 +382,13 @@ def valid_state(s):
             parse_iso(lock["started_at"])
         return (bool(RUN_ID_RE.match(s["run_id"]))
                 and isinstance(s["iter"], int) and isinstance(s["consecutive_failures"], int)
-                and isinstance(lock["running"], bool) and isinstance(lock.get("sha") or "", str)
+                and isinstance(lock["running"], bool) and valid_sha(lock.get("sha"))
                 and all(isinstance(a["result"], str) and isinstance(a["at"], str)
-                        and isinstance(a.get("sha") or "", str) and isinstance(a.get("reason") or "", str)
-                        and all(isinstance(v, int) for v in (a.get("tokens") or {}).values())
+                        and valid_sha(a.get("sha")) and isinstance(a.get("reason") or "", str)
+                        and valid_tokens(a.get("tokens"))
                         for a in s["attempts"])
-                and (prev is None or (isinstance(prev["run_id"], str) and isinstance(prev["iterations"], int))))
+                and (prev is None or (bool(RUN_ID_RE.match(prev["run_id"])) and isinstance(prev["iterations"], int)
+                                      and valid_tokens(prev.get("tokens")))))
     except (KeyError, TypeError, ValueError, AttributeError):
         return False
 
@@ -458,9 +466,23 @@ def new_state(previous=None):
     }
 
 
-def man(n):
+def format_count(n):
     """トークン数を 1.2万 のように短く書く。"""
     return f"{n / 10000:.1f}万" if n >= 10000 else str(n)
+
+
+def format_tokens(t):
+    """(入力, 出力) の表記を返す。入力にはキャッシュ読み込みの内訳を添える。"""
+    return (f"{format_count(t['input'])}(うちキャッシュ読み込み {format_count(t['cache_read'])})",
+            format_count(t["output"]))
+
+
+def total_tokens(attempts):
+    total = new_tokens()
+    for a in attempts:
+        for k, v in (a.get("tokens") or {}).items():
+            total[k] += v
+    return total
 
 
 def cell(text):
@@ -479,17 +501,18 @@ def render(state):
              f"**review-loop** run {state['run_id']} — 反復 {state['iter']} — {status}", ""]
     prev = state.get("previous_run")
     if prev:
-        lines += [f"直前のシリーズ: run {prev['run_id']}(反復 {prev['iterations']})", ""]
+        used = "、入力 {}・出力 {} トークン".format(*format_tokens(prev["tokens"])) if prev.get("tokens") else ""
+        lines += [f"直前のシリーズ: run {prev['run_id']}(反復 {prev['iterations']}{used})", ""]
     if state["attempts"]:
         lines += ["| SHA | 時刻 | 結果 | 入力トークン | 出力トークン |", "|---|---|---|---|---|"]
         for a in state["attempts"]:
             result = a["result"] + (f"(反復 {a['iter']})" if a.get("iter") else "")
             if a.get("reason"):
                 result += f": {a['reason'][:100]}"
-            t = a.get("tokens")
-            tin = f"{man(t['input'])}(うちキャッシュ読み込み {man(t['cache_read'])})" if t else "—"
-            tout = man(t["output"]) if t else "—"
+            tin, tout = format_tokens(a["tokens"]) if a.get("tokens") else ("—", "—")
             lines.append(f"| {cell((a['sha'] or '')[:7])} | {cell(a['at'])} | {cell(result)} | {tin} | {tout} |")
+        tin, tout = format_tokens(total_tokens(state["attempts"]))
+        lines.append(f"| **合計** | | | {tin} | {tout} |")
         lines += ["", "失敗した試行のトークン数は、途中で止めた子の分を含まない(下限)。", ""]
     lines.append("<sub>review-loop のスクリプトが更新するコメント。手で編集しても上書きされる。</sub>")
     return "\n".join(lines)
@@ -517,7 +540,8 @@ def acquire_lock(sc, head, new_run):
     if state is None:
         state = new_state()
     elif new_run:
-        state = new_state({"run_id": state["run_id"], "iterations": state["iter"]})
+        state = new_state({"run_id": state["run_id"], "iterations": state["iter"],
+                           "tokens": total_tokens(state["attempts"])})
     nonce = uuid.uuid4().hex
     state["lock"] = {"running": True, "started_at": iso(now()), "sha": head, "nonce": nonce}
     try:
@@ -538,8 +562,8 @@ def release_lock(sc, state, nonce):
     """ロックを解除し、状態を書き込めたかを返す。書き込めなくても例外にはせず、結果は返す。"""
     try:
         current = sc.read()
-        if current and current["lock"].get("nonce") not in (nonce, None):
-            log("warn: ロックが別の試行に書き換えられていた。状態コメントは更新しない")
+        if current is None or current["lock"].get("nonce") != nonce:
+            log("warn: ロックが自分のものではなくなっていた(古いロックとして奪われた可能性がある)。状態コメントは更新しない")
             return False
         state["lock"] = dict(UNLOCKED)
         sc.write(state)
@@ -618,21 +642,28 @@ def run_judge(wt, env, pr_number, reviews, workdir, children, attempt):
     return data["structured_output"]
 
 
-def check_contamination(wt, start):
-    """子が作業ツリーやブランチを変えていないか、PR の head が試行中に動いていないかを確かめる。"""
+def find_contamination(wt, start):
+    """子が作業ツリーやブランチを変えていないか、PR の head が試行中に動いていないかを確かめる。
+    問題があれば (種類, 詳細) を、なければ None を返す。"""
     problems = []
     status = git_status(wt)
     if status.strip():
         problems.append("作業ツリーがクリーンでない:\n" + status.rstrip())
-    cur = snapshot(wt)  # gh の失敗は command_error になる
-    for key, label in (("head", "HEAD"), ("branch", "ブランチ")):
-        if cur[key] != start[key]:
-            problems.append(f"{label} が変わった: {start[key]} → {cur[key]}")
+    # ブランチが切り替わっていると gh pr view が失敗するので、git で分かるものを先に見る
+    head = run(["git", "rev-parse", "HEAD"], cwd=wt).stdout.strip()
+    branch = run(["git", "symbolic-ref", "--quiet", "--short", "HEAD"], cwd=wt, check=False).stdout.strip()
+    for label, before, after in (("HEAD", start["head"], head), ("ブランチ", start["branch"], branch)):
+        if before != after:
+            problems.append(f"{label} が変わった: {before} → {after}")
     if problems:
-        raise AttemptFailed("contamination", "", "\n".join(problems) + "\n(変更は元に戻していない)")
-    if cur["pr_head"] != start["pr_head"]:  # ローカルは変わらず、PR にだけ別の push があった
-        raise AttemptFailed("head_changed", "", f"試行中に PR の head が変わった: {start['pr_head']} → {cur['pr_head']}"
-                            "(古い head をレビューした結果なので捨てる)")
+        return "contamination", "\n".join(problems) + "\n(変更は元に戻していない)"
+    pr_head = pr_view(wt)["headRefOid"]
+    if pr_head != start["pr_head"]:
+        # 外からの push と、子がローカルを変えずに直接 push したものは区別できない
+        return "head_changed", (f"試行中に PR の head が変わった: {start['pr_head']} → {pr_head}。"
+                                "自分で push したのでなければ、子が禁じられた push をした可能性がある。"
+                                "取り込む前に、新しいコミットの作者と内容を確かめる")
+    return None
 
 
 # --- 本体 --------------------------------------------------------------------
@@ -655,10 +686,6 @@ def iterate(worktree, new_run, ctx):
     if start["head"] != start["pr_head"]:
         raise Precondition(f"ローカルの HEAD({start['head'][:7]})が PR の head({start['pr_head'][:7]})と"
                            "一致しない。push してから実行する")
-    if any("{base_sha}" in s for s in PERSPECTIVES) and \
-            run(["git", "cat-file", "-e", start["base_sha"] + "^{commit}"], cwd=wt, check=False).returncode != 0:
-        raise Precondition(f"PR のベース({start['base']} の {start['base_sha'][:7]})がローカルにない。"
-                           f"`git fetch origin {start['base']}` などで取得してから実行する")
     preflight(wt, env)
 
     sc = StateComment(wt, start["number"], me)
@@ -678,7 +705,9 @@ def iterate(worktree, new_run, ctx):
         reviews = run_reviews(wt, env, start, ctx["workdir"], children, attempt)
         verdict = run_judge(wt, env, start["number"], reviews, ctx["workdir"], children, attempt)
         children.kill_all()
-        check_contamination(wt, start)
+        found = find_contamination(wt, start)
+        if found:
+            raise AttemptFailed(found[0], "", found[1])
         with open(os.path.join(ctx["workdir"], "verdict.json"), "w", encoding="utf-8") as f:
             json.dump(verdict, f, ensure_ascii=False, indent=2)
         ignore_signals()  # ここから先は成功の記録だけなので、中断させない
@@ -688,13 +717,29 @@ def iterate(worktree, new_run, ctx):
         return verdict
     except BaseException as e:
         ignore_signals()
-        if attempt is not None:
-            attempt["reason"], detail = classify(e)
-            state["consecutive_failures"] += 1
-            if ctx["workdir"]:
+        if attempt is None:
+            raise
+        kind, detail = classify(e)
+        # 失敗した試行でも、子が作業ツリーやブランチを変えていないかを確かめる。変えていれば、そちらを優先して
+        # 報告する(放っておくと、親が子の変更を自分の修正としてコミットしかねない)
+        children.kill_all()
+        if not (isinstance(e, AttemptFailed) and e.kind in ("contamination", "head_changed")):
+            try:
+                found = find_contamination(wt, start)
+            except Exception:
+                found = None
+            if found:
+                e = AttemptFailed(found[0], "", f"{found[1]}\n\n(この試行はもともと {kind} で失敗した: {detail.strip()})")
+                kind, detail = classify(e)
+        attempt["reason"] = kind
+        state["consecutive_failures"] += 1
+        if ctx["workdir"]:  # 作業ディレクトリを作る前の失敗(workdir_error)では残さない
+            try:
                 with open(os.path.join(ctx["workdir"], "failure.txt"), "w", encoding="utf-8") as f:
-                    f.write(f"{attempt['reason']}\n{detail}\n")
-        raise
+                    f.write(f"{kind}\n{detail}\n")
+            except OSError:  # 詳細を残せなくても、記録と報告は続ける
+                pass
+        raise e
     finally:
         ignore_signals()
         children.kill_all()
@@ -703,14 +748,15 @@ def iterate(worktree, new_run, ctx):
         if nonce is not None and not release_lock(sc, state, nonce) and attempt is not None:
             log("warn: この試行の結果を状態コメントに記録できなかった"
                 + ("(反復回数が進んでいない)" if attempt["result"] == "completed" else "(連続失敗にも数えられていない)")
-                + "。ロックが残っていれば、65分たつまで次の起動は「別の試行が実行中」で止まる")
+                + f"。ロックが残っていれば、{STALE_LOCK_AFTER // 60}分たつまで次の起動は「別の試行が実行中」で止まる")
 
 
 def make_workdir(start, run_id, attempt_no):
     """<一時ディレクトリ>/review-loop/<owner>_<repo>/<PR番号>/<run_id>/<試行>/ を新しく作る。
 
     共有の一時ディレクトリ(TMPDIR のない Linux の /tmp)で他人に先回りされたり、レビューの出力を
-    読まれたりしないよう、起点は自分が所有するディレクトリに限り、権限を 0700 に絞って使う。試行のディレクトリが既にあれば、前の出力と混ざるので失敗にする。"""
+    読まれたりしないよう、起点は自分が所有するディレクトリに限り、権限を 0700 に絞って使う。
+    試行のディレクトリが既にあれば、前の出力と混ざるので失敗にする。"""
     top = os.path.join(tempfile.gettempdir(), "review-loop")
     os.makedirs(top, mode=0o700, exist_ok=True)
     st = os.lstat(top)
@@ -760,9 +806,7 @@ def main():
     try:
         verdict = iterate(args.worktree, args.new_run, ctx)
         print(json.dumps(verdict, ensure_ascii=False, indent=2), flush=True)
-        t = ctx["attempt"]["tokens"]
-        log(f"完了: 反復 {ctx['attempt']['iter']}、入力 {man(t['input'])}(うちキャッシュ読み込み {man(t['cache_read'])})、"
-            f"出力 {man(t['output'])} トークン")
+        log("完了: 反復 {}、入力 {}、出力 {} トークン".format(ctx["attempt"]["iter"], *format_tokens(ctx["attempt"]["tokens"])))
     except BaseException as e:
         ignore_signals()
         kind, detail = classify(e)
