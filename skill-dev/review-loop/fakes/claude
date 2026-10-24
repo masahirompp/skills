@@ -4,6 +4,7 @@
 #   FAKE_SKILLS              init で返すスキル(カンマ区切り。既定は観点スキル全部)
 #   FAKE_PREFLIGHT_DELAY     init を返すまでの秒数
 #   FAKE_REVIEW_<観点>       ok(既定) / deny / fail / empty / dirty / hang / slow / bg(孫を残して終わる)
+#                            / remote(PR のブランチにだけ別のコミットを push する)
 #                            <観点> は英数字以外を _ にしたもの(例: FAKE_REVIEW_code_review)
 #   FAKE_JUDGE               ok(既定) / noso / retries
 import json
@@ -75,6 +76,12 @@ elif mode == "dirty":
 elif mode == "hang":
     time.sleep(120)
     record("review-not-killed", name=name)
+elif mode == "remote":  # 作業ツリーには触れず、PR のブランチにだけ別のコミットを push する
+    import subprocess
+    sha = subprocess.run(["git", "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "remote"],
+                         capture_output=True, text=True).stdout.strip()
+    subprocess.run(["git", "push", "-q", "origin", f"{sha}:refs/heads/feature"], capture_output=True)
+    result(f"{name}: 指摘なし")
 elif mode == "bg":
     import subprocess
     g = subprocess.Popen(["sleep", "120"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

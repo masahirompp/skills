@@ -32,16 +32,18 @@ import uuid
 
 # --- 設定 ------------------------------------------------------------------
 # 観点スキル。先頭の `/` を除いたスキル名と、その引数を書く。プラグインのスキルは `plugin:name` の形式。
-# 引数の {pr} は PR 番号に、{base} は PR のベースブランチ名に置き換わる。引数の意味はスキルごとに違うので、
+# 引数の {pr} は PR 番号に置き換わる。引数の意味はスキルごとに違うので、
 # PR 番号を自動では足さない。
 # - 組み込みの code-review は、レベルを指定しないと利用者が最後に使ったレベルを引き継ぎ、反復ごとに
 #   深さが変わりうるので固定する
 # - mattpocock-skills:code-review は、引数を比較の起点(commit や branch)として読む。PR 番号を渡すと
-#   短い SHA と取り違えうるので、起点と仕様の在りかを分けて書く
+#   短い SHA と取り違えうるので、起点と仕様の在りかを分けて書く。起点には、ローカルの追跡ブランチ
+#   (fetch していなければ古い)ではなく、GitHub 上のベースの SHA を使う
+# {base_sha} は PR のベースの先端の SHA(ローカルになければ前提チェックで止まる)、{base} はベースブランチ名。
 PERSPECTIVES = [
     "code-review high {pr}",
     "security-review",
-    "mattpocock-skills:code-review origin/{base}(仕様は PR #{pr} の本文)",
+    "mattpocock-skills:code-review {base_sha} (仕様は PR #{pr} の本文)",
 ]
 
 SAFETY_MAX_ITER = 10          # シリーズあたりの反復の上限
@@ -57,6 +59,7 @@ STALE_LOCK_AFTER = REVIEW_TIMEOUT + JUDGE_TIMEOUT + MARGIN
 WATCHDOG_GRACE = 60           # 子の見張り役が、親のタイムアウトに加えて待つ時間
 LOCK_SETTLE_SECONDS = 3       # nonce を書いてから読み直すまで
 POLL_SECONDS = 2
+COMMAND_TIMEOUT = 60          # git や gh の1回の呼び出し
 
 MARKER = "review-loop-state"
 RUN_ID_RE = re.compile(r"^\d{8}T\d{6}$")
@@ -107,11 +110,14 @@ def parse_iso(s):
 
 
 def run(args, cwd, input=None, check=True):
+    """git や gh を実行する。後片付け中はシグナルを無視しているので、止まっても抜けられるよう制限時間を付ける。"""
     try:
         r = subprocess.run(args, cwd=cwd, input=input, capture_output=True, text=True,
-                           stdin=None if input is not None else subprocess.DEVNULL)
+                           stdin=None if input is not None else subprocess.DEVNULL, timeout=COMMAND_TIMEOUT)
     except OSError as e:
         raise Precondition(f"{args[0]} を起動できない: {e}")
+    except subprocess.TimeoutExpired:
+        raise Precondition(f"`{' '.join(args[:4])} …` が {COMMAND_TIMEOUT} 秒で終わらなかった")
     if check and r.returncode != 0:
         raise Precondition(f"`{' '.join(args[:4])} …` が失敗した(終了コード {r.returncode}): {r.stderr.strip()}")
     return r
@@ -235,6 +241,11 @@ def skill_name(spec):
     return spec.split()[0]
 
 
+def expand(spec, pr):
+    return (spec.replace("{pr}", str(pr["number"])).replace("{base_sha}", pr["base_sha"])
+            .replace("{base}", pr["base"]))
+
+
 def check_tools():
     if sys.version_info < (3, 9):
         raise Precondition("Python 3.9 以降が必要")
@@ -265,7 +276,7 @@ def git_status(wt):
 
 
 def pr_view(wt):
-    r = run(["gh", "pr", "view", "--json", "number,headRefOid,baseRefName,state,author,url"], cwd=wt, check=False)
+    r = run(["gh", "pr", "view", "--json", "number,headRefOid,baseRefName,baseRefOid,state,author,url"], cwd=wt, check=False)
     if r.returncode != 0:
         raise Precondition(f"このブランチの PR を取得できない: {r.stderr.strip()}")
     return json.loads(r.stdout)
@@ -278,6 +289,7 @@ def snapshot(wt):
     return {
         "number": pr["number"],
         "base": pr["baseRefName"],
+        "base_sha": pr["baseRefOid"],
         "repo": f"{m.group(1)}_{m.group(2)}" if m else "unknown",
         "state": pr.get("state"),
         "author": (pr.get("author") or {}).get("login"),
@@ -375,7 +387,7 @@ class StateComment:
         for line in r.stdout.splitlines():
             if line.strip():
                 c = json.loads(line)
-                if c["login"] == self.me and f"<!-- {MARKER} " in (c["body"] or ""):
+                if c["login"] == self.me and (c["body"] or "").startswith(f"<!-- {MARKER} "):
                     found.append(c)
         if not found:
             self.id = None
@@ -490,15 +502,18 @@ def acquire_lock(sc, head, new_run):
 
 
 def release_lock(sc, state, nonce):
+    """ロックを解除し、状態を書き込めたかを返す。書き込めなくても例外にはせず、結果は返す。"""
     try:
         current = sc.read()
         if current and current["lock"].get("nonce") not in (nonce, None):
             log("warn: ロックが別の試行に書き換えられていた。状態コメントは更新しない")
-            return
+            return False
         state["lock"] = dict(UNLOCKED)
         sc.write(state)
-    except Exception as e:  # ロックを解除できなくても、結果は返す
+        return True
+    except Exception as e:
         log(f"warn: 状態コメントを更新できなかった(次回、古いロックとして扱われる): {e}")
+        return False
 
 
 # --- レビュー役と判定役 ------------------------------------------------------
@@ -511,7 +526,7 @@ def run_reviews(wt, env, pr, workdir, children, attempt):
     running = {}
     for spec in PERSPECTIVES:
         base = os.path.join(workdir, f"review-{safe_name(skill_name(spec))}")
-        prompt = "/" + spec.replace("{pr}", str(pr["number"])).replace("{base}", pr["base"])
+        prompt = "/" + expand(spec, pr)
         with open(base + ".stdout.json", "w") as out, open(base + ".stderr.txt", "w") as err:
             p = children.spawn(["claude", "-p", "--output-format", "json", "--append-system-prompt",
                                 REVIEW_CONSTRAINT, prompt],
@@ -544,6 +559,7 @@ PR #{pr} に対する観点別レビューの出力を、標準入力で渡す(�
 - behavior_change は、その指摘に従って修正したときにプログラムの挙動が変わるかどうか
 - PR 本文やコードコメントに判断の理由(以前のレビューで採らなかった指摘など)が書かれていれば、それを踏まえる。理由が妥当なら蒸し返さない
 - recommendation.continue は、挙動が変わる修正を要する指摘が残っていれば true
+- 観点の出力がレビューになっていない(セットアップの案内や利用者への質問で終わっている、対象を取り違えているなど)ときは、その観点が欠けたことを category が other の指摘として findings に載せ、behavior_change を true にする
 - 指摘がなければ findings と conflicts は空配列にする
 """
 
@@ -570,20 +586,20 @@ def run_judge(wt, env, pr_number, reviews, workdir, children, attempt):
 
 
 def check_contamination(wt, start):
+    """子が作業ツリーやブランチを変えていないか、PR の head が試行中に動いていないかを確かめる。"""
     problems = []
     status = git_status(wt)
     if status.strip():
         problems.append("作業ツリーがクリーンでない:\n" + status.rstrip())
-    try:
-        cur = snapshot(wt)
-    except Precondition as e:
-        problems.append(str(e))
-        cur = {}
-    for key, label in (("head", "HEAD"), ("branch", "ブランチ"), ("pr_head", "PR の head")):
-        if key in cur and cur[key] != start[key]:
+    cur = snapshot(wt)  # gh の失敗は command_error になる
+    for key, label in (("head", "HEAD"), ("branch", "ブランチ")):
+        if cur[key] != start[key]:
             problems.append(f"{label} が変わった: {start[key]} → {cur[key]}")
     if problems:
         raise AttemptFailed("contamination", "", "\n".join(problems) + "\n(変更は元に戻していない)")
+    if cur["pr_head"] != start["pr_head"]:  # ローカルは変わらず、PR にだけ別の push があった
+        raise AttemptFailed("head_changed", "", f"試行中に PR の head が変わった: {start['pr_head']} → {cur['pr_head']}"
+                            "(古い head をレビューした結果なので捨てる)")
 
 
 # --- 本体 --------------------------------------------------------------------
@@ -606,13 +622,17 @@ def iterate(worktree, new_run, ctx):
     if start["head"] != start["pr_head"]:
         raise Precondition(f"ローカルの HEAD({start['head'][:7]})が PR の head({start['pr_head'][:7]})と"
                            "一致しない。push してから実行する")
+    if any("{base_sha}" in s for s in PERSPECTIVES) and \
+            run(["git", "cat-file", "-e", start["base_sha"] + "^{commit}"], cwd=wt, check=False).returncode != 0:
+        raise Precondition(f"PR のベース({start['base']} の {start['base_sha'][:7]})がローカルにない。"
+                           f"`git fetch origin {start['base']}` などで取得してから実行する")
     preflight(wt, env)
 
     sc = StateComment(wt, start["number"], me)
     children = Children()
-    attempt = None
-    state, nonce = acquire_lock(sc, start["head"], new_run)
-    try:  # ここから先は、どこで終わってもロックを解除する
+    attempt = state = nonce = None
+    try:  # ロックを取ったら、どこで終わっても解除する
+        state, nonce = acquire_lock(sc, start["head"], new_run)
         if state["iter"] >= SAFETY_MAX_ITER:
             raise Precondition(f"反復が安全上限({SAFETY_MAX_ITER} 回)に達した")
         if state["consecutive_failures"] >= MAX_CONSECUTIVE_FAILURES:
@@ -648,20 +668,22 @@ def iterate(worktree, new_run, ctx):
         if attempt is not None:
             attempt["cost_usd"] = round(attempt["cost_usd"], 4)
             state["attempts"].append(attempt)
-        release_lock(sc, state, nonce)
+        if nonce is not None and not release_lock(sc, state, nonce) and attempt is not None:
+            log("warn: この試行の結果を状態コメントに記録できなかった。連続失敗の回数にも数えられていない")
 
 
 def make_workdir(start, run_id, attempt_no):
     """<一時ディレクトリ>/review-loop/<owner>_<repo>/<PR番号>/<run_id>/<試行>/ を新しく作る。
 
-    共有の一時ディレクトリ(TMPDIR のない Linux の /tmp)で他人に先回りされないよう、起点は
-    自分が所有し、他人が書き込めないディレクトリに限る。試行のディレクトリが既にあれば、前の出力と混ざるので失敗にする。"""
+    共有の一時ディレクトリ(TMPDIR のない Linux の /tmp)で他人に先回りされたり、レビューの出力を
+    読まれたりしないよう、起点は自分が所有する 0700 のディレクトリに限る。試行のディレクトリが既にあれば、前の出力と混ざるので失敗にする。"""
     top = os.path.join(tempfile.gettempdir(), "review-loop")
     os.makedirs(top, mode=0o700, exist_ok=True)
     st = os.lstat(top)
-    # 他人が書き込めなければよい(以前の版が通常の権限 0755 で作ったものもそのまま使う)
-    if stat.S_ISLNK(st.st_mode) or st.st_uid != os.getuid() or st.st_mode & 0o022:
-        raise AttemptFailed("workdir_error", "", f"{top} を他人が書き換えられる(所有者か権限を確かめてほしい)")
+    if stat.S_ISLNK(st.st_mode) or st.st_uid != os.getuid():
+        raise AttemptFailed("workdir_error", "", f"{top} が自分の所有するディレクトリではない")
+    if st.st_mode & 0o077:  # 以前の版が通常の権限(0755)で作ったもの。レビューの出力を他人に読ませない
+        os.chmod(top, 0o700)
     path = os.path.join(top, start["repo"], str(start["number"]), run_id, str(attempt_no))
     try:
         os.makedirs(path)

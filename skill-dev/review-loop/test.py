@@ -152,8 +152,9 @@ check(judge and '"enum"' in judge[0]["args"][judge[0]["args"].index("--json-sche
       "--json-schema にはスキーマの中身を渡す")
 check(all("--append-system-prompt" in c["args"] for c in reviews + judge), "運用上の制約を渡す")
 prompts = {c["args"][-1] for c in reviews}
-check(prompts == {"/code-review high 7", "/security-review", "/mattpocock-skills:code-review origin/main(仕様は PR #7 の本文)"},
-      f"レビュー役のプロンプトは /<観点と引数>({{pr}} と {{base}} を展開)。{prompts}")
+main_sha = sh("git", "rev-parse", "origin/main", cwd=wt)
+check(prompts == {"/code-review high 7", "/security-review", f"/mattpocock-skills:code-review {main_sha} (仕様は PR #7 の本文)"},
+      f"レビュー役のプロンプトは /<観点と引数>({{pr}} と {{base_sha}} を展開)。{prompts}")
 
 # 2回目: 同じコメントを編集で更新する
 rc, out, err = run(wt)
@@ -347,13 +348,32 @@ check(rc == 1 and "failed: workdir_error" in err, "作業ディレクトリが�
 run(wt, "--new-run")
 
 # 起点のディレクトリは、他人が書き込めなければ通常の権限(0755)でも使う
+# 以前の版が通常の権限で作った起点は、自分のものなら 0700 に直して使う
 os.chmod(os.path.join(root, "review-loop"), 0o755)
 rc, _, err = run(wt)
-check(rc == 0, f"起点が 0755 でも使える {err[-200:] if rc else ''}")
-os.chmod(os.path.join(root, "review-loop"), 0o777)
+mode = os.stat(os.path.join(root, "review-loop")).st_mode & 0o777
+check(rc == 0 and mode == 0o700, f"起点が 0755 なら 0700 に直して使う({oct(mode)}) {err[-200:] if rc else ''}")
+
+# ベースの SHA がローカルになければ、前提チェックで止める
+rc, _, err = run(wt, FAKE_BASE_SHA="0123456789abcdef0123456789abcdef01234567")
+check(rc == 2 and "ローカルにない" in err, "PR のベースがローカルになければ止まる")
+
+# 試行中に PR にだけ別の push があったら、混入ではなく head_changed として失敗にする
+rc, _, err = run(wt, FAKE_REVIEW_security_review="remote")
+check(rc == 1 and "failed: head_changed" in err, "試行中の PR への push は head_changed")
+sh("git", "fetch", "-q", "origin", cwd=wt)
+sh("git", "reset", "-q", "--hard", "origin/feature", cwd=wt)
+
+# マーカーを引用した自分の通常のコメントは、状態コメントとみなさない
+with open(os.path.join(root, "fake", "comments.json")) as f:
+    cs = json.load(f)
+cs.insert(0, {"id": 2, "login": "me", "created_at": "2024-01-01T00:00:00Z",
+              "body": "状態は `<!-- review-loop-state ... -->` に書かれる", "edits": 0})
+with open(os.path.join(root, "fake", "comments.json"), "w") as f:
+    json.dump(cs, f)
 rc, _, err = run(wt)
-check(rc == 1 and "workdir_error" in err, "起点を他人が書き換えられるなら失敗にする")
-os.chmod(os.path.join(root, "review-loop"), 0o700)
+quoted = next(c for c in comments() if c["id"] == 2)
+check(rc == 0 and quoted["edits"] == 0 and "件ある" not in err, "マーカーを引用しただけの自分のコメントは上書きしない")
 run(wt, "--new-run")
 
 # 同時にコメントを作った場合、負けた側は自分のコメントを消して撤退する
@@ -386,7 +406,14 @@ with open(os.path.join(root, "fake", "comments.json"), "w") as f:
 rc, _, err = run(wt)
 check(rc == 2 and "安全上限" in err, "反復が安全上限に達したら止まる")
 check(state() is not None and next(c for c in comments() if c["id"] == 1)["edits"] == 0, "他人のコメントは触らない")
-check("@" not in comments()[-1]["body"].split("-->")[0].replace("\\u0040", ""), "状態コメントに生の @ を含めない")
+s = state()
+s["attempts"].append({"sha": "abc", "at": "2026-01-01T00:00:00Z", "result": "failed", "reason": "x @someone", "cost_usd": 0})
+s["iter"] = 0
+write_state(s)
+run(wt)
+body = next(c for c in comments() if c["login"] == "me")["body"]
+json_part, table = body.split("-->", 1)
+check("@" not in json_part and "@someone" not in table and "@\u200bsomeone" in table, "状態コメントに生の @ を含めない")
 
 if os.environ.get("KEEP"):
     print("作業ディレクトリ:", root)
