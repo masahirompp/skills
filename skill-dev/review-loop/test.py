@@ -346,6 +346,16 @@ rc, _, err = run(wt)
 check(rc == 1 and "failed: workdir_error" in err, "作業ディレクトリが既にあれば失敗にし、failed: の行に種類を出す")
 run(wt, "--new-run")
 
+# 起点のディレクトリは、他人が書き込めなければ通常の権限(0755)でも使う
+os.chmod(os.path.join(root, "review-loop"), 0o755)
+rc, _, err = run(wt)
+check(rc == 0, f"起点が 0755 でも使える {err[-200:] if rc else ''}")
+os.chmod(os.path.join(root, "review-loop"), 0o777)
+rc, _, err = run(wt)
+check(rc == 1 and "workdir_error" in err, "起点を他人が書き換えられるなら失敗にする")
+os.chmod(os.path.join(root, "review-loop"), 0o700)
+run(wt, "--new-run")
+
 # 同時にコメントを作った場合、負けた側は自分のコメントを消して撤退する
 os.remove(os.path.join(root, "fake", "comments.json"))
 rc, _, err = run(wt, FAKE_RACE="1")

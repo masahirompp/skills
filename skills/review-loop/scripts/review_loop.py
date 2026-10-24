@@ -654,13 +654,14 @@ def iterate(worktree, new_run, ctx):
 def make_workdir(start, run_id, attempt_no):
     """<一時ディレクトリ>/review-loop/<owner>_<repo>/<PR番号>/<run_id>/<試行>/ を新しく作る。
 
-    共有の一時ディレクトリ(TMPDIR のない Linux の /tmp)で他人に先回りされないよう、起点を
-    自分だけが使えるディレクトリにする。試行のディレクトリが既にあれば、前の出力と混ざるので失敗にする。"""
+    共有の一時ディレクトリ(TMPDIR のない Linux の /tmp)で他人に先回りされないよう、起点は
+    自分が所有し、他人が書き込めないディレクトリに限る。試行のディレクトリが既にあれば、前の出力と混ざるので失敗にする。"""
     top = os.path.join(tempfile.gettempdir(), "review-loop")
     os.makedirs(top, mode=0o700, exist_ok=True)
     st = os.lstat(top)
-    if stat.S_ISLNK(st.st_mode) or st.st_uid != os.getuid() or st.st_mode & 0o077:
-        raise AttemptFailed("workdir_error", "", f"{top} が自分だけのディレクトリではない(所有者か権限を確かめてほしい)")
+    # 他人が書き込めなければよい(以前の版が通常の権限 0755 で作ったものもそのまま使う)
+    if stat.S_ISLNK(st.st_mode) or st.st_uid != os.getuid() or st.st_mode & 0o022:
+        raise AttemptFailed("workdir_error", "", f"{top} を他人が書き換えられる(所有者か権限を確かめてほしい)")
     path = os.path.join(top, start["repo"], str(start["number"]), run_id, str(attempt_no))
     try:
         os.makedirs(path)
