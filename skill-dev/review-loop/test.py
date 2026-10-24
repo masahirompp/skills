@@ -22,7 +22,7 @@ RUNNER = """
 import json, os, sys
 sys.path.insert(0, sys.argv[1])
 import review_loop as r
-r.PERSPECTIVES = ["code-review", "security-review", "mattpocock-skills:code-review"]
+r.PERSPECTIVES = ["code-review high", "security-review", "mattpocock-skills:code-review"]
 r.LOCK_SETTLE_SECONDS = 0
 r.POLL_SECONDS = 0.1
 for k, v in json.loads(os.environ.get("OVERRIDES", "{}")).items():
@@ -140,7 +140,7 @@ check(s and s["lock"]["running"] is False, "ロックが解除される")
 check(s and abs(s["attempts"][0]["cost_usd"] - 2.0) < 1e-9, "費用はレビュー役3つと判定役の合計")
 workdir = err.rstrip().splitlines()[-1]
 check(os.path.isfile(os.path.join(workdir, "verdict.json")), "stderr の最後の行は作業ディレクトリ")
-check(workdir.startswith(os.path.join(root, "review-loop", "7")), "作業ディレクトリは <tmp>/review-loop/<PR>/<run>/<試行>")
+check(workdir.startswith(os.path.join(root, "review-loop", "o_r", "7")), "作業ディレクトリは <tmp>/review-loop/<リポジトリ>/<PR>/<run>/<試行>")
 cs = calls()
 reviews = [c for c in cs if c["kind"] == "review"]
 check(len(reviews) == 3, "観点ごとに1プロセス起動する")
@@ -152,7 +152,7 @@ check(judge and "===== 観点: security-review =====" in judge[0]["stdin"], "判
 check(judge and '"enum"' in judge[0]["args"][judge[0]["args"].index("--json-schema") + 1],
       "--json-schema にはスキーマの中身を渡す")
 check(all("--append-system-prompt" in c["args"] for c in reviews + judge), "運用上の制約を渡す")
-check(reviews and reviews[0]["args"][-1] == "/code-review 7", "レビュー役のプロンプトは /<観点> <PR番号>")
+check(any(c["args"][-1] == "/code-review high 7" for c in reviews), "レビュー役のプロンプトは /<観点と引数> <PR番号>")
 
 # 2回目: 同じコメントを編集で更新する
 rc, out, err = run(wt)
@@ -258,7 +258,77 @@ s = state()
 check(rc == 0 and s["attempts"][n]["result"] == "interrupted" and s["attempts"][n]["sha"] == "abc",
       "古いロックは interrupted として記録してから取得する")
 
+# --- 後片付けと中断 ----------------------------------------------------------
+rc, _, err = run(wt, FAKE_REVIEW_security_review="bg")
+g = [c for c in calls() if c["kind"] == "grandchild"][-1]["grandchild"]
+time.sleep(0.5)
+check(rc == 0 and not alive(g), "正常終了した子がグループに残した孫も止める")
+
+t = time.time()
+rc, _, err = run(wt, FAKE_REVIEW_code_review="slow", FAKE_REVIEW_security_review="slow",
+                 FAKE_REVIEW_mattpocock_skills_code_review="slow")
+check(rc == 0 and time.time() - t < 8, f"レビュー役は並列に動く({time.time() - t:.1f} 秒)")
+
+# スクリプトが SIGKILL されても、見張り役が子を止める
+env = env_for(OVERRIDES="{}", FAKE_REVIEW_code_review="hang")
+p = subprocess.Popen([sys.executable, "-c", RUNNER, SCRIPTS, "iterate", wt], env=env,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+deadline = time.time() + 20
+while time.time() < deadline and not any(c["kind"] == "review" and c["name"] == "code-review" and c["pid"] != hung["pid"]
+                                         for c in calls()):
+    time.sleep(0.2)
+hung = [c for c in calls() if c["kind"] == "review" and c["name"] == "code-review"][-1]
+p.kill()
+p.wait()
+time.sleep(3)
+check(not alive(hung["pid"]), "スクリプトが SIGKILL されても子は止まる")
+s = state()
+s["lock"]["started_at"] = "2026-01-01T00:00:00Z"  # 古いロックとして片付けさせる
+s["consecutive_failures"] = 0
+write_state(s)
+rc, _, _ = run(wt)
+check(rc == 0, "SIGKILL 後に残ったロックは次回の起動で片付く")
+
+# 試行の開始前(事前確認中)に止められたら、何も記録せず終了コード2
+before = json.dumps(state())
+env = env_for(OVERRIDES="{}", FAKE_PREFLIGHT_DELAY="30")
+p = subprocess.Popen([sys.executable, "-c", RUNNER, SCRIPTS, "iterate", wt], env=env,
+                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+time.sleep(3)
+p.send_signal(signal.SIGTERM)
+_, err = p.communicate(timeout=30)
+check(p.returncode == 2 and "開始前" in err and json.dumps(state()) == before, "開始前の中断は記録せず終了コード2")
+
+# 読めない形の状態コメントは、新しいシリーズとして上書きする
+write_state({})
+rc, _, err = run(wt)
+s = state()
+check(rc == 0 and s["iter"] == 1 and "読めない" in err, "読めない状態コメントは新しいシリーズとして上書きする")
+s["run_id"] = "../../escape"
+write_state(s)
+rc, _, err = run(wt)
+check(rc == 0 and state()["run_id"] != "../../escape" and not os.path.exists(os.path.join(root, "escape")),
+      "run_id の形を検証し、作業ディレクトリのパスに外の値を使わない")
+
+# 同時にコメントを作った場合、負けた側は自分のコメントを消して撤退する
+os.remove(os.path.join(root, "fake", "comments.json"))
+rc, _, err = run(wt, FAKE_RACE="1")
+check(rc == 2 and "競合" in err and [c["id"] for c in comments()] == [50], "競合で負けたら自分のコメントを消す")
+os.remove(os.path.join(root, "fake", "comments.json"))
+
+rc, _, err = run(wt, FAKE_PR_STATE="MERGED")
+check(rc == 2 and "オープンではない" in err, "オープンでない PR は拒否する")
+rc, _, err = run(wt, FAKE_PR_AUTHOR="someone")
+check(rc == 2 and "自分" in err, "他人の PR は拒否する")
+
+rc, _, err = run(wt, FAKE_REVIEW_code_review="deny")
+body = comments()[0]["body"]
+check(rc == 1 and "gh pr diff" in err and "gh pr diff" not in body, "失敗の詳細は stderr にだけ出し、PR には種類だけを載せる")
+check(os.path.isfile(os.path.join(err.rstrip().splitlines()[-1], "failure.txt")), "失敗の詳細を作業ディレクトリに残す")
+run(wt, "--new-run")
+
 # --- 安全上限と他人のコメント -------------------------------------------------
+s = state()
 s["iter"] = 10
 write_state(s)
 with open(os.path.join(root, "fake", "comments.json")) as f:

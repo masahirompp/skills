@@ -68,7 +68,7 @@ ln -s ../../ghq/github.com/masahirompp/skills/skills/cycle-rewrite ~/.claude/ski
 
 housekeeping は判定と削除をスクリプトで行うので、スクリプトのテストで検証する。`skill-dev/housekeeping/test.sh` を実行すると、使い捨てのリポジトリを作り、そこでマージ済み・作業中・監査用などの各ケースを走査・削除して結果を照合する。origin にはローカルの bare リポジトリを、PR 一覧には偽の JSON を使うので、GitHub には触れない。
 
-review-loop も、スクリプトの振る舞い(前提チェック、ロック、失敗の判定、子の停止、状態コメントの更新)をテストで検証する。`python3 skill-dev/review-loop/test.py` を実行すると、`skill-dev/review-loop/fakes/` の偽の `claude` と `gh` を PATH の先頭に置いて各ケースを実行する。GitHub にも API にも触れない。
+review-loop も、スクリプトの振る舞い（前提チェック、ロック、失敗の判定、子の停止、状態コメントの更新）をテストで検証する。`python3 skill-dev/review-loop/test.py` を実行すると、`skill-dev/review-loop/fakes/` の偽の `claude` と `gh` を PATH の先頭に置いて各ケースを実行する。GitHub にも API にも触れない。
 
 ## ライセンス
 

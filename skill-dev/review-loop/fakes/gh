@@ -30,7 +30,10 @@ if args[:2] == ["pr", "view"]:
         sys.exit(1)
     branch = subprocess.run(["git", "symbolic-ref", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
     out = subprocess.run(["git", "ls-remote", "origin", f"refs/heads/{branch}"], capture_output=True, text=True).stdout
-    print(json.dumps({"number": 7, "headRefOid": out.split()[0] if out else ""}))
+    print(json.dumps({"number": 7, "headRefOid": out.split()[0] if out else "",
+                      "state": os.environ.get("FAKE_PR_STATE", "OPEN"),
+                      "author": {"login": os.environ.get("FAKE_PR_AUTHOR", ME)},
+                      "url": "https://github.com/o/r/pull/7"}))
 elif args[:2] == ["api", "user"]:
     print(ME)
 elif args[0] == "api" and "--paginate" in args:
@@ -39,9 +42,16 @@ elif args[0] == "api" and "--paginate" in args:
                          ensure_ascii=False))
 elif args[0] == "api" and "-X" in args:
     method = args[args.index("-X") + 1]
-    body = json.load(sys.stdin)["body"]
     cs = load()
+    if method == "DELETE":
+        cid = int(args[args.index("-X") + 2].rsplit("/", 1)[1])
+        save([c for c in cs if c["id"] != cid])
+        sys.exit(0)
+    body = json.load(sys.stdin)["body"]
     if method == "POST":
+        if os.environ.get("FAKE_RACE"):  # 同時に起動した別の試行が、一瞬先にコメントを作っていた
+            other = body.replace('"nonce":"', '"nonce":"other')
+            cs.append({"id": 50, "login": ME, "created_at": "2026-10-24T00:00:00Z", "body": other, "edits": 0})
         cid = max([c["id"] for c in cs], default=100) + 1
         cs.append({"id": cid, "login": ME, "created_at": f"2026-10-25T00:00:{len(cs):02d}Z", "body": body, "edits": 0})
     else:
