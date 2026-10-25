@@ -3,14 +3,16 @@
 #   FAKE_DIR                 呼び出しの記録(calls.jsonl)を置く場所
 #   FAKE_SKILLS              init で返すスキル(カンマ区切り。既定は観点スキル全部)
 #   FAKE_PREFLIGHT_DELAY     init を返すまでの秒数
-#   FAKE_REVIEW_<観点>       ok(既定) / deny / fail / empty / dirty / hang / slow / bg(孫を残して終わる)
+#   FAKE_REVIEW_<観点>       ok(既定) / deny / fail / empty(結果が空) / dirty / hang / slow / bg(孫を残して終わる)
 #                            / remote(PR のブランチにだけ別のコミットを push する)
 #                            / switch(作業ツリーはクリーンのまま、別のブランチに切り替える)
 #                            <観点> は英数字以外を _ にしたもの(例: FAKE_REVIEW_code_review)
-#   FAKE_JUDGE               ok(既定) / noso / retries
+#   FAKE_JUDGE               ok(既定) / noheading(決めた見出しがない) / empty(結果が空)
+#                            / fenced(前置きとコードフェンスで包み、見出しに文字を足す)
 import json
 import os
 import re
+import stat
 import sys
 import time
 
@@ -48,20 +50,22 @@ if "stream-json" in args:
     record("preflight-not-killed")
     sys.exit(0)
 
-if "--json-schema" in args:
+if stat.S_ISREG(os.fstat(0).st_mode):  # 判定役(標準入力にレビューの出力のファイルを受け取るのは判定役だけ)
     stdin = sys.stdin.read()
     record("judge", stdin=stdin)
     mode = os.environ.get("FAKE_JUDGE", "ok")
-    if mode == "noso":
+    if mode == "noheading":
         result("done")
-    elif mode == "retries":
-        result("", subtype="error_max_structured_output_retries", is_error=True)
+    elif mode == "empty":
+        result("")
+    elif mode == "fenced":
+        result("以下が判定です。\n\n```markdown\n## 指摘(1件)\n\n### F1: s\n\n```sh\nx\n```\n\n## 競合\n\nなし\n```\n")
+    elif mode == "codeend":  # 前置きはなく、最後の項目が正当なコードブロックで終わる
+        result("## 指摘\n\nなし\n\n## 競合\n\n### C1: t\n```sh\nx\n```\n")
+    elif mode == "conflictfirst":
+        result("## 競合\n\nなし\n\n## 指摘\n\nなし\n")
     else:
-        verdict = {"findings": [{"id": "F1", "perspectives": ["code-review"], "file": "a.txt", "line": 1,
-                                 "summary": "s", "rationale": "r", "behavior_change": True,
-                                 "category": "defect", "conflict": None}],
-                   "conflicts": [], "recommendation": {"continue": True, "reason": "F1"}}
-        result(json.dumps(verdict), structured_output=verdict)
+        result("## 指摘\n\n### F1: s\n- 観点: code-review\n- 場所: a.txt:1\n- 影響: 中。r\n\n## 競合\n\nなし\n")
     sys.exit(0)
 
 name = args[-1].split()[0].lstrip("/")

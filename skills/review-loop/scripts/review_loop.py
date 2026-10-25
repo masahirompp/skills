@@ -4,11 +4,11 @@
     review_loop.py iterate <worktree の絶対パス> [--new-run]
 
 観点別のレビュースキルを `claude -p` で並列に実行し、判定役の `claude -p` に突き合わせと
-競合の裁定をさせ、判定 JSON を標準出力に出す。コードは修正しない。ループの状態は PR の
-コメント1つ(マーカー付き)に記録する。
+競合の裁定をさせ、判定(Markdown のテキスト)を標準出力に出す。コードは修正しない。
+ループの状態は PR のコメント1つ(マーカー付き)に記録する。
 
 終了コード:
-  0  成功。標準出力は判定 JSON だけ
+  0  成功。標準出力は判定のテキストだけ
   1  試行が失敗した。状態コメントに記録済み
   2  試行を始めなかった(前提を満たさない、ロックを取れない、上限に達した、開始前に中断された)。試行は記録しない
      (ただし、残っていた古いロックを interrupted として片付けた記録は残る)
@@ -72,9 +72,6 @@ GUARD_ENV = "REVIEW_LOOP_ACTIVE"
 NO_MUTATION = "ファイルの編集、checkout、commit、stash、pushなど、作業ツリーやブランチを変える操作をしないでください。"
 REVIEW_CONSTRAINT = "他のレビューと並列に、同じworktreeで実行しています。" + NO_MUTATION
 JUDGE_CONSTRAINT = "レビュー対象のworktreeで実行しています。" + NO_MUTATION
-
-SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "verdict.schema.json")
-
 
 class Precondition(Exception):
     """前提を満たさない。試行を始めず、終了コード2で終わる。"""
@@ -229,7 +226,7 @@ def add_tokens(tokens, data):
         tokens["output"] += m.get("outputTokens", 0)
 
 
-def check_result(label, rc, base, attempt, structured=False):
+def check_result(label, rc, base, attempt):
     """子の結果を読んでトークン数を attempt に足し、成功の条件を全て満たすか確かめる。結果の JSON を返す。"""
     try:
         with open(base + ".stdout.json", encoding="utf-8") as f:
@@ -245,10 +242,7 @@ def check_result(label, rc, base, attempt, structured=False):
     if rc != 0 or data.get("subtype") != "success" or data.get("is_error"):
         raise AttemptFailed("child_error", label, f"終了コード {rc}、subtype {data.get('subtype')}、"
                             f"is_error {data.get('is_error')}: {str(data.get('result', ''))[:500]}")
-    if structured:
-        if not isinstance(data.get("structured_output"), dict):
-            raise AttemptFailed("no_output", label, "structured_output がない")
-    elif not str(data.get("result") or "").strip():
+    if not str(data.get("result") or "").strip():
         raise AttemptFailed("no_output", label, "result が空")
     return data
 
@@ -628,17 +622,52 @@ def run_reviews(wt, env, pr, workdir, children, attempt):
     return {skill_name(s): results[skill_name(s)] for s in PERSPECTIVES}
 
 
+# 判定の見出し。JUDGE_PROMPT の出力の形と、偽の claude(skill-dev/review-loop/fakes/claude)の判定と揃える。判定の中身を読むのは親なので、スクリプトが確かめるのは
+# この2つが行頭にあることだけにする(項目の抜けまで失敗にすると、形の揺れで試行が無駄になる)
+VERDICT_SECTIONS = ("## 指摘", "## 競合")
+
 JUDGE_PROMPT = """\
 PR #{pr} に対する観点別レビューの出力を、標準入力で渡す(観点ごとに区切ってある)。
-あなたの役割は、指摘を突き合わせ、観点どうしの競合を裁定し、レビューを続けるべきかを推奨すること。修正はしない。
-- 同じ問題への指摘は1件にまとめ、挙げた観点を perspectives に全て入れる
-- 指摘を捨てない。根拠が疑わしいものは、コードを読んで確かめ、その結果を rationale に書く
-- 観点どうしで両立しない指摘(一方に従うと他方が悪化する)は conflicts に載せ、PR の意図に照らしてどちらを採るかを ruling で裁定する。action が fix になったものは findings にも載せ、その conflict に競合の id を入れる
-- behavior_change は、その指摘に従って修正したときにプログラムの挙動が変わるかどうか
-- PR 本文やコードコメントに判断の理由(以前のレビューで採らなかった指摘など)が書かれていれば、それを踏まえる。理由が妥当なら蒸し返さない
-- recommendation.continue は、挙動が変わる修正を要する指摘が残っていれば true
-- 観点の出力がレビューになっていない(セットアップの案内や利用者への質問で終わっている、対象を取り違えているなど)ときは、その観点が欠けたことを category が other の指摘として findings に載せ、behavior_change を true にする
-- 指摘がなければ findings と conflicts は空配列にする
+あなたの役割は、指摘を突き合わせ、観点どうしの競合を裁定し、修正する人(親)が直す範囲を決められる材料を返すこと。修正はしない。
+
+- 同じ問題への指摘は1件にまとめ、挙げた観点を全て書く
+- 指摘を捨てない。根拠が疑わしいものは、コードを読んで確かめ、その結果を根拠に書く
+- PR 本文やコードコメントに、以前のレビューで採らなかった指摘とその理由が書かれていれば、同じ指摘にも「再指摘」として載せ、その理由と、今回の指摘がその理由を覆す事情を持つかどうかを書く
+- 観点どうしで両立しない指摘(一方に従うと他方が悪化する)は「競合」に載せ、PR の意図に照らしてどちらを採るかを裁定する。直すと裁定したものは「指摘」にも載せる
+- 観点の出力がレビューになっていない(セットアップの案内や利用者への質問で終わっている、対象を取り違えているなど)ときは、その観点が欠けたことを、要約の先頭に「観点の欠落」と書いた、分類 other の指摘として載せる。影響の欄には段階を付けず「観点の欠落」と書く
+
+影響は、指摘を直さなかったときに起きることで決める。プロジェクトの CLAUDE.md などに影響の具体例があれば、それに従う。
+
+- 高: 取り返しがつかない(データの消失、消すべきでないものを消す、セキュリティ)
+- 中: 機能が使えない、誤った表示で利用者が判断を誤る
+- 低: 表示の乱れなど、利用者がすぐ気づいてやり直せる
+- なし: 挙動に関わらない(命名、コメント、書き方)
+
+起きやすさは、普通の使い方 / 特定の操作の組み合わせ / まれな条件(競合やタイミング)のどれかにし、起きる操作の順を根拠として書く。
+
+横展開には、その指摘が破っている規則と、同じ規則に触れるほかの経路の候補を、コードで確かめた範囲で書く。なければ「なし」と書く。
+
+次の形の Markdown だけを出力する。指摘や競合がなければ、その見出しの下に「なし」と書く。
+
+## 指摘
+
+### F1: <要約>
+- 観点: <観点スキルの名前、カンマ区切り>
+- 場所: <リポジトリ相対パス>:<行>
+- 分類: defect / test_gap / naming_or_comment / style / other
+- 影響: 高 / 中 / 低 / なし。<直さなかったら何が起きるか>
+- 起きやすさ: <段階>。<起きる操作の順>
+- 再指摘: なし / あり。<以前の理由と、今回の事情>
+- 根拠: <コードで確かめた結果を含める>
+- 横展開: <破っている規則と、ほかの経路の候補> / なし
+- 競合: なし / <裁定でこの指摘を直すことにした競合の id(C1 など)>
+
+## 競合
+
+### C1: <何と何がトレードオフか>
+- 場所: <リポジトリ相対パス>:<行>
+- 指摘: <観点>: <要約>、<観点>: <要約>
+- 裁定: <採る観点>。直す / 直さない。<理由>
 """
 
 
@@ -647,11 +676,9 @@ def run_judge(wt, env, pr_number, reviews, workdir, children, attempt):
     with open(input_path, "w", encoding="utf-8") as f:
         for name, text in reviews.items():
             f.write(f"===== 観点: {name} =====\n{text.strip()}\n===== ここまで: {name} =====\n\n")
-    with open(SCHEMA_PATH, encoding="utf-8") as f:
-        schema = json.dumps(json.load(f), ensure_ascii=False)
     base = os.path.join(workdir, "verdict")
     with open(input_path, "rb") as fin, open(base + ".stdout.json", "w") as out, open(base + ".stderr.txt", "w") as err:
-        p = children.spawn(["claude", "-p", "--output-format", "json", "--json-schema", schema,
+        p = children.spawn(["claude", "-p", "--output-format", "json",
                             "--append-system-prompt", JUDGE_CONSTRAINT, JUDGE_PROMPT.format(pr=pr_number)],
                            JUDGE_TIMEOUT, cwd=wt, env=env, stdin=fin, stdout=out, stderr=err)
     try:
@@ -659,8 +686,18 @@ def run_judge(wt, env, pr_number, reviews, workdir, children, attempt):
     except subprocess.TimeoutExpired:
         raise AttemptFailed("timeout", "judge", f"{JUDGE_TIMEOUT // 60} 分を超えた")
     children.finish(p)
-    data = check_result("judge", p.returncode, base, attempt, structured=True)
-    return data["structured_output"]
+    text = check_result("judge", p.returncode, base, attempt)["result"]
+    found = {h: re.search(rf"^{re.escape(h)}", text, re.M) for h in VERDICT_SECTIONS}
+    missing = [h for h, m in found.items() if not m]
+    if missing:
+        raise AttemptFailed("no_output", "judge", f"判定に見出し {'、'.join(missing)} がない: {text[:500]}")
+    # 「以下が判定です」のような前置きは、最初の見出しより前にあるので落とす。前置きでコードフェンスを
+    # 開いていたときだけ、末尾の閉じフェンスも落とす
+    start = min(m.start() for m in found.values())
+    verdict = text[start:].strip()
+    if text[:start].count("```") % 2:
+        verdict = re.sub(r"\n```\s*$", "", verdict).rstrip()
+    return verdict
 
 
 def find_contamination(wt, start):
@@ -728,8 +765,8 @@ def iterate(worktree, new_run, ctx):
         found = find_contamination(wt, start)
         if found:
             raise AttemptFailed(found[0], "", found[1])
-        with open(os.path.join(ctx["workdir"], "verdict.json"), "w", encoding="utf-8") as f:
-            json.dump(verdict, f, ensure_ascii=False, indent=2)
+        with open(os.path.join(ctx["workdir"], "verdict.md"), "w", encoding="utf-8") as f:
+            f.write(verdict + "\n")
         ignore_signals()  # ここから先は成功の記録だけなので、中断させない
         state["iter"] += 1
         state["consecutive_failures"] = 0
@@ -827,7 +864,7 @@ def main():
     code = 0
     try:
         verdict = iterate(args.worktree, args.new_run, ctx)
-        print(json.dumps(verdict, ensure_ascii=False, indent=2), flush=True)
+        print(verdict, flush=True)
         log("完了: 反復 {}、入力 {}、出力 {} トークン".format(ctx["attempt"]["iter"], *format_tokens(ctx["attempt"]["tokens"])))
     except BaseException as e:
         ignore_signals()
