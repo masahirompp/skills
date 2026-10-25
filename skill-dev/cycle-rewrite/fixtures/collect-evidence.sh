@@ -66,9 +66,14 @@ dump() { # $1=repo-name $2=run-dir(iteration-N からの相対)
     echo "--- GitHub issues (all states) ---"
     gh issue list -R "$r" --state all --limit 50 --json number,title,state,labels,milestone \
       --jq '.[] | "#\(.number) [\(.state)] labels=\([.labels[].name] | join(",")) ms=\(.milestone.title // "none") \(.title)"'
-    echo "--- GitHub open issue bodies (本文の判定用: 二択併記・照合結果の反映など) ---"
-    gh issue list -R "$r" --state open --limit 50 --json number,title,body \
-      --jq '.[] | "### #\(.number) \(.title)\n\(.body)\n"'
+    echo "--- GitHub open issue bodies and comments (本文の判定用: 二択併記・照合結果の反映・ジャーナルの追記など) ---"
+    gh issue list -R "$r" --state open --limit 50 --json number,title,body,comments \
+      --jq '.[] | "### #\(.number) \(.title)\n\(.body)\n\([.comments[] | "[comment] \(.body)"] | join("\n"))\n"'
+    echo "--- changes since the initial commit (実装の判定用) ---"
+    local first
+    first=$(git -C "$dir" rev-list --max-parents=0 HEAD | tail -1)
+    git -C "$dir" diff --stat "$first"
+    git -C "$dir" diff "$first" -- src tests | head -300
     echo "--- git worktrees (作業ツリー外参照の後始末チェック) ---"
     git -C "$dir" worktree list
   } > "$out" 2>&1
@@ -87,3 +92,5 @@ dump "cycle-rewrite-eval-start-with-i$N"   "eval-4-cycle-start/$WITH_CFG/run-1"
 dump "cycle-rewrite-eval-start-base-i$N"   "eval-4-cycle-start/$BASE_CFG/run-1"
 dump "cycle-rewrite-eval-audit-with-i$N"   "eval-5-cycle-audit/$WITH_CFG/run-1"
 dump "cycle-rewrite-eval-audit-base-i$N"   "eval-5-cycle-audit/$BASE_CFG/run-1"
+dump "cycle-rewrite-eval-impl-with-i$N"    "eval-6-impl-provisional/$WITH_CFG/run-1"
+dump "cycle-rewrite-eval-impl-base-i$N"    "eval-6-impl-provisional/$BASE_CFG/run-1"

@@ -60,7 +60,7 @@ ln -s ../../ghq/github.com/masahirompp/skills/skills/cycle-rewrite ~/.claude/ski
 スキルの改善は skill-creator の eval で計測しながら行う。資産は `skill-dev/<skill-name>/` にある:
 
 - `evals/evals.json` — eval 定義（プロンプト・assertion）
-- `fixtures/build-fixtures.sh` — eval 用の使い捨て GitHub リポジトリ（`cycle-rewrite-eval-*`）を生成・シードする。イテレーション番号をサフィックスに渡す（例: `build-fixtures.sh -i7`）
+- `fixtures/build-fixtures.sh` — eval 用の使い捨て GitHub リポジトリ（`cycle-rewrite-eval-*`）を生成・シードする。イテレーション番号をサフィックスに渡す（例: `build-fixtures.sh -i7`）。一部の eval だけ回すときは `ONLY` で作る種類を絞る（例: `ONLY="end impl" build-fixtures.sh -i20`）。GitHub はリポジトリの連続作成を制限するので、全種類を一度に作ると途中で失敗することがある
 - `fixtures/collect-evidence.sh` — 実行後の各 fixture リポの状態を evidence.txt にダンプする（例: `collect-evidence.sh 7`）
 - `history/iteration-N/` — 過去イテレーションのベンチマーク結果とフィードバック
 
