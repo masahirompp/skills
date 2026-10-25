@@ -9,8 +9,13 @@ TPL="$WS/templates"
 REPOS="$WS/repos"
 OWNER="masahirompp"
 SUFFIX="${1:-}"   # 例: -i2 (イテレーションごとに新しい使い捨てリポを作る)
+# ONLY で作る種類を絞れる(init end capture trans start audit impl の空白区切り)。既定は全部。
+# GitHub はリポジトリの連続作成を制限するので、一部の eval だけ回すときに使う
+ONLY="${ONLY:-}"
+want() { [ -z "$ONLY" ] || [[ " $ONLY " == *" $1 "* ]]; }
 
-rm -rf "$TPL" "$REPOS"
+rm -rf "$TPL"
+[ -z "$ONLY" ] && rm -rf "$REPOS"
 mkdir -p "$TPL"/{init,midcycle,converging,postend} "$REPOS"
 
 # ---------------------------------------------------------------
@@ -1073,19 +1078,36 @@ seed_converging_history() { # $1=repo-name
 }
 
 # --- init 用 (シードは repo のみ。ラベル・マイルストーンは init モードが作るのが期待動作) ---
-create_repo init "cycle-rewrite-eval-init-with$SUFFIX"
-create_repo init "cycle-rewrite-eval-init-base$SUFFIX"
+if want init; then
+  create_repo init "cycle-rewrite-eval-init-with$SUFFIX"
+  create_repo init "cycle-rewrite-eval-init-base$SUFFIX"
+fi
 
-# --- midcycle 用 (cycle-end / capture) ---
-for name in "cycle-rewrite-eval-end-with$SUFFIX" "cycle-rewrite-eval-end-base$SUFFIX" "cycle-rewrite-eval-capture-with$SUFFIX" "cycle-rewrite-eval-capture-base$SUFFIX"; do
+# --- midcycle 用 (cycle-end / capture / 実装セッション) ---
+for name in "cycle-rewrite-eval-end-with$SUFFIX" "cycle-rewrite-eval-end-base$SUFFIX" "cycle-rewrite-eval-capture-with$SUFFIX" "cycle-rewrite-eval-capture-base$SUFFIX" "cycle-rewrite-eval-impl-with$SUFFIX" "cycle-rewrite-eval-impl-base$SUFFIX"; do
+  kind="${name#cycle-rewrite-eval-}"; kind="${kind%%-*}"
+  want "$kind" || continue
   create_repo midcycle "$name"
   seed_workflow_labels "$name"
   create_milestone "$name" cycle-1 >/dev/null
   seed_midcycle_issues "$name"
+  # cycle-end 用: 実装セッションが層2で暫定の挙動を採った記録。棚卸しで close でも個別確認になるかを見る
+  if [ "$kind" = end ]; then
+    issue "$name" cycle-1 spec-change "暫定: ブックマークHTMLの再インポートで、同じURLは重複して追加する" \
+      "実装中に、保存済みと同じURLを含むHTMLをインポートしたときの挙動が PRODUCT.md・ADR・CONTEXT.md のどこにも定められていないと判明した(暗黙の要件の発覚)。
+
+選択肢:
+- 案A: 既存を残して、同じURLはスキップする
+- 案B: 既存のタイトルを、インポートした内容で上書きする
+- 案C: 重複して追加する
+
+暫定で案C(今の実装のまま)を採った。確定は人間が行う。"
+  fi
 done
 
 # --- converging 用 (transition-check) ---
 for name in "cycle-rewrite-eval-trans-with$SUFFIX" "cycle-rewrite-eval-trans-base$SUFFIX"; do
+  want trans || continue
   create_repo converging "$name"
   cd "$REPOS/$name"
   # cycle-1 / cycle-2 のタグ履歴を再現
@@ -1109,6 +1131,7 @@ done
 # close 済み issue に旧サイクルの情報(検索インデックス案等)を意図的に残し、
 # cycle-start が旧 issue を読まない規律を検証できるようにする
 for name in "cycle-rewrite-eval-start-with$SUFFIX" "cycle-rewrite-eval-start-base$SUFFIX"; do
+  want start || continue
   create_repo postend "$name"
   cd "$REPOS/$name"
   git tag cycle-1
@@ -1127,6 +1150,7 @@ done
 # サイクル2の実装完了直後・cycle-end 前の状態。issue は cycle-1 分が棚卸し済み close、
 # cycle-2 分に実装計画ジャーナル(decision-log)と学び1件が open で残る
 for name in "cycle-rewrite-eval-audit-with$SUFFIX" "cycle-rewrite-eval-audit-base$SUFFIX"; do
+  want audit || continue
   dir="$REPOS/$name"
   rm -rf "$dir"
   cp -R "$TPL/audit-c1" "$dir"
