@@ -223,6 +223,9 @@ check(rc == 0 and s["iter"] == 1 and s["previous_run"]["iterations"] == 2 and le
 
 rc, _, err = run(wt, FAKE_JUDGE="noheading")
 check(rc == 1 and "no_output" in err and "## 指摘" in err, "判定に決めた見出しがなければ失敗")
+rc, out, err = run(wt, FAKE_JUDGE="fenced")
+check(rc == 0 and out.startswith("## 指摘(1件)") and out.rstrip().endswith("なし"),
+      "見出しに文字が足されていても通し、前置きとコードフェンスは落とす")
 rc, _, err = run(wt, FAKE_JUDGE="empty")
 check(rc == 1 and "no_output" in err and "result が空" in err, "判定が空なら失敗")
 rc, _, err = run(wt, FAKE_REVIEW_code_review="fail")

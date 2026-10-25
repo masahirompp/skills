@@ -4,8 +4,8 @@
     review_loop.py iterate <worktree の絶対パス> [--new-run]
 
 観点別のレビュースキルを `claude -p` で並列に実行し、判定役の `claude -p` に突き合わせと
-競合の裁定をさせ、判定(Markdown のテキスト)を標準出力に出す。コードは修正しない。ループの状態は PR の
-コメント1つ(マーカー付き)に記録する。
+競合の裁定をさせ、判定(Markdown のテキスト)を標準出力に出す。コードは修正しない。
+ループの状態は PR のコメント1つ(マーカー付き)に記録する。
 
 終了コード:
   0  成功。標準出力は判定のテキストだけ
@@ -622,7 +622,8 @@ def run_reviews(wt, env, pr, workdir, children, attempt):
     return {skill_name(s): results[skill_name(s)] for s in PERSPECTIVES}
 
 
-# 判定の見出し。判定役の出力にこの2つがなければ、決めた形になっていないとみなす
+# 判定の見出し。JUDGE_PROMPT の出力の形と揃える。判定の中身を読むのは親なので、スクリプトが確かめるのは
+# この2つが行頭にあることだけにする(項目の抜けまで失敗にすると、形の揺れで試行が無駄になる)
 VERDICT_SECTIONS = ("## 指摘", "## 競合")
 
 JUDGE_PROMPT = """\
@@ -633,7 +634,7 @@ PR #{pr} に対する観点別レビューの出力を、標準入力で渡す(�
 - 指摘を捨てない。根拠が疑わしいものは、コードを読んで確かめ、その結果を根拠に書く
 - PR 本文やコードコメントに、以前のレビューで採らなかった指摘とその理由が書かれていれば、同じ指摘にも「再指摘」として載せ、その理由と、今回の指摘がその理由を覆す事情を持つかどうかを書く
 - 観点どうしで両立しない指摘(一方に従うと他方が悪化する)は「競合」に載せ、PR の意図に照らしてどちらを採るかを裁定する。直すと裁定したものは「指摘」にも載せる
-- 観点の出力がレビューになっていない(セットアップの案内や利用者への質問で終わっている、対象を取り違えているなど)ときは、その観点が欠けたことを、分類 other、影響 高の指摘として載せる
+- 観点の出力がレビューになっていない(セットアップの案内や利用者への質問で終わっている、対象を取り違えているなど)ときは、その観点が欠けたことを、要約の先頭に「観点の欠落」と書いた、分類 other の指摘として載せる(影響は「なし」とする)
 
 影響は、指摘を直さなかったときに起きることで決める。プロジェクトの CLAUDE.md などに影響の具体例があれば、それに従う。
 
@@ -659,6 +660,7 @@ PR #{pr} に対する観点別レビューの出力を、標準入力で渡す(�
 - 再指摘: なし / あり。<以前の理由と、今回の事情>
 - 根拠: <コードで確かめた結果を含める>
 - 横展開: <破っている規則と、ほかの経路の候補> / なし
+- 競合: なし / <裁定でこの指摘を直すことにした競合の id(C1 など)>
 
 ## 競合
 
@@ -684,11 +686,13 @@ def run_judge(wt, env, pr_number, reviews, workdir, children, attempt):
     except subprocess.TimeoutExpired:
         raise AttemptFailed("timeout", "judge", f"{JUDGE_TIMEOUT // 60} 分を超えた")
     children.finish(p)
-    verdict = check_result("judge", p.returncode, base, attempt)["result"].strip()
-    missing = [h for h in VERDICT_SECTIONS if not re.search(rf"^{re.escape(h)}\s*$", verdict, re.M)]
+    text = check_result("judge", p.returncode, base, attempt)["result"]
+    missing = [h for h in VERDICT_SECTIONS if not re.search(rf"^{re.escape(h)}", text, re.M)]
     if missing:
-        raise AttemptFailed("no_output", "judge", f"判定に見出し {'、'.join(missing)} がない: {verdict[:500]}")
-    return verdict
+        raise AttemptFailed("no_output", "judge", f"判定に見出し {'、'.join(missing)} がない: {text[:500]}")
+    # 「以下が判定です」のような前置きやコードフェンスは、最初の見出しより前にあるので落とす
+    verdict = text[re.search(rf"^{re.escape(VERDICT_SECTIONS[0])}", text, re.M).start():].strip()
+    return re.sub(r"\n```\s*$", "", verdict).rstrip()
 
 
 def find_contamination(wt, start):
