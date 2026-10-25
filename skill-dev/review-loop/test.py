@@ -132,8 +132,7 @@ def commit_and_push(wt, name):
 wt = setup()
 rc, out, err = run(wt)
 check(rc == 0, f"成功すると終了コード0({rc}) {err[-300:] if rc else ''}")
-verdict = json.loads(out) if rc == 0 else {}
-check(verdict.get("recommendation", {}).get("continue") is True, "標準出力は判定 JSON だけ")
+check(out.startswith("## 指摘") and "### F1: s" in out, "標準出力は判定のテキストだけ")
 s = state()
 check(s and s["iter"] == 1 and s["attempts"][0]["result"] == "completed", "状態コメントに反復1が記録される")
 check(s and s["lock"]["running"] is False, "ロックが解除される")
@@ -142,7 +141,9 @@ check(s and s["attempts"][0]["tokens"] == {"input": 4 * 3500, "cache_read": 4 * 
 body = comments()[0]["body"]
 check("| 1.4万(うちキャッシュ読み込み 8000) | 1200 |" in body, "入力と出力のトークン数を別の列に出す")
 workdir = err.rstrip().splitlines()[-1]
-check(os.path.isfile(os.path.join(workdir, "verdict.json")), "stderr の最後の行は作業ディレクトリ")
+check(os.path.isfile(os.path.join(workdir, "verdict.md")), "stderr の最後の行は作業ディレクトリ")
+with open(os.path.join(workdir, "verdict.md"), encoding="utf-8") as f:
+    check(f.read() == out, "判定は作業ディレクトリの verdict.md にも残る")
 check(workdir.startswith(os.path.join(root, "review-loop", "o_r", "7")), "作業ディレクトリは <tmp>/review-loop/<リポジトリ>/<PR>/<run>/<試行>")
 cs = calls()
 reviews = [c for c in cs if c["kind"] == "review"]
@@ -152,8 +153,8 @@ check(all(c["guard"] == "1" for c in cs), "子には REVIEW_LOOP_ACTIVE が渡�
 check(not any(c["kind"] == "preflight-not-killed" for c in cs), "事前確認の子は init の直後に止める")
 judge = [c for c in cs if c["kind"] == "judge"]
 check(judge and "===== 観点: security-review =====" in judge[0]["stdin"], "判定役には各レビューを区切って stdin で渡す")
-check(judge and '"enum"' in judge[0]["args"][judge[0]["args"].index("--json-schema") + 1],
-      "--json-schema にはスキーマの中身を渡す")
+check(judge and "--json-schema" not in judge[0]["args"] and "## 指摘" in judge[0]["args"][-1],
+      "判定役には出力の形をプロンプトで渡す")
 check(all("--append-system-prompt" in c["args"] for c in reviews + judge), "運用上の制約を渡す")
 prompts = {c["args"][-1] for c in reviews}
 check(prompts == {"/code-review high 7", "/security-review", "/mattpocock-skills:code-review PR #7"},
@@ -220,10 +221,10 @@ s = state()
 check(rc == 0 and s["iter"] == 1 and s["previous_run"]["iterations"] == 2 and len(s["attempts"]) == 1,
       "--new-run で直前のシリーズを要約して始め直す")
 
-rc, _, err = run(wt, FAKE_JUDGE="noso")
-check(rc == 1 and "structured_output" in err, "判定役に structured_output がなければ失敗")
-rc, _, err = run(wt, FAKE_JUDGE="retries")
-check(rc == 1 and "error_max_structured_output_retries" in err, "構造化出力の再試行が尽きたら失敗")
+rc, _, err = run(wt, FAKE_JUDGE="noheading")
+check(rc == 1 and "no_output" in err and "## 指摘" in err, "判定に決めた見出しがなければ失敗")
+rc, _, err = run(wt, FAKE_JUDGE="empty")
+check(rc == 1 and "no_output" in err and "result が空" in err, "判定が空なら失敗")
 rc, _, err = run(wt, FAKE_REVIEW_code_review="fail")
 check(rc == 1 and "boom" in err, "子が異常終了したら stderr を添えて失敗")
 

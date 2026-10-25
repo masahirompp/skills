@@ -7,7 +7,7 @@
 #                            / remote(PR のブランチにだけ別のコミットを push する)
 #                            / switch(作業ツリーはクリーンのまま、別のブランチに切り替える)
 #                            <観点> は英数字以外を _ にしたもの(例: FAKE_REVIEW_code_review)
-#   FAKE_JUDGE               ok(既定) / noso / retries
+#   FAKE_JUDGE               ok(既定) / noheading(決めた見出しがない) / empty
 import json
 import os
 import re
@@ -48,20 +48,16 @@ if "stream-json" in args:
     record("preflight-not-killed")
     sys.exit(0)
 
-if "--json-schema" in args:
+if args[-1].startswith("PR #"):  # 判定役(プロンプトが「PR #<番号> に対する…」で始まる)
     stdin = sys.stdin.read()
     record("judge", stdin=stdin)
     mode = os.environ.get("FAKE_JUDGE", "ok")
-    if mode == "noso":
+    if mode == "noheading":
         result("done")
-    elif mode == "retries":
-        result("", subtype="error_max_structured_output_retries", is_error=True)
+    elif mode == "empty":
+        result("")
     else:
-        verdict = {"findings": [{"id": "F1", "perspectives": ["code-review"], "file": "a.txt", "line": 1,
-                                 "summary": "s", "rationale": "r", "behavior_change": True,
-                                 "category": "defect", "conflict": None}],
-                   "conflicts": [], "recommendation": {"continue": True, "reason": "F1"}}
-        result(json.dumps(verdict), structured_output=verdict)
+        result("## 指摘\n\n### F1: s\n- 観点: code-review\n- 場所: a.txt:1\n- 影響: 中。r\n\n## 競合\n\nなし\n")
     sys.exit(0)
 
 name = args[-1].split()[0].lstrip("/")
