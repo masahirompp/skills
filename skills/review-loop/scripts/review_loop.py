@@ -622,7 +622,7 @@ def run_reviews(wt, env, pr, workdir, children, attempt):
     return {skill_name(s): results[skill_name(s)] for s in PERSPECTIVES}
 
 
-# 判定の見出し。JUDGE_PROMPT の出力の形と揃える。判定の中身を読むのは親なので、スクリプトが確かめるのは
+# 判定の見出し。JUDGE_PROMPT の出力の形と、偽の claude(skill-dev/review-loop/fakes/claude)の判定と揃える。判定の中身を読むのは親なので、スクリプトが確かめるのは
 # この2つが行頭にあることだけにする(項目の抜けまで失敗にすると、形の揺れで試行が無駄になる)
 VERDICT_SECTIONS = ("## 指摘", "## 競合")
 
@@ -634,7 +634,7 @@ PR #{pr} に対する観点別レビューの出力を、標準入力で渡す(�
 - 指摘を捨てない。根拠が疑わしいものは、コードを読んで確かめ、その結果を根拠に書く
 - PR 本文やコードコメントに、以前のレビューで採らなかった指摘とその理由が書かれていれば、同じ指摘にも「再指摘」として載せ、その理由と、今回の指摘がその理由を覆す事情を持つかどうかを書く
 - 観点どうしで両立しない指摘(一方に従うと他方が悪化する)は「競合」に載せ、PR の意図に照らしてどちらを採るかを裁定する。直すと裁定したものは「指摘」にも載せる
-- 観点の出力がレビューになっていない(セットアップの案内や利用者への質問で終わっている、対象を取り違えているなど)ときは、その観点が欠けたことを、要約の先頭に「観点の欠落」と書いた、分類 other の指摘として載せる(影響は「なし」とする)
+- 観点の出力がレビューになっていない(セットアップの案内や利用者への質問で終わっている、対象を取り違えているなど)ときは、その観点が欠けたことを、要約の先頭に「観点の欠落」と書いた、分類 other の指摘として載せる。影響の欄には段階を付けず「観点の欠落」と書く
 
 影響は、指摘を直さなかったときに起きることで決める。プロジェクトの CLAUDE.md などに影響の具体例があれば、それに従う。
 
@@ -687,12 +687,17 @@ def run_judge(wt, env, pr_number, reviews, workdir, children, attempt):
         raise AttemptFailed("timeout", "judge", f"{JUDGE_TIMEOUT // 60} 分を超えた")
     children.finish(p)
     text = check_result("judge", p.returncode, base, attempt)["result"]
-    missing = [h for h in VERDICT_SECTIONS if not re.search(rf"^{re.escape(h)}", text, re.M)]
+    found = {h: re.search(rf"^{re.escape(h)}", text, re.M) for h in VERDICT_SECTIONS}
+    missing = [h for h, m in found.items() if not m]
     if missing:
         raise AttemptFailed("no_output", "judge", f"判定に見出し {'、'.join(missing)} がない: {text[:500]}")
-    # 「以下が判定です」のような前置きやコードフェンスは、最初の見出しより前にあるので落とす
-    verdict = text[re.search(rf"^{re.escape(VERDICT_SECTIONS[0])}", text, re.M).start():].strip()
-    return re.sub(r"\n```\s*$", "", verdict).rstrip()
+    # 「以下が判定です」のような前置きは、最初の見出しより前にあるので落とす。前置きでコードフェンスを
+    # 開いていたときだけ、末尾の閉じフェンスも落とす
+    start = min(m.start() for m in found.values())
+    verdict = text[start:].strip()
+    if text[:start].count("```") % 2:
+        verdict = re.sub(r"\n```\s*$", "", verdict).rstrip()
+    return verdict
 
 
 def find_contamination(wt, start):

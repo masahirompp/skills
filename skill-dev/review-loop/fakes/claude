@@ -12,6 +12,7 @@
 import json
 import os
 import re
+import stat
 import sys
 import time
 
@@ -49,8 +50,7 @@ if "stream-json" in args:
     record("preflight-not-killed")
     sys.exit(0)
 
-if "--append-system-prompt" in args and \
-        args[args.index("--append-system-prompt") + 1].startswith("レビュー対象のworktree"):  # 判定役(JUDGE_CONSTRAINT)
+if stat.S_ISREG(os.fstat(0).st_mode):  # 判定役(標準入力にレビューの出力のファイルを受け取るのは判定役だけ)
     stdin = sys.stdin.read()
     record("judge", stdin=stdin)
     mode = os.environ.get("FAKE_JUDGE", "ok")
@@ -59,7 +59,11 @@ if "--append-system-prompt" in args and \
     elif mode == "empty":
         result("")
     elif mode == "fenced":
-        result("以下が判定です。\n\n```markdown\n## 指摘(1件)\n\n### F1: s\n\n## 競合\n\nなし\n```\n")
+        result("以下が判定です。\n\n```markdown\n## 指摘(1件)\n\n### F1: s\n\n```sh\nx\n```\n\n## 競合\n\nなし\n```\n")
+    elif mode == "codeend":  # 前置きはなく、最後の項目が正当なコードブロックで終わる
+        result("## 指摘\n\nなし\n\n## 競合\n\n### C1: t\n```sh\nx\n```\n")
+    elif mode == "conflictfirst":
+        result("## 競合\n\nなし\n\n## 指摘\n\nなし\n")
     else:
         result("## 指摘\n\n### F1: s\n- 観点: code-review\n- 場所: a.txt:1\n- 影響: 中。r\n\n## 競合\n\nなし\n")
     sys.exit(0)

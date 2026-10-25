@@ -226,6 +226,10 @@ check(rc == 1 and "no_output" in err and "## 指摘" in err, "判定に決めた
 rc, out, err = run(wt, FAKE_JUDGE="fenced")
 check(rc == 0 and out.startswith("## 指摘(1件)") and out.rstrip().endswith("なし"),
       "見出しに文字が足されていても通し、前置きとコードフェンスは落とす")
+rc, out, err = run(wt, FAKE_JUDGE="codeend")
+check(rc == 0 and out.rstrip().endswith("x\n```"), "前置きでフェンスを開いていなければ、末尾のコードブロックは残す")
+rc, out, err = run(wt, FAKE_JUDGE="conflictfirst")
+check(rc == 0 and out.startswith("## 競合"), "競合の節が先にあっても落とさない")
 rc, _, err = run(wt, FAKE_JUDGE="empty")
 check(rc == 1 and "no_output" in err and "result が空" in err, "判定が空なら失敗")
 rc, _, err = run(wt, FAKE_REVIEW_code_review="fail")
