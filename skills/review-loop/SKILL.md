@@ -36,9 +36,10 @@ description: >-
 Bash ツールの**バックグラウンド実行**で、**制限時間を 90 分(`timeout: 5400000`。`BASH_TIMEOUT` と同じ値)と明示して**起動する。既定の制限時間では、レビューの途中で止められる。
 
 ```sh
-python3 "${CLAUDE_SKILL_DIR}/scripts/review_loop.py" iterate <worktree の絶対パス>
+python3 ${CLAUDE_SKILL_DIR}/scripts/review_loop.py iterate <worktree の絶対パス>
 ```
 
+- コマンドは上の形のまま書き、パスを引用符で囲まない。sandbox の除外ルールなど、コマンドの文字列で照合する設定に合わせるため。パスに空白が含まれる環境では使えない
 - `--new-run` は、利用者から新しいシリーズを始めるよう明示的に指示されたときだけ付ける。直前のシリーズは run_id と反復回数だけに要約され、試行の記録は消える。状態コメントが手で編集されるなどして読めないときも、スクリプトは上限を黙って外さないよう終了コード2で止まる。そのときも `--new-run` は利用者に確認してから付ける
 - 実行中は、誰も worktree を編集せず、PR に push しない。レビュー役は同じ worktree と PR を読んでいる。編集や push があると、試行は `contamination` か `head_changed` で失敗する
 
