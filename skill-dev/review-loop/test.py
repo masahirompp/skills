@@ -145,6 +145,8 @@ check(os.path.isfile(os.path.join(workdir, "verdict.md")), "stderr の最後の�
 with open(os.path.join(workdir, "verdict.md"), encoding="utf-8") as f:
     check(f.read() == out, "判定は作業ディレクトリの verdict.md にも残る")
 check(workdir.startswith(os.path.join(root, "review-loop", "o_r", "7")), "作業ディレクトリは <tmp>/review-loop/<リポジトリ>/<PR>/<run>/<試行>")
+with open(os.path.join(workdir, "review-code-review.result.md"), encoding="utf-8") as f:
+    check(f.read() == "code-review: 指摘1件\n", "各レビューの result のテキストを review-*.result.md に残す")
 cs = calls()
 reviews = [c for c in cs if c["kind"] == "review"]
 check(len(reviews) == 3, "観点ごとに1プロセス起動する")
@@ -198,6 +200,10 @@ t = time.time()
 rc, _, err = run(wt, FAKE_REVIEW_code_review="deny", FAKE_REVIEW_security_review="hang")
 s = state()
 check(rc == 1 and "permission_denied" in err and "gh pr diff 7" in err, "権限の拒否は失敗にし、内容を出す")
+wd = err.rstrip().splitlines()[-1]
+with open(os.path.join(wd, "review-code-review.result.md"), encoding="utf-8") as f:
+    check(f.read() == "読めなかった\n", "失敗したレビューでも result のテキストを review-*.result.md に残す")
+check(s["attempts"][-1]["tokens"]["output"] >= 300, "拒否で終わった子のトークン数も記録する")
 check(time.time() - t < 30, "1つ失敗したら残りをすぐ止める")
 hung = [c for c in calls() if c["kind"] == "review" and c["name"] == "security-review"][-1]
 check(not alive(hung["pid"]), "止めた子のプロセスが残らない")
@@ -468,6 +474,15 @@ run(wt)
 body = next(c for c in comments() if c["login"] == "me")["body"]
 json_part, table = body.split("-->", 1)
 check("@" not in json_part and "@someone" not in table and "@\u200bsomeone" in table, "状態コメントに生の @ を含めない")
+
+# 拒否のイベントが stream に出たら、子が作業を続けていても、その時点で全体を止める
+run(wt, "--new-run")
+t = time.time()
+rc, _, err = run(wt, FAKE_REVIEW_code_review="denylive", FAKE_REVIEW_security_review="hang")
+check(rc == 1 and "permission_denied: review code-review" in err and "gh pr diff 7" in err and time.time() - t < 30,
+      "拒否のイベントが出たら、子の終了を待たずに permission_denied で止める")
+last = [c for c in calls() if c["kind"] == "review"][-3:]
+check(not any(alive(c["pid"]) for c in last), "拒否で止めたとき、どの子も残らない")
 
 if os.environ.get("KEEP"):
     print("作業ディレクトリ:", root)

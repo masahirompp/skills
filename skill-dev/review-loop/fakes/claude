@@ -3,7 +3,7 @@
 #   FAKE_DIR                 呼び出しの記録(calls.jsonl)を置く場所
 #   FAKE_SKILLS              init で返すスキル(カンマ区切り。既定は観点スキル全部)
 #   FAKE_PREFLIGHT_DELAY     init を返すまでの秒数
-#   FAKE_REVIEW_<観点>       ok(既定) / deny / fail / empty(結果が空) / dirty / hang / slow / bg(孫を残して終わる)
+#   FAKE_REVIEW_<観点>       ok(既定) / deny / denylive(拒否のイベントを出して、終わらずに続ける) / fail / empty(結果が空) / dirty / hang / slow / bg(孫を残して終わる)
 #                            / remote(PR のブランチにだけ別のコミットを push する)
 #                            / switch(作業ツリーはクリーンのまま、別のブランチに切り替える)
 #                            <観点> は英数字以外を _ にしたもの(例: FAKE_REVIEW_code_review)
@@ -36,10 +36,10 @@ def result(text, **extra):
          "modelUsage": {"m": {"inputTokens": 500, "cacheCreationInputTokens": 1000, "cacheReadInputTokens": 2000,
                               "outputTokens": 300}}}
     d.update(extra)
-    print(json.dumps(d, ensure_ascii=False))
+    print(json.dumps(d, ensure_ascii=False), flush=True)
 
 
-if "stream-json" in args:
+if args[-1] == "ok":  # 事前確認(レビュー役も stream-json を使うので、プロンプトで見分ける)
     record("preflight")
     skills = os.environ.get("FAKE_SKILLS", "code-review,mattpocock-skills:code-review").split(",")
     print(json.dumps({"type": "system", "subtype": "hook_started"}), flush=True)
@@ -82,6 +82,14 @@ elif mode == "empty":
 elif mode == "dirty":
     open("stray.txt", "w").write("x")
     result(f"{name}: 指摘なし")
+elif mode == "denylive":  # 拒否されても終わらずに作業を続ける(本物の claude と同じく、拒否のイベントを出す)
+    # 拒否されたツールの入力はイベントにないので、tool_use の行から引けることを確かめられるよう、message に入力を含めない
+    print(json.dumps({"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "id": "x", "name": "Bash", "input": {"command": "gh pr diff 7"}}]}}), flush=True)
+    print(json.dumps({"type": "system", "subtype": "permission_denied", "tool_name": "Bash", "tool_use_id": "x",
+                      "message": "Permission denied."}), flush=True)
+    time.sleep(120)
+    record("review-not-killed", name=name)
 elif mode == "hang":
     time.sleep(120)
     record("review-not-killed", name=name)
