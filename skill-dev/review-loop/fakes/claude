@@ -83,8 +83,11 @@ elif mode == "dirty":
     open("stray.txt", "w").write("x")
     result(f"{name}: 指摘なし")
 elif mode == "denylive":  # 拒否されても終わらずに作業を続ける(本物の claude と同じく、拒否のイベントを出す)
+    # 拒否されたツールの入力はイベントにないので、tool_use の行から引けることを確かめられるよう、message に入力を含めない
+    print(json.dumps({"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "id": "x", "name": "Bash", "input": {"command": "gh pr diff 7"}}]}}), flush=True)
     print(json.dumps({"type": "system", "subtype": "permission_denied", "tool_name": "Bash", "tool_use_id": "x",
-                      "message": "Permission to use Bash with command gh pr diff 7 has been denied."}), flush=True)
+                      "message": "Permission denied."}), flush=True)
     time.sleep(120)
     record("review-not-killed", name=name)
 elif mode == "hang":

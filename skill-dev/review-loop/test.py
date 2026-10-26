@@ -200,6 +200,10 @@ t = time.time()
 rc, _, err = run(wt, FAKE_REVIEW_code_review="deny", FAKE_REVIEW_security_review="hang")
 s = state()
 check(rc == 1 and "permission_denied" in err and "gh pr diff 7" in err, "権限の拒否は失敗にし、内容を出す")
+wd = err.rstrip().splitlines()[-1]
+with open(os.path.join(wd, "review-code-review.result.md"), encoding="utf-8") as f:
+    check(f.read() == "読めなかった\n", "失敗したレビューでも result のテキストを review-*.result.md に残す")
+check(s["attempts"][-1]["tokens"]["output"] >= 300, "拒否で終わった子のトークン数も記録する")
 check(time.time() - t < 30, "1つ失敗したら残りをすぐ止める")
 hung = [c for c in calls() if c["kind"] == "review" and c["name"] == "security-review"][-1]
 check(not alive(hung["pid"]), "止めた子のプロセスが残らない")
