@@ -50,7 +50,7 @@ PERSPECTIVES = [
 SAFETY_MAX_ITER = 10          # シリーズあたりの反復の上限
 MAX_CONSECUTIVE_FAILURES = 3  # 連続失敗の上限
 
-PREFLIGHT_TIMEOUT = 3 * 60    # 事前確認(子が Bash を1回実行して結果を返すまで)
+PREFLIGHT_TIMEOUT = 2 * 60    # 事前確認(init を受け取るまで)
 REVIEW_TIMEOUT = 40 * 60      # レビュー役1つあたり
 JUDGE_TIMEOUT = 20 * 60       # 判定役
 MARGIN = 5 * 60               # Bash の制限時間に対する余裕(事前確認の後の gh の呼び出しなど)
@@ -226,11 +226,28 @@ def add_tokens(tokens, data):
         tokens["output"] += m.get("outputTokens", 0)
 
 
-def check_result(label, rc, base, attempt):
+def load_result(path):
+    """子の結果の JSON を読む。stream-json(.jsonl)なら最後の result の行を返す。読めなければ ValueError。"""
+    with open(path, encoding="utf-8") as f:
+        if not path.endswith(".jsonl"):
+            return json.load(f)
+        found = None
+        for line in f:
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(msg, dict) and msg.get("type") == "result":
+                found = msg
+    if found is None:
+        raise ValueError("result の行がない")
+    return found
+
+
+def check_result(label, rc, base, attempt, ext=".stdout.json"):
     """子の結果を読んでトークン数を attempt に足し、成功の条件を全て満たすか確かめる。結果の JSON を返す。"""
     try:
-        with open(base + ".stdout.json", encoding="utf-8") as f:
-            data = json.load(f)
+        data = load_result(base + ext)
     except (OSError, ValueError):
         with open(base + ".stderr.txt", encoding="utf-8", errors="replace") as f:
             err = f.read().strip()[-1000:]
@@ -245,6 +262,41 @@ def check_result(label, rc, base, attempt):
     if not str(data.get("result") or "").strip():
         raise AttemptFailed("no_output", label, "result が空")
     return data
+
+
+class StreamTail:
+    """子が書き出している stream-json のファイルを、書き終わった行だけ少しずつ読む。"""
+
+    def __init__(self, path):
+        self.path, self.offset = path, 0
+
+    def new_messages(self):
+        try:
+            with open(self.path, "rb") as f:
+                f.seek(self.offset)
+                chunk = f.read()
+        except OSError:
+            return []
+        end = chunk.rfind(b"\n") + 1  # 書きかけの最後の行は次に回す
+        self.offset += end
+        out = []
+        for line in chunk[:end].splitlines():
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(msg, dict):
+                out.append(msg)
+        return out
+
+
+def check_denial(label, tail):
+    """stream に権限の拒否が出ていたら、子の終了を待たずに失敗にする。拒否が1回でもあれば、どのみち
+    試行は permission_denied で失敗になる(check_result)ので、出た時点で止めて残りの時間と費用を省く。"""
+    for msg in tail.new_messages():
+        if msg.get("type") == "system" and msg.get("subtype") == "permission_denied":
+            raise AttemptFailed("permission_denied", label,
+                                f"{msg.get('tool_name', '?')}: {str(msg.get('message', ''))[:300]}")
 
 
 # --- 前提チェック ------------------------------------------------------------
@@ -325,20 +377,16 @@ def snapshot(wt):
     }
 
 
-PREFLIGHT_PROMPT = "Bash ツールで `pwd` を1回だけ実行し、その出力だけを答えてください。ほかのツールは使わないでください。"
-
-
-def tool_result_text(content):
-    """tool_result の content(文字列か、text ブロックの配列)を文字列にする。"""
-    if isinstance(content, list):
-        return "\n".join(str(c.get("text", "")) for c in content if isinstance(c, dict))
-    return str(content or "")
-
-
-def read_preflight_stream(p):
-    """事前確認の子の stream-json を、result が来るか、出力が終わるか、制限時間を超えるまで読む。
-
-    返すのは (init, result, Bash の tool_use の id の集合, Bash の結果 [(is_error, 出力)], 出力が終わったか)。"""
+def preflight(wt, env):
+    """子を1回だけ起動し、init を受け取ったらすぐ止める。API を呼ぶ前に止まるので費用はほぼかからない。"""
+    err_file = tempfile.TemporaryFile(mode="w+")
+    try:
+        p = subprocess.Popen(watched(["claude", "-p", "--output-format", "stream-json", "--verbose", "ok"],
+                                     PREFLIGHT_TIMEOUT),
+                             cwd=wt, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                             stderr=err_file, text=True, start_new_session=True)
+    except OSError as e:
+        raise Precondition(f"claude を起動できない: {e}")
     lines = queue.Queue()
 
     def reader():
@@ -348,66 +396,29 @@ def read_preflight_stream(p):
 
     threading.Thread(target=reader, daemon=True).start()
     deadline = time.monotonic() + PREFLIGHT_TIMEOUT
-    init = result = None
-    bash_ids = set()
-    bash_results = []
-    eof = False
-    while result is None:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            break
-        try:
-            line = lines.get(timeout=remaining)
-        except queue.Empty:
-            break
-        if line is None:
-            eof = True
-            break
-        try:
-            msg = json.loads(line)
-        except ValueError:
-            continue
-        kind = msg.get("type")
-        if kind == "system" and msg.get("subtype") == "init":
-            init = msg
-        elif kind == "result":
-            result = msg
-        elif kind in ("assistant", "user"):
-            for block in (msg.get("message") or {}).get("content") or []:
-                if not isinstance(block, dict):
-                    continue
-                if block.get("type") == "tool_use" and block.get("name") == "Bash":
-                    bash_ids.add(block.get("id"))
-                elif block.get("type") == "tool_result" and block.get("tool_use_id") in bash_ids:
-                    bash_results.append((bool(block.get("is_error")), tool_result_text(block.get("content"))))
-    return init, result, bash_ids, bash_results, eof
-
-
-def preflight(wt, env):
-    """子を1回起動し、短いプロンプトで結果まで走らせる。子の使ったトークン数を返す。
-
-    init は API の呼び出しやツールの実行より前に出るので、init だけでは認証・ネットワークの失敗や、
-    子の Bash が sandbox を入れ子に起動できない失敗を見逃す。そこで子に Bash で pwd を実行させ、
-    結果まで確かめる。子が Bash を呼ばなかったときは失敗にせず、確かめられなかったことだけを出す
-    (モデルの振る舞いで前提チェックが揺れないように)。
-
-    スクリプト自身が sandbox の中にいるかを sandbox-exec などで直接確かめる方法は取らない。sandbox の外で
-    実行していて子の Bash が正常に動く環境でも、sandbox-exec が殺されることがあり、誤検知になるため。"""
-    err_file = tempfile.TemporaryFile(mode="w+")
+    init = None
     try:
-        p = subprocess.Popen(watched(["claude", "-p", "--output-format", "stream-json", "--verbose",
-                                      "--max-turns", "3", PREFLIGHT_PROMPT], PREFLIGHT_TIMEOUT),
-                             cwd=wt, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                             stderr=err_file, text=True, start_new_session=True)
-    except OSError as e:
-        raise Precondition(f"claude を起動できない: {e}")
-    try:
-        init, result, bash_ids, bash_results, eof = read_preflight_stream(p)
+        while init is None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                line = lines.get(timeout=remaining)
+            except queue.Empty:
+                break
+            if line is None:
+                break
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                continue
+            if msg.get("type") == "system" and msg.get("subtype") == "init":
+                init = msg
     finally:
         kill_group(p)
-    err_file.seek(0)
-    err = err_file.read().strip()[-1000:]
     if init is None:
+        err_file.seek(0)
+        err = err_file.read().strip()[-1000:]
         raise Precondition("事前確認: claude が起動しなかった(init が来ない)。認証・sandbox・ネットワークを確かめてほしい。"
                            f"stderr: {err}{sandbox_hint(err)}")
     if os.path.realpath(init.get("cwd") or "") != wt:
@@ -418,34 +429,6 @@ def preflight(wt, env):
     if missing:
         raise Precondition(f"事前確認: 観点スキルが見つからない: {', '.join(missing)}"
                            "(名前の誤りか未導入。プラグインのスキルは plugin:name の形式で書く)")
-    # Bash の失敗を、拒否より先に見る。子が sandbox を外して再試行し、それが拒否されることがあるが、
-    # 根本の原因は Bash の失敗の方なので
-    failed = [out for is_error, out in bash_results if is_error]
-    denials = (result or {}).get("permission_denials") or []
-    if failed:
-        out = failed[0].strip()[-1000:]
-        also = f"(続く呼び出しも拒否された: {summarize_denials(denials)})" if denials else ""
-        raise Precondition(f"事前確認: 子の Bash が失敗した: {out}{sandbox_hint(out)}{also}")
-    if result is None:
-        why = "結果を返さずに終わった" if eof else f"{PREFLIGHT_TIMEOUT} 秒以内に結果を返さなかった"
-        raise Precondition(f"事前確認: claude が{why}。認証・sandbox・ネットワークを確かめてほしい。"
-                           f"stderr: {err}{sandbox_hint(err)}")
-    if denials:
-        raise Precondition(f"事前確認: 子のツール呼び出しが拒否された: {summarize_denials(denials)}"
-                           "(観点スキルも Bash を使うので、許可ルールを見直してほしい)")
-    tokens = new_tokens()
-    add_tokens(tokens, result)
-    if bash_results:  # Bash が成功していれば、そのあとの応答の失敗(ターン数の上限など)は前提の問題ではないので問わない
-        return tokens
-    if result.get("subtype") != "success" or result.get("is_error"):
-        text = str(result.get("result", ""))
-        raise Precondition(f"事前確認: claude の応答が失敗した(subtype {result.get('subtype')}、"
-                           f"is_error {result.get('is_error')}): {text[:500]}{sandbox_hint(text)}")
-    if bash_ids:
-        log("事前確認: 子の Bash の結果を読めなかったので、子の Bash が動くか(sandbox の入れ子など)は確かめていない")
-    else:
-        log("事前確認: 子が Bash を呼ばなかったので、子の Bash が動くか(sandbox の入れ子など)は確かめていない")
-    return tokens
 
 
 # --- PR の状態コメント -------------------------------------------------------
@@ -663,28 +646,35 @@ def safe_name(s):
 
 
 def run_reviews(wt, env, pr, workdir, children, attempt):
-    """観点別レビューを並列に実行し、{観点: result} を返す。1つでも失敗したら残りを止める。"""
+    """観点別レビューを並列に実行し、{観点: result} を返す。1つでも失敗したら残りを止める。
+
+    出力は stream-json で受け、権限の拒否が出たらその時点で止める(子は拒否されても作業を続けるので、
+    終わるのを待つと、sandbox の入れ子などで全ての試行が失敗する環境でもレビュー1つ分を待つことになる)。
+    stream にはツールの出力まで入って大きいので、親が読むための result のテキストは別のファイルに書く。"""
     running = {}
     for spec in PERSPECTIVES:
         base = os.path.join(workdir, f"review-{safe_name(skill_name(spec))}")
         prompt = "/" + expand(spec, pr)
-        with open(base + ".stdout.json", "w") as out, open(base + ".stderr.txt", "w") as err:
-            p = children.spawn(["claude", "-p", "--output-format", "json", "--append-system-prompt",
-                                REVIEW_CONSTRAINT, prompt],
+        with open(base + ".stdout.jsonl", "w") as out, open(base + ".stderr.txt", "w") as err:
+            p = children.spawn(["claude", "-p", "--output-format", "stream-json", "--verbose",
+                                "--append-system-prompt", REVIEW_CONSTRAINT, prompt],
                                REVIEW_TIMEOUT, cwd=wt, env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=err)
-        running[skill_name(spec)] = (p, base, time.monotonic())
+        running[skill_name(spec)] = (p, base, time.monotonic(), StreamTail(base + ".stdout.jsonl"))
     results = {}
     while running:
-        for name, (p, base, started) in list(running.items()):
+        for name, (p, base, started, tail) in list(running.items()):
             rc = p.poll()
+            check_denial(f"review {name}", tail)
             if rc is None:
                 if time.monotonic() - started > REVIEW_TIMEOUT:
                     raise AttemptFailed("timeout", f"review {name}", f"{REVIEW_TIMEOUT // 60} 分を超えた")
                 continue
             del running[name]
             children.finish(p)
-            data = check_result(f"review {name}", rc, base, attempt)
+            data = check_result(f"review {name}", rc, base, attempt, ext=".stdout.jsonl")
             results[name] = data["result"]
+            with open(base + ".result.md", "w", encoding="utf-8") as f:
+                f.write(data["result"].strip() + "\n")
             log(f"review {name}: 完了")
         if running:
             time.sleep(POLL_SECONDS)
@@ -812,12 +802,7 @@ def iterate(worktree, new_run, ctx):
     if start["head"] != start["pr_head"]:
         raise Precondition(f"ローカルの HEAD({start['head'][:7]})が PR の head({start['pr_head'][:7]})と"
                            "一致しない。push してから実行する")
-    preflight_tokens = preflight(wt, env)
-    # 事前確認の子もツールを実行する(フックも走る)ので、混入を比べる基準は事前確認のあとの状態と突き合わせる。
-    # 事前確認の変更をレビュー役の混入と取り違えないように、ここで止める
-    after = snapshot(wt)
-    if git_status(wt).strip() or any(after[k] != start[k] for k in ("head", "branch", "pr_head")):
-        raise Precondition("事前確認の子が、作業ツリー、ブランチ、PR の head のどれかを変えた。内容を確かめてから実行する")
+    preflight(wt, env)
 
     sc = StateComment(wt, start["number"], me)
     children = Children()
@@ -829,7 +814,7 @@ def iterate(worktree, new_run, ctx):
         if state["consecutive_failures"] >= MAX_CONSECUTIVE_FAILURES:
             raise Precondition(f"連続失敗が {MAX_CONSECUTIVE_FAILURES} 回に達した。原因を取り除いてから、利用者の指示で --new-run する")
 
-        attempt = {"sha": start["head"], "at": state["lock"]["started_at"], "result": "failed", "tokens": preflight_tokens}
+        attempt = {"sha": start["head"], "at": state["lock"]["started_at"], "result": "failed", "tokens": new_tokens()}
         ctx["attempt"] = attempt
         ctx["workdir"] = make_workdir(start, state["run_id"], len(state["attempts"]) + 1)
         log(f"作業ディレクトリ: {ctx['workdir']}")

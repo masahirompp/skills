@@ -3,13 +3,7 @@
 #   FAKE_DIR                 呼び出しの記録(calls.jsonl)を置く場所
 #   FAKE_SKILLS              init で返すスキル(カンマ区切り。既定は観点スキル全部)
 #   FAKE_PREFLIGHT_DELAY     init を返すまでの秒数
-#   FAKE_PREFLIGHT           事前確認の振る舞い。ok(既定。Bash で pwd を実行して答える) / bash_error(Bash が失敗する)
-#                            / fail_then_deny(Bash が失敗し、続く呼び出しが拒否される) / deny(Bash が拒否される)
-#                            / nobash(Bash を呼ばずに答える) / noresult(Bash の結果が届かないまま答える)
-#                            / api_error(Bash の前に応答が失敗する) / max_turns(Bash は成功し、ターン数の上限で終わる)
-#                            / eof(init のあと result を出さずに終わる) / hang(init のあと何も返さない)
-#                            / dirty(作業ツリーを変える)
-#   FAKE_REVIEW_<観点>       ok(既定) / deny / fail / empty(結果が空) / dirty / hang / slow / bg(孫を残して終わる)
+#   FAKE_REVIEW_<観点>       ok(既定) / deny / denylive(拒否のイベントを出して、終わらずに続ける) / fail / empty(結果が空) / dirty / hang / slow / bg(孫を残して終わる)
 #                            / remote(PR のブランチにだけ別のコミットを push する)
 #                            / switch(作業ツリーはクリーンのまま、別のブランチに切り替える)
 #                            <観点> は英数字以外を _ にしたもの(例: FAKE_REVIEW_code_review)
@@ -45,57 +39,15 @@ def result(text, **extra):
     print(json.dumps(d, ensure_ascii=False), flush=True)
 
 
-if "stream-json" in args:
+if args[-1] == "ok":  # 事前確認(レビュー役も stream-json を使うので、プロンプトで見分ける)
     record("preflight")
     skills = os.environ.get("FAKE_SKILLS", "code-review,mattpocock-skills:code-review").split(",")
-    mode = os.environ.get("FAKE_PREFLIGHT", "ok")
-    if mode not in ("ok", "bash_error", "fail_then_deny", "deny", "nobash", "noresult", "api_error", "max_turns",
-                    "eof", "hang", "dirty"):
-        sys.exit(f"未知の FAKE_PREFLIGHT: {mode}")
-
-    def emit(d):
-        print(json.dumps(d, ensure_ascii=False), flush=True)
-
-    def bash_result(is_error, text):
-        emit({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t1", "is_error": is_error,
-              "content": [{"type": "text", "text": text}]}]}})
-
-    emit({"type": "system", "subtype": "hook_started"})
+    print(json.dumps({"type": "system", "subtype": "hook_started"}), flush=True)
     time.sleep(float(os.environ.get("FAKE_PREFLIGHT_DELAY", "0")))
-    emit({"type": "system", "subtype": "init", "cwd": os.getcwd(), "skills": skills,
-          "slash_commands": skills + ["security-review", "clear"]})
-    if mode == "hang":
-        time.sleep(60)  # 制限時間で止められるはず
-        record("preflight-not-killed")
-        sys.exit(0)
-    if mode == "eof":  # result を出さずに終わる
-        sys.exit(1)
-    if mode == "api_error":  # 認証の失敗など。Bash を呼ぶ前に応答が失敗する
-        result("Not logged in · Please run /login", subtype="success", is_error=True)
-        sys.exit(1)
-    if mode != "nobash":
-        emit({"type": "assistant", "message": {"content": [
-            {"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "pwd"}}]}})
-    denial = [{"tool_name": "Bash", "tool_use_id": "t1", "tool_input": {"command": "pwd"}}]
-    if mode == "deny":
-        bash_result(True, "denied")  # 本物も、拒否された呼び出しには is_error の tool_result を返す
-        result("拒否された", permission_denials=denial)
-    elif mode in ("bash_error", "fail_then_deny"):
-        bash_result(True, "sandbox-exec: sandbox_apply: Operation not permitted")
-        # fail_then_deny: 子が sandbox を外して再試行し、それが拒否される
-        result("失敗した", permission_denials=denial if mode == "fail_then_deny" else [])
-    elif mode == "max_turns":
-        bash_result(False, os.getcwd())
-        result("", subtype="error_max_turns", is_error=True)
-    elif mode == "dirty":  # 事前確認の子(やそのフック)が作業ツリーを変える
-        open("preflight-stray.txt", "w").write("x")
-        bash_result(False, os.getcwd())
-        result(os.getcwd())
-    elif mode == "ok":
-        bash_result(False, os.getcwd())
-        result(os.getcwd())
-    else:  # nobash(Bash を呼ばずに答える)と noresult(Bash の結果が届かないまま答える)
-        result(os.getcwd())
+    print(json.dumps({"type": "system", "subtype": "init", "cwd": os.getcwd(), "skills": skills,
+                      "slash_commands": skills + ["security-review", "clear"]}), flush=True)
+    time.sleep(60)  # 止められるはず
+    record("preflight-not-killed")
     sys.exit(0)
 
 if stat.S_ISREG(os.fstat(0).st_mode):  # 判定役(標準入力にレビューの出力のファイルを受け取るのは判定役だけ)
@@ -130,6 +82,11 @@ elif mode == "empty":
 elif mode == "dirty":
     open("stray.txt", "w").write("x")
     result(f"{name}: 指摘なし")
+elif mode == "denylive":  # 拒否されても終わらずに作業を続ける(本物の claude と同じく、拒否のイベントを出す)
+    print(json.dumps({"type": "system", "subtype": "permission_denied", "tool_name": "Bash", "tool_use_id": "x",
+                      "message": "Permission to use Bash with command gh pr diff 7 has been denied."}), flush=True)
+    time.sleep(120)
+    record("review-not-killed", name=name)
 elif mode == "hang":
     time.sleep(120)
     record("review-not-killed", name=name)

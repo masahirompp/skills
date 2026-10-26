@@ -136,22 +136,23 @@ check(out.startswith("## 指摘") and "### F1: s" in out, "標準出力は判定
 s = state()
 check(s and s["iter"] == 1 and s["attempts"][0]["result"] == "completed", "状態コメントに反復1が記録される")
 check(s and s["lock"]["running"] is False, "ロックが解除される")
-check(s and s["attempts"][0]["tokens"] == {"input": 5 * 3500, "cache_read": 5 * 2000, "output": 5 * 300},
-      "トークン数は事前確認とレビュー役3つと判定役の modelUsage の合計(入力はキャッシュを含む)")
+check(s and s["attempts"][0]["tokens"] == {"input": 4 * 3500, "cache_read": 4 * 2000, "output": 4 * 300},
+      "トークン数はレビュー役3つと判定役の modelUsage の合計(入力はキャッシュを含む)")
 body = comments()[0]["body"]
-check("| 1.8万(うちキャッシュ読み込み 1.0万) | 1500 |" in body, "入力と出力のトークン数を別の列に出す")
+check("| 1.4万(うちキャッシュ読み込み 8000) | 1200 |" in body, "入力と出力のトークン数を別の列に出す")
 workdir = err.rstrip().splitlines()[-1]
 check(os.path.isfile(os.path.join(workdir, "verdict.md")), "stderr の最後の行は作業ディレクトリ")
 with open(os.path.join(workdir, "verdict.md"), encoding="utf-8") as f:
     check(f.read() == out, "判定は作業ディレクトリの verdict.md にも残る")
 check(workdir.startswith(os.path.join(root, "review-loop", "o_r", "7")), "作業ディレクトリは <tmp>/review-loop/<リポジトリ>/<PR>/<run>/<試行>")
+with open(os.path.join(workdir, "review-code-review.result.md"), encoding="utf-8") as f:
+    check(f.read() == "code-review: 指摘1件\n", "各レビューの result のテキストを review-*.result.md に残す")
 cs = calls()
 reviews = [c for c in cs if c["kind"] == "review"]
 check(len(reviews) == 3, "観点ごとに1プロセス起動する")
 check(all(not c["env_job_dir"] and not c["env_session_id"] for c in cs), "子の環境から CLAUDE_JOB_DIR などを外す")
 check(all(c["guard"] == "1" for c in cs), "子には REVIEW_LOOP_ACTIVE が渡る")
-pre = [c for c in cs if c["kind"] == "preflight"]
-check(pre and "pwd" in pre[0]["args"][-1], "事前確認では子に Bash で pwd を実行させる")
+check(not any(c["kind"] == "preflight-not-killed" for c in cs), "事前確認の子は init の直後に止める")
 judge = [c for c in cs if c["kind"] == "judge"]
 check(judge and "===== 観点: security-review =====" in judge[0]["stdin"], "判定役には各レビューを区切って stdin で渡す")
 check(judge and "--json-schema" not in judge[0]["args"] and "## 指摘" in judge[0]["args"][-1],
@@ -185,28 +186,6 @@ rc, _, err = run(wt, FAKE_NO_PR="1")
 check(rc == 2 and "PR を取得できない" in err, "PR がなければ終了コード2")
 rc, _, err = run(wt, FAKE_SKILLS="code-review")
 check(rc == 2 and "mattpocock-skills:code-review" in err, "事前確認で観点スキルの欠落を検出する")
-reviews_before = [c for c in calls() if c["kind"] == "review"]
-rc, _, err = run(wt, FAKE_PREFLIGHT="bash_error")
-check(rc == 2 and "子の Bash が失敗した" in err and "Operation not permitted" in err and "sandbox" in err,
-      "事前確認で子の Bash の失敗(sandbox の入れ子など)を検出する")
-rc, _, err = run(wt, FAKE_PREFLIGHT="deny")
-check(rc == 2 and "拒否" in err and "pwd" in err, "事前確認で Bash の拒否を検出する")
-rc, _, err = run(wt, FAKE_PREFLIGHT="fail_then_deny")
-check(rc == 2 and "子の Bash が失敗した" in err and "続く呼び出しも拒否された" in err and "許可ルール" not in err,
-      "Bash の失敗のあとに拒否が続いても、根本の原因である Bash の失敗を報告する")
-rc, _, err = run(wt, FAKE_PREFLIGHT="eof")
-check(rc == 2 and "結果を返さずに終わった" in err, "結果を出さずに終わった子は、時間切れと区別して報告する")
-rc, _, err = run(wt, FAKE_PREFLIGHT="dirty")
-check(rc == 2 and "事前確認の子が" in err and len([c for c in calls() if c["kind"] == "review"]) == len(reviews_before),
-      "事前確認の子が作業ツリーを変えたら、レビューを始めずに止める")
-os.remove(os.path.join(wt, "preflight-stray.txt"))
-rc, _, err = run(wt, FAKE_PREFLIGHT="api_error")
-check(rc == 2 and "応答が失敗" in err and "Not logged in" in err, "事前確認で init のあとの失敗(認証など)を検出する")
-t = time.time()
-rc, _, err = run(wt, FAKE_PREFLIGHT="hang", overrides={"PREFLIGHT_TIMEOUT": 2})
-check(rc == 2 and "結果を返さなかった" in err and time.time() - t < 30, "事前確認で結果が返らなければ制限時間で止める")
-time.sleep(1)
-check(not any(c["kind"] == "preflight-not-killed" for c in calls()), "結果が返らない事前確認の子は止める")
 rc, _, err = run(wt, REVIEW_LOOP_ACTIVE="1")
 check(rc == 2 and "再帰" in err, "再帰ガード")
 rc, _, err = run("relative/path")
@@ -492,14 +471,14 @@ body = next(c for c in comments() if c["login"] == "me")["body"]
 json_part, table = body.split("-->", 1)
 check("@" not in json_part and "@someone" not in table and "@\u200bsomeone" in table, "状態コメントに生の @ を含めない")
 
-# 事前確認で、子の Bash を確かめられなかったときと、Bash のあとに応答が失敗したとき(どちらも試行は進む)
+# 拒否のイベントが stream に出たら、子が作業を続けていても、その時点で全体を止める
 run(wt, "--new-run")
-rc, _, err = run(wt, FAKE_PREFLIGHT="nobash")
-check(rc == 0 and "確かめていない" in err, "子が Bash を呼ばなくても失敗にはせず、確かめていないと出す")
-rc, _, err = run(wt, FAKE_PREFLIGHT="max_turns")
-check(rc == 0 and "確かめていない" not in err, "Bash が成功していれば、そのあとの応答の失敗は問わない")
-rc, _, err = run(wt, FAKE_PREFLIGHT="noresult")
-check(rc == 0 and "結果を読めなかった" in err, "Bash を呼んだのに結果が届かなければ、呼ばなかったとは言わない")
+t = time.time()
+rc, _, err = run(wt, FAKE_REVIEW_code_review="denylive", FAKE_REVIEW_security_review="hang")
+check(rc == 1 and "permission_denied: review code-review" in err and "gh pr diff 7" in err and time.time() - t < 30,
+      "拒否のイベントが出たら、子の終了を待たずに permission_denied で止める")
+last = [c for c in calls() if c["kind"] == "review"][-3:]
+check(not any(alive(c["pid"]) for c in last), "拒否で止めたとき、どの子も残らない")
 
 if os.environ.get("KEEP"):
     print("作業ディレクトリ:", root)
