@@ -136,10 +136,10 @@ check(out.startswith("## 指摘") and "### F1: s" in out, "標準出力は判定
 s = state()
 check(s and s["iter"] == 1 and s["attempts"][0]["result"] == "completed", "状態コメントに反復1が記録される")
 check(s and s["lock"]["running"] is False, "ロックが解除される")
-check(s and s["attempts"][0]["tokens"] == {"input": 4 * 3500, "cache_read": 4 * 2000, "output": 4 * 300},
-      "トークン数はレビュー役3つと判定役の modelUsage の合計(入力はキャッシュを含む)")
+check(s and s["attempts"][0]["tokens"] == {"input": 5 * 3500, "cache_read": 5 * 2000, "output": 5 * 300},
+      "トークン数は事前確認とレビュー役3つと判定役の modelUsage の合計(入力はキャッシュを含む)")
 body = comments()[0]["body"]
-check("| 1.4万(うちキャッシュ読み込み 8000) | 1200 |" in body, "入力と出力のトークン数を別の列に出す")
+check("| 1.8万(うちキャッシュ読み込み 1.0万) | 1500 |" in body, "入力と出力のトークン数を別の列に出す")
 workdir = err.rstrip().splitlines()[-1]
 check(os.path.isfile(os.path.join(workdir, "verdict.md")), "stderr の最後の行は作業ディレクトリ")
 with open(os.path.join(workdir, "verdict.md"), encoding="utf-8") as f:
@@ -185,11 +185,21 @@ rc, _, err = run(wt, FAKE_NO_PR="1")
 check(rc == 2 and "PR を取得できない" in err, "PR がなければ終了コード2")
 rc, _, err = run(wt, FAKE_SKILLS="code-review")
 check(rc == 2 and "mattpocock-skills:code-review" in err, "事前確認で観点スキルの欠落を検出する")
+reviews_before = [c for c in calls() if c["kind"] == "review"]
 rc, _, err = run(wt, FAKE_PREFLIGHT="bash_error")
 check(rc == 2 and "子の Bash が失敗した" in err and "Operation not permitted" in err and "sandbox" in err,
       "事前確認で子の Bash の失敗(sandbox の入れ子など)を検出する")
 rc, _, err = run(wt, FAKE_PREFLIGHT="deny")
 check(rc == 2 and "拒否" in err and "pwd" in err, "事前確認で Bash の拒否を検出する")
+rc, _, err = run(wt, FAKE_PREFLIGHT="fail_then_deny")
+check(rc == 2 and "子の Bash が失敗した" in err and "続く呼び出しも拒否された" in err and "許可ルール" not in err,
+      "Bash の失敗のあとに拒否が続いても、根本の原因である Bash の失敗を報告する")
+rc, _, err = run(wt, FAKE_PREFLIGHT="eof")
+check(rc == 2 and "結果を返さずに終わった" in err, "結果を出さずに終わった子は、時間切れと区別して報告する")
+rc, _, err = run(wt, FAKE_PREFLIGHT="dirty")
+check(rc == 2 and "事前確認の子が" in err and len([c for c in calls() if c["kind"] == "review"]) == len(reviews_before),
+      "事前確認の子が作業ツリーを変えたら、レビューを始めずに止める")
+os.remove(os.path.join(wt, "preflight-stray.txt"))
 rc, _, err = run(wt, FAKE_PREFLIGHT="api_error")
 check(rc == 2 and "応答が失敗" in err and "Not logged in" in err, "事前確認で init のあとの失敗(認証など)を検出する")
 t = time.time()
@@ -488,6 +498,8 @@ rc, _, err = run(wt, FAKE_PREFLIGHT="nobash")
 check(rc == 0 and "確かめていない" in err, "子が Bash を呼ばなくても失敗にはせず、確かめていないと出す")
 rc, _, err = run(wt, FAKE_PREFLIGHT="max_turns")
 check(rc == 0 and "確かめていない" not in err, "Bash が成功していれば、そのあとの応答の失敗は問わない")
+rc, _, err = run(wt, FAKE_PREFLIGHT="noresult")
+check(rc == 0 and "結果を読めなかった" in err, "Bash を呼んだのに結果が届かなければ、呼ばなかったとは言わない")
 
 if os.environ.get("KEEP"):
     print("作業ディレクトリ:", root)
