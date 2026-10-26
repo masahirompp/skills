@@ -150,7 +150,8 @@ reviews = [c for c in cs if c["kind"] == "review"]
 check(len(reviews) == 3, "観点ごとに1プロセス起動する")
 check(all(not c["env_job_dir"] and not c["env_session_id"] for c in cs), "子の環境から CLAUDE_JOB_DIR などを外す")
 check(all(c["guard"] == "1" for c in cs), "子には REVIEW_LOOP_ACTIVE が渡る")
-check(not any(c["kind"] == "preflight-not-killed" for c in cs), "事前確認の子は init の直後に止める")
+pre = [c for c in cs if c["kind"] == "preflight"]
+check(pre and "pwd" in pre[0]["args"][-1], "事前確認では子に Bash で pwd を実行させる")
 judge = [c for c in cs if c["kind"] == "judge"]
 check(judge and "===== 観点: security-review =====" in judge[0]["stdin"], "判定役には各レビューを区切って stdin で渡す")
 check(judge and "--json-schema" not in judge[0]["args"] and "## 指摘" in judge[0]["args"][-1],
@@ -184,6 +185,18 @@ rc, _, err = run(wt, FAKE_NO_PR="1")
 check(rc == 2 and "PR を取得できない" in err, "PR がなければ終了コード2")
 rc, _, err = run(wt, FAKE_SKILLS="code-review")
 check(rc == 2 and "mattpocock-skills:code-review" in err, "事前確認で観点スキルの欠落を検出する")
+rc, _, err = run(wt, FAKE_PREFLIGHT="bash_error")
+check(rc == 2 and "子の Bash が失敗した" in err and "Operation not permitted" in err and "sandbox" in err,
+      "事前確認で子の Bash の失敗(sandbox の入れ子など)を検出する")
+rc, _, err = run(wt, FAKE_PREFLIGHT="deny")
+check(rc == 2 and "拒否" in err and "pwd" in err, "事前確認で Bash の拒否を検出する")
+rc, _, err = run(wt, FAKE_PREFLIGHT="api_error")
+check(rc == 2 and "応答が失敗" in err and "Not logged in" in err, "事前確認で init のあとの失敗(認証など)を検出する")
+t = time.time()
+rc, _, err = run(wt, FAKE_PREFLIGHT="hang", overrides={"PREFLIGHT_TIMEOUT": 2})
+check(rc == 2 and "結果を返さなかった" in err and time.time() - t < 30, "事前確認で結果が返らなければ制限時間で止める")
+time.sleep(1)
+check(not any(c["kind"] == "preflight-not-killed" for c in calls()), "結果が返らない事前確認の子は止める")
 rc, _, err = run(wt, REVIEW_LOOP_ACTIVE="1")
 check(rc == 2 and "再帰" in err, "再帰ガード")
 rc, _, err = run("relative/path")
@@ -468,6 +481,13 @@ run(wt)
 body = next(c for c in comments() if c["login"] == "me")["body"]
 json_part, table = body.split("-->", 1)
 check("@" not in json_part and "@someone" not in table and "@\u200bsomeone" in table, "状態コメントに生の @ を含めない")
+
+# 事前確認で、子の Bash を確かめられなかったときと、Bash のあとに応答が失敗したとき(どちらも試行は進む)
+run(wt, "--new-run")
+rc, _, err = run(wt, FAKE_PREFLIGHT="nobash")
+check(rc == 0 and "確かめていない" in err, "子が Bash を呼ばなくても失敗にはせず、確かめていないと出す")
+rc, _, err = run(wt, FAKE_PREFLIGHT="max_turns")
+check(rc == 0 and "確かめていない" not in err, "Bash が成功していれば、そのあとの応答の失敗は問わない")
 
 if os.environ.get("KEEP"):
     print("作業ディレクトリ:", root)

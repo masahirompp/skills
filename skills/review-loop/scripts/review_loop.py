@@ -50,7 +50,7 @@ PERSPECTIVES = [
 SAFETY_MAX_ITER = 10          # シリーズあたりの反復の上限
 MAX_CONSECUTIVE_FAILURES = 3  # 連続失敗の上限
 
-PREFLIGHT_TIMEOUT = 2 * 60    # 事前確認(init を受け取るまで)
+PREFLIGHT_TIMEOUT = 3 * 60    # 事前確認(子が Bash を1回実行して結果を返すまで)
 REVIEW_TIMEOUT = 40 * 60      # レビュー役1つあたり
 JUDGE_TIMEOUT = 20 * 60       # 判定役
 MARGIN = 5 * 60               # Bash の制限時間に対する余裕(事前確認の後の gh の呼び出しなど)
@@ -325,12 +325,27 @@ def snapshot(wt):
     }
 
 
+PREFLIGHT_PROMPT = "Bash ツールで `pwd` を1回だけ実行し、その出力だけを答えてください。ほかのツールは使わないでください。"
+
+
+def tool_result_text(content):
+    """tool_result の content(文字列か、text ブロックの配列)を文字列にする。"""
+    if isinstance(content, list):
+        return "\n".join(str(c.get("text", "")) for c in content if isinstance(c, dict))
+    return str(content or "")
+
+
 def preflight(wt, env):
-    """子を1回だけ起動し、init を受け取ったらすぐ止める。API を呼ぶ前に止まるので費用はほぼかからない。"""
+    """子を1回起動し、短いプロンプトで結果まで走らせる。
+
+    init は API の呼び出しやツールの実行より前に出るので、init だけでは認証・ネットワークの失敗や、
+    子の Bash が sandbox を入れ子に起動できない失敗を見逃す。そこで子に Bash で pwd を実行させ、
+    結果まで確かめる。子が Bash を呼ばなかったときは失敗にせず、確かめられなかったことだけを出す
+    (モデルの振る舞いで前提チェックが揺れないように)。"""
     err_file = tempfile.TemporaryFile(mode="w+")
     try:
-        p = subprocess.Popen(watched(["claude", "-p", "--output-format", "stream-json", "--verbose", "ok"],
-                                     PREFLIGHT_TIMEOUT),
+        p = subprocess.Popen(watched(["claude", "-p", "--output-format", "stream-json", "--verbose",
+                                      "--max-turns", "3", PREFLIGHT_PROMPT], PREFLIGHT_TIMEOUT),
                              cwd=wt, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                              stderr=err_file, text=True, start_new_session=True)
     except OSError as e:
@@ -344,9 +359,11 @@ def preflight(wt, env):
 
     threading.Thread(target=reader, daemon=True).start()
     deadline = time.monotonic() + PREFLIGHT_TIMEOUT
-    init = None
+    init = result = None
+    bash_ids = set()
+    bash_results = []  # (is_error, 出力)
     try:
-        while init is None:
+        while result is None:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 break
@@ -360,13 +377,24 @@ def preflight(wt, env):
                 msg = json.loads(line)
             except ValueError:
                 continue
-            if msg.get("type") == "system" and msg.get("subtype") == "init":
+            kind = msg.get("type")
+            if kind == "system" and msg.get("subtype") == "init":
                 init = msg
+            elif kind == "result":
+                result = msg
+            elif kind in ("assistant", "user"):
+                for block in (msg.get("message") or {}).get("content") or []:
+                    if not isinstance(block, dict):
+                        continue
+                    if block.get("type") == "tool_use" and block.get("name") == "Bash":
+                        bash_ids.add(block.get("id"))
+                    elif block.get("type") == "tool_result" and block.get("tool_use_id") in bash_ids:
+                        bash_results.append((bool(block.get("is_error")), tool_result_text(block.get("content"))))
     finally:
         kill_group(p)
+    err_file.seek(0)
+    err = err_file.read().strip()[-1000:]
     if init is None:
-        err_file.seek(0)
-        err = err_file.read().strip()[-1000:]
         raise Precondition("事前確認: claude が起動しなかった(init が来ない)。認証・sandbox・ネットワークを確かめてほしい。"
                            f"stderr: {err}{sandbox_hint(err)}")
     if os.path.realpath(init.get("cwd") or "") != wt:
@@ -377,6 +405,24 @@ def preflight(wt, env):
     if missing:
         raise Precondition(f"事前確認: 観点スキルが見つからない: {', '.join(missing)}"
                            "(名前の誤りか未導入。プラグインのスキルは plugin:name の形式で書く)")
+    if result is None:
+        raise Precondition(f"事前確認: claude が {PREFLIGHT_TIMEOUT} 秒以内に結果を返さなかった。"
+                           f"認証・sandbox・ネットワークを確かめてほしい。stderr: {err}{sandbox_hint(err)}")
+    denials = result.get("permission_denials") or []
+    if denials:
+        raise Precondition(f"事前確認: 子のツール呼び出しが拒否された: {summarize_denials(denials)}"
+                           "(観点スキルも Bash を使うので、許可ルールを見直してほしい)")
+    failed = [out for is_error, out in bash_results if is_error]
+    if failed:
+        out = failed[0].strip()[-1000:]
+        raise Precondition(f"事前確認: 子の Bash が失敗した: {out}{sandbox_hint(out)}")
+    if not bash_results:
+        if result.get("subtype") != "success" or result.get("is_error"):
+            raise Precondition(f"事前確認: claude の応答が失敗した(subtype {result.get('subtype')}、"
+                               f"is_error {result.get('is_error')}): {str(result.get('result', ''))[:500]}"
+                               f"{sandbox_hint(str(result.get('result', '')))}")
+        log("事前確認: 子が Bash を呼ばなかったので、子の Bash が動くか(sandbox の入れ子など)は確かめていない")
+    # Bash が成功していれば、そのあとの応答の失敗(ターン数の上限など)は前提の問題ではないので問わない
 
 
 # --- PR の状態コメント -------------------------------------------------------

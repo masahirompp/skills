@@ -3,6 +3,9 @@
 #   FAKE_DIR                 呼び出しの記録(calls.jsonl)を置く場所
 #   FAKE_SKILLS              init で返すスキル(カンマ区切り。既定は観点スキル全部)
 #   FAKE_PREFLIGHT_DELAY     init を返すまでの秒数
+#   FAKE_PREFLIGHT           事前確認の振る舞い。ok(既定。Bash で pwd を実行して答える) / bash_error(Bash が失敗する)
+#                            / deny(Bash が拒否される) / nobash(Bash を呼ばずに答える) / api_error(Bash の前に応答が失敗する)
+#                            / max_turns(Bash は成功し、ターン数の上限で終わる) / hang(init のあと何も返さない)
 #   FAKE_REVIEW_<観点>       ok(既定) / deny / fail / empty(結果が空) / dirty / hang / slow / bg(孫を残して終わる)
 #                            / remote(PR のブランチにだけ別のコミットを push する)
 #                            / switch(作業ツリーはクリーンのまま、別のブランチに切り替える)
@@ -42,12 +45,43 @@ def result(text, **extra):
 if "stream-json" in args:
     record("preflight")
     skills = os.environ.get("FAKE_SKILLS", "code-review,mattpocock-skills:code-review").split(",")
-    print(json.dumps({"type": "system", "subtype": "hook_started"}), flush=True)
+    mode = os.environ.get("FAKE_PREFLIGHT", "ok")
+
+    def emit(d):
+        print(json.dumps(d, ensure_ascii=False), flush=True)
+
+    emit({"type": "system", "subtype": "hook_started"})
     time.sleep(float(os.environ.get("FAKE_PREFLIGHT_DELAY", "0")))
-    print(json.dumps({"type": "system", "subtype": "init", "cwd": os.getcwd(), "skills": skills,
-                      "slash_commands": skills + ["security-review", "clear"]}), flush=True)
-    time.sleep(60)  # 止められるはず
-    record("preflight-not-killed")
+    emit({"type": "system", "subtype": "init", "cwd": os.getcwd(), "skills": skills,
+          "slash_commands": skills + ["security-review", "clear"]})
+    if mode == "hang":
+        time.sleep(60)  # 制限時間で止められるはず
+        record("preflight-not-killed")
+        sys.exit(0)
+    if mode == "api_error":  # 認証の失敗など。Bash を呼ぶ前に応答が失敗する
+        result("Not logged in · Please run /login", subtype="success", is_error=True)
+        sys.exit(1)
+    if mode in ("ok", "bash_error", "deny", "max_turns"):
+        emit({"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "pwd"}}]}})
+    if mode == "deny":
+        emit({"type": "user", "message": {"content": [
+            {"type": "tool_result", "tool_use_id": "t1", "is_error": True, "content": "denied"}]}})
+        result("拒否された", permission_denials=[{"tool_name": "Bash", "tool_use_id": "t1",
+                                                  "tool_input": {"command": "pwd"}}])
+        sys.exit(0)
+    if mode == "bash_error":
+        emit({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t1", "is_error": True,
+              "content": [{"type": "text", "text": "sandbox-exec: sandbox_apply: Operation not permitted"}]}]}})
+        result("失敗した")
+        sys.exit(0)
+    if mode in ("ok", "max_turns"):
+        emit({"type": "user", "message": {"content": [
+            {"type": "tool_result", "tool_use_id": "t1", "is_error": False, "content": os.getcwd()}]}})
+    if mode == "max_turns":
+        result("", subtype="error_max_turns", is_error=True)
+    else:  # ok と nobash(Bash を呼ばずに答える)
+        result(os.getcwd())
     sys.exit(0)
 
 if stat.S_ISREG(os.fstat(0).st_mode):  # 判定役(標準入力にレビューの出力のファイルを受け取るのは判定役だけ)
