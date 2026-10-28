@@ -513,6 +513,8 @@ check(rc == 0 and out.startswith("## 指摘") and "突き合わせています" 
       "判定役の result の行が複数でも、判定の行を採り、前置きは落とす")
 rc, out, err = run(wt, FAKE_JUDGE="multishort")
 check(rc == 0 and out.rstrip().endswith("なし") and "変わりません" not in out, "判定役の後の行の短い文は判定に混ぜない")
+rc, out, err = run(wt, FAKE_JUDGE="partiallater")
+check(rc == 0 and "## 競合" in out and "補足" not in out, "後の行が見出しを一部だけ持っていても、完全な判定を採る")
 rc, out, err = run(wt, FAKE_JUDGE="redo")
 check(rc == 0 and out.count("## 指摘") == 1 and "下書き" not in out and "```" not in out,
       "判定役が判定を出し直したら、最後の判定だけを採る")
@@ -534,6 +536,11 @@ rc, _, err = run(wt, FAKE_REVIEW_security_review="denyclassifier")
 check(rc == 1 and "permission_denied: review security-review" in err, "source が config でも、分類器による拒否は止める")
 rc, _, err = run(wt, FAKE_REVIEW_security_review="denynoid")
 check(rc == 1 and "permission_denied: review security-review" in err, "tool_use_id のない拒否は止める")
+run(wt, "--new-run")
+rc, _, err = run(wt, FAKE_REVIEW_security_review="denyrepeat")
+detail = err.split("failed: ", 1)[-1]
+check(rc == 1 and "permission_denied" in err and detail.count("gh pr diff 7") == 1,
+      "tool_use_id のない拒否が result の行ごとに載っても、1回だけ出す")
 run(wt, "--new-run")
 
 # ほかの観点の失敗で止めるときも、まだ動いている子の止めない拒否を記録に残す

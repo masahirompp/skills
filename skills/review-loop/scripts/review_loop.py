@@ -234,7 +234,8 @@ def check_result(label, rc, base, attempt, tail):
     (空の行が本文の前後に出ることも、最後の行が「変わりません」のような短い文になることもある)。途中経過の
     文も混ざるが、読む側が読み飛ばせる量なので、欠けるよりよい。テキストは成否にかかわらず <base>.result.md
     に書く(stream はツールの出力まで含んで大きいので、親はこちらを読む)。
-    トークン数と成否は最後の result の行で見る(modelUsage はセッションの累計で、どの行も同じ値になる)。"""
+    トークン数と成否は最後の result の行で見る(どの行の modelUsage にもセッション全体の値が入るので、足すと
+    二重に数える)。"""
     if not tail.results:
         with open(base + ".stderr.txt", encoding="utf-8", errors="replace") as f:
             err = f.read().strip()[-1000:]
@@ -255,9 +256,11 @@ def check_result(label, rc, base, attempt, tail):
     return text
 
 
-# 試行を止めない拒否の (source, reason_type)。`;` でつないだ読み取りの一部が利用者の deny ルール
-# (`Read(**/.env*)` など)に当たったもので、子は該当部分を外してやり直せる。source が config でも、
-# auto mode の分類器の判定(reason_type が classifier)のように、子が読めないまま進みうるものは含めない
+# 試行を止めない拒否の (source, reason_type)。複合コマンド(`;`・`&&`・パイプなど)を、サブコマンドごとの
+# 判定から拒否したもの。読み取りの一部が利用者の deny ルール(`Read(**/.env*)` など)に当たるといった形で
+# 普通に起き、子は該当部分を外してやり直せる。この2つの値からは、拒否されたのが一部か全部か、deny ルールに
+# 当たったのか許可ルールに無かったのかは見分けられない。source が config でも、auto mode の分類器の判定
+# (reason_type が classifier)のように、子が読めないまま進みうるものは含めない
 TOLERATED_DENIAL = ("config", "subcommandResults")
 
 
@@ -329,10 +332,12 @@ class StreamTail:
         permission_denials にしか載っていないもの(出どころが分からない)も含める。"""
         out = [self.denied_call(e) for e in self.blocking]
         seen = self.tolerated_ids | {e.get("tool_use_id") for e in self.blocking if e.get("tool_use_id")}
-        for r in self.results:
+        for r in self.results:  # permission_denials は result の行ごとに同じものが繰り返し載りうる
             for d in r.get("permission_denials") or []:
-                if not d.get("tool_use_id") or d["tool_use_id"] not in seen:
-                    seen.add(d.get("tool_use_id"))
+                # tool_use_id のないものは止める側に倒し、重複はツールと入力で見分ける
+                key = d.get("tool_use_id") or json.dumps([d.get("tool_name"), d.get("tool_input")], sort_keys=True)
+                if key not in seen:
+                    seen.add(key)
                     out.append(d)
         return out
 
@@ -343,11 +348,16 @@ class StreamTail:
 
 
 def record_tolerated(label, tail, workdir):
-    """止めない拒否を stderr と作業ディレクトリの denials.txt に残す(denials.txt は判定役の入力にも添える)。"""
+    """止めない拒否を stderr と作業ディレクトリの denials.txt に残す(denials.txt は判定役の入力にも添える)。
+
+    失敗の後始末(finally)からも呼ぶので、denials.txt に書けなくても例外にしない(元の失敗を上書きしない)。"""
     for s in tail.take_tolerated():
         log(f"warn: {label}: 設定のルールで拒否された(試行は続ける): {s}")
-        with open(os.path.join(workdir, "denials.txt"), "a", encoding="utf-8") as f:
-            f.write(f"{label}: {s}\n")
+        try:
+            with open(os.path.join(workdir, "denials.txt"), "a", encoding="utf-8") as f:
+                f.write(f"{label}: {s}\n")
+        except OSError as e:
+            log(f"warn: denials.txt に書けなかった: {e}")
 
 
 def watch_denials(label, tail, workdir):
@@ -824,17 +834,24 @@ def run_judge(wt, env, pr_number, reviews, workdir, children, attempt):
             watch_denials("judge", tail, workdir)
             if time.monotonic() - started > JUDGE_TIMEOUT:
                 raise AttemptFailed("timeout", "judge", f"{JUDGE_TIMEOUT // 60} 分を超えた")
-            time.sleep(POLL_SECONDS)
+            try:  # 子が終わったらすぐ戻る
+                p.wait(POLL_SECONDS)
+            except subprocess.TimeoutExpired:
+                pass
     finally:
         tail.poll()  # 終わる直前に書かれた行を読み残さない。失敗で抜けるときも、止めない拒否を記録に残す
         record_tolerated("judge", tail, workdir)
     children.finish(p)
     joined = check_result("judge", p.returncode, base, attempt, tail)
     # 判定は決めた形の文書1つなので、レビュー役と違って行をつながない。判定を出し直したときに下書きと
-    # 最終版が両方残ったり、後の行の「変わりません」が末尾に混ざったりしないよう、見出しを含む行のうち
-    # 最後のものを採る。最後の行が空や短い文でも、判定の本文は残る
-    has_heading = [t for t in tail.texts() if any(re.search(rf"^{re.escape(h)}", t, re.M) for h in VERDICT_SECTIONS)]
-    text = has_heading[-1] if has_heading else joined
+    # 最終版が両方残ったり、後の行の「変わりません」が末尾に混ざったりしないよう、見出しを全て含む行のうち
+    # 最後のものを採る(後の訂正の行が見出しを一部だけ持っていても、完全な判定を捨てない)。なければ見出しを
+    # 1つでも含む行のうち最後のもので、見出しの欠けを報告する。最後の行が空や短い文でも、判定の本文は残る
+    def headings(t):
+        return sum(bool(re.search(rf"^{re.escape(h)}", t, re.M)) for h in VERDICT_SECTIONS)
+    ranked = [t for t in tail.texts() if headings(t)]
+    complete = [t for t in ranked if headings(t) == len(VERDICT_SECTIONS)]
+    text = (complete or ranked or [joined])[-1]
     found = {h: re.search(rf"^{re.escape(h)}", text, re.M) for h in VERDICT_SECTIONS}
     missing = [h for h, m in found.items() if not m]
     if missing:

@@ -8,6 +8,7 @@
 #                            / denyclassifier(source は config だが、分類器による拒否のイベントを出したあと、正常に終わる)
 #                            / denynoid(denyconfig と同じだが、イベントに tool_use_id がない)
 #                            / denyconfighang(設定のルールでの拒否のイベントを出したあと、終わらずに続ける)
+#                            / denyrepeat(tool_use_id のない同じ拒否を、2つの result の行に載せる)
 #                            / failslow(1秒待ってから異常終了する)
 #                            / multierror(result の行を複数出し、途中の行はエラー)
 #                            / multiempty・multishort(result の行を複数出し、本文は途中の行に入れる。最後の行は空 / 短い文)
@@ -19,6 +20,7 @@
 #                            / fenced(前置きとコードフェンスで包み、見出しに文字を足す)
 #                            / multi(result の行を複数出し、判定は途中の行に入れる。最後の行は空)
 #                            / multishort(判定のあとに、短い文だけの result の行を出す)
+#                            / partiallater(判定のあとに、見出しを一部だけ持つ訂正の result の行を出す)
 #                            / redo(前置きとフェンスで包んだ下書きの判定を出したあと、直した判定を出す)
 #                            / denyconfig(設定のルールでの拒否のイベントを出したあと、正常に終わる)
 # 出力は本物と同じく stream-json(1行1イベント)。事前確認以外は init の行から始める
@@ -100,6 +102,8 @@ if stat.S_ISREG(os.fstat(0).st_mode):  # 判定役(標準入力にレビュー�
         multi("レビューを突き合わせています。", verdict, "")
     elif mode == "multishort":
         multi(verdict, "前のメッセージの内容から変わりません")
+    elif mode == "partiallater":
+        multi(verdict, "## 指摘\n\n補足: F1 の行番号は 2")
     elif mode == "redo":
         multi("以下が判定です。\n\n```markdown\n## 指摘\n\n### F1: 下書き\n\n## 競合\n\nなし\n```", verdict)
     elif mode == "denyconfig":
@@ -148,6 +152,10 @@ elif mode in ("denyclassifier", "denynoid"):
         deny("config", tool_use_id=None)
     result(f"{name}: 指摘1件", permission_denials=[{"tool_name": "Bash", "tool_input": {"command": "gh pr diff 7"},
                                                    **({"tool_use_id": "x"} if mode == "denyclassifier" else {})}])
+elif mode == "denyrepeat":
+    same = [{"tool_name": "Bash", "tool_input": {"command": "gh pr diff 7"}}]
+    result("途中", permission_denials=same)
+    result(f"{name}: 指摘1件", permission_denials=same)
 elif mode == "denyconfighang":
     deny("config")
     time.sleep(120)
