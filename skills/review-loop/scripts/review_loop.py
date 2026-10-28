@@ -229,59 +229,60 @@ def add_tokens(tokens, data):
 def check_result(label, rc, base, attempt, tail):
     """子の結果を読んでトークン数を attempt に足し、成功の条件を全て満たすか確かめる。結果のテキストを返す。
 
-    結果のテキストは、最上位の result の行のうち空でないものを、出た順につないだもの。サブエージェントを
-    バックグラウンドで動かすスキルでは、子がタスクの通知を受けるたびにターンを回して result の行を出し、
-    本文は途中の行に入る(最後の行は空や「変わりません」のような短い文になりうる)。途中経過の文も混ざるが、
-    読む側が読み飛ばせる量なので、欠けるよりよい。テキストは成否にかかわらず <base>.result.md に書く
-    (stream はツールの出力まで含んで大きいので、親はこちらを読む)。
+    結果のテキストは StreamTail.texts を出た順につないだもの。サブエージェントをバックグラウンドで動かす
+    スキルでは、子がタスクの通知を受けるたびにターンを回して result の行を出し、本文は途中の行に入る
+    (空の行が本文の前後に出ることも、最後の行が「変わりません」のような短い文になることもある)。途中経過の
+    文も混ざるが、読む側が読み飛ばせる量なので、欠けるよりよい。テキストは成否にかかわらず <base>.result.md
+    に書く(stream はツールの出力まで含んで大きいので、親はこちらを読む)。
     トークン数と成否は最後の result の行で見る(modelUsage はセッションの累計で、どの行も同じ値になる)。"""
     if not tail.results:
         with open(base + ".stderr.txt", encoding="utf-8", errors="replace") as f:
             err = f.read().strip()[-1000:]
         raise AttemptFailed("child_error", label, f"result の行がない(終了コード {rc})。stderr: {err}{sandbox_hint(err)}")
-    text = "\n\n".join(t for t in (str(r.get("result") or "").strip() for r in tail.results) if t)
+    text = "\n\n".join(tail.texts())
     with open(base + ".result.md", "w", encoding="utf-8") as f:
         f.write(text + "\n")
     data = tail.results[-1]
     add_tokens(attempt["tokens"], data)
-    # 設定のルールでの拒否は、イベントの側で記録済みで、試行を止めない。result にしか載っていない拒否は、
-    # 出どころが分からないので止める側に倒す
-    denials, seen = [], set(tail.config_denied)
-    if tail.denial:
-        seen.add(tail.denial.get("tool_use_id"))
-        denials.append({"tool_name": tail.denial.get("tool_name"),
-                        "tool_input": tail.tool_inputs.get(tail.denial.get("tool_use_id"), {})})
-    for r in tail.results:
-        for d in r.get("permission_denials") or []:
-            if d.get("tool_use_id") not in seen:
-                seen.add(d.get("tool_use_id"))
-                denials.append(d)
+    denials = tail.blocking_denials()
     if denials:
         raise AttemptFailed("permission_denied", label, summarize_denials(denials))
     if rc != 0 or data.get("subtype") != "success" or data.get("is_error"):
         raise AttemptFailed("child_error", label, f"終了コード {rc}、subtype {data.get('subtype')}、"
-                            f"is_error {data.get('is_error')}: {text[:500]}")
+                            f"is_error {data.get('is_error')}: {str(data.get('result') or '')[:500]}")
     if not text:
         raise AttemptFailed("no_output", label, "空でない result の行がない")
     return text
+
+
+# 試行を止めない拒否の (source, reason_type)。`;` でつないだ読み取りの一部が利用者の deny ルール
+# (`Read(**/.env*)` など)に当たったもので、子は該当部分を外してやり直せる。source が config でも、
+# auto mode の分類器の判定(reason_type が classifier)のように、子が読めないまま進みうるものは含めない
+TOLERATED_DENIAL = ("config", "subcommandResults")
+
+
+def tolerated(event):
+    """試行を止めない拒否のイベントか。tool_use_id がないものは、result の permission_denials と
+    突き合わせられないので止める側に倒す。"""
+    return (event.get("source"), event.get("reason_type")) == TOLERATED_DENIAL and bool(event.get("tool_use_id"))
 
 
 class StreamTail:
     """子が書き出している stream-json のファイルを、書き終わった行だけ少しずつ読み、判定に使うものだけを覚える。
 
     - results: 最上位(parent_tool_use_id がない)の result の行を、出た順に全て
-    - denial: 試行を止める権限の拒否のイベント(system の permission_denied)のうち最初のもの。設定のルール
-      (source が config)での拒否は、子が別のやり方で作業を続けられるので止めず、config_denied に
-      tool_use_id ごとに覚えて、新しいものを new_config_denials で渡す。source がないものは止める側に倒す
+    - blocking: 試行を止める権限の拒否のイベント(system の permission_denied)。止めない拒否(tolerated)は
+      tolerated_ids に覚え、まだ記録していないものを take_tolerated で渡す。サブエージェントの中での拒否も、
+      同じイベントとして stream に出る
     - 拒否されたツールの入力はイベントにないので、tool_use の行から引けるよう、ツール呼び出しの入力を
       id ごとに覚えておく"""
 
     def __init__(self, path):
         self.path, self.offset = path, 0
         self.results = []
-        self.denial = None
-        self.config_denied = {}
-        self.reported = 0
+        self.blocking = []
+        self.tolerated_ids = set()
+        self.unrecorded = []
         self.tool_inputs = {}
 
     def poll(self):
@@ -305,40 +306,58 @@ class StreamTail:
                 if not msg.get("parent_tool_use_id"):
                     self.results.append(msg)
             elif kind == "system" and msg.get("subtype") == "permission_denied":
-                if msg.get("source") == "config":
-                    self.config_denied[msg.get("tool_use_id")] = msg
-                elif self.denial is None:
-                    self.denial = msg
+                if tolerated(msg):
+                    self.tolerated_ids.add(msg["tool_use_id"])
+                    self.unrecorded.append(msg)
+                else:
+                    self.blocking.append(msg)
             elif kind == "assistant":
                 for block in (msg.get("message") or {}).get("content") or []:
                     if isinstance(block, dict) and block.get("type") == "tool_use":
                         self.tool_inputs[block.get("id")] = block.get("input", {})
 
-    def summary(self, d):
-        return summarize_denials([{"tool_name": d.get("tool_name"),
-                                   "tool_input": self.tool_inputs.get(d.get("tool_use_id"), {})}])
+    def texts(self):
+        """最上位の result の行のうち、エラーでも空でもないもののテキストを、出た順に返す。"""
+        return [t for t in (str(r.get("result") or "").strip() for r in self.results if not r.get("is_error")) if t]
 
-    def new_config_denials(self):
-        """前回から増えた、設定のルールでの拒否の要約を返す。"""
-        items = list(self.config_denied.values())[self.reported:]
-        self.reported += len(items)
-        return [f"{self.summary(d)}(reason_type {d.get('reason_type')})" for d in items]
+    def denied_call(self, event):
+        """拒否のイベントを、summarize_denials に渡せる形(ツール名と入力)にする。"""
+        return {"tool_name": event.get("tool_name"), "tool_input": self.tool_inputs.get(event.get("tool_use_id"), {})}
+
+    def blocking_denials(self):
+        """試行を止める拒否を、summarize_denials に渡せる形で返す。イベントで出たものに加え、result の
+        permission_denials にしか載っていないもの(出どころが分からない)も含める。"""
+        out = [self.denied_call(e) for e in self.blocking]
+        seen = self.tolerated_ids | {e.get("tool_use_id") for e in self.blocking if e.get("tool_use_id")}
+        for r in self.results:
+            for d in r.get("permission_denials") or []:
+                if not d.get("tool_use_id") or d["tool_use_id"] not in seen:
+                    seen.add(d.get("tool_use_id"))
+                    out.append(d)
+        return out
+
+    def take_tolerated(self):
+        """まだ記録していない、止めない拒否の要約を返す。"""
+        items, self.unrecorded = self.unrecorded, []
+        return [summarize_denials([self.denied_call(e)]) + f"(reason_type {e.get('reason_type')})" for e in items]
 
 
-def watch_denials(label, tail, workdir, running):
-    """設定のルールでの拒否を記録する。子が動いている間に試行を止める拒否が出たら、その時点で失敗にする。
-
-    設定のルール(利用者の deny ルールなど)での拒否は、`;` でつないだ読み取りの一部が `.env` に当たる
-    といった形で普通に起き、子は該当部分を外して続けるので止めない。それ以外(sandbox の入れ子など)は、
-    どのみち試行は失敗し、全ての試行で起きうる。子は拒否されても作業を続けるので、終わるのを待たずに
-    止めて残りの時間と費用を省く(終わった子の拒否は check_result が扱う)。サブエージェントの中での拒否も、
-    同じイベントとして stream に出る"""
-    for s in tail.new_config_denials():
+def record_tolerated(label, tail, workdir):
+    """止めない拒否を stderr と作業ディレクトリの denials.txt に残す(denials.txt は判定役の入力にも添える)。"""
+    for s in tail.take_tolerated():
         log(f"warn: {label}: 設定のルールで拒否された(試行は続ける): {s}")
         with open(os.path.join(workdir, "denials.txt"), "a", encoding="utf-8") as f:
             f.write(f"{label}: {s}\n")
-    if running and tail.denial:
-        raise AttemptFailed("permission_denied", label, tail.summary(tail.denial))
+
+
+def watch_denials(label, tail, workdir):
+    """動いている子の拒否を見る。止めない拒否は記録し、止める拒否が出たらその時点で失敗にする。
+
+    止める拒否(sandbox の入れ子など)では、どのみち試行は失敗し、全ての試行で起きうる。子は拒否されても
+    作業を続けるので、終わるのを待たずに止めて残りの時間と費用を省く(終わった子の拒否は check_result が扱う)。"""
+    record_tolerated(label, tail, workdir)
+    if tail.blocking:
+        raise AttemptFailed("permission_denied", label, summarize_denials([tail.denied_call(tail.blocking[0])]))
 
 
 # --- 前提チェック ------------------------------------------------------------
@@ -701,23 +720,29 @@ def run_reviews(wt, env, pr, workdir, children, attempt):
                                REVIEW_TIMEOUT, cwd=wt, env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=err)
         running[skill_name(spec)] = (p, base, time.monotonic(), StreamTail(base + ".stdout.jsonl"))
     results = {}
-    while running:
-        for name, (p, base, started, tail) in list(running.items()):
-            rc = p.poll()
+    try:
+        while running:
+            for name, (p, base, started, tail) in list(running.items()):
+                rc = p.poll()
+                tail.poll()
+                if rc is None:
+                    watch_denials(f"review {name}", tail, workdir)
+                    if time.monotonic() - started > REVIEW_TIMEOUT:
+                        raise AttemptFailed("timeout", f"review {name}", f"{REVIEW_TIMEOUT // 60} 分を超えた")
+                    continue
+                del running[name]
+                children.finish(p)
+                tail.poll()  # 終わる直前に書かれた行を読み残さない
+                record_tolerated(f"review {name}", tail, workdir)
+                results[name] = check_result(f"review {name}", rc, base, attempt, tail)
+                log(f"review {name}: 完了")
+            if running:
+                time.sleep(POLL_SECONDS)
+    finally:
+        # ほかの観点の失敗で抜けるときも、まだ動いている子の止めない拒否を記録に残す
+        for name, (_, _, _, tail) in running.items():
             tail.poll()
-            watch_denials(f"review {name}", tail, workdir, running=rc is None)
-            if rc is None:
-                if time.monotonic() - started > REVIEW_TIMEOUT:
-                    raise AttemptFailed("timeout", f"review {name}", f"{REVIEW_TIMEOUT // 60} 分を超えた")
-                continue
-            del running[name]
-            children.finish(p)
-            tail.poll()  # 終わる直前に書かれた行を読み残さない
-            watch_denials(f"review {name}", tail, workdir, running=False)
-            results[name] = check_result(f"review {name}", rc, base, attempt, tail)
-            log(f"review {name}: 完了")
-        if running:
-            time.sleep(POLL_SECONDS)
+            record_tolerated(f"review {name}", tail, workdir)
     return {skill_name(s): results[skill_name(s)] for s in PERSPECTIVES}
 
 
@@ -775,6 +800,16 @@ def run_judge(wt, env, pr_number, reviews, workdir, children, attempt):
     with open(input_path, "w", encoding="utf-8") as f:
         for name, text in reviews.items():
             f.write(f"===== 観点: {name} =====\n{text.strip()}\n===== ここまで: {name} =====\n\n")
+        # 試行を止めなかった拒否があれば添える。レビュー役が一部を読めないまま書いた可能性を、判定役が
+        # 出力だけから見分けることはできないため
+        try:
+            with open(os.path.join(workdir, "denials.txt"), encoding="utf-8") as d:
+                denied = d.read().strip()
+        except FileNotFoundError:
+            denied = ""
+        if denied:
+            f.write("===== レビュー中に権限の設定で拒否されたツールの呼び出し(レビュー役はこれを実行できていない) =====\n"
+                    f"{denied}\n===== ここまで: 拒否 =====\n\n")
     # レビュー役と同じく stream-json で受け、result の行の扱いと権限の拒否の扱いを揃える
     base = os.path.join(workdir, "judge")
     with open(input_path, "rb") as fin, open(base + ".stdout.jsonl", "w") as out, open(base + ".stderr.txt", "w") as err:
@@ -783,16 +818,23 @@ def run_judge(wt, env, pr_number, reviews, workdir, children, attempt):
                            JUDGE_TIMEOUT, cwd=wt, env=env, stdin=fin, stdout=out, stderr=err)
     tail = StreamTail(base + ".stdout.jsonl")
     started = time.monotonic()
-    while p.poll() is None:
-        tail.poll()
-        watch_denials("judge", tail, workdir, running=True)
-        if time.monotonic() - started > JUDGE_TIMEOUT:
-            raise AttemptFailed("timeout", "judge", f"{JUDGE_TIMEOUT // 60} 分を超えた")
-        time.sleep(POLL_SECONDS)
+    try:
+        while p.poll() is None:
+            tail.poll()
+            watch_denials("judge", tail, workdir)
+            if time.monotonic() - started > JUDGE_TIMEOUT:
+                raise AttemptFailed("timeout", "judge", f"{JUDGE_TIMEOUT // 60} 分を超えた")
+            time.sleep(POLL_SECONDS)
+    finally:
+        tail.poll()  # 終わる直前に書かれた行を読み残さない。失敗で抜けるときも、止めない拒否を記録に残す
+        record_tolerated("judge", tail, workdir)
     children.finish(p)
-    tail.poll()
-    watch_denials("judge", tail, workdir, running=False)
-    text = check_result("judge", p.returncode, base, attempt, tail)
+    joined = check_result("judge", p.returncode, base, attempt, tail)
+    # 判定は決めた形の文書1つなので、レビュー役と違って行をつながない。判定を出し直したときに下書きと
+    # 最終版が両方残ったり、後の行の「変わりません」が末尾に混ざったりしないよう、見出しを含む行のうち
+    # 最後のものを採る。最後の行が空や短い文でも、判定の本文は残る
+    has_heading = [t for t in tail.texts() if any(re.search(rf"^{re.escape(h)}", t, re.M) for h in VERDICT_SECTIONS)]
+    text = has_heading[-1] if has_heading else joined
     found = {h: re.search(rf"^{re.escape(h)}", text, re.M) for h in VERDICT_SECTIONS}
     missing = [h for h, m in found.items() if not m]
     if missing:

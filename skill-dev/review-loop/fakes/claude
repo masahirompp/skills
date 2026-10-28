@@ -5,6 +5,11 @@
 #   FAKE_PREFLIGHT_DELAY     init を返すまでの秒数
 #   FAKE_REVIEW_<観点>       ok(既定) / deny / denylive(拒否のイベントを出して、終わらずに続ける) / fail / empty(結果が空) / dirty / hang / slow / bg(孫を残して終わる)
 #                            / denyconfig(設定のルールでの拒否のイベントを出したあと、正常に終わる)
+#                            / denyclassifier(source は config だが、分類器による拒否のイベントを出したあと、正常に終わる)
+#                            / denynoid(denyconfig と同じだが、イベントに tool_use_id がない)
+#                            / denyconfighang(設定のルールでの拒否のイベントを出したあと、終わらずに続ける)
+#                            / failslow(1秒待ってから異常終了する)
+#                            / multierror(result の行を複数出し、途中の行はエラー)
 #                            / multiempty・multishort(result の行を複数出し、本文は途中の行に入れる。最後の行は空 / 短い文)
 #                            / multiallempty(result の行を複数出し、どれも空)
 #                            / remote(PR のブランチにだけ別のコミットを push する)
@@ -13,6 +18,8 @@
 #   FAKE_JUDGE               ok(既定) / noheading(決めた見出しがない) / empty(結果が空)
 #                            / fenced(前置きとコードフェンスで包み、見出しに文字を足す)
 #                            / multi(result の行を複数出し、判定は途中の行に入れる。最後の行は空)
+#                            / multishort(判定のあとに、短い文だけの result の行を出す)
+#                            / redo(前置きとフェンスで包んだ下書きの判定を出したあと、直した判定を出す)
 #                            / denyconfig(設定のルールでの拒否のイベントを出したあと、正常に終わる)
 # 出力は本物と同じく stream-json(1行1イベント)。事前確認以外は init の行から始める
 import json
@@ -38,15 +45,16 @@ def emit(d):
     print(json.dumps(d, ensure_ascii=False), flush=True)
 
 
-def deny(source=None):
+def deny(source=None, reason_type="subcommandResults", tool_use_id="x"):
     """拒否のイベントを出す。拒否されたツールの入力はイベントにないので、tool_use の行から引けることを
     確かめられるよう、イベントに入力を含めない。"""
     emit({"type": "assistant", "message": {"content": [
         {"type": "tool_use", "id": "x", "name": "Bash", "input": {"command": "gh pr diff 7; grep -n KEY .env"}}]}})
-    d = {"type": "system", "subtype": "permission_denied", "tool_name": "Bash", "tool_use_id": "x",
-         "message": "Permission denied."}
+    d = {"type": "system", "subtype": "permission_denied", "tool_name": "Bash", "message": "Permission denied."}
+    if tool_use_id:
+        d["tool_use_id"] = tool_use_id
     if source:
-        d.update(source=source, reason_type="subcommandResults")
+        d.update(source=source, reason_type=reason_type)
     emit(d)
 
 
@@ -90,6 +98,10 @@ if stat.S_ISREG(os.fstat(0).st_mode):  # 判定役(標準入力にレビュー�
     verdict = "## 指摘\n\n### F1: s\n- 観点: code-review\n- 場所: a.txt:1\n- 影響: 中。r\n\n## 競合\n\nなし\n"
     if mode == "multi":
         multi("レビューを突き合わせています。", verdict, "")
+    elif mode == "multishort":
+        multi(verdict, "前のメッセージの内容から変わりません")
+    elif mode == "redo":
+        multi("以下が判定です。\n\n```markdown\n## 指摘\n\n### F1: 下書き\n\n## 競合\n\nなし\n```", verdict)
     elif mode == "denyconfig":
         deny("config")
         result(verdict, permission_denials=[{"tool_name": "Bash", "tool_use_id": "x", "tool_input": {}}])
@@ -129,6 +141,24 @@ elif mode == "denyconfig":  # 設定のルールで拒否されたあと、該�
     deny("config")
     result(f"{name}: 指摘1件", permission_denials=[{"tool_name": "Bash", "tool_use_id": "x",
                                                    "tool_input": {"command": "gh pr diff 7; grep -n KEY .env"}}])
+elif mode in ("denyclassifier", "denynoid"):
+    if mode == "denyclassifier":
+        deny("config", reason_type="classifier")
+    else:
+        deny("config", tool_use_id=None)
+    result(f"{name}: 指摘1件", permission_denials=[{"tool_name": "Bash", "tool_input": {"command": "gh pr diff 7"},
+                                                   **({"tool_use_id": "x"} if mode == "denyclassifier" else {})}])
+elif mode == "denyconfighang":
+    deny("config")
+    time.sleep(120)
+    record("review-not-killed", name=name)
+elif mode == "failslow":
+    time.sleep(1)
+    print("boom", file=sys.stderr)
+    sys.exit(1)
+elif mode == "multierror":
+    result("API Error: overloaded", is_error=True)
+    result(f"{name}: 本文")
 elif mode == "multiempty":
     multi("2つのレビューをバックグラウンドで実行しています", "Standards のレビューは終わりました",
           f"{name}: 本文", "")

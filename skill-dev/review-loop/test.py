@@ -489,32 +489,59 @@ check(not any(alive(c["pid"]) for c in last), "拒否で止めたとき、どの
 
 # result の行が複数あれば、最上位の空でないものを全てつなぐ(最後の行だけを使うと本文が捨てられる)
 run(wt, "--new-run")
-for mode, last in (("multiempty", ""), ("multishort", "前のメッセージの内容から変わりません")):
+for mode, final in (("multiempty", ""), ("multishort", "前のメッセージの内容から変わりません")):
     rc, out, err = run(wt, FAKE_REVIEW_mattpocock_skills_code_review=mode)
     wd = err.rstrip().splitlines()[-1]
     stdin = [c for c in calls() if c["kind"] == "judge"][-1]["stdin"]
     with open(os.path.join(wd, "review-mattpocock-skills_code-review.result.md"), encoding="utf-8") as f:
         saved = f.read()
     check(rc == 0 and "mattpocock-skills:code-review: 本文" in stdin and "バックグラウンドで実行しています" in stdin
-          and saved.index("バックグラウンド") < saved.index("本文") and (not last or last in saved)
+          and saved.index("バックグラウンド") < saved.index("本文") and (not final or final in saved)
           and "サブエージェントの結果" not in saved,
-          f"result の行が複数あれば、最上位の空でないものを出た順につなぐ(最後の行が{'空' if not last else '短い文'})")
+          f"result の行が複数あれば、最上位の空でないものを出た順につなぐ(最後の行が{'空' if not final else '短い文'})")
     check(state()["attempts"][-1]["tokens"]["output"] == 4 * 300,
           "トークン数は最後の result の行だけで数える(modelUsage は累計なので足さない)")
+rc, out, err = run(wt, FAKE_REVIEW_code_review="multierror")
+stdin = [c for c in calls() if c["kind"] == "judge"][-1]["stdin"]
+check(rc == 0 and "code-review: 本文" in stdin and "API Error" not in stdin, "エラーの result の行はつながない")
 rc, _, err = run(wt, FAKE_REVIEW_code_review="multiallempty")
 check(rc == 1 and "no_output: review code-review" in err, "result の行が全て空なら no_output")
+
+# 判定役は行をつながず、見出しを含む行のうち最後のものを採る
 rc, out, err = run(wt, FAKE_JUDGE="multi")
 check(rc == 0 and out.startswith("## 指摘") and "突き合わせています" not in out,
-      "判定役の result の行が複数でも、つないだテキストで見出しを確かめ、前置きは落とす")
+      "判定役の result の行が複数でも、判定の行を採り、前置きは落とす")
+rc, out, err = run(wt, FAKE_JUDGE="multishort")
+check(rc == 0 and out.rstrip().endswith("なし") and "変わりません" not in out, "判定役の後の行の短い文は判定に混ぜない")
+rc, out, err = run(wt, FAKE_JUDGE="redo")
+check(rc == 0 and out.count("## 指摘") == 1 and "下書き" not in out and "```" not in out,
+      "判定役が判定を出し直したら、最後の判定だけを採る")
 
-# 設定のルールでの拒否では止めず、内容を作業ディレクトリと stderr に残す
+# 設定のルールで、`;` でつないだコマンドの一部が拒否されただけなら止めず、内容を作業ディレクトリと stderr に残す
 rc, out, err = run(wt, FAKE_REVIEW_security_review="denyconfig", FAKE_JUDGE="denyconfig")
 wd = err.rstrip().splitlines()[-1]
-denials = open(os.path.join(wd, "denials.txt"), encoding="utf-8").read() if os.path.exists(os.path.join(wd, "denials.txt")) else ""
+with open(os.path.join(wd, "denials.txt"), encoding="utf-8") as f:
+    denials = f.read()
 check(rc == 0 and out.startswith("## 指摘"), f"設定のルールでの拒否では試行を止めない {err[-300:] if rc else ''}")
 check("review security-review: Bash" in denials and "judge: Bash" in denials and "grep -n KEY .env" in denials
       and "subcommandResults" in denials, "設定のルールでの拒否は作業ディレクトリの denials.txt に残す")
 check("設定のルールで拒否された" in err and "grep -n KEY .env" in err, "設定のルールでの拒否は stderr にも出す")
+stdin = [c for c in calls() if c["kind"] == "judge"][-1]["stdin"]
+check("権限の設定で拒否された" in stdin and "review security-review: Bash" in stdin, "止めなかった拒否は判定役の入力にも添える")
+
+# source が config でも、分類器による拒否や、tool_use_id のない拒否は止める
+rc, _, err = run(wt, FAKE_REVIEW_security_review="denyclassifier")
+check(rc == 1 and "permission_denied: review security-review" in err, "source が config でも、分類器による拒否は止める")
+rc, _, err = run(wt, FAKE_REVIEW_security_review="denynoid")
+check(rc == 1 and "permission_denied: review security-review" in err, "tool_use_id のない拒否は止める")
+run(wt, "--new-run")
+
+# ほかの観点の失敗で止めるときも、まだ動いている子の止めない拒否を記録に残す
+rc, _, err = run(wt, FAKE_REVIEW_code_review="failslow", FAKE_REVIEW_security_review="denyconfighang")
+wd = err.rstrip().splitlines()[-1]
+check(rc == 1 and "child_error: review code-review" in err and os.path.isfile(os.path.join(wd, "denials.txt")),
+      "ほかの観点の失敗で止めても、動いていた子の止めない拒否を denials.txt に残す")
+run(wt, "--new-run")
 
 if os.environ.get("KEEP"):
     print("作業ディレクトリ:", root)
