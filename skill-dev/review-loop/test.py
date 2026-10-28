@@ -158,6 +158,9 @@ check(judge and "===== 観点: security-review =====" in judge[0]["stdin"], "判
 check(judge and "--json-schema" not in judge[0]["args"] and "## 指摘" in judge[0]["args"][-1],
       "判定役には出力の形をプロンプトで渡す")
 check(all("--append-system-prompt" in c["args"] for c in reviews + judge), "運用上の制約を渡す")
+check(judge and "stream-json" in judge[0]["args"] and "--verbose" in judge[0]["args"], "判定役も stream-json で受ける")
+check(os.path.isfile(os.path.join(workdir, "judge.result.md")) and not os.path.exists(os.path.join(workdir, "denials.txt")),
+      "判定役の result のテキストも judge.result.md に残し、拒否がなければ denials.txt は作らない")
 prompts = {c["args"][-1] for c in reviews}
 check(prompts == {"/code-review high 7", "/security-review", "/mattpocock-skills:code-review PR #7"},
       f"レビュー役のプロンプトは /<観点と引数>({{pr}} を展開)。{prompts}")
@@ -218,7 +221,7 @@ os.remove(os.path.join(wt, "stray.txt"))
 check(state()["consecutive_failures"] == 2, "連続失敗が積み上がる")
 
 rc, _, err = run(wt, FAKE_REVIEW_code_review="empty")
-check(rc == 1 and "result が空" in err, "result が空なら失敗")
+check(rc == 1 and "no_output" in err and "空でない result の行がない" in err, "result が空なら失敗")
 rc, _, err = run(wt)
 check(rc == 2 and "連続失敗" in err, "連続失敗3回で止まる")
 
@@ -237,7 +240,7 @@ check(rc == 0 and out.rstrip().endswith("x\n```"), "前置きでフェンスを�
 rc, out, err = run(wt, FAKE_JUDGE="conflictfirst")
 check(rc == 0 and out.startswith("## 競合"), "競合の節が先にあっても落とさない")
 rc, _, err = run(wt, FAKE_JUDGE="empty")
-check(rc == 1 and "no_output" in err and "result が空" in err, "判定が空なら失敗")
+check(rc == 1 and "no_output" in err and "空でない result の行がない" in err, "判定が空なら失敗")
 rc, _, err = run(wt, FAKE_REVIEW_code_review="fail")
 check(rc == 1 and "boom" in err, "子が異常終了したら stderr を添えて失敗")
 
@@ -483,6 +486,35 @@ check(rc == 1 and "permission_denied: review code-review" in err and "gh pr diff
       "拒否のイベントが出たら、子の終了を待たずに permission_denied で止める")
 last = [c for c in calls() if c["kind"] == "review"][-3:]
 check(not any(alive(c["pid"]) for c in last), "拒否で止めたとき、どの子も残らない")
+
+# result の行が複数あれば、最上位の空でないものを全てつなぐ(最後の行だけを使うと本文が捨てられる)
+run(wt, "--new-run")
+for mode, last in (("multiempty", ""), ("multishort", "前のメッセージの内容から変わりません")):
+    rc, out, err = run(wt, FAKE_REVIEW_mattpocock_skills_code_review=mode)
+    wd = err.rstrip().splitlines()[-1]
+    stdin = [c for c in calls() if c["kind"] == "judge"][-1]["stdin"]
+    with open(os.path.join(wd, "review-mattpocock-skills_code-review.result.md"), encoding="utf-8") as f:
+        saved = f.read()
+    check(rc == 0 and "mattpocock-skills:code-review: 本文" in stdin and "バックグラウンドで実行しています" in stdin
+          and saved.index("バックグラウンド") < saved.index("本文") and (not last or last in saved)
+          and "サブエージェントの結果" not in saved,
+          f"result の行が複数あれば、最上位の空でないものを出た順につなぐ(最後の行が{'空' if not last else '短い文'})")
+    check(state()["attempts"][-1]["tokens"]["output"] == 4 * 300,
+          "トークン数は最後の result の行だけで数える(modelUsage は累計なので足さない)")
+rc, _, err = run(wt, FAKE_REVIEW_code_review="multiallempty")
+check(rc == 1 and "no_output: review code-review" in err, "result の行が全て空なら no_output")
+rc, out, err = run(wt, FAKE_JUDGE="multi")
+check(rc == 0 and out.startswith("## 指摘") and "突き合わせています" not in out,
+      "判定役の result の行が複数でも、つないだテキストで見出しを確かめ、前置きは落とす")
+
+# 設定のルールでの拒否では止めず、内容を作業ディレクトリと stderr に残す
+rc, out, err = run(wt, FAKE_REVIEW_security_review="denyconfig", FAKE_JUDGE="denyconfig")
+wd = err.rstrip().splitlines()[-1]
+denials = open(os.path.join(wd, "denials.txt"), encoding="utf-8").read() if os.path.exists(os.path.join(wd, "denials.txt")) else ""
+check(rc == 0 and out.startswith("## 指摘"), f"設定のルールでの拒否では試行を止めない {err[-300:] if rc else ''}")
+check("review security-review: Bash" in denials and "judge: Bash" in denials and "grep -n KEY .env" in denials
+      and "subcommandResults" in denials, "設定のルールでの拒否は作業ディレクトリの denials.txt に残す")
+check("設定のルールで拒否された" in err and "grep -n KEY .env" in err, "設定のルールでの拒否は stderr にも出す")
 
 if os.environ.get("KEEP"):
     print("作業ディレクトリ:", root)
