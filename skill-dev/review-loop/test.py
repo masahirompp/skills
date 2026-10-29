@@ -556,10 +556,10 @@ check(rc == 1 and "child_error: review code-review" in err and os.path.isfile(os
 run(wt, "--new-run")
 
 # --- 観点の入れ替えと追加の指示 -----------------------------------------------
-run(wt, "--new-run")
 n = len(calls())
 rc, out, err = run(wt, "--perspective", " code-review\thigh  {pr} ", "--perspective", "mattpocock-skills:code-review PR #{pr}",
-                   "--instruct", "code-review=削除したファイルの中身は確かめない", "--instruct", " code-review = テストは見ない")
+                   "--instruct", "code-review=削除したファイルの中身は確かめない", "--instruct", " code-review = テストは見ない",
+                   "--instruct", "mattpocock-skills:code-review=a=b")
 new = calls()[n:]
 reviews = [c for c in new if c["kind"] == "review"]
 judge = [c for c in new if c["kind"] == "judge"]
@@ -569,22 +569,30 @@ by_name = {c["name"]: system_prompt(c) for c in reviews}
 check("削除したファイルの中身は確かめない\nテストは見ない" in by_name.get("code-review", ""),
       "--instruct はその観点のシステムプロンプトに足し、同じ観点への指示は改行でつなぐ")
 check("削除したファイル" not in by_name.get("mattpocock-skills:code-review", "x"), "--instruct はほかの観点には渡さない")
+check(by_name.get("mattpocock-skills:code-review", "").endswith("\na=b"), "--instruct は最初の `=` で分ける")
 check(judge and "観点 code-review に利用者が与えた追加の指示" in judge[0]["stdin"], "追加の指示は判定役の入力にも添える")
 check(judge and "追加の指示" in judge[0]["args"][-1], "判定役の手順に、追加の指示の扱いを書く")
 last = state()["attempts"][-1]
 body = comments()[0]["body"]
 check(last.get("perspectives") == ["code-review high {pr}", "mattpocock-skills:code-review PR #{pr}"]
-      and last.get("instructed") == ["code-review"]
-      and "観点 code-review high {pr}, mattpocock-skills:code-review PR #{pr}、指示あり code-review" in body
+      and last.get("instructed") == ["code-review", "mattpocock-skills:code-review"]
+      and "観点 code-review high {pr}, mattpocock-skills:code-review PR #{pr}、指示あり code-review, mattpocock-skills:code-review" in body
       and "削除したファイル" not in body,
       "既定と違う観点と、指示を渡した観点を状態コメントに残す(指示の本文は残さない)")
-rc, _, _ = run(wt, "--perspective", "code-review low {pr}", "--perspective", "security-review",
-               "--perspective", "mattpocock-skills:code-review PR #{pr}")
+rc, _, err = run(wt, "--perspective", "code-review low {pr}", "--perspective", "security-review",
+                 "--perspective", "mattpocock-skills:code-review PR #{pr}")
 check(rc == 0 and state()["attempts"][-1].get("perspectives", [""])[0] == "code-review low {pr}",
       "スキル名が既定と同じでも、引数が違えば観点を残す")
-rc, _, _ = run(wt)
+check("直前の試行と指示を渡した観点が違う" in err and "直前の試行と観点が違う" in err,
+      "直前の試行と観点や指示が違えば警告する")
+rc, _, err = run(wt, "--perspective", "security-review", "--perspective", "mattpocock-skills:code-review PR #{pr}",
+                 "--perspective", "code-review high {pr}")
 last = state()["attempts"][-1]
-check(rc == 0 and "perspectives" not in last and "instructed" not in last, "既定の観点で、指示なしで回したら、何も残さない")
+check(rc == 0 and "perspectives" not in last and "instructed" not in last, "既定の観点を並べ替えただけなら、何も残さない")
+rc, _, err = run(wt)
+check(rc == 0 and "warn: 直前の試行と" not in err, "直前の試行と同じなら警告しない")
+rc, _, _ = run(wt, "--instruct", "security-review=x", FAKE_REVIEW_security_review="fail")
+check(rc == 1 and state()["attempts"][-1].get("instructed") == ["security-review"], "失敗した試行にも、指示を渡した観点を残す")
 
 before = json.dumps(state())
 for flags, label in ((("--instruct", "security-review"), "`=` のない --instruct"),

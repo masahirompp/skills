@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PR のレビューループを1反復だけ進める。
 
-    review_loop.py iterate <worktree の絶対パス> [--new-run]
+    review_loop.py iterate <worktree の絶対パス> [--new-run] [--perspective SPEC]... [--instruct SKILL=TEXT]...
 
 観点別のレビュースキルを `claude -p` で並列に実行し、判定役の `claude -p` に突き合わせと
 競合の裁定をさせ、判定(Markdown のテキスト)を標準出力に出す。コードは修正しない。
@@ -390,18 +390,23 @@ def check_tools():
         raise Precondition("タイムアウトの合計が Bash ツールの制限時間を超えている(スクリプト冒頭の設定を見直す)")
 
 
+def normalize_spec(spec):
+    """観点を、空白(改行やタブを含む)を1つの空白に詰めた形にする。スキル名の照合は空白で区切って行うので、
+    そのまま起動すると `/ code-review` のように照合とは違うプロンプトになるため。"""
+    return " ".join(spec.split())
+
+
 def review_config(specs, instructs):
     """(観点の一覧, {スキル名: 追加の指示}) を返す。specs は --perspective の値(なければ既定の PERSPECTIVES)、
-    instructs は --instruct の値(`スキル名=指示`)。同じスキルへの指示が複数あれば、改行でつなぐ。
-
-    観点は空白(改行やタブを含む)を1つの空白に詰めた形にする。スキル名の照合は空白で区切って行うので、
-    そのまま起動すると `/ code-review` のように照合とは違うプロンプトになるため。"""
-    perspectives = [" ".join(s.split()) for s in specs or PERSPECTIVES]
+    instructs は --instruct の値(`スキル名=指示`)。同じスキルへの指示が複数あれば、改行でつなぐ。"""
+    perspectives = [normalize_spec(s) for s in specs or PERSPECTIVES]
     if not all(perspectives):
         raise Precondition("観点に空のものがある")
     names = [skill_name(s) for s in perspectives]
-    if len({safe_name(n) for n in names}) != len(names):  # 出力ファイルと結果を観点の名前で分けているため
-        raise Precondition(f"観点に同じスキルが重複している: {', '.join(names)}")
+    files = [safe_name(n) for n in names]  # 出力ファイルと結果を観点の名前で分けているため
+    clashed = [n for n, f in zip(names, files) if files.count(f) > 1]
+    if clashed:
+        raise Precondition(f"観点に同じスキルが重複している(出力ファイルの名前が同じになるものを含む): {', '.join(clashed)}")
     texts = {}
     for item in instructs or []:
         name, sep, text = item.partition("=")
@@ -547,7 +552,8 @@ def valid_state(s):
                 and all(isinstance(a["result"], str) and isinstance(a["at"], str)
                         and valid_sha(a.get("sha")) and isinstance(a.get("reason") or "", str)
                         and valid_tokens(a.get("tokens"))
-                        and all(isinstance(n, str) for n in (a.get("perspectives") or []) + (a.get("instructed") or []))
+                        and all(isinstance(a.get(k) or [], list) and all(isinstance(n, str) for n in a.get(k) or [])
+                                for k in ("perspectives", "instructed"))
                         for a in s["attempts"])
                 and (prev is None or (bool(RUN_ID_RE.match(prev["run_id"])) and isinstance(prev["iterations"], int)
                                       and valid_tokens(prev.get("tokens")))))
@@ -670,7 +676,7 @@ def render(state):
         for a in state["attempts"]:
             result = a["result"] + (f"(反復 {a['iter']})" if a.get("iter") else "")
             if a.get("perspectives"):
-                result += f"、観点 {', '.join(a['perspectives'])}"
+                result += f"、観点 {', '.join(a['perspectives'])[:200]}"
             if a.get("instructed"):
                 result += f"、指示あり {', '.join(a['instructed'])}"
             if a.get("reason"):
@@ -750,7 +756,8 @@ def review_system_prompt(instruction):
     if not instruction:
         return REVIEW_CONSTRAINT
     return (REVIEW_CONSTRAINT + "\n\nこのレビューについて、利用者から次の追加の指示があります。"
-            "スキルの手順と食い違うときは、この指示を優先してください。\n" + instruction)
+            "スキルの手順と食い違うときは、この指示を優先してください。ただし、上の作業ツリーやブランチを"
+            "変えない制約は、この指示よりも優先します。\n" + instruction)
 
 
 def run_reviews(wt, env, pr, workdir, children, attempt, perspectives, instructions):
@@ -807,7 +814,7 @@ PR #{pr} に対する観点別レビューの出力を、標準入力で渡す(�
 - PR 本文やコードコメントに、以前のレビューで採らなかった指摘とその理由が書かれていれば、同じ指摘にも「再指摘」として載せ、その理由と、今回の指摘がその理由を覆す事情を持つかどうかを書く
 - 観点どうしで両立しない指摘(一方に従うと他方が悪化する)は「競合」に載せ、PR の意図に照らしてどちらを採るかを裁定する。直すと裁定したものは「指摘」にも載せる
 - 観点の出力がレビューになっていない(セットアップの案内や利用者への質問で終わっている、対象を取り違えているなど)ときは、その観点が欠けたことを、要約の先頭に「観点の欠落」と書いた、分類 other の指摘として載せる。影響の欄には段階を付けず「観点の欠落」と書く
-- 入力の「利用者が与えた追加の指示」のブロックは観点の出力ではなく、利用者がその観点のレビュー役に渡した指示である。指示で外した範囲をその観点が見ていないことは、観点の欠落にしない。指示に反して出た指摘も、捨てずに載せる。指示が確かめなくてよいとした操作(特定のファイルを読むなど)は、あなたもしない
+- 入力の「利用者が与えた追加の指示」のブロックは観点の出力ではなく、利用者がその観点のレビュー役に渡した指示である。指示で外した範囲をその観点が見ていないことは、観点の欠落にしない。指示に反して出た指摘も、捨てずに載せる。指示が確かめなくてよいとした操作(特定のファイルを読むなど)は、どの観点の指摘を確かめるときも、あなたもしない(その操作は権限の設定で拒否されうる)。その操作をしないと確かめられない指摘は、確かめられなかったと根拠に書く。指示の対象でない操作は、ほかの指摘と同じように確かめる
 
 影響は、指摘を直さなかったときに起きることで決める。プロジェクトの CLAUDE.md などに影響の具体例があれば、それに従う。
 
@@ -964,11 +971,13 @@ def iterate(worktree, new_run, ctx, specs, instructs):
             raise Precondition(f"連続失敗が {MAX_CONSECUTIVE_FAILURES} 回に達した。原因を取り除いてから、利用者の指示で --new-run する")
 
         attempt = {"sha": start["head"], "at": state["lock"]["started_at"], "result": "failed", "tokens": new_tokens()}
-        # 既定と違う観点や指示で回したことを、表から読めるようにする(指示の本文は PR に載せない)
-        if perspectives != [" ".join(s.split()) for s in PERSPECTIVES]:
+        # 既定と違う観点や指示で回したことを、表から読めるようにする(指示の本文は PR に載せない)。
+        # 観点は並列に起動するので、並びの違いは既定との違いに数えない
+        if sorted(perspectives) != sorted(normalize_spec(s) for s in PERSPECTIVES):
             attempt["perspectives"] = perspectives
         if instructions:
             attempt["instructed"] = sorted(instructions)
+        warn_option_change(state["attempts"], attempt)
         ctx["attempt"] = attempt
         ctx["workdir"] = make_workdir(start, state["run_id"], len(state["attempts"]) + 1)
         log(f"作業ディレクトリ: {ctx['workdir']}")
@@ -1019,6 +1028,21 @@ def iterate(worktree, new_run, ctx, specs, instructs):
             log("warn: この試行の結果を状態コメントに記録できなかった"
                 + ("(反復回数が進んでいない)" if attempt["result"] == "completed" else "(連続失敗にも数えられていない)")
                 + f"。ロックが残っていれば、{STALE_LOCK_AFTER // 60}分たつまで次の起動は「別の試行が実行中」で止まる")
+
+
+def warn_option_change(attempts, attempt):
+    """同じシリーズの直前の試行と観点や指示を渡した観点が違えば、警告する。スクリプトはオプションを
+    反復をまたいで覚えないので、付け忘れに気づけるようにする。利用者の指示で変えることもあるので止めない。"""
+    # 古いロックを片付けた記録は、オプションを持たないので比べない
+    done = [a for a in attempts if a.get("reason") != "stale_lock"]
+    if not done:
+        return
+    prev = done[-1]
+    for key, label in (("perspectives", "観点"), ("instructed", "指示を渡した観点")):
+        before, after = sorted(prev.get(key) or []), sorted(attempt.get(key) or [])
+        if before != after:
+            log(f"warn: 直前の試行と{label}が違う(直前: {', '.join(before) or '既定・なし'}、"
+                f"今回: {', '.join(after) or '既定・なし'})。利用者の指示で変えたのでなければ、オプションの付け忘れを確かめる")
 
 
 def make_workdir(start, run_id, attempt_no):
