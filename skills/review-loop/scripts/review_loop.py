@@ -65,15 +65,19 @@ POLL_SECONDS = 2
 COMMAND_TIMEOUT = 60          # git や gh の1回の呼び出し
 
 MARKER = "review-loop-state"
+MAX_RECORDED_SPEC = 200       # 状態コメントに記録する観点1つあたりの文字数
 RUN_ID_RE = re.compile(r"^\d{8}T\d{6}$")
 SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
 STRIP_ENV = ("CLAUDE_JOB_DIR", "CLAUDE_CODE_SESSION_KIND", "CLAUDE_CODE_SESSION_ID")
 GUARD_ENV = "REVIEW_LOOP_ACTIVE"
 
 NO_MUTATION = "ファイルの編集、checkout、commit、stash、pushなど、作業ツリーやブランチを変える操作をしないでください。"
-REVIEW_CONSTRAINT = ("他のレビューと並列に、同じworktreeで実行しています。" + NO_MUTATION
-                     + "サブエージェントやサブタスクに作業を任せるときは、この制約をその依頼文にも含めてください。")
-JUDGE_CONSTRAINT = "レビュー対象のworktreeで実行しています。" + NO_MUTATION
+# システムプロンプトはサブエージェントに引き継がれないので、任せるときは依頼文に含めるよう頼む
+DELEGATE = "サブエージェントやサブタスクに作業を任せるときは、この制約をその依頼文にも含めてください。"
+REVIEW_CONSTRAINT = "他のレビューと並列に、同じworktreeで実行しています。" + NO_MUTATION + DELEGATE
+JUDGE_CONSTRAINT = "レビュー対象のworktreeで実行しています。" + NO_MUTATION + DELEGATE
+# 利用者の指示を足すときに添える文。指示より作業ツリーの制約を優先させ、指示も依頼文に含めるよう頼む
+INSTRUCTION_RULES = "上の作業ツリーやブランチを変えない制約は、この指示よりも優先します。サブエージェントやサブタスクに作業を任せるときは、この指示もその依頼文に含めてください。"
 
 class Precondition(Exception):
     """前提を満たさない。試行を始めず、終了コード2で終わる。"""
@@ -395,13 +399,18 @@ def normalize_spec(spec):
     """観点を、空白(改行やタブを含む)を1つの空白に詰め、先頭の `/` を除いた形にする。スキル名の照合は
     空白で区切って行うので、そのまま起動すると `/ code-review` や `//code-review` のように照合とは違う
     プロンプトになるため。"""
-    return " ".join(spec.split()).lstrip("/").lstrip()
+    return re.sub(r"^[/\s]+", "", " ".join(spec.split()))
+
+
+def default_perspectives():
+    """既定の観点を、--perspective と同じ形に整えて返す。テストが PERSPECTIVES を差し替えるので、毎回作る。"""
+    return [normalize_spec(s) for s in PERSPECTIVES]
 
 
 def review_config(perspective_args, instruct_args):
     """(観点の一覧, {スキル名: 追加の指示}) を返す。perspective_args は --perspective の値(なければ既定の
     PERSPECTIVES)、instruct_args は --instruct の値(`スキル名=指示`)。同じスキルへの指示が複数あれば、改行でつなぐ。"""
-    perspectives = [normalize_spec(s) for s in perspective_args or PERSPECTIVES]
+    perspectives = [normalize_spec(s) for s in perspective_args] if perspective_args else default_perspectives()
     if not all(perspectives):
         raise Precondition("観点に空のものがある")
     names = [skill_name(s) for s in perspectives]
@@ -412,7 +421,7 @@ def review_config(perspective_args, instruct_args):
     texts = {}
     for item in instruct_args or []:
         name, sep, text = item.partition("=")
-        name, text = name.strip(), text.strip()
+        name, text = normalize_spec(name), text.strip()
         if not sep or not name or not text:
             raise Precondition(f"--instruct は `スキル名=指示` の形で書く: {item}")
         # 名前の誤りで指示が黙って捨てられないよう、使う観点のどれかに当たるものだけを受け付ける
@@ -662,7 +671,7 @@ def cell(text):
 
 def is_default(perspectives):
     """今の既定の観点と同じか。観点は並列に起動するので、並びの違いは数えない。"""
-    return sorted(perspectives) == sorted(normalize_spec(s) for s in PERSPECTIVES)
+    return sorted(perspectives) == sorted(default_perspectives())
 
 
 def render(state):
@@ -762,11 +771,8 @@ def review_system_prompt(instruction):
     (引数の読み方はスキルごとに違い、引数を取らないスキルもあるため)。"""
     if not instruction:
         return REVIEW_CONSTRAINT
-    # システムプロンプトはサブエージェントに引き継がれないので、任せるときは依頼文に含めるよう頼む
     return (REVIEW_CONSTRAINT + "\n\nこのレビューについて、利用者から次の追加の指示があります。"
-            "スキルの手順と食い違うときは、この指示を優先してください。ただし、上の作業ツリーやブランチを"
-            "変えない制約は、この指示よりも優先します。サブエージェントやサブタスクに作業を任せるときは、"
-            "この指示と上の制約を、その依頼文にそのまま含めてください。\n" + instruction)
+            "スキルの手順と食い違うときは、この指示を優先してください。" + INSTRUCTION_RULES + "\n" + instruction)
 
 
 def run_reviews(wt, env, pr, workdir, children, attempt, perspectives, instructions):
@@ -866,8 +872,10 @@ def judge_system_prompt(instructions):
     ので、こちらで渡す。"""
     if not instructions:
         return JUDGE_CONSTRAINT
-    return JUDGE_CONSTRAINT + "".join(f"\n\n利用者が観点 {name} のレビュー役に与えた追加の指示:\n{text}"
-                                      for name, text in instructions.items())
+    blocks = "".join(f"\n\n----- 利用者が観点 {name} のレビュー役に与えた追加の指示 -----\n{text}\n----- ここまで: {name} -----"
+                     for name, text in instructions.items())
+    return (JUDGE_CONSTRAINT + "\n\n次は、利用者が観点のレビュー役に与えた追加の指示です。扱いは手順に従ってください。"
+            + INSTRUCTION_RULES + blocks)
 
 
 def run_judge(wt, env, pr_number, reviews, workdir, children, attempt, instructions):
@@ -991,7 +999,8 @@ def iterate(worktree, new_run, ctx, perspective_args, instruct_args):
         attempt = {"sha": start["head"], "at": state["lock"]["started_at"], "result": "failed", "tokens": new_tokens()}
         # どの観点や指示で回したかを、あとから表で読めるようにする(指示の本文は PR に載せない)。観点は
         # 既定でも記録する。既定(PERSPECTIVES)はスクリプトの更新で変わりうるので、記録しないと前後で比べられない
-        attempt["perspectives"] = perspectives
+        # 状態コメントの本文には GitHub の上限があるので、観点ごとに長さを抑える
+        attempt["perspectives"] = [p[:MAX_RECORDED_SPEC] for p in perspectives]
         if instructions:
             attempt["instructed"] = sorted(instructions)
         warn_option_change(state["attempts"], attempt)
@@ -1051,10 +1060,10 @@ def warn_option_change(attempts, attempt):
     """同じシリーズの直前の試行と観点や指示を渡した観点が違えば、警告する。スクリプトはオプションを
     反復をまたいで覚えないので、付け忘れに気づけるようにする。利用者の指示で変えることもあるので止めない。"""
     # 古いロックを片付けた記録は、オプションを持たないので比べない
-    done = [a for a in attempts if a.get("reason") != "stale_lock"]
-    if not done:
+    recorded = [a for a in attempts if a.get("reason") != "stale_lock"]
+    if not recorded:
         return
-    prev = done[-1]
+    prev = recorded[-1]
     for key, label in (("perspectives", "観点"), ("instructed", "指示を渡した観点")):
         if key == "perspectives" and key not in prev:  # 観点を記録する前の版で書かれた試行
             continue

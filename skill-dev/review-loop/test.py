@@ -125,6 +125,12 @@ def system_prompt(c):
     return c["args"][c["args"].index("--append-system-prompt") + 1]
 
 
+def last_row():
+    """状態コメントの表のうち、最後の試行の行(合計の行の直前)を返す。"""
+    lines = comments()[0]["body"].splitlines()
+    return lines[lines.index(next(line for line in lines if line.startswith("| **合計**"))) - 1]
+
+
 def commit_and_push(wt, name):
     with open(os.path.join(wt, name), "w") as f:
         f.write(name)
@@ -559,7 +565,7 @@ run(wt, "--new-run")
 n = len(calls())
 rc, out, err = run(wt, "--perspective", " /code-review\thigh  {pr} ", "--perspective", "mattpocock-skills:code-review PR #{pr}",
                    "--instruct", "code-review=削除したファイルの中身は確かめない", "--instruct", " code-review = テストは見ない",
-                   "--instruct", "mattpocock-skills:code-review=a=b PR #{pr}")
+                   "--instruct", "/mattpocock-skills:code-review=a=b PR #{pr}")
 new = calls()[n:]
 reviews = [c for c in new if c["kind"] == "review"]
 judge = [c for c in new if c["kind"] == "judge"]
@@ -569,9 +575,11 @@ by_name = {c["name"]: system_prompt(c) for c in reviews}
 check("削除したファイルの中身は確かめない\nテストは見ない" in by_name.get("code-review", ""),
       "--instruct はその観点のシステムプロンプトに足し、同じ観点への指示は改行でつなぐ")
 check("削除したファイル" not in by_name.get("mattpocock-skills:code-review", "x"), "--instruct はほかの観点には渡さない")
-check(by_name.get("mattpocock-skills:code-review", "").endswith("\na=b PR #7"), "--instruct は最初の `=` で分け、{pr} を置き換える")
-check(all("依頼文" in system_prompt(c) for c in reviews), "サブエージェントに任せるときは制約と指示を依頼文に含めるよう頼む")
-check(judge and "観点 code-review のレビュー役に与えた追加の指示:\n削除したファイル" in system_prompt(judge[0])
+check(by_name.get("mattpocock-skills:code-review", "").endswith("\na=b PR #7"), "--instruct は最初の `=` で分け、スキル名の先頭の `/` を除き、{pr} を置き換える")
+check(all("依頼文" in system_prompt(c) for c in reviews + judge),
+      "レビュー役にも判定役にも、サブエージェントに任せるときは制約と指示を依頼文に含めるよう頼む")
+check(judge and "観点 code-review のレビュー役に与えた追加の指示 -----\n削除したファイル" in system_prompt(judge[0])
+      and "----- ここまで: code-review -----" in system_prompt(judge[0])
       and "削除したファイル" not in judge[0]["stdin"],
       "追加の指示は判定役のシステムプロンプトで渡し、標準入力には混ぜない")
 check(judge and "追加の指示" in judge[0]["args"][-1], "判定役の手順に、追加の指示の扱いを書く")
@@ -584,14 +592,14 @@ check(last.get("perspectives") == ["code-review high {pr}", "mattpocock-skills:c
       "既定と違う観点と、指示を渡した観点を状態コメントに残す(指示の本文は残さない)")
 rc, _, err = run(wt, "--perspective", "code-review low {pr}", "--perspective", "security-review",
                  "--perspective", "mattpocock-skills:code-review PR #{pr}")
-check(rc == 0 and state()["attempts"][-1].get("perspectives", [""])[0] == "code-review low {pr}",
-      "スキル名が既定と同じでも、引数が違えば観点を残す")
+check(rc == 0 and "観点 code-review low {pr}, security-review" in last_row(),
+      "スキル名が既定と同じでも、引数が違えば表に観点を出す")
 check("直前の試行と指示を渡した観点が違う" in err and "直前の試行と観点が違う" in err,
       "直前の試行と観点や指示が違えば警告する")
 rc, _, err = run(wt, "--perspective", "security-review", "--perspective", "mattpocock-skills:code-review PR #{pr}",
                  "--perspective", "code-review high {pr}")
 last = state()["attempts"][-1]
-check(rc == 0 and "instructed" not in last and "観点 security-review" not in comments()[0]["body"].splitlines()[-6],
+check(rc == 0 and "instructed" not in last and "、観点" not in last_row(),
       "既定の観点を並べ替えただけなら、表に観点を出さない")
 rc, _, err = run(wt)
 last = state()["attempts"][-1]
@@ -607,6 +615,8 @@ rc, _, _ = run(wt, "--instruct", "security-review=x", FAKE_REVIEW_security_revie
 check(rc == 1 and state()["attempts"][-1].get("instructed") == ["security-review"], "失敗した試行にも、指示を渡した観点を残す")
 rc, _, err = run(wt, "--new-run", "--instruct", "security-review=x")
 check(rc == 0 and "warn: 直前の試行と" not in err, "シリーズの初回は警告しない")
+rc, _, _ = run(wt, "--perspective", "code-review " + "x" * 300)
+check(rc == 0 and len(state()["attempts"][-1]["perspectives"][0]) == 200, "状態コメントに記録する観点の長さを抑える")
 
 before = json.dumps(state())
 for flags, label in ((("--instruct", "security-review"), "`=` のない --instruct"),
