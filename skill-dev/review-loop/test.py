@@ -617,6 +617,15 @@ rc, _, err = run(wt, "--new-run", "--instruct", "security-review=x")
 check(rc == 0 and "warn: 直前の試行と" not in err, "シリーズの初回は警告しない")
 rc, _, _ = run(wt, "--perspective", "code-review " + "x" * 300)
 check(rc == 0 and len(state()["attempts"][-1]["perspectives"][0]) == 200, "状態コメントに記録する観点の長さを抑える")
+long_flags = [a for i in range(10) for a in ("--perspective", f"code-review{i} " + "x" * 300)]
+long_skills = ",".join(f"code-review{i}" for i in range(10))
+run(wt, *long_flags, FAKE_SKILLS=long_skills)
+limit = len(comments()[0]["body"]) + 500  # 長い観点の試行を2つは載せられない
+rc, _, _ = run(wt, *long_flags, overrides={"MAX_BODY_CHARS": limit}, FAKE_SKILLS=long_skills)
+s = state()
+check(rc == 0 and len(comments()[0]["body"]) <= limit and "perspectives" not in s["attempts"][-2]
+      and "perspectives" in s["attempts"][-1],
+      "本文が上限を超えるなら、古い試行から観点の記録を外す")
 
 before = json.dumps(state())
 for flags, label in ((("--instruct", "security-review"), "`=` のない --instruct"),
