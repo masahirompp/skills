@@ -33,7 +33,8 @@ import traceback
 import uuid
 
 # --- 設定 ------------------------------------------------------------------
-# 観点スキル。先頭の `/` を除いたスキル名と、その引数を書く。プラグインのスキルは `plugin:name` の形式。
+# 観点スキルの既定。先頭の `/` を除いたスキル名と、その引数を書く。プラグインのスキルは `plugin:name` の形式。
+# 起動時に --perspective を1つでも渡すと、この一覧の代わりにそれだけを使う。
 # 引数の {pr} は PR 番号に置き換わる。引数の意味はスキルごとに違うので、
 # PR 番号を自動では足さない。
 # - 組み込みの code-review は、レベルを指定しないと利用者が最後に使ったレベルを引き継ぎ、反復ごとに
@@ -387,9 +388,29 @@ def check_tools():
         raise Precondition(f"コマンドが見つからない: {', '.join(missing)}")
     if PREFLIGHT_TIMEOUT + REVIEW_TIMEOUT + JUDGE_TIMEOUT + MARGIN > BASH_TIMEOUT or BASH_TIMEOUT > BASH_TIMEOUT_MAX:
         raise Precondition("タイムアウトの合計が Bash ツールの制限時間を超えている(スクリプト冒頭の設定を見直す)")
-    names = [safe_name(skill_name(s)) for s in PERSPECTIVES]
+
+
+def review_config(specs, instructs):
+    """(観点の一覧, {スキル名: 追加の指示}) を返す。specs は --perspective の値(なければ既定の PERSPECTIVES)、
+    instructs は --instruct の値(`スキル名=指示`)。同じスキルへの指示が複数あれば、改行でつなぐ。"""
+    perspectives = specs or PERSPECTIVES
+    if any(not s.strip() for s in perspectives):
+        raise Precondition("観点に空のものがある")
+    names = [safe_name(skill_name(s)) for s in perspectives]
     if len(set(names)) != len(names):  # 出力ファイルと結果を観点の名前で分けているため
-        raise Precondition(f"PERSPECTIVES に同じスキルが重複している: {', '.join(names)}")
+        raise Precondition(f"観点に同じスキルが重複している: {', '.join(names)}")
+    instructions = {}
+    for item in instructs or []:
+        name, sep, text = item.partition("=")
+        name, text = name.strip(), text.strip()
+        if not sep or not name or not text:
+            raise Precondition(f"--instruct は `スキル名=指示` の形で書く: {item}")
+        # 名前の誤りで指示が黙って捨てられないよう、使う観点のどれかに当たるものだけを受け付ける
+        if name not in [skill_name(s) for s in perspectives]:
+            raise Precondition(f"--instruct のスキル {name} が観点にない(観点: "
+                               f"{', '.join(skill_name(s) for s in perspectives)})")
+        instructions[name] = (instructions[name] + "\n" + text) if name in instructions else text
+    return perspectives, instructions
 
 
 def normalize_worktree(path):
@@ -448,7 +469,7 @@ def snapshot(wt):
     }
 
 
-def preflight(wt, env):
+def preflight(wt, env, perspectives):
     """子を1回だけ起動し、init を受け取ったらすぐ止める。API を呼ぶ前に止まるので費用はほぼかからない。"""
     err_file = tempfile.TemporaryFile(mode="w+")
     try:
@@ -496,7 +517,7 @@ def preflight(wt, env):
         raise Precondition(f"事前確認: 子の cwd が worktree と一致しない: {init.get('cwd')}")
     # 組み込みのコマンド(security-review など)は skills には載らず、slash_commands にだけ載る
     available = set(init.get("skills") or []) | set(init.get("slash_commands") or [])
-    missing = [skill_name(s) for s in PERSPECTIVES if skill_name(s) not in available]
+    missing = [skill_name(s) for s in perspectives if skill_name(s) not in available]
     if missing:
         raise Precondition(f"事前確認: 観点スキルが見つからない: {', '.join(missing)}"
                            "(名前の誤りか未導入。プラグインのスキルは plugin:name の形式で書く)")
@@ -524,6 +545,7 @@ def valid_state(s):
                 and all(isinstance(a["result"], str) and isinstance(a["at"], str)
                         and valid_sha(a.get("sha")) and isinstance(a.get("reason") or "", str)
                         and valid_tokens(a.get("tokens"))
+                        and all(isinstance(n, str) for n in a.get("perspectives") or [])
                         for a in s["attempts"])
                 and (prev is None or (bool(RUN_ID_RE.match(prev["run_id"])) and isinstance(prev["iterations"], int)
                                       and valid_tokens(prev.get("tokens")))))
@@ -645,6 +667,8 @@ def render(state):
         lines += ["| SHA | 時刻 | 結果 | 入力トークン | 出力トークン |", "|---|---|---|---|---|"]
         for a in state["attempts"]:
             result = a["result"] + (f"(反復 {a['iter']})" if a.get("iter") else "")
+            if a.get("perspectives"):
+                result += f"、観点 {', '.join(a['perspectives'])}"
             if a.get("reason"):
                 result += f": {a['reason'][:100]}"
             tin, tout = format_tokens(a["tokens"]) if a.get("tokens") else ("—", "—")
@@ -716,17 +740,27 @@ def safe_name(s):
     return re.sub(r"[^A-Za-z0-9_.-]", "_", s)
 
 
-def run_reviews(wt, env, pr, workdir, children, attempt):
+def review_constraint(instruction):
+    """レビュー役に渡すシステムプロンプト。利用者からの追加の指示は、スキルの引数ではなくここに足す
+    (引数の読み方はスキルごとに違い、引数を取らないスキルもあるため)。"""
+    if not instruction:
+        return REVIEW_CONSTRAINT
+    return (REVIEW_CONSTRAINT + "\n\nこのレビューについて、利用者から次の追加の指示があります。"
+            "スキルの手順と食い違うときは、この指示を優先してください。\n" + instruction)
+
+
+def run_reviews(wt, env, pr, workdir, children, attempt, perspectives, instructions):
     """観点別レビューを並列に実行し、{観点: 結果のテキスト} を返す。1つでも失敗したら残りを止める。
 
     出力は stream-json で受け、試行を止める権限の拒否が出たらその時点で止める(watch_denials)。"""
     running = {}
-    for spec in PERSPECTIVES:
+    for spec in perspectives:
         base = os.path.join(workdir, f"review-{safe_name(skill_name(spec))}")
         prompt = "/" + expand(spec, pr)
         with open(base + ".stdout.jsonl", "w") as out, open(base + ".stderr.txt", "w") as err:
             p = children.spawn(["claude", "-p", "--output-format", "stream-json", "--verbose",
-                                "--append-system-prompt", REVIEW_CONSTRAINT, prompt],
+                                "--append-system-prompt", review_constraint(instructions.get(skill_name(spec))),
+                                prompt],
                                REVIEW_TIMEOUT, cwd=wt, env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=err)
         running[skill_name(spec)] = (p, base, time.monotonic(), StreamTail(base + ".stdout.jsonl"))
     results = {}
@@ -753,7 +787,7 @@ def run_reviews(wt, env, pr, workdir, children, attempt):
         for name, (_, _, _, tail) in running.items():
             tail.poll()
             record_tolerated(f"review {name}", tail, workdir)
-    return {skill_name(s): results[skill_name(s)] for s in PERSPECTIVES}
+    return {skill_name(s): results[skill_name(s)] for s in perspectives}
 
 
 # 判定の見出し。JUDGE_PROMPT の出力の形と、偽の claude(skill-dev/review-loop/fakes/claude)の判定と揃える。判定の中身を読むのは親なので、スクリプトが確かめるのは
@@ -805,9 +839,12 @@ PR #{pr} に対する観点別レビューの出力を、標準入力で渡す(�
 """
 
 
-def run_judge(wt, env, pr_number, reviews, workdir, children, attempt):
+def run_judge(wt, env, pr_number, reviews, workdir, children, attempt, instructions):
     input_path = os.path.join(workdir, "judge-input.md")
     with open(input_path, "w", encoding="utf-8") as f:
+        # 指示で範囲を絞った観点が、その範囲を見ていないことを「観点の欠落」と取り違えないよう、指示も添える
+        for name, text in instructions.items():
+            f.write(f"===== 観点 {name} に利用者が与えた追加の指示 =====\n{text}\n===== ここまで: 指示 =====\n\n")
         for name, text in reviews.items():
             f.write(f"===== 観点: {name} =====\n{text.strip()}\n===== ここまで: {name} =====\n\n")
         # 試行を止めなかった拒否があれば添える。レビュー役が一部を読めないまま書いた可能性を、判定役が
@@ -889,12 +926,13 @@ def find_contamination(wt, start):
 
 
 # --- 本体 --------------------------------------------------------------------
-def iterate(worktree, new_run, ctx):
+def iterate(worktree, new_run, ctx, specs=None, instructs=None):
     # 前提チェック。ロックを取る前なので、失敗しても状態には記録しない
     if os.environ.get(GUARD_ENV):
         raise Precondition(f"{GUARD_ENV} が設定済み。レビューループの中から再帰的に起動された")
     os.environ[GUARD_ENV] = "1"
     check_tools()
+    perspectives, instructions = review_config(specs, instructs)
     env = child_env()
     wt = normalize_worktree(worktree)
     if git_status(wt).strip():
@@ -908,7 +946,7 @@ def iterate(worktree, new_run, ctx):
     if start["head"] != start["pr_head"]:
         raise Precondition(f"ローカルの HEAD({start['head'][:7]})が PR の head({start['pr_head'][:7]})と"
                            "一致しない。push してから実行する")
-    preflight(wt, env)
+    preflight(wt, env, perspectives)
 
     sc = StateComment(wt, start["number"], me)
     children = Children()
@@ -921,11 +959,14 @@ def iterate(worktree, new_run, ctx):
             raise Precondition(f"連続失敗が {MAX_CONSECUTIVE_FAILURES} 回に達した。原因を取り除いてから、利用者の指示で --new-run する")
 
         attempt = {"sha": start["head"], "at": state["lock"]["started_at"], "result": "failed", "tokens": new_tokens()}
+        names = [skill_name(s) for s in perspectives]
+        if names != [skill_name(s) for s in PERSPECTIVES]:  # 既定と違う観点で回したことを、表から読めるようにする
+            attempt["perspectives"] = names
         ctx["attempt"] = attempt
         ctx["workdir"] = make_workdir(start, state["run_id"], len(state["attempts"]) + 1)
         log(f"作業ディレクトリ: {ctx['workdir']}")
-        reviews = run_reviews(wt, env, start, ctx["workdir"], children, attempt)
-        verdict = run_judge(wt, env, start["number"], reviews, ctx["workdir"], children, attempt)
+        reviews = run_reviews(wt, env, start, ctx["workdir"], children, attempt, perspectives, instructions)
+        verdict = run_judge(wt, env, start["number"], reviews, ctx["workdir"], children, attempt, instructions)
         children.kill_all()
         found = find_contamination(wt, start)
         if found:
@@ -1021,6 +1062,10 @@ def main():
     it = sub.add_parser("iterate", help="レビューを1反復だけ実行する")
     it.add_argument("worktree", help="PR のブランチをチェックアウトした worktree の絶対パス")
     it.add_argument("--new-run", action="store_true", help="新しいシリーズを始める(利用者の指示があったときだけ使う)")
+    it.add_argument("--perspective", action="append", metavar="SPEC",
+                    help="観点スキルとその引数(例: 'code-review high {pr}')。1つでも渡すと、既定の一覧の代わりに渡したものだけを使う。繰り返せる")
+    it.add_argument("--instruct", action="append", metavar="SKILL=TEXT",
+                    help="その観点のレビュー役だけに渡す追加の指示。繰り返せる")
     args = ap.parse_args()
 
     for s in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
@@ -1028,7 +1073,7 @@ def main():
     ctx = {"workdir": "", "attempt": None}
     code = 0
     try:
-        verdict = iterate(args.worktree, args.new_run, ctx)
+        verdict = iterate(args.worktree, args.new_run, ctx, args.perspective, args.instruct)
         print(verdict, flush=True)
         log("完了: 反復 {}、入力 {}、出力 {} トークン".format(ctx["attempt"]["iter"], *format_tokens(ctx["attempt"]["tokens"])))
     except BaseException as e:
