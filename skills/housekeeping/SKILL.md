@@ -17,7 +17,7 @@ description: >-
 対象リポジトリの中(どの worktree からでもよい)で実行し、結果をファイルに残す。
 
 ```sh
-<skill-dir>/scripts/scan.sh > "$TMPDIR/housekeeping-scan.tsv"
+<skill-dir>/scripts/scan.sh > "${TMPDIR:-/tmp}/housekeeping-scan.tsv"
 ```
 
 scan.sh は何も削除しない。副作用は、リモート追跡ブランチを最新にする `git fetch --prune` だけ。出力は TSV で、列は `action kind name sha path reason`。
@@ -29,7 +29,12 @@ scan.sh は何も削除しない。副作用は、リモート追跡ブランチ
 | `ask` | 判断材料が足りない。ユーザーに個別に確認する |
 | `keep` | 残す |
 
-`kind` は `worktree` / `branch` / `remote`(リモートブランチ)のいずれか。error で終了したらその内容を伝えて止まる。よくある原因は gh の未認証で、ユーザーに `! gh auth login` を案内する。
+`kind` は `worktree` / `branch` / `remote`(リモートブランチ)のいずれか。error で終了したらその内容を伝えて止まる。よくある原因は次の2つ。
+
+- gh の未認証: ユーザーに `! gh auth login` を案内する
+- サンドボックスの制限(`Operation not permitted` や「一時ディレクトリを作れない」): ユーザーに、サンドボックスの外で走査してもらう(後述)
+
+サンドボックスの外で実行してもらうときは、`! <skill-dir>/scripts/scan.sh > <ファイル>` の形のコマンドを案内する。`<skill-dir>` と `<ファイル>` は展開済みの絶対パスで書く(ユーザーのシェルの `$TMPDIR` は、エージェントのものと違うことがある)。`<ファイル>` は、エージェントが読める場所(エージェント側の `$TMPDIR` の下など)にする。`!` の結果では終了コードが見えないので、会話に出た stderr に `error:` が無いことと、`<ファイル>` に見出しの行より後の行があることを確かめてから次に進む。
 
 完了条件: scan.tsv の全行が、次の手順の4区分のどれかに入っている。
 
@@ -53,16 +58,25 @@ scan.sh は何も削除しない。副作用は、リモート追跡ブランチ
 承認された行を scan.tsv から抜き出して apply.sh に渡す。区分1をすべて承認した場合の例:
 
 ```sh
-awk -F'\t' '$2 != "remote" && ($1 == "delete" || $1 == "prune")' "$TMPDIR/housekeeping-scan.tsv" \
+awk -F'\t' '$2 != "remote" && ($1 == "delete" || $1 == "prune")' "${TMPDIR:-/tmp}/housekeeping-scan.tsv" \
   | <skill-dir>/scripts/apply.sh
 ```
 
-`ask` の行やリモートブランチの行も、承認されたものは同じように行ごと渡す。apply.sh は、worktree → ローカルブランチ → リモートブランチの順に削除する。各行について削除の直前に、走査時から状態が変わっていないかを確かめ直す。変わっていれば、その行を `skipped` として飛ばす。
+`ask` の行やリモートブランチの行も、承認されたものは同じように行ごと渡す。
+
+次のどちらかに当たるときは、サンドボックスの制限が原因なので、手順1と同じ書き方で apply.sh を `!` で実行してもらう。
+
+- `Operation not permitted` で失敗した(git の書き込みや push の拒否など)
+- worktree の行が「lsof でプロセスを確かめられない」で `skipped` になった(サンドボックスの中では、ほかのプロセスを見られないことがある。scan.sh を `!` で外で実行し、apply.sh を中で実行したときに起きる)。走査の結果で、同じ理由で `keep` になった worktree も、外で走査し直せば判定できる
+
+apply.sh は承認済みの行を標準入力で受け取るので、`! awk -F'\t' '<承認した行の条件>' <ファイル> | <skill-dir>/scripts/apply.sh` の形にする。何も渡さないと、何も消さずに終わる。一部の行がすでに `done` になっていれば、その行は条件から外す(流し直すと、消し済みの行は `skipped` になり、終了コードが 1 になる)。`!` の結果では終了コードが見えないので、会話に出た出力で、承認した行がそれぞれ `done` か `skipped` のどちらになったかを確かめてから報告に進む。
+
+apply.sh は、worktree → ローカルブランチ → リモートブランチの順に削除する。各行について削除の直前に、走査時から状態が変わっていないかを確かめ直す。変わっていれば、その行を `skipped` として飛ばす。
 
 ### 5. 報告する
 
 - `done` の行: 削除したもの。ブランチは `git branch <name> <sha>` で復元できる(コミットが gc されるまで)ので、sha も一緒に伝える
-- `skipped` の行: 走査後に作業が再開されたなど、消すべきでない状態に変わったもの。そのまま残し、理由を伝える
+- `skipped` の行: 走査後に作業が再開されたなど、消すべきでない状態に変わったもの。そのまま残し、理由を伝える。理由が「lsof でプロセスを確かめられない」なら、状態が変わったのではなく、確かめられなかっただけだと伝える(手順4の `!` での実行を案内する)
 
 ## 判定基準
 
@@ -92,5 +106,7 @@ entire.io は、記録用のブランチ `entire/checkpoints/v1` と、セッシ
 ## 設定と前提
 
 - 保護するブランチ名は glob パターンで足せる。リポジトリごとの設定は `git config --add housekeeping.protect 'release/*'` で、その場限りなら環境変数 `HOUSEKEEPING_PROTECT='release/* sandbox'` で指定する
+- scan.sh は一時ディレクトリを `$TMPDIR`(未設定なら `/tmp`)の下に作り、終了時に消す。作れなければ、fetch を含めて何もせずに止まる。apply.sh は一時ファイルを使わない
+- `git`・`gh`・`jq` が要る。jq が無ければ scan.sh は止まる。`lsof` で worktree を使っているプロセスを調べ、lsof が無い、またはプロセスを見られない(サンドボックスなど)ときは、どの worktree も「確かめられない」として残す
 - 対象のリモートは `origin`。変えるときは `HOUSEKEEPING_REMOTE` を使う。PR は、そのリモートの GitHub リポジトリから `gh` で取得する
 - fork から upstream へ PR を出す運用には対応していない。PR が見つからないので「PR なし」として判定され、未取り込みのコミットがあるブランチは残る

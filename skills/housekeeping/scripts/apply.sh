@@ -17,9 +17,8 @@ git rev-parse --git-dir >/dev/null 2>&1 || { echo "error: git リポジトリの
 default=$(hk_default_branch)
 [ -n "$default" ] || { echo "error: 既定ブランチを特定できない" >&2; exit 1; }
 
-input=$(mktemp)
-trap 'rm -f "$input"' EXIT
-grep -v '^action	' >"$input"
+# 承認済みの行は変数で持つ(一時ファイルを使わない。作れない環境で空のパスに書きに行くことを避ける)
+input=$(grep -v '^action	')
 
 status=0
 ok() { printf 'done\t%s\n' "$*"; }
@@ -27,7 +26,7 @@ skip() {
   printf 'skipped\t%s\n' "$*"
   status=1
 }
-rows() { awk -F'\t' -v k="$1" '$2 == k && $1 != "keep"' "$input"; }
+rows() { printf '%s\n' "$input" | awk -F'\t' -v k="$1" '$2 == k && $1 != "keep"'; }
 
 # 1. ディレクトリが消えた worktree の管理情報
 if [ -n "$(rows worktree | awk -F'\t' '$1 == "prune"')" ]; then
@@ -41,7 +40,7 @@ while IFS=$'\t' read -r action kind name sha path reason; do
   cur=$(git -C "$path" rev-parse HEAD 2>/dev/null) || { skip "worktree $path: 見つからない"; continue; }
   [ "$cur" = "$sha" ] || { skip "worktree $path: HEAD が走査時から変わっている"; continue; }
   proc=$(hk_path_in_use "$(cd "$path" && pwd -P)" "$cwds")
-  [ -z "$proc" ] || { skip "worktree $path: プロセスが使用中(pid $proc)"; continue; }
+  [ -z "$proc" ] || { skip "worktree $path: プロセスが使用中か、確かめられない($proc)"; continue; }
   if out=$(git worktree remove "$path" 2>&1); then
     ok "worktree $path"
   else

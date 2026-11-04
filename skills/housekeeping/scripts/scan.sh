@@ -17,7 +17,12 @@ set -uo pipefail
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 
 git rev-parse --git-dir >/dev/null 2>&1 || { echo "error: git リポジトリの中で実行する" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "error: jq が無い(PR の状態を判定できない)" >&2; exit 1; }
 cwd=$(pwd -P)
+
+# 作れなかったら、fetch などに進む前に止まる。空のパスのまま進むと /prs.json などルート直下に書きに行く
+tmp=$(hk_mktemp_dir) || exit 1
+trap 'rm -rf "$tmp"' EXIT
 
 if ! git fetch --prune --quiet "$hk_remote" 2>/dev/null; then
   echo "warn: $hk_remote の fetch に失敗した。リモートの状態は古い可能性がある" >&2
@@ -25,9 +30,6 @@ fi
 
 default=$(hk_default_branch)
 [ -n "$default" ] || { echo "error: 既定ブランチを特定できない" >&2; exit 1; }
-
-tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
 
 # --- PR 一覧 -------------------------------------------------------------
 url=$(git remote get-url "$hk_remote" 2>/dev/null)
@@ -40,6 +42,16 @@ elif ! gh pr list -R "$slug" --state all --limit "${HOUSEKEEPING_PR_LIMIT:-1000}
   echo "error: PR 一覧を取得できない($slug): $(cat "$tmp/gh.err")" >&2
   exit 1
 fi
+# 読めない PR 一覧で進むと、jq が空を返してオープン PR やスタックした PR の保護が外れる
+jq -e 'type == "array"' "$tmp/prs.json" >/dev/null 2>&1 || { echo "error: PR 一覧を JSON の配列として読めない" >&2; exit 1; }
+
+# parse_pr_info <pr_info の出力>: グローバル変数 st num oid に分ける。空なら st=UNKNOWN(残す側に倒す)
+parse_pr_info() {
+  local r=$1
+  st=${r%% *} r=${r#* }
+  num=${r%% *} oid=${r#* }
+  [ -n "$st" ] || st=UNKNOWN
+}
 
 # pr_info <branch> → "<state> <number> <headRefOid>"。オープンな PR があればそれを、無ければ最新の PR を返す。
 # fork からの同名ブランチを取り違えないよう、head のリポジトリ所有者がリモートの所有者と一致するものだけを見る。
@@ -64,7 +76,14 @@ merged_into_default() {
 }
 
 # 既定ブランチの first-parent 履歴。ブランチの先端がここに無いのに既定ブランチに含まれていれば、merge コミットで取り込まれている。
-git rev-list --first-parent "refs/remotes/$hk_remote/$default" "refs/heads/$default" -- 2>/dev/null >"$tmp/first-parent"
+# 存在する ref だけを渡す(1つでも無い ref があると rev-list は何も出さず、取り込み済みのブランチがすべて
+# 「merge コミットで取り込み済み」になる)。作れなければ止まる。
+fp_refs=''
+for r in "refs/remotes/$hk_remote/$default" "refs/heads/$default"; do
+  git rev-parse -q --verify "$r^{commit}" >/dev/null && fp_refs="$fp_refs $r"
+done
+[ -n "$fp_refs" ] && git rev-list --first-parent $fp_refs -- >"$tmp/first-parent" 2>/dev/null &&
+  [ -s "$tmp/first-parent" ] || { echo "error: $default の履歴を読めない" >&2; exit 1; }
 
 # verify_pr_merged <number> <headRefOid> <sha> → delete / ask / keep と理由(TAB 区切り)
 verify_pr_merged() {
@@ -81,7 +100,7 @@ verify_pr_merged() {
 
 # classify_branch <branch> <sha> → action と理由(TAB 区切り)
 classify_branch() {
-  local name=$1 sha=$2 st num oid stacked
+  local name=$1 sha=$2 st num oid stacked on_fp
   if hk_is_protected "$name" "$default"; then
     printf 'keep\t保護対象(既定ブランチ・監査用・設定による保護)\n'
     return
@@ -91,26 +110,28 @@ classify_branch() {
     printf 'keep\tオープン PR %s のベースブランチ\n' "$stacked"
     return
   fi
-  IFS=' ' read -r st num oid <<EOF
-$(pr_info "$name")
-EOF
+  parse_pr_info "$(pr_info "$name")"
   case $st in
     OPEN) printf 'keep\tPR #%s がオープン\n' "$num" ;;
     CLOSED) printf 'keep\tPR #%s は未マージのままクローズ\n' "$num" ;;
     MERGED) verify_pr_merged "$num" "$oid" "$sha" ;;
-    *)
+    NONE)
+      grep -qxF "$sha" "$tmp/first-parent"
+      on_fp=$? # 0: first-parent 上にある / 1: 無い / それ以外: 読めない
       if ! merged_into_default "$sha"; then
         printf 'keep\tPR なし・%s に未取り込みのコミットがある\n' "$default"
-      elif ! grep -qxF "$sha" "$tmp/first-parent"; then
+      elif [ "$on_fp" -gt 1 ]; then
+        printf 'keep\t%s の first-parent 履歴を読めない\n' "$default"
+      elif [ "$on_fp" = 1 ]; then
         printf 'delete\tPR なし・merge コミットで %s に取り込み済み\n' "$default"
-      elif grep -qE '^(commit|cherry-pick|revert|merge .*Merge made)' <<EOF; then
-$(git reflog show --format=%gs "refs/heads/$name" -- 2>/dev/null)
-EOF
+      elif git reflog show --format=%gs "refs/heads/$name" -- 2>/dev/null |
+        grep -E '^(commit|cherry-pick|revert|merge .*Merge made)' >/dev/null; then # -q にしない(途中で閉じると pipefail で失敗する)
         printf 'delete\tPR なし・%s に取り込み済み(このブランチでコミットした記録がある)\n' "$default"
       else
         printf 'ask\tPR なし・%s に含まれるが、作成後にコミットした記録がない(未着手の可能性)\n' "$default"
       fi
       ;;
+    *) printf 'keep\tPR の状態を判定できなかった(%s)\n' "$st" ;;
   esac
 }
 
@@ -141,7 +162,7 @@ handle_wt() {
   elif [ "$cwd" = "$rp" ] || [ "${cwd#"$rp"/}" != "$cwd" ]; then
     action=keep reason="このスキャンを実行している作業ディレクトリ"
   elif proc=$(hk_path_in_use "$rp" "$cwds") && [ -n "$proc" ]; then
-    action=keep reason="プロセスがカレントディレクトリとして使用中(pid $proc)"
+    action=keep reason="プロセスがカレントディレクトリとして使用中か、確かめられない($proc)"
   elif op=$(hk_in_progress_op "$path") && [ -n "$op" ]; then
     action=keep reason="進行中の操作がある($op)"
   elif ! dirty=$(git -C "$path" status --porcelain 2>/dev/null); then
@@ -149,9 +170,7 @@ handle_wt() {
   elif [ -n "$dirty" ]; then
     action=keep reason="未コミットの変更・未追跡ファイルが $(printf '%s\n' "$dirty" | wc -l | tr -d ' ') 件ある"
   elif [ -n "$branch" ]; then
-    IFS=$'\t' read -r action reason <<EOF
-$(classify_branch "$branch" "$head")
-EOF
+    hk_parse_action "$(classify_branch "$branch" "$head")"
   elif merged_into_default "$head"; then
     action=delete reason="detached HEAD・$default に含まれるコミットを指している"
   else
@@ -190,15 +209,11 @@ while IFS=$'\t' read -r name sha track; do
       continue
       ;;
     delete | ask)
-      IFS=$'\t' read -r action reason <<EOF
-$(classify_branch "$name" "$sha")
-EOF
-      reason="worktree ${wt_path} と一緒に消す。${reason}"
+      hk_parse_action "$(classify_branch "$name" "$sha")"
+      [ "$action" = keep ] || reason="worktree ${wt_path} と一緒に消す。${reason}"
       ;;
     *)
-      IFS=$'\t' read -r action reason <<EOF
-$(classify_branch "$name" "$sha")
-EOF
+      hk_parse_action "$(classify_branch "$name" "$sha")"
       ;;
   esac
   case $track in *gone*) [ "$action" != keep ] && reason="${reason}(追跡先のリモートブランチは削除済み)" ;; esac
@@ -211,13 +226,9 @@ while IFS=$'\t' read -r name sha; do
   [ "$name" = HEAD ] && continue
   hk_is_protected "$name" "$default" && continue
   [ -n "$(open_pr_based_on "$name")" ] && continue
-  IFS=' ' read -r st num oid <<EOF
-$(pr_info "$name")
-EOF
+  parse_pr_info "$(pr_info "$name")"
   [ "$st" = MERGED ] || continue
-  IFS=$'\t' read -r action reason <<EOF
-$(verify_pr_merged "$num" "$oid" "$sha")
-EOF
+  hk_parse_action "$(verify_pr_merged "$num" "$oid" "$sha")"
   [ "$action" = keep ] && continue
   emit "$action" remote "$name" "$sha" "" "$reason"
 done < <(git for-each-ref --format='%(refname:lstrip=3)%09%(objectname)' "refs/remotes/$hk_remote/")

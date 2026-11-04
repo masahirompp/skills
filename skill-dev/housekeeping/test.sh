@@ -155,9 +155,111 @@ expect keep worktree wt-untracked "未コミットの変更・未追跡ファイ
 expect keep worktree wt-locked "ロック"
 expect prune worktree wt-gone
 expect delete branch wt-gone "PR #14"
-expect keep worktree wt-busy "プロセス"
+expect keep worktree wt-busy "使用中か、確かめられない(pid"
 expect keep branch wt-busy "使用中"
 expect delete worktree "(detached)" "detached"
+
+# lsof でプロセスを見られないときは、どの worktree も残すこと(使用中かどうかを確かめられない)
+mkdir "$root/fake-bin"
+printf '#!/bin/sh\nexit 1\n' >"$root/fake-bin/lsof" && chmod +x "$root/fake-bin/lsof"
+PATH="$root/fake-bin:$PATH" "$scripts/scan.sh" >"$root/scan-nolsof.tsv" 2>/dev/null || true
+got=$(awk -F'\t' '$2 == "worktree" && $3 == "wt-merged" { print $1 "\t" $6 }' "$root/scan-nolsof.tsv")
+[ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"確かめられない"* ]] &&
+  pass "scan: lsof でプロセスを見られなければ worktree を残す" || fail "scan: lsof が使えないと wt-merged → ${got:-(出力なし)}"
+got=$(awk -F'\t' '$2 == "branch" && $3 == "wt-merged" { print $1 "\t" $6 }' "$root/scan-nolsof.tsv")
+[ "${got%%$'\t'*}" = keep ] && pass "scan: 残した worktree のブランチも残す" || fail "scan: 残した worktree のブランチ → ${got:-(出力なし)}"
+
+# 一時ディレクトリを作れないときは、空のパスのまま進まずに、fetch より前に止まること。
+# fetch に進めば、存在しないリモートへの fetch で warn が出る。
+# テンプレートを付けない mktemp は macOS では TMPDIR を見ないので、TMPDIR に従うことの確認にもなる。
+set +e
+TMPDIR="$root/no-such-dir" HOUSEKEEPING_REMOTE=no-such-remote "$scripts/scan.sh" >"$root/scan-notmp.out" 2>"$root/scan-notmp.err"
+notmp_rc=$?
+set -e
+if [ "$notmp_rc" != 0 ] && [ ! -s "$root/scan-notmp.out" ] && grep -q '一時ディレクトリを作れない' "$root/scan-notmp.err" &&
+  ! grep -q fetch "$root/scan-notmp.err"; then
+  pass "scan: 一時ディレクトリを作れなければ fetch より前に止まる"
+else
+  fail "scan: 一時ディレクトリを作れないのに止まらない(rc=$notmp_rc): $(cat "$root/scan-notmp.err")"
+fi
+
+in_lib() { bash -c '. "$1/lib.sh" && shift && "$@"' _ "$scripts" "$@"; }
+# 一時ディレクトリは TMPDIR の下に作ること(末尾の / があってもよい)
+mkdir "$root/tmpdir"
+made=$(TMPDIR="$root/tmpdir/" in_lib hk_mktemp_dir) || true
+[ "${made%/*}" = "$root/tmpdir" ] && pass "lib: TMPDIR の下に作る" || fail "lib: TMPDIR を使わない($made)"
+rm -rf "${root:?}/tmpdir"/*
+# 終了時に消すこと(TMPDIR に従うことは上の「止まる」テストで確かめている)
+if TMPDIR="$root/tmpdir" "$scripts/scan.sh" >/dev/null && [ -z "$(ls -A "$root/tmpdir")" ]; then
+  pass "scan: 一時ディレクトリを片付ける"
+else
+  fail "scan: 失敗した、または一時ディレクトリが残っている"
+fi
+
+# 削除の可否を決めるスクリプトに、一時ファイルを使う書き方が無いこと(理由は lib.sh の冒頭)。
+# 一時ファイルを作れない環境は作りにくいので、書き方で確かめる。mktemp は hk_mktemp_dir の中だけで使う。
+temp_usage() { # file pattern: コメント行を除いて、pattern に当たる行を出す
+  grep -nE "$2" "$1" | grep -vE '^[0-9]+:[[:space:]]*#'
+}
+if temp_usage "$scripts/apply.sh" '<<|mktemp' || temp_usage "$scripts/lib.sh" '<<' || temp_usage "$scripts/scan.sh" '<<' ||
+  temp_usage "$scripts/scan.sh" 'mktemp' | grep -v 'hk_mktemp_dir' ||
+  [ "$(temp_usage "$scripts/lib.sh" 'mktemp' | grep -vc 'hk_mktemp_dir()')" != 1 ]; then
+  fail "scan/apply/lib: 一時ファイルを使う書き方がある(上の行。lib.sh の mktemp は hk_mktemp_dir の1か所だけ)"
+else
+  pass "scan/apply/lib: ヒアドキュメントを使わず、mktemp は hk_mktemp_dir だけ"
+fi
+
+# 判定の結果が1行の「既知の action<TAB>理由」でなければ、残す側に倒すこと
+parsed() { bash -c '. "$1/lib.sh"; hk_parse_action "$2"; printf "%s/%s" "$action" "$reason"' _ "$scripts" "$1"; }
+for input in '' 'delete' $'delete\tx\ndelete\ty' $'remove\tx'; do
+  r=$(parsed "$input") || true
+  [ "${r%%/*}" = keep ] && pass "lib: 判定 $(printf %q "$input") は keep に倒す" || fail "lib: 判定 $(printf %q "$input") → $r"
+done
+r=$(parsed $'delete\tx') || true
+[ "$r" = delete/x ] && pass "lib: 判定を action と reason に分ける" || fail "lib: 判定の分け方が違う($r)"
+
+# 保護パターンは、set -f が外れていてもファイル名に展開されないこと
+mkdir -p "$root/globcwd/release" && : >"$root/globcwd/release/notes.md"
+if (cd "$root/globcwd" && HOUSEKEEPING_PROTECT='release/*' bash -c '. "$1/lib.sh"; set +f; hk_is_protected release/1.0 main' _ "$scripts"); then
+  pass "lib: set +f でも保護パターンを展開しない"
+else
+  fail "lib: set +f で保護パターンが展開された"
+fi
+
+# ローカルの既定ブランチが無くても、first-parent の履歴を origin から読むこと
+# (読めないと、作ったばかりのブランチが「merge コミットで取り込み済み」の delete になる)
+git clone -q "$root/origin.git" "$root/no-local-main" 2>/dev/null
+(
+  cd "$root/no-local-main"
+  git switch -q --detach && git branch fresh2 && git branch -q -D main
+  "$scripts/scan.sh" >"$root/scan-nomain.tsv" 2>/dev/null
+) || true
+got=$(awk -F'\t' '$2 == "branch" && $3 == "fresh2" { print $1 }' "$root/scan-nomain.tsv")
+[ "$got" = ask ] && pass "scan: ローカルの既定ブランチが無くても未着手のブランチは ask" || fail "scan: ローカルの既定ブランチが無いと fresh2 → ${got:-(出力なし)}"
+
+# 読めない PR 一覧では止まること(jq が空を返すと、オープン PR の保護が外れる)
+echo 'not json' >"$root/bad-prs.json"
+set +e
+HOUSEKEEPING_PR_JSON="$root/bad-prs.json" "$scripts/scan.sh" >"$root/scan-bad.out" 2>"$root/scan-bad.err"
+bad_rc=$?
+set -e
+[ "$bad_rc" != 0 ] && grep -q 'JSON の配列として読めない' "$root/scan-bad.err" && ! grep -q '^delete' "$root/scan-bad.out" &&
+  pass "scan: 読めない PR 一覧では止まる" || fail "scan: 読めない PR 一覧で止まらない(rc=$bad_rc)"
+
+# 保護パターン: 空白区切りの HOUSEKEEPING_PROTECT と git config の両方が効くこと
+protected() { HOUSEKEEPING_PROTECT='release/* sandbox' in_lib hk_is_protected "$1" main; }
+git config --add housekeeping.protect 'keep me/*'
+for b in release/1.0 sandbox 'keep me/x' main entire/x; do
+  protected "$b" && pass "lib: $b は保護対象" || fail "lib: $b が保護されない"
+done
+for b in releases feature/sandbox; do
+  protected "$b" && fail "lib: $b が保護対象になった" || pass "lib: $b は保護対象でない"
+done
+git config --unset-all housekeeping.protect
+# git config を読めない(キーが無いのとは別の失敗)ときは、保護対象とみなすこと
+printf '[broken\n' >"$root/bad.gitconfig"
+GIT_CONFIG_GLOBAL="$root/bad.gitconfig" in_lib hk_is_protected feature/x main &&
+  pass "lib: git config を読めなければ保護対象とみなす" || fail "lib: git config を読めないのに保護対象でない"
 
 # --- apply ----------------------------------------------------------------
 # 走査後に作業が再開されたブランチ・保護対象を偽装した行は消さないこと
