@@ -159,6 +159,21 @@ expect keep worktree wt-busy "プロセス"
 expect keep branch wt-busy "使用中"
 expect delete worktree "(detached)" "detached"
 
+# 一時ディレクトリを作れないときは、空のパスのまま進まずに止まること
+set +e
+HOUSEKEEPING_TMPDIR="$root/no-such-dir" "$scripts/scan.sh" >"$root/scan-notmp.out" 2>"$root/scan-notmp.err"
+notmp_rc=$?
+set -e
+if [ "$notmp_rc" != 0 ] && [ ! -s "$root/scan-notmp.out" ] && grep -q '一時ディレクトリを作れない' "$root/scan-notmp.err"; then
+  pass "scan: 一時ディレクトリを作れなければ止まる"
+else
+  fail "scan: 一時ディレクトリを作れないのに止まらない(rc=$notmp_rc)"
+fi
+# 一時ディレクトリは HOUSEKEEPING_TMPDIR の下に作り、終了時に消すこと
+mkdir "$root/hk-tmp"
+HOUSEKEEPING_TMPDIR="$root/hk-tmp" "$scripts/scan.sh" >/dev/null
+[ -z "$(ls -A "$root/hk-tmp")" ] && pass "scan: 一時ディレクトリを片付ける" || fail "scan: 一時ディレクトリが残っている"
+
 # --- apply ----------------------------------------------------------------
 # 走査後に作業が再開されたブランチ・保護対象を偽装した行は消さないこと
 git switch -q nopr-merge && commit resumed && git switch -q main
@@ -167,7 +182,8 @@ git switch -q nopr-merge && commit resumed && git switch -q main
   printf 'delete\tbranch\tentire/checkpoints/v1\t%s\t\tforged\n' "$(git rev-parse entire/checkpoints/v1)"
 } >"$root/approved.tsv"
 set +e
-"$scripts/apply.sh" <"$root/approved.tsv" >"$root/apply.out"
+# 一時ファイルを使わないので、書き込めない TMPDIR でも動くこと
+TMPDIR="$root/no-such-dir" HOUSEKEEPING_TMPDIR="$root/no-such-dir" "$scripts/apply.sh" <"$root/approved.tsv" >"$root/apply.out"
 apply_rc=$?
 set -e
 [ -n "${VERBOSE:-}" ] && cat "$root/apply.out"

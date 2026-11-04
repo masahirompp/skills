@@ -26,7 +26,11 @@ fi
 default=$(hk_default_branch)
 [ -n "$default" ] || { echo "error: 既定ブランチを特定できない" >&2; exit 1; }
 
-tmp=$(mktemp -d)
+# 作れなかったら止まる。空のパスのまま進むと /prs.json などルート直下に書きに行く
+tmp=$(hk_mktemp_dir) || {
+  echo "error: 一時ディレクトリを作れない(${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}})。HOUSEKEEPING_TMPDIR で書き込める場所を指定する" >&2
+  exit 1
+}
 trap 'rm -rf "$tmp"' EXIT
 
 # --- PR 一覧 -------------------------------------------------------------

@@ -3,12 +3,23 @@
 # 環境変数:
 #   HOUSEKEEPING_REMOTE   対象リモート(既定 origin)
 #   HOUSEKEEPING_PROTECT  追加の保護パターン(空白区切りの glob。例 "release/* sandbox")
+#   HOUSEKEEPING_TMPDIR   一時ディレクトリを作る場所(既定 $TMPDIR、無ければ /tmp)
 # git config:
 #   housekeeping.protect  追加の保護パターン(複数指定可。git config --add で足す)
 
 set -f # 保護パターンの glob をファイル名に展開させない
 
 hk_remote=${HOUSEKEEPING_REMOTE:-origin}
+
+# 一時ディレクトリを作り、そのパスを返す。作れなければ失敗を返す(呼び出し側は必ず確かめて止まる)。
+# macOS の mktemp はテンプレートを付けないと TMPDIR を見ずに /var/folders/... を使う。
+# サンドボックスではそこに書けないことがあるので、場所をテンプレートで明示する。
+hk_mktemp_dir() {
+  local base=${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}} d
+  d=$(mktemp -d "${base%/}/housekeeping.XXXXXX") || return 1
+  [ -n "$d" ] && [ -d "$d" ] || return 1
+  printf '%s\n' "$d"
+}
 
 hk_default_branch() {
   local b

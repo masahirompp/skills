@@ -29,7 +29,10 @@ scan.sh は何も削除しない。副作用は、リモート追跡ブランチ
 | `ask` | 判断材料が足りない。ユーザーに個別に確認する |
 | `keep` | 残す |
 
-`kind` は `worktree` / `branch` / `remote`(リモートブランチ)のいずれか。error で終了したらその内容を伝えて止まる。よくある原因は gh の未認証で、ユーザーに `! gh auth login` を案内する。
+`kind` は `worktree` / `branch` / `remote`(リモートブランチ)のいずれか。error で終了したらその内容を伝えて止まる。よくある原因は次の2つ。
+
+- gh の未認証: ユーザーに `! gh auth login` を案内する
+- サンドボックスの制限(`Operation not permitted` や「一時ディレクトリを作れない」): ユーザーに、サンドボックスの外で走査してもらう。案内するコマンドは `! <skill-dir>/scripts/scan.sh > <ファイル>` の形にし、`<skill-dir>` と `<ファイル>` は展開済みの絶対パスで書く(ユーザーのシェルの `$TMPDIR` はエージェントのものと違うことがある)。`<ファイル>` は、エージェントが読める場所(エージェント側の `$TMPDIR` の下など)にする。手順4の apply.sh が同じ理由で失敗したときも、同じように `!` で実行してもらう
 
 完了条件: scan.tsv の全行が、次の手順の4区分のどれかに入っている。
 
@@ -92,5 +95,6 @@ entire.io は、記録用のブランチ `entire/checkpoints/v1` と、セッシ
 ## 設定と前提
 
 - 保護するブランチ名は glob パターンで足せる。リポジトリごとの設定は `git config --add housekeeping.protect 'release/*'` で、その場限りなら環境変数 `HOUSEKEEPING_PROTECT='release/* sandbox'` で指定する
+- scan.sh は一時ディレクトリを `$HOUSEKEEPING_TMPDIR`(未設定なら `$TMPDIR`、それも無ければ `/tmp`)の下に作り、終了時に消す。作れなければ何もせずに止まる。apply.sh は一時ファイルを使わない
 - 対象のリモートは `origin`。変えるときは `HOUSEKEEPING_REMOTE` を使う。PR は、そのリモートの GitHub リポジトリから `gh` で取得する
 - fork から upstream へ PR を出す運用には対応していない。PR が見つからないので「PR なし」として判定され、未取り込みのコミットがあるブランチは残る
