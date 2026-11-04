@@ -155,9 +155,19 @@ expect keep worktree wt-untracked "未コミットの変更・未追跡ファイ
 expect keep worktree wt-locked "ロック"
 expect prune worktree wt-gone
 expect delete branch wt-gone "PR #14"
-expect keep worktree wt-busy "プロセス"
+expect keep worktree wt-busy "使用中か、確かめられない(pid"
 expect keep branch wt-busy "使用中"
 expect delete worktree "(detached)" "detached"
+
+# lsof でプロセスを見られないときは、どの worktree も残すこと(使用中かどうかを確かめられない)
+mkdir "$root/fake-bin"
+printf '#!/bin/sh\nexit 1\n' >"$root/fake-bin/lsof" && chmod +x "$root/fake-bin/lsof"
+PATH="$root/fake-bin:$PATH" "$scripts/scan.sh" >"$root/scan-nolsof.tsv" 2>/dev/null || true
+got=$(awk -F'\t' '$2 == "worktree" && $3 == "wt-merged" { print $1 "\t" $6 }' "$root/scan-nolsof.tsv")
+[ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"確かめられない"* ]] &&
+  pass "scan: lsof でプロセスを見られなければ worktree を残す" || fail "scan: lsof が使えないと wt-merged → ${got:-(出力なし)}"
+got=$(awk -F'\t' '$2 == "branch" && $3 == "wt-merged" { print $1 "\t" $6 }' "$root/scan-nolsof.tsv")
+[ "${got%%$'\t'*}" = keep ] && pass "scan: 残した worktree のブランチも残す" || fail "scan: 残した worktree のブランチ → ${got:-(出力なし)}"
 
 # 一時ディレクトリを作れないときは、空のパスのまま進まずに、fetch より前に止まること。
 # fetch に進めば、存在しないリモートへの fetch で warn が出る。
@@ -246,6 +256,10 @@ for b in releases feature/sandbox; do
   protected "$b" && fail "lib: $b が保護対象になった" || pass "lib: $b は保護対象でない"
 done
 git config --unset-all housekeeping.protect
+# git config を読めない(キーが無いのとは別の失敗)ときは、保護対象とみなすこと
+printf '[broken\n' >"$root/bad.gitconfig"
+GIT_CONFIG_GLOBAL="$root/bad.gitconfig" in_lib hk_is_protected feature/x main &&
+  pass "lib: git config を読めなければ保護対象とみなす" || fail "lib: git config を読めないのに保護対象でない"
 
 # --- apply ----------------------------------------------------------------
 # 走査後に作業が再開されたブランチ・保護対象を偽装した行は消さないこと

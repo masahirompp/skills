@@ -40,7 +40,7 @@ while IFS=$'\t' read -r action kind name sha path reason; do
   cur=$(git -C "$path" rev-parse HEAD 2>/dev/null) || { skip "worktree $path: 見つからない"; continue; }
   [ "$cur" = "$sha" ] || { skip "worktree $path: HEAD が走査時から変わっている"; continue; }
   proc=$(hk_path_in_use "$(cd "$path" && pwd -P)" "$cwds")
-  [ -z "$proc" ] || { skip "worktree $path: プロセスが使用中(pid $proc)"; continue; }
+  [ -z "$proc" ] || { skip "worktree $path: プロセスが使用中か、確かめられない($proc)"; continue; }
   if out=$(git worktree remove "$path" 2>&1); then
     ok "worktree $path"
   else

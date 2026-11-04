@@ -162,7 +162,7 @@ handle_wt() {
   elif [ "$cwd" = "$rp" ] || [ "${cwd#"$rp"/}" != "$cwd" ]; then
     action=keep reason="このスキャンを実行している作業ディレクトリ"
   elif proc=$(hk_path_in_use "$rp" "$cwds") && [ -n "$proc" ]; then
-    action=keep reason="プロセスがカレントディレクトリとして使用中(pid $proc)"
+    action=keep reason="プロセスがカレントディレクトリとして使用中か、確かめられない($proc)"
   elif op=$(hk_in_progress_op "$path") && [ -n "$op" ]; then
     action=keep reason="進行中の操作がある($op)"
   elif ! dirty=$(git -C "$path" status --porcelain 2>/dev/null); then
@@ -210,7 +210,7 @@ while IFS=$'\t' read -r name sha track; do
       ;;
     delete | ask)
       hk_parse_action "$(classify_branch "$name" "$sha")"
-      reason="worktree ${wt_path} と一緒に消す。${reason}"
+      [ "$action" = keep ] || reason="worktree ${wt_path} と一緒に消す。${reason}"
       ;;
     *)
       hk_parse_action "$(classify_branch "$name" "$sha")"

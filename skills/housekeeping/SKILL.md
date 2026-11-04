@@ -102,5 +102,6 @@ entire.io は、記録用のブランチ `entire/checkpoints/v1` と、セッシ
 
 - 保護するブランチ名は glob パターンで足せる。リポジトリごとの設定は `git config --add housekeeping.protect 'release/*'` で、その場限りなら環境変数 `HOUSEKEEPING_PROTECT='release/* sandbox'` で指定する
 - scan.sh は一時ディレクトリを `$TMPDIR`(未設定なら `/tmp`)の下に作り、終了時に消す。作れなければ、fetch を含めて何もせずに止まる。apply.sh は一時ファイルを使わない
+- `git`・`gh`・`jq` が要る。jq が無ければ scan.sh は止まる。`lsof` で worktree を使っているプロセスを調べ、lsof が無い、またはプロセスを見られない(サンドボックスなど)ときは、どの worktree も「確かめられない」として残す
 - 対象のリモートは `origin`。変えるときは `HOUSEKEEPING_REMOTE` を使う。PR は、そのリモートの GitHub リポジトリから `gh` で取得する
 - fork から upstream へ PR を出す運用には対応していない。PR が見つからないので「PR なし」として判定され、未取り込みのコミットがあるブランチは残る
