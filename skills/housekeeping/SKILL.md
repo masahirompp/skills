@@ -32,7 +32,11 @@ scan.sh は何も削除しない。副作用は、リモート追跡ブランチ
 `kind` は `worktree` / `branch` / `remote`(リモートブランチ)のいずれか。error で終了したらその内容を伝えて止まる。よくある原因は次の2つ。
 
 - gh の未認証: ユーザーに `! gh auth login` を案内する
-- サンドボックスの制限(`Operation not permitted` や「一時ディレクトリを作れない」): ユーザーに、サンドボックスの外で走査してもらう。案内するコマンドは `! <skill-dir>/scripts/scan.sh > <ファイル>` の形にし、`<skill-dir>` と `<ファイル>` は展開済みの絶対パスで書く(ユーザーのシェルの `$TMPDIR` はエージェントのものと違うことがある)。`<ファイル>` は、エージェントが読める場所(エージェント側の `$TMPDIR` の下など)にする。手順4の apply.sh が同じ理由で失敗したときも、同じように `!` で実行してもらう
+- サンドボックスの制限(`Operation not permitted` や「一時ディレクトリを作れない」): ユーザーに、サンドボックスの外で走査してもらう(後述)
+
+サンドボックスの外で実行してもらうときは、`! <skill-dir>/scripts/scan.sh > <ファイル>` の形のコマンドを案内する。`<skill-dir>` と `<ファイル>` は展開済みの絶対パスで書く。ユーザーのシェルの `$TMPDIR` は、エージェントのものと違うことがあるため。`<ファイル>` は、エージェントが読める場所(エージェント側の `$TMPDIR` の下など)にする。
+
+手順4の apply.sh が `Operation not permitted` で失敗したとき(git の書き込みや push が拒否されたときなど)も、同じように `!` で実行してもらう。apply.sh は承認済みの行を標準入力で受け取るので、`! awk -F'\t' '<承認した行の条件>' <ファイル> | <skill-dir>/scripts/apply.sh` の形で、パスは同じく絶対パスで書く。何も渡さないと、何も消さずに終わる
 
 完了条件: scan.tsv の全行が、次の手順の4区分のどれかに入っている。
 
@@ -95,6 +99,6 @@ entire.io は、記録用のブランチ `entire/checkpoints/v1` と、セッシ
 ## 設定と前提
 
 - 保護するブランチ名は glob パターンで足せる。リポジトリごとの設定は `git config --add housekeeping.protect 'release/*'` で、その場限りなら環境変数 `HOUSEKEEPING_PROTECT='release/* sandbox'` で指定する
-- scan.sh は一時ディレクトリを `$HOUSEKEEPING_TMPDIR`(未設定なら `$TMPDIR`、それも無ければ `/tmp`)の下に作り、終了時に消す。作れなければ何もせずに止まる。apply.sh は一時ファイルを使わない
+- scan.sh は一時ディレクトリを `$HOUSEKEEPING_TMPDIR`(未設定なら `$TMPDIR`、それも無ければ `/tmp`)の下に作り、終了時に消す。作れなければ、fetch を含めて何もせずに止まる。apply.sh と、削除の可否を決める lib.sh の判定は、一時ファイル(ヒアドキュメントを含む)を使わない
 - 対象のリモートは `origin`。変えるときは `HOUSEKEEPING_REMOTE` を使う。PR は、そのリモートの GitHub リポジトリから `gh` で取得する
 - fork から upstream へ PR を出す運用には対応していない。PR が見つからないので「PR なし」として判定され、未取り込みのコミットがあるブランチは残る

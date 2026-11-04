@@ -11,14 +11,18 @@ set -f # 保護パターンの glob をファイル名に展開させない
 
 hk_remote=${HOUSEKEEPING_REMOTE:-origin}
 
-# 一時ディレクトリを作り、そのパスを返す。作れなければ失敗を返す(呼び出し側は必ず確かめて止まる)。
+# hk_mktemp_dir: 一時ディレクトリを作り、そのパスを返す。作れなければ理由を stderr に出して失敗を返す。
+# $(...) の中では exit しても呼び出し元は止まらないので、呼び出し側は必ず `|| exit 1` で止まる。
 # macOS の mktemp はテンプレートを付けないと TMPDIR を見ずに /var/folders/... を使う。
 # サンドボックスではそこに書けないことがあるので、場所をテンプレートで明示する。
 hk_mktemp_dir() {
   local base=${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}} d
-  d=$(mktemp -d "${base%/}/housekeeping.XXXXXX") || return 1
-  [ -n "$d" ] && [ -d "$d" ] || return 1
-  printf '%s\n' "$d"
+  if d=$(mktemp -d "${base%/}/housekeeping.XXXXXX") && [ -n "$d" ] && [ -d "$d" ]; then
+    printf '%s\n' "$d"
+    return 0
+  fi
+  echo "error: 一時ディレクトリを作れない($base)。HOUSEKEEPING_TMPDIR で書き込める場所を指定する" >&2
+  return 1
 }
 
 hk_default_branch() {
@@ -34,20 +38,20 @@ hk_default_branch() {
 # 監査用ブランチ(entire.io の entire/checkpoints/v1 と、セッション中の shadow ブランチ entire/<commit>-<worktree>)は
 # 名前空間ごと保護する。shadow ブランチの後始末は Entire 自身(entire clean)に任せる。
 hk_protect_patterns() {
+  local p IFS=$' \t\n' # 呼び出し元(hk_is_protected)の IFS を引き継がず、HOUSEKEEPING_PROTECT を空白で分ける
   printf '%s\n' 'entire/*' main master develop gh-pages "$1"
   git config --get-all housekeeping.protect 2>/dev/null
   for p in ${HOUSEKEEPING_PROTECT:-}; do printf '%s\n' "$p"; done
 }
 
 # hk_is_protected <branch> <default-branch>
+# この関数と hk_path_in_use は削除の可否を決めるので、ヒアドキュメントを使わない。bash はヒアドキュメントを
+# 一時ファイルで渡すことがあり、作れないと入力が空になって「保護対象でない」「使用中でない」と判定してしまう。
 hk_is_protected() {
-  local p
-  while IFS= read -r p; do
-    [ -n "$p" ] || continue
+  local p IFS=$'\n' # 1行に1パターン。set -f なので glob は展開されない
+  for p in $(hk_protect_patterns "$2"); do
     case "$1" in $p) return 0 ;; esac
-  done <<EOF
-$(hk_protect_patterns "$2")
-EOF
+  done
   return 1
 }
 
@@ -63,10 +67,8 @@ hk_process_cwds() {
 # hk_path_in_use <path> <process-cwds>: path 以下をカレントにしているプロセスを1つ返す
 hk_path_in_use() {
   # 入力を最後まで読む(途中で exit するとパイプの書き手が SIGPIPE で失敗し、pipefail で結果ごと失われる)
-  awk -F'\t' -v p="$1" -v self="$$" '
-    !found && $1 != self && ($3 == p || index($3, p "/") == 1) { print $1 " " $2; found = 1 }' <<EOF
-$2
-EOF
+  printf '%s\n' "$2" | awk -F'\t' -v p="$1" -v self="$$" '
+    !found && $1 != self && ($3 == p || index($3, p "/") == 1) { print $1 " " $2; found = 1 }'
 }
 
 # hk_in_progress_op <worktree-path>: 進行中の rebase / merge / cherry-pick / revert / bisect を返す

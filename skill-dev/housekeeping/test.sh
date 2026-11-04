@@ -169,10 +169,41 @@ if [ "$notmp_rc" != 0 ] && [ ! -s "$root/scan-notmp.out" ] && grep -q '一時デ
 else
   fail "scan: 一時ディレクトリを作れないのに止まらない(rc=$notmp_rc)"
 fi
-# 一時ディレクトリは HOUSEKEEPING_TMPDIR の下に作り、終了時に消すこと
-mkdir "$root/hk-tmp"
-HOUSEKEEPING_TMPDIR="$root/hk-tmp" "$scripts/scan.sh" >/dev/null
-[ -z "$(ls -A "$root/hk-tmp")" ] && pass "scan: 一時ディレクトリを片付ける" || fail "scan: 一時ディレクトリが残っている"
+# 一時ディレクトリは HOUSEKEEPING_TMPDIR → TMPDIR の順で決めた場所の下に作ること
+mkdir "$root/hk-tmp" "$root/tmpdir"
+made=$(HOUSEKEEPING_TMPDIR="$root/hk-tmp" TMPDIR="$root/tmpdir" bash -c '. "$1/lib.sh" && hk_mktemp_dir' _ "$scripts")
+[ "${made%/*}" = "$root/hk-tmp" ] && pass "lib: HOUSEKEEPING_TMPDIR の下に作る" || fail "lib: HOUSEKEEPING_TMPDIR を使わない($made)"
+made=$(env -u HOUSEKEEPING_TMPDIR TMPDIR="$root/tmpdir/" bash -c '. "$1/lib.sh" && hk_mktemp_dir' _ "$scripts")
+[ "${made%/*}" = "$root/tmpdir" ] && pass "lib: 未設定なら TMPDIR の下に作る" || fail "lib: TMPDIR を使わない($made)"
+rm -rf "$root/hk-tmp"/* "$root/tmpdir"/*
+# 終了時に消すこと
+if HOUSEKEEPING_TMPDIR="$root/hk-tmp" "$scripts/scan.sh" >/dev/null && [ -z "$(ls -A "$root/hk-tmp")" ]; then
+  pass "scan: 一時ディレクトリを片付ける"
+else
+  fail "scan: 失敗した、または一時ディレクトリが残っている"
+fi
+
+# 削除の可否を決める apply.sh と lib.sh は、一時ファイルに依存しないこと。
+# bash はヒアドキュメント・ヒアストリングを一時ファイルで渡すことがあり、作れないと入力が空になって
+# 保護判定・使用中判定が素通りになる。macOS の mktemp は TMPDIR を見ないので、環境変数を変える
+# 実行テストでは検出できず、ここでは書き方で確かめる。
+if grep -nE '<<|mktemp' "$scripts/apply.sh" | grep -v '^[0-9]*:#' ||
+  grep -nE '<<' "$scripts/lib.sh" | grep -v '^[0-9]*:[[:space:]]*#'; then
+  fail "apply/lib: 一時ファイルを使う書き方がある(上の行)"
+else
+  pass "apply/lib: ヒアドキュメントと mktemp を使わない"
+fi
+
+# 保護パターン: 空白区切りの HOUSEKEEPING_PROTECT と git config の両方が効くこと
+protected() { HOUSEKEEPING_PROTECT='release/* sandbox' bash -c '. "$1/lib.sh" && hk_is_protected "$2" main' _ "$scripts" "$1"; }
+git config --add housekeeping.protect 'keep me/*'
+for b in release/1.0 sandbox 'keep me/x' main entire/x; do
+  protected "$b" && pass "lib: $b は保護対象" || fail "lib: $b が保護されない"
+done
+for b in releases feature/sandbox; do
+  protected "$b" && fail "lib: $b が保護対象になった" || pass "lib: $b は保護対象でない"
+done
+git config --unset-all housekeeping.protect
 
 # --- apply ----------------------------------------------------------------
 # 走査後に作業が再開されたブランチ・保護対象を偽装した行は消さないこと
@@ -182,8 +213,7 @@ git switch -q nopr-merge && commit resumed && git switch -q main
   printf 'delete\tbranch\tentire/checkpoints/v1\t%s\t\tforged\n' "$(git rev-parse entire/checkpoints/v1)"
 } >"$root/approved.tsv"
 set +e
-# 一時ファイルを使わないので、書き込めない TMPDIR でも動くこと
-TMPDIR="$root/no-such-dir" HOUSEKEEPING_TMPDIR="$root/no-such-dir" "$scripts/apply.sh" <"$root/approved.tsv" >"$root/apply.out"
+"$scripts/apply.sh" <"$root/approved.tsv" >"$root/apply.out"
 apply_rc=$?
 set -e
 [ -n "${VERBOSE:-}" ] && cat "$root/apply.out"
