@@ -5,6 +5,11 @@
 #   HOUSEKEEPING_PROTECT  追加の保護パターン(空白区切りの glob。例 "release/* sandbox")
 # git config:
 #   housekeeping.protect  追加の保護パターン(複数指定可。git config --add で足す)
+#
+# 削除の可否を決める判定(lib.sh、scan.sh と apply.sh の判定の経路)は、ヒアドキュメントとヒアストリングを使わない。
+# bash はこれらを一時ファイルで渡すことがあり、作れないと入力が空になって「保護対象でない」「使用中でない」と
+# 判定してしまう。test.sh が書き方を確かめている。プロセス置換(< <(...))は /dev/fd を使うので対象にしない。
+# 判定の結果が空になったときは、残す側に倒す(hk_parse_action)。
 
 set -f # 保護パターンの glob をファイル名に展開させない
 
@@ -20,7 +25,7 @@ hk_mktemp_dir() {
     printf '%s\n' "$d"
     return 0
   fi
-  echo "error: 一時ディレクトリを作れない($base)。TMPDIR=<書き込める場所> を指定して実行し直す" >&2
+  echo "error: 一時ディレクトリを作れない($base)。TMPDIR=<書き込める場所> で実行し直すか、サンドボックスの外で実行する" >&2
   return 1
 }
 
@@ -37,22 +42,31 @@ hk_default_branch() {
 # 監査用ブランチ(entire.io の entire/checkpoints/v1 と、セッション中の shadow ブランチ entire/<commit>-<worktree>)は
 # 名前空間ごと保護する。shadow ブランチの後始末は Entire 自身(entire clean)に任せる。
 hk_protect_patterns() {
-  local p IFS=$' \t\n' # 呼び出し元(hk_is_protected)の IFS を引き継がず、HOUSEKEEPING_PROTECT を空白で分ける
+  local p IFS=$' \t\n'
+  set -f # 呼び出し元の設定に頼らず、HOUSEKEEPING_PROTECT の glob を展開させない($(...) の中で呼ぶので外には漏れない)
   printf '%s\n' 'entire/*' main master develop gh-pages "$1"
   git config --get-all housekeeping.protect 2>/dev/null
   for p in ${HOUSEKEEPING_PROTECT:-}; do printf '%s\n' "$p"; done
 }
 
 # hk_is_protected <branch> <default-branch>
-# 削除の可否を決める判定(この関数、hk_path_in_use、scan.sh・apply.sh の判定の経路)は、ヒアドキュメントを使わない。
-# bash はヒアドキュメントを一時ファイルで渡すことがあり、作れないと入力が空になって「保護対象でない」「使用中でない」と
-# 判定してしまう。test.sh が書き方を確かめている。
+# パターンは1行ずつ切り出して case で照合する。単語分割を使わないので、glob がファイル名に展開されることもない。
 hk_is_protected() {
-  local p IFS=$'\n' # 1行に1パターン。set -f なので glob は展開されない
-  for p in $(hk_protect_patterns "$2"); do
+  local p rest
+  rest=$(hk_protect_patterns "$2")
+  while [ -n "$rest" ]; do
+    p=${rest%%$'\n'*}
+    case $rest in *$'\n'*) rest=${rest#*$'\n'} ;; *) rest='' ;; esac
+    [ -n "$p" ] || continue
     case "$1" in $p) return 0 ;; esac
   done
   return 1
+}
+
+# hk_parse_action <"action<TAB>reason">: 判定の結果をグローバル変数 action と reason に分ける。空なら残す側に倒す
+hk_parse_action() {
+  action=${1%%$'\t'*} reason=${1#*$'\t'}
+  [ -n "$action" ] || action=keep reason="判定できなかった"
 }
 
 # 実行中プロセスのカレントディレクトリ一覧("pid<TAB>command<TAB>cwd")。lsof が無ければ空。

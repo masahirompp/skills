@@ -186,16 +186,52 @@ else
   fail "scan: 失敗した、または一時ディレクトリが残っている"
 fi
 
-# 削除の可否を決めるスクリプトに、一時ファイルを使う書き方が無いこと(理由は lib.sh の hk_is_protected)。
-# 一時ファイルを作れない環境は作りにくいので、書き方で確かめる。scan.sh だけは hk_mktemp_dir を使ってよい。
+# 削除の可否を決めるスクリプトに、一時ファイルを使う書き方が無いこと(理由は lib.sh の冒頭)。
+# 一時ファイルを作れない環境は作りにくいので、書き方で確かめる。mktemp は hk_mktemp_dir の中だけで使う。
 temp_usage() { # file pattern: コメント行を除いて、pattern に当たる行を出す
   grep -nE "$2" "$1" | grep -vE '^[0-9]+:[[:space:]]*#'
 }
-if temp_usage "$scripts/apply.sh" '<<|mktemp' || temp_usage "$scripts/lib.sh" '<<' || temp_usage "$scripts/scan.sh" '<<'; then
-  fail "scan/apply/lib: 一時ファイルを使う書き方がある(上の行)"
+if temp_usage "$scripts/apply.sh" '<<|mktemp' || temp_usage "$scripts/lib.sh" '<<' || temp_usage "$scripts/scan.sh" '<<' ||
+  temp_usage "$scripts/scan.sh" 'mktemp' | grep -v 'hk_mktemp_dir' ||
+  [ "$(temp_usage "$scripts/lib.sh" 'mktemp' | grep -vc 'hk_mktemp_dir()')" != 1 ]; then
+  fail "scan/apply/lib: 一時ファイルを使う書き方がある(上の行。lib.sh の mktemp は hk_mktemp_dir の1か所だけ)"
 else
   pass "scan/apply/lib: ヒアドキュメントを使わず、mktemp は hk_mktemp_dir だけ"
 fi
+
+# 判定の結果が空なら残す側に倒すこと
+r=$(bash -c '. "$1/lib.sh"; hk_parse_action ""; printf "%s" "$action"' _ "$scripts") || true
+[ "$r" = keep ] && pass "lib: 空の判定は keep に倒す" || fail "lib: 空の判定が keep にならない($r)"
+r=$(bash -c '. "$1/lib.sh"; hk_parse_action "$(printf "delete\tx")"; printf "%s/%s" "$action" "$reason"' _ "$scripts") || true
+[ "$r" = delete/x ] && pass "lib: 判定を action と reason に分ける" || fail "lib: 判定の分け方が違う($r)"
+
+# 保護パターンは、set -f が外れていてもファイル名に展開されないこと
+mkdir -p "$root/globcwd/release" && : >"$root/globcwd/release/notes.md"
+if (cd "$root/globcwd" && HOUSEKEEPING_PROTECT='release/*' bash -c '. "$1/lib.sh"; set +f; hk_is_protected release/1.0 main' _ "$scripts"); then
+  pass "lib: set +f でも保護パターンを展開しない"
+else
+  fail "lib: set +f で保護パターンが展開された"
+fi
+
+# ローカルの既定ブランチが無くても、first-parent の履歴を origin から読むこと
+# (読めないと、作ったばかりのブランチが「merge コミットで取り込み済み」の delete になる)
+git clone -q "$root/origin.git" "$root/no-local-main" 2>/dev/null
+(
+  cd "$root/no-local-main"
+  git switch -q --detach && git branch fresh2 && git branch -q -D main
+  "$scripts/scan.sh" >"$root/scan-nomain.tsv" 2>/dev/null
+) || true
+got=$(awk -F'\t' '$2 == "branch" && $3 == "fresh2" { print $1 }' "$root/scan-nomain.tsv")
+[ "$got" = ask ] && pass "scan: ローカルの既定ブランチが無くても未着手のブランチは ask" || fail "scan: ローカルの既定ブランチが無いと fresh2 → ${got:-(出力なし)}"
+
+# 読めない PR 一覧では止まること(jq が空を返すと、オープン PR の保護が外れる)
+echo 'not json' >"$root/bad-prs.json"
+set +e
+HOUSEKEEPING_PR_JSON="$root/bad-prs.json" "$scripts/scan.sh" >"$root/scan-bad.out" 2>"$root/scan-bad.err"
+bad_rc=$?
+set -e
+[ "$bad_rc" != 0 ] && grep -q 'JSON の配列として読めない' "$root/scan-bad.err" && ! grep -q '^delete' "$root/scan-bad.out" &&
+  pass "scan: 読めない PR 一覧では止まる" || fail "scan: 読めない PR 一覧で止まらない(rc=$bad_rc)"
 
 # 保護パターン: 空白区切りの HOUSEKEEPING_PROTECT と git config の両方が効くこと
 protected() { HOUSEKEEPING_PROTECT='release/* sandbox' in_lib hk_is_protected "$1" main; }
