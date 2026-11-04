@@ -17,7 +17,7 @@ description: >-
 対象リポジトリの中(どの worktree からでもよい)で実行し、結果をファイルに残す。
 
 ```sh
-<skill-dir>/scripts/scan.sh > "$TMPDIR/housekeeping-scan.tsv"
+<skill-dir>/scripts/scan.sh > "${TMPDIR:-/tmp}/housekeeping-scan.tsv"
 ```
 
 scan.sh は何も削除しない。副作用は、リモート追跡ブランチを最新にする `git fetch --prune` だけ。出力は TSV で、列は `action kind name sha path reason`。
@@ -34,9 +34,7 @@ scan.sh は何も削除しない。副作用は、リモート追跡ブランチ
 - gh の未認証: ユーザーに `! gh auth login` を案内する
 - サンドボックスの制限(`Operation not permitted` や「一時ディレクトリを作れない」): ユーザーに、サンドボックスの外で走査してもらう(後述)
 
-サンドボックスの外で実行してもらうときは、`! <skill-dir>/scripts/scan.sh > <ファイル>` の形のコマンドを案内する。`<skill-dir>` と `<ファイル>` は展開済みの絶対パスで書く。ユーザーのシェルの `$TMPDIR` は、エージェントのものと違うことがあるため。`<ファイル>` は、エージェントが読める場所(エージェント側の `$TMPDIR` の下など)にする。
-
-手順4の apply.sh が `Operation not permitted` で失敗したとき(git の書き込みや push が拒否されたときなど)も、同じように `!` で実行してもらう。apply.sh は承認済みの行を標準入力で受け取るので、`! awk -F'\t' '<承認した行の条件>' <ファイル> | <skill-dir>/scripts/apply.sh` の形で、パスは同じく絶対パスで書く。何も渡さないと、何も消さずに終わる
+サンドボックスの外で実行してもらうときは、`! <skill-dir>/scripts/scan.sh > <ファイル>` の形のコマンドを案内する。`<skill-dir>` と `<ファイル>` は展開済みの絶対パスで書く(ユーザーのシェルの `$TMPDIR` は、エージェントのものと違うことがある)。`<ファイル>` は、エージェントが読める場所(エージェント側の `$TMPDIR` の下など)にする。`!` の結果では終了コードが見えないので、会話に出た stderr に `error:` が無いことと、`<ファイル>` に見出しの行より後の行があることを確かめてから次に進む。
 
 完了条件: scan.tsv の全行が、次の手順の4区分のどれかに入っている。
 
@@ -60,11 +58,15 @@ scan.sh は何も削除しない。副作用は、リモート追跡ブランチ
 承認された行を scan.tsv から抜き出して apply.sh に渡す。区分1をすべて承認した場合の例:
 
 ```sh
-awk -F'\t' '$2 != "remote" && ($1 == "delete" || $1 == "prune")' "$TMPDIR/housekeeping-scan.tsv" \
+awk -F'\t' '$2 != "remote" && ($1 == "delete" || $1 == "prune")' "${TMPDIR:-/tmp}/housekeeping-scan.tsv" \
   | <skill-dir>/scripts/apply.sh
 ```
 
-`ask` の行やリモートブランチの行も、承認されたものは同じように行ごと渡す。apply.sh は、worktree → ローカルブランチ → リモートブランチの順に削除する。各行について削除の直前に、走査時から状態が変わっていないかを確かめ直す。変わっていれば、その行を `skipped` として飛ばす。
+`ask` の行やリモートブランチの行も、承認されたものは同じように行ごと渡す。
+
+apply.sh がサンドボックスの制限(`Operation not permitted`。git の書き込みや push の拒否など)で失敗したときも、手順1と同じように `!` で実行してもらう。apply.sh は承認済みの行を標準入力で受け取るので、`! awk -F'\t' '<承認した行の条件>' <ファイル> | <skill-dir>/scripts/apply.sh` の形で案内し、パスは絶対パスで書く。何も渡さないと、何も消さずに終わる。一部の行がすでに `done` になっていれば、その行は条件から外す(流し直すと「見つからない」の `skipped` になり、終了コードが 1 になる)。
+
+apply.sh は、worktree → ローカルブランチ → リモートブランチの順に削除する。各行について削除の直前に、走査時から状態が変わっていないかを確かめ直す。変わっていれば、その行を `skipped` として飛ばす。
 
 ### 5. 報告する
 
@@ -99,6 +101,6 @@ entire.io は、記録用のブランチ `entire/checkpoints/v1` と、セッシ
 ## 設定と前提
 
 - 保護するブランチ名は glob パターンで足せる。リポジトリごとの設定は `git config --add housekeeping.protect 'release/*'` で、その場限りなら環境変数 `HOUSEKEEPING_PROTECT='release/* sandbox'` で指定する
-- scan.sh は一時ディレクトリを `$HOUSEKEEPING_TMPDIR`(未設定なら `$TMPDIR`、それも無ければ `/tmp`)の下に作り、終了時に消す。作れなければ、fetch を含めて何もせずに止まる。apply.sh と、削除の可否を決める lib.sh の判定は、一時ファイル(ヒアドキュメントを含む)を使わない
+- scan.sh は一時ディレクトリを `$TMPDIR`(未設定なら `/tmp`)の下に作り、終了時に消す。作れなければ、fetch を含めて何もせずに止まる。apply.sh は一時ファイルを使わない
 - 対象のリモートは `origin`。変えるときは `HOUSEKEEPING_REMOTE` を使う。PR は、そのリモートの GitHub リポジトリから `gh` で取得する
 - fork から upstream へ PR を出す運用には対応していない。PR が見つからないので「PR なし」として判定され、未取り込みのコミットがあるブランチは残る

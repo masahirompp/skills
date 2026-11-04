@@ -19,7 +19,8 @@ set -uo pipefail
 git rev-parse --git-dir >/dev/null 2>&1 || { echo "error: git リポジトリの中で実行する" >&2; exit 1; }
 cwd=$(pwd -P)
 
-# 作れなかったら、fetch などに進む前に止まる。空のパスのまま進むと /prs.json などルート直下に書きに行く
+# 作れなかったら、fetch などに進む前に止まる。空のパスのまま進むと /prs.json などルート直下に書きに行く。
+# 判定の経路はヒアドキュメントを使わない(理由は lib.sh の hk_is_protected)
 tmp=$(hk_mktemp_dir) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 
@@ -44,6 +45,13 @@ fi
 
 # pr_info <branch> → "<state> <number> <headRefOid>"。オープンな PR があればそれを、無ければ最新の PR を返す。
 # fork からの同名ブランチを取り違えないよう、head のリポジトリ所有者がリモートの所有者と一致するものだけを見る。
+# set_pr <pr_info の出力>: st num oid に分ける
+set_pr() {
+  local r=$1
+  st=${r%% *} r=${r#* }
+  num=${r%% *} oid=${r#* }
+}
+
 pr_info() {
   jq -r --arg b "$1" --arg o "$owner" '
     [ .[] | select(.headRefName == $b and ($o == "" or ((.headRepositoryOwner.login // "") | ascii_downcase) == $o)) ] as $p
@@ -92,9 +100,7 @@ classify_branch() {
     printf 'keep\tオープン PR %s のベースブランチ\n' "$stacked"
     return
   fi
-  IFS=' ' read -r st num oid <<EOF
-$(pr_info "$name")
-EOF
+  set_pr "$(pr_info "$name")"
   case $st in
     OPEN) printf 'keep\tPR #%s がオープン\n' "$num" ;;
     CLOSED) printf 'keep\tPR #%s は未マージのままクローズ\n' "$num" ;;
@@ -104,15 +110,20 @@ EOF
         printf 'keep\tPR なし・%s に未取り込みのコミットがある\n' "$default"
       elif ! grep -qxF "$sha" "$tmp/first-parent"; then
         printf 'delete\tPR なし・merge コミットで %s に取り込み済み\n' "$default"
-      elif grep -qE '^(commit|cherry-pick|revert|merge .*Merge made)' <<EOF; then
-$(git reflog show --format=%gs "refs/heads/$name" -- 2>/dev/null)
-EOF
+      elif git reflog show --format=%gs "refs/heads/$name" -- 2>/dev/null |
+        grep -E '^(commit|cherry-pick|revert|merge .*Merge made)' >/dev/null; then # -q にしない(途中で閉じると pipefail で失敗する)
         printf 'delete\tPR なし・%s に取り込み済み(このブランチでコミットした記録がある)\n' "$default"
       else
         printf 'ask\tPR なし・%s に含まれるが、作成後にコミットした記録がない(未着手の可能性)\n' "$default"
       fi
       ;;
   esac
+}
+
+# set_action <"action<TAB>reason">: 判定の結果を action と reason に分ける。空なら残す側に倒す
+set_action() {
+  action=${1%%$'\t'*} reason=${1#*$'\t'}
+  [ -n "$action" ] || action=keep reason="判定できなかった"
 }
 
 emit() { printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$@"; }
@@ -150,9 +161,7 @@ handle_wt() {
   elif [ -n "$dirty" ]; then
     action=keep reason="未コミットの変更・未追跡ファイルが $(printf '%s\n' "$dirty" | wc -l | tr -d ' ') 件ある"
   elif [ -n "$branch" ]; then
-    IFS=$'\t' read -r action reason <<EOF
-$(classify_branch "$branch" "$head")
-EOF
+    set_action "$(classify_branch "$branch" "$head")"
   elif merged_into_default "$head"; then
     action=delete reason="detached HEAD・$default に含まれるコミットを指している"
   else
@@ -191,15 +200,11 @@ while IFS=$'\t' read -r name sha track; do
       continue
       ;;
     delete | ask)
-      IFS=$'\t' read -r action reason <<EOF
-$(classify_branch "$name" "$sha")
-EOF
+      set_action "$(classify_branch "$name" "$sha")"
       reason="worktree ${wt_path} と一緒に消す。${reason}"
       ;;
     *)
-      IFS=$'\t' read -r action reason <<EOF
-$(classify_branch "$name" "$sha")
-EOF
+      set_action "$(classify_branch "$name" "$sha")"
       ;;
   esac
   case $track in *gone*) [ "$action" != keep ] && reason="${reason}(追跡先のリモートブランチは削除済み)" ;; esac
@@ -212,13 +217,9 @@ while IFS=$'\t' read -r name sha; do
   [ "$name" = HEAD ] && continue
   hk_is_protected "$name" "$default" && continue
   [ -n "$(open_pr_based_on "$name")" ] && continue
-  IFS=' ' read -r st num oid <<EOF
-$(pr_info "$name")
-EOF
+  set_pr "$(pr_info "$name")"
   [ "$st" = MERGED ] || continue
-  IFS=$'\t' read -r action reason <<EOF
-$(verify_pr_merged "$num" "$oid" "$sha")
-EOF
+  set_action "$(verify_pr_merged "$num" "$oid" "$sha")"
   [ "$action" = keep ] && continue
   emit "$action" remote "$name" "$sha" "" "$reason"
 done < <(git for-each-ref --format='%(refname:lstrip=3)%09%(objectname)' "refs/remotes/$hk_remote/")

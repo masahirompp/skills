@@ -3,7 +3,6 @@
 # 環境変数:
 #   HOUSEKEEPING_REMOTE   対象リモート(既定 origin)
 #   HOUSEKEEPING_PROTECT  追加の保護パターン(空白区切りの glob。例 "release/* sandbox")
-#   HOUSEKEEPING_TMPDIR   一時ディレクトリを作る場所(既定 $TMPDIR、無ければ /tmp)
 # git config:
 #   housekeeping.protect  追加の保護パターン(複数指定可。git config --add で足す)
 
@@ -16,12 +15,12 @@ hk_remote=${HOUSEKEEPING_REMOTE:-origin}
 # macOS の mktemp はテンプレートを付けないと TMPDIR を見ずに /var/folders/... を使う。
 # サンドボックスではそこに書けないことがあるので、場所をテンプレートで明示する。
 hk_mktemp_dir() {
-  local base=${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}} d
+  local base=${TMPDIR:-/tmp} d
   if d=$(mktemp -d "${base%/}/housekeeping.XXXXXX") && [ -n "$d" ] && [ -d "$d" ]; then
     printf '%s\n' "$d"
     return 0
   fi
-  echo "error: 一時ディレクトリを作れない($base)。HOUSEKEEPING_TMPDIR で書き込める場所を指定する" >&2
+  echo "error: 一時ディレクトリを作れない($base)。TMPDIR=<書き込める場所> を指定して実行し直す" >&2
   return 1
 }
 
@@ -45,8 +44,9 @@ hk_protect_patterns() {
 }
 
 # hk_is_protected <branch> <default-branch>
-# この関数と hk_path_in_use は削除の可否を決めるので、ヒアドキュメントを使わない。bash はヒアドキュメントを
-# 一時ファイルで渡すことがあり、作れないと入力が空になって「保護対象でない」「使用中でない」と判定してしまう。
+# 削除の可否を決める判定(この関数、hk_path_in_use、scan.sh・apply.sh の判定の経路)は、ヒアドキュメントを使わない。
+# bash はヒアドキュメントを一時ファイルで渡すことがあり、作れないと入力が空になって「保護対象でない」「使用中でない」と
+# 判定してしまう。test.sh が書き方を確かめている。
 hk_is_protected() {
   local p IFS=$'\n' # 1行に1パターン。set -f なので glob は展開されない
   for p in $(hk_protect_patterns "$2"); do

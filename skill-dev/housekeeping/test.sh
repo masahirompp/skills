@@ -159,43 +159,46 @@ expect keep worktree wt-busy "プロセス"
 expect keep branch wt-busy "使用中"
 expect delete worktree "(detached)" "detached"
 
-# 一時ディレクトリを作れないときは、空のパスのまま進まずに止まること
+# 一時ディレクトリを作れないときは、空のパスのまま進まずに、fetch より前に止まること。
+# fetch に進めば、存在しないリモートへの fetch で warn が出る。
+# テンプレートを付けない mktemp は macOS では TMPDIR を見ないので、TMPDIR に従うことの確認にもなる。
 set +e
-HOUSEKEEPING_TMPDIR="$root/no-such-dir" "$scripts/scan.sh" >"$root/scan-notmp.out" 2>"$root/scan-notmp.err"
+TMPDIR="$root/no-such-dir" HOUSEKEEPING_REMOTE=no-such-remote "$scripts/scan.sh" >"$root/scan-notmp.out" 2>"$root/scan-notmp.err"
 notmp_rc=$?
 set -e
-if [ "$notmp_rc" != 0 ] && [ ! -s "$root/scan-notmp.out" ] && grep -q '一時ディレクトリを作れない' "$root/scan-notmp.err"; then
-  pass "scan: 一時ディレクトリを作れなければ止まる"
+if [ "$notmp_rc" != 0 ] && [ ! -s "$root/scan-notmp.out" ] && grep -q '一時ディレクトリを作れない' "$root/scan-notmp.err" &&
+  ! grep -q fetch "$root/scan-notmp.err"; then
+  pass "scan: 一時ディレクトリを作れなければ fetch より前に止まる"
 else
-  fail "scan: 一時ディレクトリを作れないのに止まらない(rc=$notmp_rc)"
+  fail "scan: 一時ディレクトリを作れないのに止まらない(rc=$notmp_rc): $(cat "$root/scan-notmp.err")"
 fi
-# 一時ディレクトリは HOUSEKEEPING_TMPDIR → TMPDIR の順で決めた場所の下に作ること
-mkdir "$root/hk-tmp" "$root/tmpdir"
-made=$(HOUSEKEEPING_TMPDIR="$root/hk-tmp" TMPDIR="$root/tmpdir" bash -c '. "$1/lib.sh" && hk_mktemp_dir' _ "$scripts")
-[ "${made%/*}" = "$root/hk-tmp" ] && pass "lib: HOUSEKEEPING_TMPDIR の下に作る" || fail "lib: HOUSEKEEPING_TMPDIR を使わない($made)"
-made=$(env -u HOUSEKEEPING_TMPDIR TMPDIR="$root/tmpdir/" bash -c '. "$1/lib.sh" && hk_mktemp_dir' _ "$scripts")
-[ "${made%/*}" = "$root/tmpdir" ] && pass "lib: 未設定なら TMPDIR の下に作る" || fail "lib: TMPDIR を使わない($made)"
-rm -rf "$root/hk-tmp"/* "$root/tmpdir"/*
-# 終了時に消すこと
-if HOUSEKEEPING_TMPDIR="$root/hk-tmp" "$scripts/scan.sh" >/dev/null && [ -z "$(ls -A "$root/hk-tmp")" ]; then
+
+in_lib() { bash -c '. "$1/lib.sh" && shift && "$@"' _ "$scripts" "$@"; }
+# 一時ディレクトリは TMPDIR の下に作ること(末尾の / があってもよい)
+mkdir "$root/tmpdir"
+made=$(TMPDIR="$root/tmpdir/" in_lib hk_mktemp_dir) || true
+[ "${made%/*}" = "$root/tmpdir" ] && pass "lib: TMPDIR の下に作る" || fail "lib: TMPDIR を使わない($made)"
+rm -rf "${root:?}/tmpdir"/*
+# 終了時に消すこと(TMPDIR に従うことは上の「止まる」テストで確かめている)
+if TMPDIR="$root/tmpdir" "$scripts/scan.sh" >/dev/null && [ -z "$(ls -A "$root/tmpdir")" ]; then
   pass "scan: 一時ディレクトリを片付ける"
 else
   fail "scan: 失敗した、または一時ディレクトリが残っている"
 fi
 
-# 削除の可否を決める apply.sh と lib.sh は、一時ファイルに依存しないこと。
-# bash はヒアドキュメント・ヒアストリングを一時ファイルで渡すことがあり、作れないと入力が空になって
-# 保護判定・使用中判定が素通りになる。macOS の mktemp は TMPDIR を見ないので、環境変数を変える
-# 実行テストでは検出できず、ここでは書き方で確かめる。
-if grep -nE '<<|mktemp' "$scripts/apply.sh" | grep -v '^[0-9]*:#' ||
-  grep -nE '<<' "$scripts/lib.sh" | grep -v '^[0-9]*:[[:space:]]*#'; then
-  fail "apply/lib: 一時ファイルを使う書き方がある(上の行)"
+# 削除の可否を決めるスクリプトに、一時ファイルを使う書き方が無いこと(理由は lib.sh の hk_is_protected)。
+# 一時ファイルを作れない環境は作りにくいので、書き方で確かめる。scan.sh だけは hk_mktemp_dir を使ってよい。
+temp_usage() { # file pattern: コメント行を除いて、pattern に当たる行を出す
+  grep -nE "$2" "$1" | grep -vE '^[0-9]+:[[:space:]]*#'
+}
+if temp_usage "$scripts/apply.sh" '<<|mktemp' || temp_usage "$scripts/lib.sh" '<<' || temp_usage "$scripts/scan.sh" '<<'; then
+  fail "scan/apply/lib: 一時ファイルを使う書き方がある(上の行)"
 else
-  pass "apply/lib: ヒアドキュメントと mktemp を使わない"
+  pass "scan/apply/lib: ヒアドキュメントを使わず、mktemp は hk_mktemp_dir だけ"
 fi
 
 # 保護パターン: 空白区切りの HOUSEKEEPING_PROTECT と git config の両方が効くこと
-protected() { HOUSEKEEPING_PROTECT='release/* sandbox' bash -c '. "$1/lib.sh" && hk_is_protected "$2" main' _ "$scripts" "$1"; }
+protected() { HOUSEKEEPING_PROTECT='release/* sandbox' in_lib hk_is_protected "$1" main; }
 git config --add housekeeping.protect 'keep me/*'
 for b in release/1.0 sandbox 'keep me/x' main entire/x; do
   protected "$b" && pass "lib: $b は保護対象" || fail "lib: $b が保護されない"
