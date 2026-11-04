@@ -199,10 +199,13 @@ else
   pass "scan/apply/lib: ヒアドキュメントを使わず、mktemp は hk_mktemp_dir だけ"
 fi
 
-# 判定の結果が空なら残す側に倒すこと
-r=$(bash -c '. "$1/lib.sh"; hk_parse_action ""; printf "%s" "$action"' _ "$scripts") || true
-[ "$r" = keep ] && pass "lib: 空の判定は keep に倒す" || fail "lib: 空の判定が keep にならない($r)"
-r=$(bash -c '. "$1/lib.sh"; hk_parse_action "$(printf "delete\tx")"; printf "%s/%s" "$action" "$reason"' _ "$scripts") || true
+# 判定の結果が1行の「既知の action<TAB>理由」でなければ、残す側に倒すこと
+parsed() { bash -c '. "$1/lib.sh"; hk_parse_action "$2"; printf "%s/%s" "$action" "$reason"' _ "$scripts" "$1"; }
+for input in '' 'delete' $'delete\tx\ndelete\ty' $'remove\tx'; do
+  r=$(parsed "$input") || true
+  [ "${r%%/*}" = keep ] && pass "lib: 判定 $(printf %q "$input") は keep に倒す" || fail "lib: 判定 $(printf %q "$input") → $r"
+done
+r=$(parsed $'delete\tx') || true
 [ "$r" = delete/x ] && pass "lib: 判定を action と reason に分ける" || fail "lib: 判定の分け方が違う($r)"
 
 # 保護パターンは、set -f が外れていてもファイル名に展開されないこと

@@ -100,7 +100,7 @@ verify_pr_merged() {
 
 # classify_branch <branch> <sha> → action と理由(TAB 区切り)
 classify_branch() {
-  local name=$1 sha=$2 st num oid stacked
+  local name=$1 sha=$2 st num oid stacked on_fp
   if hk_is_protected "$name" "$default"; then
     printf 'keep\t保護対象(既定ブランチ・監査用・設定による保護)\n'
     return
@@ -116,9 +116,13 @@ classify_branch() {
     CLOSED) printf 'keep\tPR #%s は未マージのままクローズ\n' "$num" ;;
     MERGED) verify_pr_merged "$num" "$oid" "$sha" ;;
     NONE)
+      grep -qxF "$sha" "$tmp/first-parent"
+      on_fp=$? # 0: first-parent 上にある / 1: 無い / それ以外: 読めない
       if ! merged_into_default "$sha"; then
         printf 'keep\tPR なし・%s に未取り込みのコミットがある\n' "$default"
-      elif ! grep -qxF "$sha" "$tmp/first-parent"; then
+      elif [ "$on_fp" -gt 1 ]; then
+        printf 'keep\t%s の first-parent 履歴を読めない\n' "$default"
+      elif [ "$on_fp" = 1 ]; then
         printf 'delete\tPR なし・merge コミットで %s に取り込み済み\n' "$default"
       elif git reflog show --format=%gs "refs/heads/$name" -- 2>/dev/null |
         grep -E '^(commit|cherry-pick|revert|merge .*Merge made)' >/dev/null; then # -q にしない(途中で閉じると pipefail で失敗する)

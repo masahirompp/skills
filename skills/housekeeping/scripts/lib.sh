@@ -53,7 +53,8 @@ hk_protect_patterns() {
 # パターンは1行ずつ切り出して case で照合する。単語分割を使わないので、glob がファイル名に展開されることもない。
 hk_is_protected() {
   local p rest
-  rest=$(hk_protect_patterns "$2")
+  # 一覧を取れなければ(組み込みのパターンは必ず出るので、空は取得の失敗)保護対象とみなす
+  rest=$(hk_protect_patterns "$2") && [ -n "$rest" ] || return 0
   while [ -n "$rest" ]; do
     p=${rest%%$'\n'*}
     case $rest in *$'\n'*) rest=${rest#*$'\n'} ;; *) rest='' ;; esac
@@ -63,10 +64,18 @@ hk_is_protected() {
   return 1
 }
 
-# hk_parse_action <"action<TAB>reason">: 判定の結果をグローバル変数 action と reason に分ける。空なら残す側に倒す
+# hk_parse_action <"action<TAB>reason">: 判定の結果をグローバル変数 action と reason に分ける。
+# 1行の「既知の action<TAB>理由」でなければ(空、タブが無い、複数行、未知の action)、残す側に倒す
 hk_parse_action() {
-  action=${1%%$'\t'*} reason=${1#*$'\t'}
-  [ -n "$action" ] || action=keep reason="判定できなかった"
+  case $1 in
+    *$'\n'* | '') action='' ;;
+    *$'\t'*) action=${1%%$'\t'*} reason=${1#*$'\t'} ;;
+    *) action='' ;;
+  esac
+  case $action in
+    delete | ask | keep | prune) ;;
+    *) action=keep reason="判定できなかった" ;;
+  esac
 }
 
 # 実行中プロセスのカレントディレクトリ一覧("pid<TAB>command<TAB>cwd")。lsof が無ければ空。
