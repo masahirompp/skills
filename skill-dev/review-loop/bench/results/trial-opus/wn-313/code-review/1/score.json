@@ -1,0 +1,98 @@
+{
+ "cost_usd": 0.12427360000000001,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "detected",
+   "quote": "案内が消えている(使い切った、手で畳んだ)と切り替えが黙って失敗し、そのまま kill-session で作業台の画面ごと離れる。ensureGuide は `whatnext workbench` の起動時にしか走らないので、根本の経路が塞がっていない。",
+   "reason": "pane-died の sh-* 分岐で wbguide が消えていても作り直されず、切り替えに失敗して作業台の画面が離れると、原因と場所が一致する形で指摘しているため。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "@wn_respawned はペインの一生分の累計で、時間で減らない。docs の言う『起動してすぐ終わるときに回り続けないため』の歯止めではなく、累計5回の上限になっている。",
+   "reason": "起動し直しの回数が通算で数えられ、時間で数え直されないため、続けて落ちていなくても上限に達すると指摘しているため。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "detected",
+   "quote": "正常につないだあとに 0 以外で終わった場合(status が null になるシグナル終了、[lost tty] など)にも『could not open the workbench screen』と誤って出し、分割ではキーを待たせる。",
+   "reason": "attach の結果の判定が、シグナルで終わって status が null になる場合も失敗と扱う、と指摘しているため。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が、利用者が分割したペインまで起動し直すという指摘が無いため。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなったという指摘が無いため。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定し、案内のペインが無い場合を見落としているという指摘が無いため。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib/tmux/tmux.ts:60",
+   "summary": "起動し直しの上限に達すると kill-pane で wbguide が消え、作業台の画面のクライアントが status 0 で何も示さずに閉じる。",
+   "quote": "起動し直しを5回使い切ると、案内のペインを kill-pane して wbguide のセッションが消える。detach-on-destroy on なので作業台の画面のクライアントは 0 で離れ",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/cli/guide.ts:19",
+   "summary": "workbench から ensureGuide が作る案内は、一覧ではなく workbench を実行したプロセスの node と cli.js で動くため、版の違いやキャッシュの消失で壊れうる。",
+   "quote": "`whatnext workbench` から ensureGuide が作る案内は、一覧の node と cli.js ではなく、workbench を実行したプロセスの env.node/env.cli/process.env で動く。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/cli/workbench.ts:43",
+   "summary": "頼みごとを書いて SIGUSR2 を送る処理が3か所に写されていて、変えるときにずれやすい。",
+   "quote": "askListToRefreshGuide は、頼みごとを書いて一覧に SIGUSR2 を送る処理を、guide.ts のキー入力の処理(74-80行)と sh の @wn_req_sh に続く3つ目の写しとして書いている。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/ops/app.ts:1156",
+   "summary": "GUIDE_REFRESH の知らせは、名前をセッションのオプションに置いていることへの対症の手当てで、条件によっては名前が空のまま残りうる。",
+   "quote": "頼みごと `guide`(GUIDE_REFRESH)という知らせの仕組みは、案内の名前をセッションのオプション @wn_name にだけ置いていることへの対症の手当て。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "src/cli/list.ts:67",
+   "summary": "ensureGuide と list.ts の両方が workbenchOptions(GUIDE, '') を呼ぶので、tmux の呼び出しが重なり、どちらが入れる役かもあいまいになる。",
+   "quote": "ensureGuide は作ったときに workbenchOptions(GUIDE, '') を呼び、その直後に list.ts も workbenchOptions(GUIDE, '') を呼ぶ。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "test/unit/cli.test.ts:26",
+   "summary": "zsh の無い環境では、単体テストが ENOENT で落ちる。",
+   "quote": "bash/zsh/sh を it.each で直接 execFileSync していて、zsh がない環境(Linux の CI、最小のコンテナ)では ENOENT で単体テストが落ちる。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "src/cli/workbench.ts:56",
+   "summary": "新しく観測できる振る舞いを DESIGN.md にしか書いておらず、PRODUCT.md に要件として載せる規約に反している。",
+   "quote": "CLAUDE.md の『`docs/PRODUCT.md` は要件(何を実現するか。観測できる振る舞い…)』に反して、新しく観測できる振る舞いを DESIGN.md にしか書いていない。",
+   "quote_ok": true
+  }
+ ]
+}

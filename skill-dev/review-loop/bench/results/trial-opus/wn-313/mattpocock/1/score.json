@@ -1,0 +1,119 @@
+{
+ "cost_usd": 0.13918039999999998,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "案内を作り直すのが一覧の起動時と attach 前だけなので、作業台の画面がつながったまま wbguide が消えると戻らない、という指摘がありません(ensureGuide を置いた場所には decision-log の観点で触れているだけです)。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "目的は「起動してすぐ終わるときに回り続けないため」ですが、実装は「ペインが生きている間に通算5回」です。間をあけて5回落ちただけで、案内は畳まれます。",
+   "reason": "@wn_respawned が戻されずに通算で数えられるため、続けて落ちていなくても上限に達して案内が畳まれる、と指摘していて正解と一致します。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "detected",
+   "quote": "利用者が端末の分割を閉じて tmux が0以外で終わった場合も、「つなげなかった」と扱い、もうない端末にエラーを書きます。",
+   "reason": "workbench() の `res.status !== 0 && hasSession(LIST)` という判定が、つながったあとにクライアントが終わった場合も「つなげなかった」と扱う、と指摘していて正解と一致します。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "detected",
+   "quote": "`lib/tmux/tmux.ts:50-61` の `${GUIDE})` の分岐は、ペインを区別せずに `respawn-pane` します。",
+   "reason": "wbguide の分岐が案内のペインと利用者が開いたペインを区別せずに起動し直す、と指摘していて正解と一致します。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなったことには触れていません。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide が案内の有無をセッションの有無だけで判定している、という問題には触れていません。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/cli/workbench.ts:25,34,57 / DESIGN.md:227-229 / PRODUCT.md:490",
+   "summary": "新しいエラー文言、キー待ち、案内を自動で起動し直すことなど、利用者から見える挙動の変更が PRODUCT.md に書かれていない。",
+   "quote": "利用者から見える挙動の変更が PRODUCT.md に書かれていない",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "docs/lib/tmux.md:10",
+   "summary": "契約 docs の頼みごとの形の一覧に、新しい guide が加えられていない。",
+   "quote": "`docs/lib/tmux.md:10` は、頼みごとの形を `key`、`focus`、`agentview` の3つに限っています。新しい `guide`(`src/ops/names.ts:12`)が入っていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "",
+   "summary": "ensureGuide を置く場所の判断について、decision-log の issue があるか確かめられていない。",
+   "quote": "`ensureGuide` を一覧の側ではなく、つなぐ側に置いた判断は、層1の decision-log に当たります。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/cli/workbench.ts:43-51",
+   "summary": "askListToRefreshGuide が lib にある頼みごとの約束を src の側で書き直していて、約束が2箇所に分かれる。",
+   "quote": "`src/cli/workbench.ts:43-51` の `askListToRefreshGuide` は、lib にある頼みごとの約束を src の側で書き直しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "src/ops/app.ts:1156-1173",
+   "summary": "GUIDE_REFRESH だけが定数で、ほかの頼みごとは文字列のまま比べている。",
+   "quote": "`src/ops/app.ts:1156-1173` では、`GUIDE_REFRESH` だけが定数で、`'agentview'`、`'focus'`、`'key'` は文字列のまま比べています。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "src/cli/list.ts:66-67",
+   "summary": "案内を作り直したとき、workbenchOptions が2回呼ばれる。",
+   "quote": "`src/cli/list.ts:66-67` は、`ensureGuide` の直後に `workbenchOptions(GUIDE, '')` を呼んでいます。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "src/cli/workbench.ts:52",
+   "summary": "fail() という名前から、キーを待つ処理であることが読めない。",
+   "quote": "`src/cli/workbench.ts:52` の `fail()` は、Ghostty の分割から起動したときにキーを待つ処理ですが、名前からはそれが読めません。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "lib/tmux/tmux.test.ts:76",
+   "summary": "テストが lastIndexOf('*)') で sh の本文を字面で切り出しているので、case の並びが変わると何も言わずにずれる。",
+   "quote": "`lib/tmux/tmux.test.ts:76` は、`lastIndexOf('*)')` で sh の本文を字面で切り出しています。case の並びが変わると、何も言わずに中身がずれます。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "test/e2e/workbench.test.ts:230-256",
+   "summary": "新しい e2e テストが、DESIGN.md の「確かめ方」の対応表に載っていない。",
+   "quote": "新しい e2e テスト(`test/e2e/workbench.test.ts:230-256`)も、DESIGN.md の「確かめ方」の対応表に載っていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "src/cli/guide.ts:20",
+   "summary": "ensureGuide で作り直した案内は workbench の側の環境で起動するため、一覧と版や環境が違う案内になりうるのに、docs に書かれていない。",
+   "quote": "`ensureGuide` が作り直した案内は、workbench の側の環境と `node`/`cli` で起動します(`src/cli/guide.ts:20`)。そのため、一覧と版や環境が違う案内になりえます。",
+   "quote_ok": true
+  }
+ ]
+}

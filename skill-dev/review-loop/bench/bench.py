@@ -69,6 +69,7 @@ CONFIGS = {
 }
 
 TIMEOUT = rl.REVIEW_TIMEOUT
+MODEL = "claude-opus-5-5"  # 子に使わせるモデルの既定。--model で変える
 print_lock = threading.Lock()
 
 
@@ -214,7 +215,18 @@ def outside_access(jsonl, trial, root):
 
 
 # --- 実行 --------------------------------------------------------------------
-def run_trial(case, config, n, template, root, out, keep):
+def child_env(root):
+    """子の環境。gh を未認証にする。題材のコードからリポジトリ名が分かるので、認証があると、子が GitHub の issue や
+    PR(レビューで見つかった不具合が書いてある)を読みに行ける。"""
+    env = rl.child_env()
+    for k in ("GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"):
+        env.pop(k, None)
+    env["GH_CONFIG_DIR"] = os.path.join(root, "gh")
+    os.makedirs(env["GH_CONFIG_DIR"], exist_ok=True)
+    return env
+
+
+def run_trial(case, config, n, template, root, out, keep, model):
     dest = os.path.join(out, case["id"], config, str(n))
     if os.path.exists(os.path.join(dest, "meta.json")):
         return
@@ -225,15 +237,15 @@ def run_trial(case, config, n, template, root, out, keep):
     head = git(repo, "rev-parse", "HEAD").strip()
     base = os.path.join(dest, "review")
     children = rl.Children()
-    meta = {"case": case["id"], "kind": case["kind"], "config": config, "trial": n, "status": "error",
+    meta = {"case": case["id"], "kind": case["kind"], "config": config, "trial": n, "model": model, "status": "error",
             "tokens": rl.new_tokens(), "cost_usd": None, "started_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
     started = time.monotonic()
     log(f"start {case['id']} {config} #{n}")
     try:
         with open(base + ".stdout.jsonl", "w") as o, open(base + ".stderr.txt", "w") as e:
-            p = children.spawn(["claude", "-p", "--output-format", "stream-json", "--verbose",
+            p = children.spawn(["claude", "-p", "--model", model, "--output-format", "stream-json", "--verbose",
                                 "--append-system-prompt", spec["system"] + "\n\n" + TARGET, spec["prompt"]],
-                               TIMEOUT, cwd=repo, env=rl.child_env(), stdin=subprocess.DEVNULL, stdout=o, stderr=e)
+                               TIMEOUT, cwd=repo, env=child_env(root), stdin=subprocess.DEVNULL, stdout=o, stderr=e)
         tail = rl.StreamTail(base + ".stdout.jsonl")
         timed_out = False
         while p.poll() is None:
@@ -304,7 +316,7 @@ def cmd_run(args):
         # 同じ構成が続けて並ばないよう、試行 → 題材 → 構成の順に積む
         jobs = [(case, config, n) for n in range(1, args.trials + 1) for case in cases for config in configs]
         with concurrent.futures.ThreadPoolExecutor(args.jobs) as ex:
-            futures = [ex.submit(run_trial, case, config, n, templates[case["id"]], root, out, args.keep)
+            futures = [ex.submit(run_trial, case, config, n, templates[case["id"]], root, out, args.keep, args.model)
                        for case, config, n in jobs]
             for f in concurrent.futures.as_completed(futures):
                 f.result()
@@ -331,6 +343,7 @@ def main():
     r.add_argument("--configs")
     r.add_argument("--trials", type=int, default=3)
     r.add_argument("--jobs", type=int, default=4)
+    r.add_argument("--model", default=MODEL, help=f"子のモデル(既定 {MODEL})")
     r.add_argument("--keep", action="store_true", help="一時ディレクトリ(題材と試行の複製)を残す")
     r.set_defaults(fn=cmd_run)
     args = ap.parse_args()

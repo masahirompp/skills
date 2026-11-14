@@ -151,9 +151,12 @@ def write_json(path, data):
     os.replace(tmp, path)
 
 
+MODEL = bench.MODEL  # 採点役と分類役のモデル。main が --model で差し替える
+
+
 def ask(prompt, schema, cwd, tools=False, system=None, timeout=45 * 60):
     """claude -p に JSON で答えさせ、(答え, 費用) を返す。プロンプトは標準入力で渡す。"""
-    args = ["claude", "-p", "--output-format", "json", "--json-schema", json.dumps(schema)]
+    args = ["claude", "-p", "--model", MODEL, "--output-format", "json", "--json-schema", json.dumps(schema)]
     if not tools:
         args += ["--tools", ""]
     if system:
@@ -166,6 +169,8 @@ def ask(prompt, schema, cwd, tools=False, system=None, timeout=45 * 60):
     if isinstance(data, list):  # 版によっては、メッセージの配列で返る
         data = next((m for m in reversed(data) if isinstance(m, dict) and m.get("type") == "result"), {})
     out = data.get("structured_output")
+    if data.get("is_error"):  # 利用枠の上限など
+        raise RuntimeError(f"採点役が失敗した: {str(data.get('result'))[:300]}")
     if out is None:
         text = re.sub(r"^```(?:json)?\s*|\s*```$", "", str(data.get("result") or "").strip())
         try:
@@ -548,11 +553,14 @@ def main():
                            ("report", cmd_report, 0)):
         p = sub.add_parser(name)
         p.add_argument("out")
+        p.add_argument("--model", default=bench.MODEL)
         if jobs:
             p.add_argument("--jobs", type=int, default=jobs)
         p.set_defaults(fn=fn)
     args = ap.parse_args()
     args.out = os.path.abspath(args.out)
+    global MODEL
+    MODEL = args.model
     args.fn(args)
 
 

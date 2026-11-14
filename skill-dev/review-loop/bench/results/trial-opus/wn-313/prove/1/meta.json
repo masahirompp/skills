@@ -1,0 +1,29 @@
+{
+ "case": "wn-313",
+ "kind": "ts",
+ "config": "prove",
+ "trial": 1,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 1179584,
+  "cache_read": 1114550,
+  "output": 15911
+ },
+ "cost_usd": 1.0612500000000002,
+ "started_at": "2026-11-15T06:48:53",
+ "duration_s": 383,
+ "num_turns": 19,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [
+  "?? scratch/break.test.ts",
+  "?? scratch/break2.test.ts",
+  "?? scratch/exitcode.sh"
+ ],
+ "head_changed": false
+}

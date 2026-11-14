@@ -1,0 +1,105 @@
+{
+ "cost_usd": 0.12346960000000001,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "detected",
+   "quote": "`ensureGuide` が走るのは `whatnext workbench` が起動したときだけです。そのため、つながったまま案内が消えると戻す手段がありません。",
+   "reason": "作り直しが attach 前だけで、つながったまま wbguide が消えると pane-died の sh-* 分岐や doFollow の切り替えが失敗し画面が離れると、場所も原因も一致して指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "回数が数えるだけで戻らないので、「すぐ落ち続けるときに回り続けない」という目的より強く効きます。",
+   "reason": "@wn_respawned が通算で数えられ時刻で戻らないため、まれな落ちでも6回目で案内が畳まれると指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "detected",
+   "quote": "`res.status` は、tmux がシグナルで終わると `null` になります。この場合も `!== 0` が成り立つので、一覧が残っていれば「could not open」と出し、`fail()` でキーを待ちます。",
+   "reason": "シグナルで終わり status が null のとき誤って失敗と扱うと、場所も原因も一致して指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が、利用者の分割ペインと案内のペインを区別しない点に触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗と判定された道でタイトルを消す OSC 2 が出なくなる点に触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定し、案内のペインが無い状態を見逃す点に触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/cli/guide.ts:19",
+   "summary": "whatnext workbench から作り直した案内が、起動したプロセスの node・cli・PATH を使うため、動いている一覧と版が食い違いうる。",
+   "quote": "一覧が動いている間に利用者が `npm i -g` で版を上げ、手で `whatnext workbench` を打つと、作り直した案内のプログラムだけが新しい版になります。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/cli/workbench.ts:27 と src/ops/app.ts:1156",
+   "summary": "mainSession が claude 以外のとき doFollow が途中で返り、作り直した案内の @wn_name が空のままになり、ステータス行に名前が出ない。",
+   "quote": "後者の場合、作り直した案内の `@wn_name` は空のまま残り、ステータス行は `workbench: ` だけになります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/cli/guide.ts:21",
+   "summary": "同時に作られたとき 'exists' を返すので、相手が workbenchOptions を入れ終える前に attach し、少しの間 prefix や mouse が効かない。",
+   "quote": "ただ、`'exists'` を返すので、作った相手が `workbenchOptions` を入れ終える前に attach する可能性があります。その間は `prefix C-q` と `mouse` が効かず",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "lib/tmux/tmux.ts:400",
+   "summary": "signalGuide が読む @wn_guide_pid をどこも書いておらず、知らせが働いていない(差分の外の既存の問題)。",
+   "quote": "`signalGuide`(`lib/tmux/tmux.ts:400`)が読む `@wn_guide_pid` は、どこからも書かれていません(grep で書く側がありません)。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "src/cli/list.ts:66-67",
+   "summary": "案内を作ったとき、workbenchOptions を ensureGuide の中と一覧の両方で呼ぶので二重になる。",
+   "quote": "作ったときは `ensureGuide` の中で `workbenchOptions(GUIDE, '')` を呼び、そのあと一覧でも呼ぶので、二重になります。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "lib/tmux/tmux.ts:48-59",
+   "summary": "tmux.test.ts はスクリプトに文字列が含まれるかを見ているだけで、振る舞いを確かめていない。",
+   "quote": "ただし `tmux.test.ts` は、スクリプトに `respawn-pane` などの文字列が含まれるかを見ているだけです。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "test/e2e/workbench.test.ts:247-249",
+   "summary": "pid() が失敗すると 0 を返し、process.kill(0, 'SIGKILL') でテストの実行器を含むプロセスグループ全体を殺しうる。",
+   "quote": "`before` が 0 のまま `process.kill(0, 'SIGKILL')` が走ると、**テストの実行器を含むプロセスグループ全体を殺します**。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "test/e2e/workbench.test.ts:254",
+   "summary": "/signal=kill/ は小文字のシグナル名を前提にしており、Linux の CI では一致しない可能性がある。",
+   "quote": "`/signal=kill/` は、`#{pane_dead_signal}` を小文字の名前で出す環境(macOS の `sys_signame`)を前提にしているように見えます。",
+   "quote_ok": true
+  }
+ ]
+}

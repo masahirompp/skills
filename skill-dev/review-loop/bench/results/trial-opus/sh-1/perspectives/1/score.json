@@ -1,0 +1,49 @@
+{
+ "cost_usd": 0.092776,
+ "bugs": [
+  {
+   "id": "B1",
+   "verdict": "detected",
+   "quote": "`git rev-list` は ref を1つでも解決できないと `fatal: bad revision` で終了コード 128 を返し、何も出力しません。",
+   "reason": "rev-list に無い ref を渡すと失敗して first-parent が空になり、空・失敗の検査も消えたことを挙げている。その結果、PR なしのブランチが「merge コミットで取り込み済み」の delete になることまで述べている。",
+   "quote_ok": true
+  },
+  {
+   "id": "B2",
+   "verdict": "detected",
+   "quote": "祖先判定の引数が逆になっています。マージ後に追加したコミットがあるブランチまで削除候補になります。",
+   "reason": "verify_pr_merged の is_ancestor の引数($oid と $sha)の向きが元と逆になったことを指摘し、追加コミットのあるブランチが delete になることにも触れている。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh:62,89",
+   "summary": "MERGED のテストケースはすべて sha == oid なので、祖先判定の向きの誤りを検出できない。",
+   "quote": "テストでは見つかりません。`skill-dev/housekeeping/test.sh:62,89` などの MERGED のケースは、すべて `headRefOid` にブランチ先端そのもの(`sha == oid`)を渡しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/scripts/scan.sh:74",
+   "summary": "is_ancestor という名前では判定の向きを取り違えやすいので、何が何を含むかが名前から分かる関数名にすべき。",
+   "quote": "`skills/housekeeping/scripts/scan.sh:74` — 判定の向きを取り違えやすい名前です。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/scripts/scan.sh:74",
+   "summary": "is_ancestor の 2>/dev/null が verify_pr_merged にも及び、オブジェクト破損などのエラーが表示されないまま keep に落ちるようになった。",
+   "quote": "`2>/dev/null` が `verify_pr_merged` にも及ぶようになりました。** 旧 L93 では stderr を捨てていなかったので、オブジェクト破損などのエラーはユーザーに見えていました。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/scripts/scan.sh:118-119",
+   "summary": "on_fp の値の意味を説明するコメントが消え、移した先の L84 の説明は実装と食い違っている。",
+   "quote": "`skills/housekeeping/scripts/scan.sh:118-119` — `on_fp` の値の意味がコメントから消えました。",
+   "quote_ok": true
+  }
+ ]
+}

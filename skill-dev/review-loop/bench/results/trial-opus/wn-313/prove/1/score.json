@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.0753096,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "場面 C で作業台を映している間に案内を使い切る場合を試していますが、閉じるのを意図どおりと結論しています。案内が一覧の起動時と attach 前にしか作り直されないという原因には触れていません。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "起動し直しの回数(5回)はペインごとの累計で、元に戻りません。whatnext を長く動かし続けると、間隔を空けて5回落ちただけで案内のセッションが畳まれます。",
+   "reason": "仕様どおりと位置づけてはいますが、@wn_respawned が累計で数え直されないため、続けて落ちていなくても上限に達して案内が畳まれる、という原因と結果を正しく述べています。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "試したのは detach-client と attach の失敗だけで、つながったあとにシグナルで止められ status が null になる場合を誤って失敗と判定する問題には触れていません。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide で利用者が分割したペインも案内として起動し直される問題には触れていません。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなる問題には触れていません。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで案内の有無を判定している問題には触れていません。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

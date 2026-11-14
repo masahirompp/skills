@@ -1,0 +1,28 @@
+{
+ "cost_usd": 0.09668,
+ "bugs": [
+  {
+   "id": "B1",
+   "verdict": "detected",
+   "quote": "存在する ref だけを rev-list に渡す絞り込みが消えた。refs/heads/$default か refs/remotes/$hk_remote/$default のどちらかが無いと、rev-list 全体が fatal(128)で失敗して first-parent ファイルが空になる。",
+   "reason": "rev-list に存在しない ref を渡すと失敗して first-parent が空になることと、その結果未着手のブランチが「delete merge コミットで取り込み済み」と誤判定されることの両方を述べている。",
+   "quote_ok": true
+  },
+  {
+   "id": "B2",
+   "verdict": "detected",
+   "quote": "verify_pr_merged の祖先判定の引数が逆になった。元は「手元の先端 sha が PR head oid の祖先か」だったが、今は「oid が sha の祖先か」を見ているので、マージ後に追加コミットがあるブランチが delete 判定になる。",
+   "reason": "verify_pr_merged の is_ancestor の引数の向きが逆になったことと、追加コミットのあるブランチが delete になることを指摘している。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh:59",
+   "summary": "マージ後に追加コミットがあるケースと、既定ブランチの ref が片方無いケースのテストが無く、今回の退行を検出できない。",
+   "quote": "マージ後に追加コミットがあるケースと、ローカルかリモートの既定ブランチが無いケースのテストが無い。今回の 2 つの退行を検出できない。",
+   "quote_ok": true
+  }
+ ]
+}
