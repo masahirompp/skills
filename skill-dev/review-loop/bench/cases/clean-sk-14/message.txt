@@ -1,0 +1,20 @@
+housekeeping: mktemp の失敗で止まり、一時ディレクトリを TMPDIR に従わせる
+
+## 背景
+Claude Code のサンドボックス(macOS Seatbelt)の中では、scan.sh / apply.sh の最初の `mktemp` が `Operation not permitted` で失敗する。そのあと空のパスのまま進み、scan.sh は `/prs.json` に書きに行って、原因と違う「PR 一覧を取得できない」で終わっていた。
+
+TMPDIR が効かなかった原因: macOS の `mktemp` はテンプレートを付けないと TMPDIR を見ずに `/var/folders/...`(`_CS_DARWIN_USER_TEMP_DIR`)を使う。サンドボックスの外でも `TMPDIR=x mktemp` で再現する。
+
+## 変更
+- `lib.sh`: `hk_mktemp_dir` を追加。`TMPDIR`(未設定なら `/tmp`)の下にテンプレート付きで作る。失敗や空のパスは、理由を stderr に出して失敗として返す
+- `lib.sh` / `scan.sh`: 削除の可否を決める判定(`hk_is_protected`、`hk_path_in_use`、scan.sh の判定の経路)から、ヒアドキュメントへの依存を外す。scan.sh で判定の結果が空になったときは残す側に倒す。bash はヒアドキュメントを一時ファイルで渡すことがあり、作れないと入力が空になって「保護対象でない」「使用中でない」と判定していた(fail-open)
+- `scan.sh`: 一時ディレクトリを作れなければ、git fetch より前に止まる。エラー文は `TMPDIR=<書き込める場所>` を案内する
+- `apply.sh`: 承認済みの行を変数で持ち、一時ファイルを使わない
+- `scan.sh`: 判定の入力が読めないときに削除側に倒れていた経路を塞ぐ(この PR より前からあったもの)。jq が無い・PR 一覧が JSON の配列でないときは止まる。PR の状態が分からなければ keep。ローカルの既定ブランチが無いと first-parent の履歴が空になり、取り込み済みのブランチがすべて delete になっていたので、存在する ref だけを渡し、読めなければ止まる
+- `lib.sh`: 保護パターンを、単語分割を使わずに1行ずつ照合する(呼び出し元の `set -f` に頼らない)。一覧を取れなければ保護対象とみなす。判定の結果は、1行の既知の action(delete / ask / keep / prune)でなければ keep に倒す。`git config` の読み取りの失敗(キーが無いのとは別)も、保護対象とみなす
+- `lib.sh`: lsof が無い、または自分自身すら一覧に出ない(サンドボックスなどでプロセスを見られない)ときは、worktree が使用中かどうかを「確かめられない」として残す。scan.sh と apply.sh の両方に効く
+- `SKILL.md`: サンドボックスで失敗したときに `!` で scan.sh / apply.sh を実行してもらう案内(コマンドの形、絶対パス、実行後に確かめること)と、一時ディレクトリの場所・前提のコマンドを追記。apply.sh の worktree の行が「lsof でプロセスを確かめられない」で skipped になったときも、`!` で実行し直すよう案内する
+- `test.sh`: 作れない場合に fetch より前に止まること、読めない PR 一覧で止まること、ローカルの既定ブランチが無くても未着手のブランチが ask になること、`set +f` でも保護パターンを展開しないこと、判定の結果の形が違えば keep に倒すこと、lsof でプロセスを見られなければ worktree を残すこと、`git config` を読めなければ保護対象とみなすこと、`TMPDIR` の下に作ること、片付けること、保護パターン(空白区切りの `HOUSEKEEPING_PROTECT` と git config)を検証。scan.sh・apply.sh・lib.sh にヒアドキュメントが無いことは、書き方で確かめる
+
+## 確認
+`skill-dev/housekeeping/test.sh` 全件成功。

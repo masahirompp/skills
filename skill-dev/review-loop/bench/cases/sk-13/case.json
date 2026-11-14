@@ -1,0 +1,12 @@
+{
+  "id": "sk-13",
+  "kind": "python",
+  "repo_name": "skills",
+  "branch": "review-loop-perspective-options",
+  "source": {
+    "type": "repo",
+    "path": ".",
+    "base": "90c0259",
+    "head": "ca40dc8"
+  }
+}

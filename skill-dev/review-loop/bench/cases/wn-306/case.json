@@ -1,0 +1,21 @@
+{
+  "id": "wn-306",
+  "kind": "ts",
+  "repo_name": "whatnext",
+  "branch": "sub-rows-unselectable",
+  "source": {
+    "type": "repo",
+    "path": "~/ghq/github.com/masahirompp/whatnext",
+    "base": "35aba69",
+    "head": "459a5fc"
+  },
+  "setup": [
+    [
+      "npm",
+      "ci",
+      "--silent",
+      "--no-audit",
+      "--no-fund"
+    ]
+  ]
+}

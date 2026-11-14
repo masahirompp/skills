@@ -1,0 +1,13 @@
+{
+  "id": "clean-sk-14",
+  "kind": "shell",
+  "repo_name": "skills",
+  "branch": "housekeeping-mktemp",
+  "source": {
+    "type": "repo",
+    "path": ".",
+    "base": "1a2c98d",
+    "head": "dcef303",
+    "squash": true
+  }
+}

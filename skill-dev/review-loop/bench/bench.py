@@ -71,6 +71,8 @@ CONFIGS = {
 TIMEOUT = rl.REVIEW_TIMEOUT
 MODEL = "claude-opus-5-5"  # 子に使わせるモデルの既定。--model で変える
 print_lock = threading.Lock()
+stop = threading.Event()  # 利用枠の上限に当たったら立てる。残りの試行を始めない
+LIMIT_RE = re.compile(r"usage limit|hit your .*limit|rate limit|overloaded", re.I)
 
 
 def log(msg):
@@ -123,11 +125,20 @@ def build(case, dest):
     elif src["type"] == "repo":
         # 実際の PR の、レビューを受ける前のコミットまでを取り込む(それより後の修正は取り込まない)
         git(dest, "init", "-q", "-b", "main", repo)
-        origin_repo = os.path.expanduser(src["path"])  # 読むだけで、変えない
+        # path が "." なら、このリポジトリ自身。読むだけで、変えない
+        origin_repo = REPO if src["path"] == "." else os.path.expanduser(src["path"])
         head, base = (git(origin_repo, "rev-parse", src[k] + "^{commit}").strip() for k in ("head", "base"))
         git(repo, "fetch", "-q", "--no-tags", origin_repo, head)
         git(repo, "update-ref", "refs/heads/main", base)
-        git(repo, "switch", "-q", "-c", case["branch"], "FETCH_HEAD")
+        if src.get("squash"):
+            # レビューを通った最終形を、1つのコミットにまとめる(「指摘を反映する」というコミットを見せない)
+            tree = git(repo, "rev-parse", head + "^{tree}").strip()
+            head = git(repo, "commit-tree", tree, "-p", base, "-F", os.path.join(case["dir"], "message.txt")).strip()
+        git(repo, "switch", "-q", "-c", case["branch"], head)
+        # 取り込みに使った参照と、まとめる前のコミットを残さない
+        os.remove(os.path.join(repo, ".git", "FETCH_HEAD"))
+        git(repo, "reflog", "expire", "--expire=now", "--all")
+        git(repo, "gc", "-q", "--prune=now")
     else:
         raise RuntimeError(f"source.type が不明: {src['type']}")
     origin = os.path.join(dest, "origin.git")
@@ -228,7 +239,7 @@ def child_env(root):
 
 def run_trial(case, config, n, template, root, out, keep, model):
     dest = os.path.join(out, case["id"], config, str(n))
-    if os.path.exists(os.path.join(dest, "meta.json")):
+    if os.path.exists(os.path.join(dest, "meta.json")) or stop.is_set():
         return
     shutil.rmtree(dest, ignore_errors=True)
     os.makedirs(dest)
@@ -288,6 +299,12 @@ def run_trial(case, config, n, template, root, out, keep, model):
         children.kill_all()
         if not keep:
             shutil.rmtree(trial, ignore_errors=True)
+    if meta["status"] != "ok" and LIMIT_RE.search(str(meta.get("detail") or "")):
+        # 利用枠の上限などで動けなかった試行は、結果として残さない(次に同じコマンドで回したときにやり直す)
+        stop.set()
+        shutil.rmtree(dest, ignore_errors=True)
+        log(f"stop  {case['id']} {config} #{n}: {meta['detail'][:200]}(残りの試行を始めない)")
+        return
     with open(os.path.join(dest, "meta.json"), "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=1)
     t = meta["tokens"]
@@ -323,7 +340,9 @@ def cmd_run(args):
     finally:
         if not args.keep:
             shutil.rmtree(root, ignore_errors=True)
-    log(f"結果: {out}")
+    log(f"結果: {out}" + ("(利用枠の上限で途中まで。同じコマンドで続きから回せる)" if stop.is_set() else ""))
+    if stop.is_set():
+        sys.exit(3)
 
 
 def cmd_build(args):

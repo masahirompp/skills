@@ -1,0 +1,22 @@
+{
+  "id": "clean-wn-315",
+  "kind": "ts",
+  "repo_name": "whatnext",
+  "branch": "new-session-repo-first",
+  "source": {
+    "type": "repo",
+    "path": "~/ghq/github.com/masahirompp/whatnext",
+    "base": "d2c9475",
+    "head": "2bb2dee",
+    "squash": true
+  },
+  "setup": [
+    [
+      "npm",
+      "ci",
+      "--silent",
+      "--no-audit",
+      "--no-fund"
+    ]
+  ]
+}
