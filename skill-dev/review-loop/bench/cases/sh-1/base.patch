@@ -1,0 +1,64 @@
+diff --git a/skill-dev/housekeeping/test.sh b/skill-dev/housekeeping/test.sh
+index 4a0ef87..64dbb27 100755
+--- a/skill-dev/housekeeping/test.sh
++++ b/skill-dev/housekeeping/test.sh
+@@ -61,10 +61,6 @@ branch_with squashed s1 s2
+ git push -q origin squashed
+ add_pr 1 MERGED squashed "$(git rev-parse squashed)"
+ git merge -q --squash squashed >/dev/null && git commit -qm "squash #1"
+-# PR マージ後に追加コミット
+-branch_with more-after a1
+-add_pr 2 MERGED more-after "$(git rev-parse more-after)"
+-git switch -q more-after && commit a2 && git switch -q main
+ # オープン / 未マージクローズ / PR なし未マージ
+ branch_with open-pr o1
+ add_pr 3 OPEN open-pr "$(git rev-parse open-pr)"
+@@ -136,7 +132,6 @@ expect keep branch main
+ expect delete branch nopr-ff "コミットした記録"
+ expect delete branch nopr-merge "merge コミット"
+ expect delete branch squashed "PR #1"
+-expect keep branch more-after "追加コミット"
+ expect keep branch open-pr "オープン"
+ expect keep branch closed-pr "クローズ"
+ expect keep branch nopr-unmerged "未取り込み"
+@@ -226,17 +221,6 @@ else
+   fail "lib: set +f で保護パターンが展開された"
+ fi
+ 
+-# ローカルの既定ブランチが無くても、first-parent の履歴を origin から読むこと
+-# (読めないと、作ったばかりのブランチが「merge コミットで取り込み済み」の delete になる)
+-git clone -q "$root/origin.git" "$root/no-local-main" 2>/dev/null
+-(
+-  cd "$root/no-local-main"
+-  git switch -q --detach && git branch fresh2 && git branch -q -D main
+-  "$scripts/scan.sh" >"$root/scan-nomain.tsv" 2>/dev/null
+-) || true
+-got=$(awk -F'\t' '$2 == "branch" && $3 == "fresh2" { print $1 }' "$root/scan-nomain.tsv")
+-[ "$got" = ask ] && pass "scan: ローカルの既定ブランチが無くても未着手のブランチは ask" || fail "scan: ローカルの既定ブランチが無いと fresh2 → ${got:-(出力なし)}"
+-
+ # 読めない PR 一覧では止まること(jq が空を返すと、オープン PR の保護が外れる)
+ echo 'not json' >"$root/bad-prs.json"
+ set +e
+@@ -278,7 +262,7 @@ set -e
+ gone_branch() { git rev-parse -q --verify "refs/heads/$1" >/dev/null && fail "apply: branch $1 が残っている" || pass "apply: branch $1 を削除"; }
+ kept_branch() { git rev-parse -q --verify "refs/heads/$1" >/dev/null && pass "apply: branch $1 は残す" || fail "apply: branch $1 が消えた"; }
+ for b in nopr-ff squashed wt-merged wt-gone; do gone_branch "$b"; done
+-for b in nopr-merge entire/checkpoints/v1 entire/abc1234-e3b0c4 fresh unverifiable more-after wt-dirty wt-busy main; do kept_branch "$b"; done
++for b in nopr-merge entire/checkpoints/v1 entire/abc1234-e3b0c4 fresh unverifiable wt-dirty wt-busy main; do kept_branch "$b"; done
+ [ ! -e "$root/wt/wt-merged" ] && pass "apply: worktree wt-merged を削除" || fail "apply: worktree wt-merged が残っている"
+ [ ! -e "$root/wt/wt-detached" ] && pass "apply: detached worktree を削除" || fail "apply: detached worktree が残っている"
+ for w in wt-dirty wt-untracked wt-locked wt-busy; do
+diff --git a/skills/housekeeping/scripts/scan.sh b/skills/housekeeping/scripts/scan.sh
+index 342e728..fe25739 100755
+--- a/skills/housekeeping/scripts/scan.sh
++++ b/skills/housekeeping/scripts/scan.sh
+@@ -76,8 +76,7 @@ merged_into_default() {
+ }
+ 
+ # 既定ブランチの first-parent 履歴。ブランチの先端がここに無いのに既定ブランチに含まれていれば、merge コミットで取り込まれている。
+-# 存在する ref だけを渡す(1つでも無い ref があると rev-list は何も出さず、取り込み済みのブランチがすべて
+-# 「merge コミットで取り込み済み」になる)。作れなければ止まる。
++# リモートとローカルのうち、存在する ref を渡す。
+ fp_refs=''
+ for r in "refs/remotes/$hk_remote/$default" "refs/heads/$default"; do
+   git rev-parse -q --verify "$r^{commit}" >/dev/null && fp_refs="$fp_refs $r"

@@ -1,0 +1,42 @@
+{
+ "cost_usd": 0.1842524,
+ "bugs": [
+  {
+   "id": "B1",
+   "verdict": "detected",
+   "quote": "`git rev-list` は ref を 1 つでも解決できないと、何も出力せずに失敗します。旧コードは存在する ref だけを渡し、空ならエラー終了していましたが、その両方が消えています。",
+   "reason": "存在しない ref で rev-list が失敗して first-parent が空になること、検査が消えたこと、PR なしのブランチが未着手も含めて delete になることまで、正解と同じ場所・原因で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "B2",
+   "verdict": "detected",
+   "quote": "旧コードは `--is-ancestor \"$sha\" \"$oid\"`(手元の先端が PR の head に含まれるか)でしたが、新コードは `is_ancestor \"$oid\" \"$sha\"` です。",
+   "reason": "verify_pr_merged の is_ancestor の引数の向きが元と逆になったことと、追加コミットのあるブランチが delete になることを明示している。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "scan.sh:84-85, 122-123",
+   "summary": "リダイレクトが必ずファイルを作るため、grep が 2 以上を返す「履歴を読めない」の分岐にほぼ到達しなくなったと指摘している。",
+   "quote": "82 行目のリダイレクトがファイルを必ず作るので、`grep` が 2 以上を返すのは一時ディレクトリが消えた場合くらいです。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "scan.sh:74, 93",
+   "summary": "is_ancestor が git のエラーと「祖先でない」を区別せず、2>/dev/null の追加でエラーも見えなくなったと指摘している。",
+   "quote": "`git merge-base --is-ancestor` は祖先でなければ 1、エラーならそれ以外を返しますが、どちらも偽として扱われます。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "scan.sh:73-74",
+   "summary": "マージ後の追加コミットとローカルの既定ブランチ無しの 2 ケースを検出できるテストが無いと指摘している。",
+   "quote": "全件成功が事実なら、上の 2 ケース(マージ後の追加コミット、ローカルの既定ブランチ無し)はテストで検出できていません。",
+   "quote_ok": true
+  }
+ ]
+}

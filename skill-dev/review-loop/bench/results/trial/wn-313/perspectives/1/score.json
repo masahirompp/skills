@@ -1,0 +1,84 @@
+{
+ "cost_usd": 0.19818560000000002,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "detected",
+   "quote": "作業台の画面が `sh-<id>` を映している間に案内が消えると、作り直す者がいません。",
+   "reason": "作業台を映している間に案内が消えると作り直されず、doFollow の switchClient の失敗と pane-died 側の kill-session で画面が離れることを、正解と同じ場所・原因で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "`@wn_respawned` はペインのオプションで、`respawn-pane` のあとも残ることを実測しました(3 を入れて起動し直しても 3 のまま)。戻す処理はありません。",
+   "reason": "@wn_respawned が通算で数えられ戻されないため、散発的に落ちても6回目で案内が畳まれると指摘しており、detect_criteria を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "workbench.ts:33 の誤判定の指摘は whatnext を起動し直した直後の競合が原因で、シグナルで終わり status が null になる場合の誤判定には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が利用者の分割したペインと案内のペインを区別しない点への指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなった点への指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定し、案内のペインがない場合に作り直されない点への指摘がない(guide.ts は「指摘なし」としている)。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/cli/workbench.ts:33-39",
+   "summary": "見ているセッションが消えて attach が 0 で終わる場合は、追加したエラー表示にかからず、作業台の画面が無言で閉じる。",
+   "quote": "上の6回目で案内が消えると、作業台の画面は 0 で終わり、Ghostty の分割は何も出さずに閉じます。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/cli/workbench.ts:33",
+   "summary": "whatnext を終了した直後に別の端末で起動し直すと、attach が 1 で返った時点で新しい list があり、誤って「could not open」と出てキー待ちになる。",
+   "quote": "whatnext を終了した直後に別の端末で起動し直すと、attach が 1 で返った時点で新しい `list` があり、「could not open」と出てキー待ちになります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/cli/workbench.ts:22",
+   "summary": "作り直した案内が、動いている一覧の版ではなく whatnext workbench を実行した側の版(node、cli、PATH)で動き、版がずれる。",
+   "quote": "`paneCommand(env, 'guide')` の `node`、`cli`、`PATH` は実行した側のものです。npm で更新したあと古い一覧が動いている間は、案内と作業台のオプションだけ新しい版になります。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/cli/list.ts:66-67",
+   "summary": "workbenchOptions(GUIDE, '') が ensureGuide の中と重複して呼ばれ、起動時に2回送られる。",
+   "quote": "`ensureGuide` が作ったときに同じ呼び出しを済ませているので、起動時は2回送られます。害はなく、片方に寄せられます。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "lib/tmux/tmux.test.ts:75-81",
+   "summary": "テストが文字列を含むかだけを見ていて、5回を超えて畳む動作と、そのあとの作り直しを通しで確かめていない。",
+   "quote": "文字列を含むかだけを見ており、e2e も1回目の起動し直しまでです。5回を超えて畳む動作と、そのあと `whatnext workbench` が作り直す動作は通しで確かめられていません。",
+   "quote_ok": true
+  }
+ ]
+}

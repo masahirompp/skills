@@ -1,0 +1,7 @@
+{
+  "id": "sh-1",
+  "kind": "shell",
+  "repo_name": "skills",
+  "branch": "housekeeping-merged-check",
+  "source": {"type": "skills", "rev": "753bcf1"}
+}

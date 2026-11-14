@@ -1,0 +1,146 @@
+{
+ "case": "sh-1",
+ "cost_usd": 0.144772,
+ "clusters": [
+  {
+   "title": "on_first_parent は呼び出しが 1 箇所だけの 1 行の包みで、終了コードの説明が使う場所から離れている。",
+   "location": "scan.sh:85 `on_first_parent`",
+   "members": [
+    "e1"
+   ],
+   "id": "sh-1/c1",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "`git grep -n on_first_parent -- skills` の結果、定義は scan.sh:85、呼び出しは scan.sh:118 の 1 箇所だけで、終了コードの説明コメントは 84 行目、使う場所は 118〜124 行目。指摘の事実関係は正しいが、関数の中身は main の `grep -qxF \"$sha\" \"$tmp/first-parent\"` と同じで、包んだこと自体では出力は変わらない。構造とコメント位置の好みの話で、挙動に関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "is_ancestor は同じ型の位置引数が 2 つあり、名前から引数の向きが読めない。",
+   "location": "scan.sh:73-74 `is_ancestor <a> <b>`",
+   "members": [
+    "e10"
+   ],
+   "id": "sh-1/c2",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "scan.sh:73-74 の `is_ancestor <a> <b>` は位置引数 2 つで、向きは 73 行目のコメント(a が b の祖先か)でしか分からない。指摘は命名・引数設計の読みやすさについてで、それ自体は挙動の主張ではないため trivial。実行で確かめる対象が無いので実行していない。なお別件として、この差分は verify_pr_merged の引数の向きを実際に逆にしており(main: `--is-ancestor \"$sha\" \"$oid\"` → HEAD: `is_ancestor \"$oid\" \"$sha\"`)、マージ後に追加コミットのあるブランチが keep から delete に変わることを再現した(c5 の evidence 参照)。ただしこの指摘はその不具合を主張していない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "is-ancestor の呼び出しに 2>/dev/null が付き、git のエラーが見えなくなり「祖先でない」とも区別できない。",
+   "location": "scan.sh:74, 93 (verify_pr_merged)",
+   "members": [
+    "e3",
+    "e8"
+   ],
+   "id": "sh-1/c3",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "事実関係は正しい。一時リポジトリで `git merge-base --is-ancestor HEAD refs/heads/main`(ref 無し)は `fatal: Not a valid object name` で rc=128、祖先でない場合は rc=1。is_ancestor(scan.sh:74)はどちらも偽として扱い、stderr を捨てる。ただし挙動の差は出ない。merged_into_default の 2 箇所は main の時点で既に `2>/dev/null` 付きで同じ扱い。新たに `2>/dev/null` が付いた verify_pr_merged(scan.sh:93)は、直前の `has_commit \"$oid\"`(91 行目)で oid の存在を確認済みで、sha は for-each-ref 由来のブランチ先端なので、git がエラーを返す経路を作れなかった。エラーが起きたとしても偽 → keep(残す側)になる。指摘自身も「実害は小さい」としており、到達する誤動作を示せないため trivial。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "リダイレクトが必ずファイルを作るため、grep が 2 以上を返す「履歴を読めない」の分岐にほぼ到達しない。",
+   "location": "scan.sh:84-85, 122-123",
+   "members": [
+    "e7"
+   ],
+   "id": "sh-1/c4",
+   "class": "real",
+   "scope": "in",
+   "ran": true,
+   "evidence": "指摘どおり、scan.sh:82 のリダイレクトは rev-list が失敗しても空のファイルを作るため、grep は 2 以上でなく 1 を返し、122〜123 行目の「履歴を読めない」に到達しない。差分が main にあった fp_refs の存在確認と `[ -s ] || exit 1` を消したため、読めなかった履歴が「first-parent に無い」と誤判定される。再現: 一時リポジトリ(origin は bare)で main 先端に `fresh` を作り、`git switch -c work main; git branch -D main` でローカル main を無くして実行。`git rev-list --first-parent refs/remotes/origin/main refs/heads/main --` は `fatal: bad revision 'refs/heads/main'` で出力 0 行。main 版 scan.sh: `ask branch fresh … 作成後にコミットした記録がない(未着手の可能性)`。HEAD 版: `delete branch fresh … PR なし・merge コミットで main に取り込み済み`(exit=0、エラー表示なし)。両方の ref がある場合はどちらの版も ask。差分で入った誤判定(ask → delete、理由も誤り)なので in。補足: grep が 2 以上を返す分岐そのものは、main でも事前に exit 1 していたので同じく到達しにくかった。新たに壊れたのは、その手前の読み取り失敗の検出が無くなった点。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "削除可否の判定を書き換えたのに、祖先判定の引数の向きの逆転や既定ブランチの ref が片方だけのケースを検出できるテストが無い。",
+   "location": "skill-dev/housekeeping/test.sh:62",
+   "members": [
+    "e2",
+    "e4",
+    "e5",
+    "e6",
+    "e9",
+    "e11"
+   ],
+   "id": "sh-1/c5",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "指摘の事実関係は正しいが、内容は「テストが無い」なので定義上 trivial。確認: `grep -n '追加コミット\\|branch -D main\\|update-ref -d' skill-dev/housekeeping/test.sh` は 0 件で、追加コミットの分岐も ref が片方だけのケースもテストに無い。MERGED の PR は全て headRefOid=ブランチ先端(test.sh:62, 72, 89)なので、祖先判定の向きを逆にしても結果が同じ。HEAD で `bash skill-dev/housekeeping/test.sh` は「全件成功」。一方、検出されない不具合は実在する: PR の head の後に 1 コミット足したブランチ `extra` で、main 版は `keep branch extra … PR #1 のマージ後に追加コミットが 1 件ある`、HEAD 版は `delete branch extra … PR #1 マージ済み`(scan.sh:93 の引数の向きが main と逆)。ref が片方だけのケースの誤判定は c4 で再現済み。つまりテストの欠落が、この差分の 2 つの退行を実際に見逃している。",
+   "classified_by": "llm"
+  }
+ ],
+ "members": {
+  "e1": {
+   "dir": "sh-1/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 2
+  },
+  "e2": {
+   "dir": "sh-1/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e3": {
+   "dir": "sh-1/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 2
+  },
+  "e4": {
+   "dir": "sh-1/security-review/1",
+   "config": "security-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e5": {
+   "dir": "sh-1/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 5
+  },
+  "e6": {
+   "dir": "sh-1/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 4
+  },
+  "e7": {
+   "dir": "sh-1/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 1
+  },
+  "e8": {
+   "dir": "sh-1/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 3
+  },
+  "e9": {
+   "dir": "sh-1/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 3
+  },
+  "e10": {
+   "dir": "sh-1/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 1
+  },
+  "e11": {
+   "dir": "sh-1/prove/1",
+   "config": "prove",
+   "trial": 1,
+   "n": 1
+  }
+ },
+ "classify_cost_usd": 0.7788628000000001
+}

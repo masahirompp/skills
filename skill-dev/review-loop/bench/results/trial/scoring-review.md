@@ -1,0 +1,169 @@
+# 採点の抜き取り用の一覧
+
+検出の判定と、余計な指摘の分類を、根拠つきで並べる。★ は乱数(種は固定)で選んだ抜き取りの対象。
+レビューの出力の全文は、各試行の `result.md`。基準は `score.py` の SCORE_PROMPT と CLASSIFY_PROMPT。
+
+## 検出の判定
+
+- `sh-1/code-review/1` B1 → **detected**
+  - 理由: rev-list に無い ref を渡すと失敗して first-parent が空になることと、その結果 PR なしブランチが全て delete になることの両方を、同じ箇所について述べている。
+  - 引用: 「存在する ref だけを rev-list に渡す処理と、失敗・空のときに error で止まるガードを削ったため、既定ブランチのローカルかリモートの片方が無いと first-parent 一覧が空のまま判定が進む。」
+- ★ `sh-1/code-review/1` B2 → **detected**
+  - 理由: verify_pr_merged の is_ancestor で引数の向きが元と逆になったことと、追加コミットのあるブランチが delete になることを指摘している。
+  - 引用: 「verify_pr_merged の祖先判定で引数の向きが逆になり(旧: sha が oid の祖先 → 新: is_ancestor "$oid" "$sha")、マージ後に追加コミットがあるブランチが delete 候補になる。」
+- `sh-1/mattpocock/1` B1 → **detected**
+  - 理由: ref が無いと rev-list が失敗して first-parent が空になること、存在確認とエラー終了が消えたこと、その結果 delete に判定されることまで同じ場所で指摘している。
+  - 引用: 「2 つの ref のどちらかが無いと rev-list は失敗して何も出さないが、リダイレクトで空の `$tmp/first-parent` は作られる。そのため `grep -qxF` は 2 ではなく 1 を返す。」
+- `sh-1/mattpocock/1` B2 → **detected**
+  - 理由: verify_pr_merged の祖先判定の引数の向きが逆になったことを指摘し、追加コミットのあるブランチが delete になることにも触れている。
+  - 引用: 「変更前は `--is-ancestor "$sha" "$oid"`、変更後は `is_ancestor "$oid" "$sha"` で、引数の向きが逆。」
+- `sh-1/perspectives/1` B1 → **detected**
+  - 理由: 存在しない ref で rev-list が失敗して first-parent が空になること、検査が消えたこと、PR なしのブランチが未着手も含めて delete になることまで、正解と同じ場所・原因で指摘している。
+  - 引用: 「`git rev-list` は ref を 1 つでも解決できないと、何も出力せずに失敗します。旧コードは存在する ref だけを渡し、空ならエラー終了していましたが、その両方が消えています。」
+- `sh-1/perspectives/1` B2 → **detected**
+  - 理由: verify_pr_merged の is_ancestor の引数の向きが元と逆になったことと、追加コミットのあるブランチが delete になることを明示している。
+  - 引用: 「旧コードは `--is-ancestor "$sha" "$oid"`(手元の先端が PR の head に含まれるか)でしたが、新コードは `is_ancestor "$oid" "$sha"` です。」
+- ★ `sh-1/prove/1` B1 → **detected**
+  - 理由: rev-list に存在しない ref を渡して first-parent が空になること、空の検査が消えたこと、その結果 PR なしのブランチが delete になることを全て指摘している。
+  - 引用: 「片方が無いと rev-list 全体が失敗し、`first-parent` は空のファイルになります。元にあった「存在する ref だけ渡す」処理と、空なら `error: … の履歴を読めない` で止まる処理は、どちらも消えています。」
+- ★ `sh-1/prove/1` B2 → **detected**
+  - 理由: verify_pr_merged の is_ancestor の引数の向きが元と逆になったことを指摘し、追加コミットのあるブランチが delete になることも示している。
+  - 引用: 「`verify_pr_merged` で `is_ancestor` の引数が逆になっています(`scan.sh:93`)。元は `git merge-base --is-ancestor "$sha" "$oid"`、変更後は `is_ancestor "$oid" "$sha"` です。」
+- `sh-1/security-review/1` B1 → **detected**
+  - 理由: 脆弱性としては挙げていないが、欠けた ref で rev-list が失敗して first-parent が空になり、終了コードの検査も無くなったため PR なしのブランチが全て delete になる、と原因と結果の両方を正解どおりに述べている。
+  - 引用: 「ローカルに既定ブランチが無いなど片方の ref が欠けると、`rev-list` は失敗して空のファイルが残ります。」
+- `sh-1/security-review/1` B2 → **detected**
+  - 理由: verify_pr_merged の祖先判定の引数の向きが元と逆になったことを指摘し、マージ後に追加コミットを積んだブランチが delete になることにも触れている。
+  - 引用: 「変更後は `is_ancestor "$oid" "$sha"` で、PR の head が手元の先端に含まれるときに `delete` になります。」
+- ★ `wn-313/code-review/1` W313-1 → **detected**
+  - 理由: 項目4が、作業台を映している間に wbguide が消えると作り直されず、doFollow・killSafely・pane-died の切り替えが失敗して画面が離れると、正解と同じ場所と原因で指摘している。
+  - 引用: 「案内のセッションを作り直すのは `whatnext workbench` の attach の前だけで、一覧や `pane-died` が案内へ切り替える経路(`doFollow`、`killSafely`、`@wn_paned_sh` の `switch-client -t =wbguide`)は、案内がないと黙って失敗する。」
+- ★ `wn-313/code-review/1` W313-2 → **detected**
+  - 理由: 項目3が、@wn_respawned が通算で数えられ数え直されないため、間をあけた終了でも6回目に案内が畳まれると指摘している。
+  - 引用: 「起動し直しの回数 `@wn_respawned` はペインの寿命を通して増えるだけで、安定して動いたあとも戻らない。」
+- ★ `wn-313/code-review/1` W313-3 → **missed**
+  - 理由: attach の判定について述べた項目2は status 0 を成功扱いにする話で、シグナルで終わり status が null のときに「つなげなかった」と誤判定する点には触れていない。
+- `wn-313/code-review/1` W313-4 → **detected**
+  - 理由: 項目1が、wbguide の分岐がセッション名だけで判定し利用者のペインも起動し直すこと、@wn_guide_died の上書きまで指摘している。
+  - 引用: 「`pane-died` の `wbguide)` の分岐はセッション名だけで判定するので、案内のプログラム以外のペイン(案内のセッションで利用者が `ctrl+q %` / `ctrl+q c` で作ったシェル)も起動し直してしまう。」
+- `wn-313/code-review/1` W313-5 → **missed**
+  - 理由: 失敗の道でタイトルを消す OSC 2 が出なくなったことへの言及がどこにもない。
+- `wn-313/code-review/1` W313-6 → **detected**
+  - 理由: 項目1の末尾が、セッションは残るが案内のペインがないとき ensureGuide が 'exists' を返して作り直さないことを、正解と同じ原因で指摘している。
+  - 引用: 「5 回を超えて案内のペインだけ `kill-pane` されると、利用者のペインだけの `wbguide` が残り、`ensureGuide` は 'exists' を返して案内のないセッションにつなぐ。」
+- `wn-313/mattpocock/1` W313-1 → **missed**
+  - 理由: 作業台の画面がつながったまま wbguide が消えたときに誰も作り直さない点(doFollow・killSafely・pane-died の sh-* 分岐)への指摘がなく、「次の whatnext workbench で作り直せる」と述べるにとどまる。
+- `wn-313/mattpocock/1` W313-2 → **detected**
+  - 理由: lib/tmux/tmux.ts の案内の分岐で回数が通算で数えられ、何日あいても6回目で畳まれると、場所も原因も正解どおりに指摘している。
+  - 引用: 「`@wn_respawned` は増えるだけで戻りません。」
+- `wn-313/mattpocock/1` W313-3 → **missed**
+  - 理由: attach の結果の判定がシグナル終了(status が null)を「つなげなかった」と扱う点への指摘がなく、終了コードが 0 になるという別の話(Spec 6)しかない。
+- ★ `wn-313/mattpocock/1` W313-4 → **detected**
+  - 理由: pane-died の wbguide の分岐が利用者の分割したペインを区別せず、起動し直して @wn_guide_died も上書きすると、正解と同じ場所と原因で指摘している。
+  - 引用: 「分岐はセッション名 `wbguide` だけで決まり、案内のプログラムのペインかどうかは見ていません。」
+- `wn-313/mattpocock/1` W313-5 → **missed**
+  - 理由: attach が失敗と判定された道でタイトルを消す OSC 2 が出なくなった点への言及がない。
+- `wn-313/mattpocock/1` W313-6 → **missed**
+  - 理由: ensureGuide がセッションの有無だけで判定し、案内のペインがないセッションを作り直さない点への指摘がなく、ensureGuide は正しく実装されていると評価している。
+- ★ `wn-313/perspectives/1` W313-1 → **detected**
+  - 理由: 作業台を映している間に案内が消えると作り直されず、doFollow の switchClient の失敗と pane-died 側の kill-session で画面が離れることを、正解と同じ場所・原因で指摘している。
+  - 引用: 「作業台の画面が `sh-<id>` を映している間に案内が消えると、作り直す者がいません。」
+- `wn-313/perspectives/1` W313-2 → **detected**
+  - 理由: @wn_respawned が通算で数えられ戻されないため、散発的に落ちても6回目で案内が畳まれると指摘しており、detect_criteria を満たす。
+  - 引用: 「`@wn_respawned` はペインのオプションで、`respawn-pane` のあとも残ることを実測しました(3 を入れて起動し直しても 3 のまま)。戻す処理はありません。」
+- `wn-313/perspectives/1` W313-3 → **missed**
+  - 理由: workbench.ts:33 の誤判定の指摘は whatnext を起動し直した直後の競合が原因で、シグナルで終わり status が null になる場合の誤判定には触れていない。
+- `wn-313/perspectives/1` W313-4 → **missed**
+  - 理由: wbguide の分岐が利用者の分割したペインと案内のペインを区別しない点への指摘がない。
+- `wn-313/perspectives/1` W313-5 → **missed**
+  - 理由: 失敗の道でタイトルを消す OSC 2 が出なくなった点への指摘がない。
+- `wn-313/perspectives/1` W313-6 → **missed**
+  - 理由: ensureGuide がセッションの有無だけで判定し、案内のペインがない場合に作り直されない点への指摘がない(guide.ts は「指摘なし」としている)。
+- ★ `wn-313/prove/1` W313-1 → **missed**
+  - 理由: 作業台の画面がつながったまま wbguide が消えたときに作り直されず、切り替えの失敗や切断になるという指摘は無い。
+- `wn-313/prove/1` W313-2 → **detected**
+  - 理由: @wn_respawned が通算で数えられて数え直されず、間を置いた終了でも6回目に案内が畳まれると指摘しており、正解の原因と一致する。
+  - 引用: 「`@wn_respawned` は増えるだけで戻りません。「起動してすぐ終わる」場合と、長く動いたあとに終わる場合を区別しません。」
+- ★ `wn-313/prove/1` W313-3 → **missed**
+  - 理由: attach 後にクライアントがシグナルで止められた場合を「つなげなかった」と誤判定する点には触れていない。
+- `wn-313/prove/1` W313-4 → **detected**
+  - 理由: wbguide の分岐が案内のペインと利用者の分割ペインを区別せず、起動し直しと @wn_guide_died の上書きが起きると指摘しており、正解と一致する。
+  - 引用: 「`pane-died` の `wbguide)` の分岐は、案内のプログラムのペインかどうかを見ていません。案内の画面で `ctrl+q %` で分割したシェルも「起動し直す」対象になります。」
+- `wn-313/prove/1` W313-5 → **missed**
+  - 理由: attach 失敗の道でタイトルを消す OSC 2 が出なくなった点には触れていない。
+- ★ `wn-313/prove/1` W313-6 → **missed**
+  - 理由: ensureGuide がセッションの有無だけで判定し、案内のペインがない場合に作り直されない点には触れていない。
+- `wn-313/security-review/1` W313-1 → **missed**
+  - 理由: レビューはセキュリティの観点だけで、作業台の画面がつながったまま wbguide が消えたときに作り直されない問題には触れていない。
+- `wn-313/security-review/1` W313-2 → **missed**
+  - 理由: @wn_respawned には書き換えの権限の観点で触れただけで、通算で数えて数え直さない問題は指摘していない。
+- `wn-313/security-review/1` W313-3 → **missed**
+  - 理由: attach の結果の判定がシグナルで終わった場合を失敗と扱う問題には触れていない。
+- `wn-313/security-review/1` W313-4 → **missed**
+  - 理由: wbguide の分岐が利用者の分割したペインを区別しない問題は指摘しておらず、分岐は安全だと結論している。
+- ★ `wn-313/security-review/1` W313-5 → **missed**
+  - 理由: 失敗の道でタイトルを消す OSC 2 が出なくなった問題には触れていない。
+- `wn-313/security-review/1` W313-6 → **missed**
+  - 理由: ensureGuide は「新しい入力はない」と退けただけで、セッションの有無だけで判定する問題は指摘していない。
+
+## 余計な指摘の分類(まとまりごと)
+
+- `sh-1/c1` **些末**(実行して確かめた、llm) — on_first_parent は呼び出しが 1 箇所だけの 1 行の包みで、終了コードの説明が使う場所から離れている。
+  - 場所: scan.sh:85 `on_first_parent` / 挙げた構成: mattpocock ×1
+  - 根拠: `git grep -n on_first_parent -- skills` の結果、定義は scan.sh:85、呼び出しは scan.sh:118 の 1 箇所だけで、終了コードの説明コメントは 84 行目、使う場所は 118〜124 行目。指摘の事実関係は正しいが、関数の中身は main の `grep -qxF "$sha" "$tmp/first-parent"` と同じで、包んだこと自体では出力は変わらない。構造とコメント位置の好みの話で、挙動に関わらない。
+- `sh-1/c2` **些末**(実行していない、llm) — is_ancestor は同じ型の位置引数が 2 つあり、名前から引数の向きが読めない。
+  - 場所: scan.sh:73-74 `is_ancestor <a> <b>` / 挙げた構成: mattpocock ×1
+  - 根拠: scan.sh:73-74 の `is_ancestor <a> <b>` は位置引数 2 つで、向きは 73 行目のコメント(a が b の祖先か)でしか分からない。指摘は命名・引数設計の読みやすさについてで、それ自体は挙動の主張ではないため trivial。実行で確かめる対象が無いので実行していない。なお別件として、この差分は verify_pr_merged の引数の向きを実際に逆にしており(main: `--is-ancestor "$sha" "$oid"` → HEAD: `is_ancestor "$oid" "$sha"`)、マージ後に追加コミットのあるブランチが keep から delete に変わることを再現した(c5 の evidence 参照)。ただしこの指摘はその不具合を主張していない。
+- ★ `sh-1/c3` **些末**(実行して確かめた、llm) — is-ancestor の呼び出しに 2>/dev/null が付き、git のエラーが見えなくなり「祖先でない」とも区別できない。
+  - 場所: scan.sh:74, 93 (verify_pr_merged) / 挙げた構成: mattpocock ×1、perspectives ×1
+  - 根拠: 事実関係は正しい。一時リポジトリで `git merge-base --is-ancestor HEAD refs/heads/main`(ref 無し)は `fatal: Not a valid object name` で rc=128、祖先でない場合は rc=1。is_ancestor(scan.sh:74)はどちらも偽として扱い、stderr を捨てる。ただし挙動の差は出ない。merged_into_default の 2 箇所は main の時点で既に `2>/dev/null` 付きで同じ扱い。新たに `2>/dev/null` が付いた verify_pr_merged(scan.sh:93)は、直前の `has_commit "$oid"`(91 行目)で oid の存在を確認済みで、sha は for-each-ref 由来のブランチ先端なので、git がエラーを返す経路を作れなかった。エラーが起きたとしても偽 → keep(残す側)になる。指摘自身も「実害は小さい」としており、到達する誤動作を示せないため trivial。
+- `sh-1/c4` **本物・差分の内**(実行して確かめた、llm) — リダイレクトが必ずファイルを作るため、grep が 2 以上を返す「履歴を読めない」の分岐にほぼ到達しない。
+  - 場所: scan.sh:84-85, 122-123 / 挙げた構成: perspectives ×1
+  - 根拠: 指摘どおり、scan.sh:82 のリダイレクトは rev-list が失敗しても空のファイルを作るため、grep は 2 以上でなく 1 を返し、122〜123 行目の「履歴を読めない」に到達しない。差分が main にあった fp_refs の存在確認と `[ -s ] || exit 1` を消したため、読めなかった履歴が「first-parent に無い」と誤判定される。再現: 一時リポジトリ(origin は bare)で main 先端に `fresh` を作り、`git switch -c work main; git branch -D main` でローカル main を無くして実行。`git rev-list --first-parent refs/remotes/origin/main refs/heads/main --` は `fatal: bad revision 'refs/heads/main'` で出力 0 行。main 版 scan.sh: `ask branch fresh … 作成後にコミットした記録がない(未着手の可能性)`。HEAD 版: `delete branch fresh … PR なし・merge コミットで main に取り込み済み`(exit=0、エラー表示なし)。両方の ref がある場合はどちらの版も ask。差分で入った誤判定(ask → delete、理由も誤り)なので in。補足: grep が 2 以上を返す分岐そのものは、main でも事前に exit 1 していたので同じく到達しにくかった。新たに壊れたのは、その手前の読み取り失敗の検出が無くなった点。
+- ★ `sh-1/c5` **些末**(実行して確かめた、llm) — 削除可否の判定を書き換えたのに、祖先判定の引数の向きの逆転や既定ブランチの ref が片方だけのケースを検出できるテストが無い。
+  - 場所: skill-dev/housekeeping/test.sh:62 / 挙げた構成: code-review ×1、security-review ×1、mattpocock ×2、perspectives ×1、prove ×1
+  - 根拠: 指摘の事実関係は正しいが、内容は「テストが無い」なので定義上 trivial。確認: `grep -n '追加コミット\|branch -D main\|update-ref -d' skill-dev/housekeeping/test.sh` は 0 件で、追加コミットの分岐も ref が片方だけのケースもテストに無い。MERGED の PR は全て headRefOid=ブランチ先端(test.sh:62, 72, 89)なので、祖先判定の向きを逆にしても結果が同じ。HEAD で `bash skill-dev/housekeeping/test.sh` は「全件成功」。一方、検出されない不具合は実在する: PR の head の後に 1 コミット足したブランチ `extra` で、main 版は `keep branch extra … PR #1 のマージ後に追加コミットが 1 件ある`、HEAD 版は `delete branch extra … PR #1 マージ済み`(scan.sh:93 の引数の向きが main と逆)。ref が片方だけのケースの誤判定は c4 で再現済み。つまりテストの欠落が、この差分の 2 つの退行を実際に見逃している。
+- ★ `wn-313/c1` **未分類** — docs/lib/tmux.md の splitWorkbench の契約に、command の先頭に exec を付けることが書かれていない。
+  - 場所: docs/lib/tmux.md:43 / 挙げた構成: mattpocock ×1
+- `wn-313/c10` **未分類** — ペインのオプション @wn_respawned が契約の文書に載っていない。
+  - 場所: lib/tmux/tmux.ts:52 / 挙げた構成: mattpocock ×1
+- `wn-313/c11` **未分類** — attach 失敗時の文言・行を消さないこと・キー待ちのテストがない。
+  - 場所: src/cli/workbench.ts:33-39 / 挙げた構成: mattpocock ×1
+- `wn-313/c12` **未分類** — 利用者に見える挙動の変更(エラー文言、キー待ち、終了コード、案内の作り直し)が docs/PRODUCT.md に反映されておらず、記述と実際が食い違う。
+  - 場所: src/cli/workbench.ts:56-64 / 挙げた構成: code-review ×1、mattpocock ×2
+- `wn-313/c13` **未分類** — it.each(['bash', 'zsh', 'sh']) のテストが zsh のない環境では ENOENT で落ちる。
+  - 場所: test/unit/cli.test.ts:26 / 挙げた構成: code-review ×1
+- ★ `wn-313/c14` **未分類** — サーバごと閉じたときに res.status ではなく 0 を返すようになった変更が、コミットメッセージにも docs にも書かれていない。
+  - 場所: src/cli/workbench.ts:40 / 挙げた構成: mattpocock ×1
+- `wn-313/c15` **未分類** — 起動し直しの上限のテストが sh の本文を toContain で照合するだけで、観測できる振る舞い(5回超で畳む、作り直し)を確かめていない。
+  - 場所: lib/tmux/tmux.test.ts:75-81 / 挙げた構成: mattpocock ×1、perspectives ×1
+- `wn-313/c16` **未分類** — 原因が未解明のまま起動し直しで症状を覆っており、@wn_guide_died は情報を落としやすく原因の調査に使いにくい。
+  - 場所: lib/tmux/tmux.ts:51 / 挙げた構成: code-review ×1
+- ★ `wn-313/c17` **些末**(実行していない、llm) — 作り直した案内が、動いている一覧の版ではなく whatnext workbench を実行した側の版で動き、版がずれる。
+  - 場所: src/cli/workbench.ts:22 / 挙げた構成: perspectives ×1
+  - 根拠: 事実としては指摘どおり。src/cli/guide.ts:19 の ensureGuide は paneCommand(env,'guide') で案内のセッションを作り、src/cli/env.ts:22-29 の readEnv は node=process.execPath、cli=自分の cli.js、env.ts:88-104 の paneCommand は PATH を実行した側の process.env から取る。したがって `whatnext workbench` が作り直した案内は、実行した側の版で動く。ただし、これで起きる誤った結果を指摘は示しておらず、コードからも追えなかった。案内と一覧のやり取りは `@wn_guide` の JSON(GuideState)と頼みごと `key <GUIDE_CREATE> wbguide -` だけで、版の間でこの形が変わって初めて食い違う(将来の変更があって初めて問題になる)。また `whatnext workbench` 自身は main の時点でも実行した側の版で動き、WB_TTY などを書いている。版をまたぐ状況(npm 更新後に古い一覧が動く)はこの複製では作れず、実行していない。
+- `wn-313/c18` **些末**(実行していない、llm) — fail() という名前に、キーを待つ副作用が表れていない。
+  - 場所: src/cli/workbench.ts:56 / 挙げた構成: mattpocock ×1
+  - 根拠: src/cli/workbench.ts:53-64 の fail() は、WHATNEXT_WORKBENCH_SPLIT=1 かつ stdin が TTY のときにキーを待ってから 1 を返す。名前に待つことが出ていないのは事実だが、直前の doc コメント(53-55行)に書かれており、命名の好みで挙動には関わらない。実行で確かめる対象がない。
+- ★ `wn-313/c19` **些末**(実行して確かめた、llm) — 契約の文書の頼みごとの列挙に新しい形 guide が載っていない。
+  - 場所: docs/lib/tmux.md:10 / 挙げた構成: mattpocock ×1
+  - 根拠: `grep -n 'guide\b\|GUIDE_REFRESH' docs/lib/tmux.md` は7行目(GUIDE の名前)だけで、10行目の頼みごとの列挙は `key …`、`focus …`、`agentview …` のまま。新しい形 `guide` は src/ops/names.ts:12 と docs/DESIGN.md にある。指摘は事実。ただし `guide` を書くのは src/cli/workbench.ts:44、読むのは src/ops/app.ts:1156 で、どちらも使い捨て層。lib/tmux の takeRequests は頼みごとの中身を解釈せずに渡すだけなので、契約の部品の挙動とは食い違っていない。文書の書き漏らしで、利用者が誤る挙動にはつながらない。
+- ★ `wn-313/c2` **未分類** — askListToRefreshGuide が guide.ts の頼みごとの書き込みと SIGUSR2 の処理と重複している。
+  - 場所: src/cli/workbench.ts:43-50 / 挙げた構成: code-review ×1、mattpocock ×1
+- ★ `wn-313/c20` **些末**(実行して確かめた、llm) — 'WHATNEXT_WORKBENCH_SPLIT' が生の文字列で2か所にあり、src/ops/names.ts に置かれていない。
+  - 場所: src/ops/app.ts:1444 / 挙げた構成: mattpocock ×1
+  - 根拠: `grep -rn WHATNEXT_WORKBENCH_SPLIT src lib docs test` の結果は src/cli/workbench.ts:57(読む側)、src/ops/app.ts:1444(渡す側)、docs/DESIGN.md:229 の3件で、src/ops/names.ts には無い。指摘は事実だが、2か所の文字列は一致していて今の挙動は正しい。重複と置き場所の指摘で、片方だけ書き換える将来の変更があって初めて問題になる。
+- `wn-313/c3` **未分類** — ensureGuide が作成時に済ませた workbenchOptions(GUIDE, '') を list.ts で直後にもう一度呼んでいる。
+  - 場所: src/cli/list.ts:66-67 / 挙げた構成: code-review ×1、mattpocock ×1、perspectives ×1
+- ★ `wn-313/c4` **未分類** — 追加したテストが `signal=kill` という macOS/BSD のシグナル名の表記に依存しており、Linux で落ちる。
+  - 場所: test/e2e/workbench.test.ts:255 / 挙げた構成: code-review ×1
+- `wn-313/c5` **未分類** — 案内のセッションが消えて attach が 0 で終わると成功扱いになり、エラー表示もキー待ちもなく分割が無言で閉じる。
+  - 場所: src/cli/workbench.ts:33 / 挙げた構成: code-review ×1、perspectives ×1
+- ★ `wn-313/c6` **未分類** — whatnext を終了直後に起動し直すと、attach が 1 で返った時点で新しい list があり、誤って「could not open」と出てキー待ちになる。
+  - 場所: src/cli/workbench.ts:33 / 挙げた構成: perspectives ×1
+- ★ `wn-313/c7` **未分類** — ensureGuide が案内のプログラムのファイルにあり、list.ts と workbench.ts が案内の描画ごと import することになる。
+  - 場所: src/cli/guide.ts:17 / 挙げた構成: mattpocock ×1
+- `wn-313/c8` **未分類** — ensureGuide の 'failed' の戻り値を捨てており、new-session の失敗が記録に残らない。
+  - 場所: src/cli/list.ts:67 / 挙げた構成: code-review ×1
+- ★ `wn-313/c9` **未分類** — guide の SIGUSR2 を attach より前に送るので、一覧の follow() が接続前に使われ、作業台が古い案内を映し続けることがある。
+  - 場所: src/cli/workbench.ts:27 / 挙げた構成: code-review ×1

@@ -1,0 +1,28 @@
+{
+ "cost_usd": 0.16218839999999998,
+ "bugs": [
+  {
+   "id": "B1",
+   "verdict": "detected",
+   "quote": "片方が無いと rev-list 全体が失敗し、`first-parent` は空のファイルになります。元にあった「存在する ref だけ渡す」処理と、空なら `error: … の履歴を読めない` で止まる処理は、どちらも消えています。",
+   "reason": "rev-list に存在しない ref を渡して first-parent が空になること、空の検査が消えたこと、その結果 PR なしのブランチが delete になることを全て指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "B2",
+   "verdict": "detected",
+   "quote": "`verify_pr_merged` で `is_ancestor` の引数が逆になっています(`scan.sh:93`)。元は `git merge-base --is-ancestor \"$sha\" \"$oid\"`、変更後は `is_ancestor \"$oid\" \"$sha\"` です。",
+   "reason": "verify_pr_merged の is_ancestor の引数の向きが元と逆になったことを指摘し、追加コミットのあるブランチが delete になることも示している。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh",
+   "summary": "既存のテストは HEAD でも全件成功のままで、指摘した挙動の変化を検出できない。",
+   "quote": "既存の `skill-dev/housekeeping/test.sh` は HEAD でも「全件成功」のままで、3件とも検出しません。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,341 @@
+#!/usr/bin/env python3
+"""review-loop のレビュー役の構成を、不具合を含む題材で比べる。
+
+    bench.py build <題材> <出力先>                 題材のリポジトリを組み立てる(確認用)
+    bench.py run --out <結果の置き場> [--cases a,b] [--configs x,y] [--trials 3] [--jobs 4]
+
+run は、題材ごとに「ベース+差分」の一時リポジトリを作り、構成 × 試行ごとに専用の複製の中で
+`claude -p` を起動する。GitHub には触れない(origin はローカルの bare リポジトリ)。
+結果は <結果の置き場>/<題材>/<構成>/<試行>/ に置く(result.md、meta.json、stdout.jsonl、stderr.txt)。
+既に meta.json がある試行は飛ばすので、途中で止めても同じコマンドで続きから回せる。
+
+採点は score.py。正解の一覧(answers/)は、このスクリプトも子も読まない。
+"""
+import argparse
+import concurrent.futures
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import uuid
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.normpath(os.path.join(HERE, "../../.."))
+sys.dont_write_bytecode = True
+sys.path.insert(0, os.path.join(REPO, "skills/review-loop/scripts"))
+import review_loop as rl  # noqa: E402  子の起動と stream の読み取りを、本番と同じものにする
+
+CASES = os.path.join(HERE, "cases")
+GIT_ID = ["-c", "user.name=dev", "-c", "user.email=dev@example.com", "-c", "commit.gpgsign=false"]
+
+# --- 構成 --------------------------------------------------------------------
+# 実物の PR が無いので、対象と意図の在りかを全構成に同じ文で伝える
+TARGET = ("レビューの対象は、ブランチ main から今のブランチ(HEAD)への差分(`git diff main...HEAD`)です。"
+          "PR はまだ作っていないので、PR 番号はありません。差分の意図は `git log main..HEAD` のコミットメッセージにあります。")
+READ_ONLY = rl.NO_MUTATION + rl.DELEGATE_CONSTRAINT
+OWN_COPY = ("あなた専用のリポジトリの複製で実行しています。このディレクトリの中では、ファイルを作り、コマンドを実行して構いません。"
+            "このディレクトリの外のファイルは変えないでください。commit と push はしないでください。" + rl.DELEGATE_CONSTRAINT)
+
+PERSPECTIVES_PROMPT = ("main からこのブランチへの差分を、正確性 / セキュリティ / 並行性 / プライバシー / 設計の観点でレビューし、"
+                       "具体的な指摘を file:line 付きの箇条書きで出してください。")
+
+PROVE_PROMPT = """\
+この変更(main からこのブランチへの差分)を壊してください。
+
+指摘は、実際のコードに対する実行で証明したものだけにします。失敗するテスト、再現スクリプト、誤った挙動を示すコマンドの出力などです。
+実行は、このディレクトリと、その下に作る `scratch/` の中だけで行います。
+
+指摘ごとに、次を書きます。
+- 題
+- 実行したコマンド(そのまま)
+- 出力(そのまま)
+- 変更の意図に照らして、出るべきだった出力
+
+実行していないものは書きません。書き方、命名、構造、将来の変更があって初めて問題になるものが、これに当たります。
+指摘なしも正当な結果です。証明できた指摘が無ければ「証明できた指摘なし」と書きます。
+"""
+
+CONFIGS = {
+    "code-review": {"prompt": "/code-review high", "system": READ_ONLY},
+    "security-review": {"prompt": "/security-review", "system": READ_ONLY},
+    "mattpocock": {"prompt": "/mattpocock-skills:code-review main", "system": READ_ONLY},
+    "perspectives": {"prompt": PERSPECTIVES_PROMPT, "system": READ_ONLY},
+    "prove": {"prompt": PROVE_PROMPT, "system": OWN_COPY},
+}
+
+TIMEOUT = rl.REVIEW_TIMEOUT
+print_lock = threading.Lock()
+
+
+def log(msg):
+    with print_lock:
+        print(time.strftime("%H:%M:%S ") + msg, file=sys.stderr, flush=True)
+
+
+def sh(args, cwd, input=None, timeout=900):
+    r = subprocess.run(args, cwd=cwd, input=input, capture_output=True, text=True, timeout=timeout)
+    if r.returncode != 0:
+        raise RuntimeError(f"`{' '.join(args[:6])}` が失敗した({r.returncode}): {r.stderr.strip()[-2000:]}")
+    return r.stdout
+
+
+def git(cwd, *args, input=None):
+    return sh(["git", *GIT_ID, *args], cwd, input=input)
+
+
+# --- 題材 --------------------------------------------------------------------
+def load_case(case_id):
+    d = os.path.join(CASES, case_id)
+    with open(os.path.join(d, "case.json"), encoding="utf-8") as f:
+        case = json.load(f)
+    case["dir"] = d
+    return case
+
+
+def all_cases():
+    return sorted(n for n in os.listdir(CASES) if os.path.isfile(os.path.join(CASES, n, "case.json")))
+
+
+def build(case, dest):
+    """dest の下に <repo_name>/(main にベース、作業ブランチに差分)と origin.git を作り、リポジトリのパスを返す。"""
+    os.makedirs(dest)
+    repo = os.path.join(dest, case["repo_name"])
+    src = case["source"]
+    if src["type"] == "skills":
+        # このリポジトリの固定した版の写しを土台にする。履歴は持ち込まない(修正後のコミットを見せないため)
+        os.makedirs(repo)
+        tar = subprocess.run(["git", "archive", src["rev"]], cwd=REPO, capture_output=True, check=True).stdout
+        subprocess.run(["tar", "-x", "-C", repo], input=tar, check=True)
+        git(repo, "init", "-q", "-b", "main")
+        apply_patch(repo, os.path.join(case["dir"], "base.patch"))
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "import")
+        git(repo, "switch", "-q", "-c", case["branch"])
+        apply_patch(repo, os.path.join(case["dir"], "change.patch"))
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-F", os.path.join(case["dir"], "message.txt"))
+    elif src["type"] == "repo":
+        # 実際の PR の、レビューを受ける前のコミットまでを取り込む(それより後の修正は取り込まない)
+        git(dest, "init", "-q", "-b", "main", repo)
+        origin_repo = os.path.expanduser(src["path"])  # 読むだけで、変えない
+        head, base = (git(origin_repo, "rev-parse", src[k] + "^{commit}").strip() for k in ("head", "base"))
+        git(repo, "fetch", "-q", "--no-tags", origin_repo, head)
+        git(repo, "update-ref", "refs/heads/main", base)
+        git(repo, "switch", "-q", "-c", case["branch"], "FETCH_HEAD")
+    else:
+        raise RuntimeError(f"source.type が不明: {src['type']}")
+    origin = os.path.join(dest, "origin.git")
+    git(dest, "init", "-q", "--bare", "-b", "main", origin)
+    git(repo, "remote", "add", "origin", origin)
+    git(repo, "push", "-q", "-u", "origin", "main", case["branch"])
+    git(repo, "remote", "set-head", "origin", "main")
+    for cmd in case.get("setup", []):
+        sh(cmd, repo, timeout=1800)
+    if git(repo, "status", "--porcelain").strip():
+        raise RuntimeError(f"{case['id']}: 組み立てた直後の作業ツリーがクリーンでない")
+    return repo
+
+
+def apply_patch(repo, path):
+    if os.path.exists(path) and os.path.getsize(path):
+        git(repo, "apply", "--whitespace=nowarn", path)
+
+
+def copy_tree(src, dst):
+    """題材を試行の場所へ複製する。macOS では clonefile で速く、容量も使わない。"""
+    if sys.platform == "darwin" and subprocess.run(["cp", "-Rc", src, dst], capture_output=True).returncode == 0:
+        return
+    shutil.copytree(src, dst, symlinks=True)
+
+
+def clone_trial(template, root, case):
+    """題材の複製を新しいディレクトリに作り、(試行のディレクトリ, リポジトリ) を返す。
+    パスに題材や構成の名前を入れない(子に、何を測っているかの手がかりを与えない)。"""
+    trial = os.path.join(root, "w", uuid.uuid4().hex[:10])
+    os.makedirs(os.path.dirname(trial), exist_ok=True)
+    copy_tree(template, trial)
+    repo = os.path.join(trial, case["repo_name"])
+    git(repo, "remote", "set-url", "origin", os.path.join(trial, "origin.git"))
+    return trial, repo
+
+
+# --- 子の出力の検査 ----------------------------------------------------------
+SUSPECT_CMD = re.compile(r"ghq/|masahirompp|\bgh\s+(pr|api|repo|issue|search|run)\b|review-loop/bench|/answers/")
+PATH_KEYS = ("file_path", "path", "notebook_path")
+
+
+def outside_access(jsonl, trial, root):
+    """子(とサブエージェント)のツール呼び出しのうち、題材の外にある答えの手がかりを見に行った疑いのあるものを返す。
+    見るのは、自分の試行の外のパス(一時ディレクトリと ~/.claude のスキルは除く)、GitHub や手元の clone に
+    触れるコマンド、Web の検索と取得。"""
+    home_claude = os.path.join(os.path.expanduser("~"), ".claude") + os.sep
+    tmp = os.path.realpath(tempfile.gettempdir()) + os.sep
+    root = os.path.realpath(root) + os.sep
+    trial = os.path.realpath(trial) + os.sep
+    found = []
+
+    def ok_path(p):
+        p = os.path.realpath(os.path.expanduser(p))
+        if (p + os.sep).startswith(trial):
+            return True
+        if p.startswith(root):  # ほかの試行や題材の雛形
+            return False
+        if p.startswith(home_claude):
+            return "masahirompp" not in p[len(home_claude):]
+        return p.startswith((tmp, "/tmp/", "/private/tmp/", "/dev/", "/usr/", "/bin/", "/opt/", "/etc/"))
+
+    with open(jsonl, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(msg, dict) or msg.get("type") != "assistant":
+                continue
+            for b in (msg.get("message") or {}).get("content") or []:
+                if not isinstance(b, dict) or b.get("type") != "tool_use":
+                    continue
+                name, inp = b.get("name") or "", b.get("input") or {}
+                if name in ("WebFetch", "WebSearch"):
+                    found.append(f"{name} {json.dumps(inp, ensure_ascii=False)[:200]}")
+                for k in PATH_KEYS:
+                    v = inp.get(k)
+                    if isinstance(v, str) and os.path.isabs(os.path.expanduser(v)) and not ok_path(v):
+                        found.append(f"{name} {k}={v}")
+                cmd = inp.get("command")
+                if isinstance(cmd, str) and SUSPECT_CMD.search(cmd.replace(trial, "")):
+                    found.append(f"{name} {cmd[:300]}")
+    return found
+
+
+# --- 実行 --------------------------------------------------------------------
+def run_trial(case, config, n, template, root, out, keep):
+    dest = os.path.join(out, case["id"], config, str(n))
+    if os.path.exists(os.path.join(dest, "meta.json")):
+        return
+    shutil.rmtree(dest, ignore_errors=True)
+    os.makedirs(dest)
+    spec = CONFIGS[config]
+    trial, repo = clone_trial(template, root, case)
+    head = git(repo, "rev-parse", "HEAD").strip()
+    base = os.path.join(dest, "review")
+    children = rl.Children()
+    meta = {"case": case["id"], "kind": case["kind"], "config": config, "trial": n, "status": "error",
+            "tokens": rl.new_tokens(), "cost_usd": None, "started_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    started = time.monotonic()
+    log(f"start {case['id']} {config} #{n}")
+    try:
+        with open(base + ".stdout.jsonl", "w") as o, open(base + ".stderr.txt", "w") as e:
+            p = children.spawn(["claude", "-p", "--output-format", "stream-json", "--verbose",
+                                "--append-system-prompt", spec["system"] + "\n\n" + TARGET, spec["prompt"]],
+                               TIMEOUT, cwd=repo, env=rl.child_env(), stdin=subprocess.DEVNULL, stdout=o, stderr=e)
+        tail = rl.StreamTail(base + ".stdout.jsonl")
+        timed_out = False
+        while p.poll() is None:
+            tail.poll()
+            if time.monotonic() - started > TIMEOUT:
+                timed_out = True
+                break
+            time.sleep(2)
+        rc = p.poll()
+        children.finish(p)
+        tail.poll()
+        meta["duration_s"] = round(time.monotonic() - started)
+        text = "\n\n".join(tail.texts())
+        with open(os.path.join(dest, "result.md"), "w", encoding="utf-8") as f:
+            f.write(text + "\n")
+        last = tail.results[-1] if tail.results else {}
+        rl.add_tokens(meta["tokens"], last)
+        meta["cost_usd"] = last.get("total_cost_usd")
+        meta["num_turns"] = last.get("num_turns")
+        meta["models"] = sorted((last.get("modelUsage") or {}).keys())
+        meta["denials_blocking"] = [rl.summarize_denials([d]) for d in tail.blocking_denials()]
+        meta["denials_tolerated"] = tail.take_tolerated()
+        meta["outside_access"] = outside_access(base + ".stdout.jsonl", trial, root)
+        meta["tree_changed"] = git(repo, "status", "--porcelain", "--untracked-files=all").strip().splitlines()[:50]
+        meta["head_changed"] = git(repo, "rev-parse", "HEAD").strip() != head
+        if timed_out:
+            meta["status"] = "timeout"
+        elif not tail.results or rc != 0 or last.get("subtype") != "success" or last.get("is_error"):
+            meta["status"] = "child_error"
+            meta["detail"] = f"rc={rc} subtype={last.get('subtype')} {str(last.get('result') or '')[:300]}"
+        elif not text.strip():
+            meta["status"] = "no_output"
+        elif meta["denials_blocking"]:
+            meta["status"] = "denied"  # 本番なら試行を止める拒否。出力は残すが、集計では分ける
+        else:
+            meta["status"] = "ok"
+    except Exception as e:  # 1つの試行の失敗で全体を止めない
+        meta["detail"] = f"{type(e).__name__}: {e}"
+    finally:
+        children.kill_all()
+        if not keep:
+            shutil.rmtree(trial, ignore_errors=True)
+    with open(os.path.join(dest, "meta.json"), "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=1)
+    t = meta["tokens"]
+    log(f"done  {case['id']} {config} #{n}: {meta['status']} {meta.get('duration_s', '?')}s "
+        f"in={t['input'] / 1e4:.0f}万 out={t['output'] / 1e4:.1f}万 ${meta['cost_usd'] or 0:.2f}"
+        + (f" 題材の外へのアクセス {len(meta['outside_access'])} 件" if meta.get("outside_access") else ""))
+
+
+def cmd_run(args):
+    os.environ[rl.GUARD_ENV] = "1"
+    cases = [load_case(c) for c in (args.cases.split(",") if args.cases else all_cases())]
+    configs = args.configs.split(",") if args.configs else list(CONFIGS)
+    unknown = [c for c in configs if c not in CONFIGS]
+    if unknown:
+        sys.exit(f"構成が不明: {', '.join(unknown)}")
+    out = os.path.abspath(args.out)
+    os.makedirs(out, exist_ok=True)
+    root = os.path.realpath(tempfile.mkdtemp(prefix="rb-"))
+    log(f"一時ディレクトリ: {root}")
+    templates = {}
+    try:
+        for case in cases:
+            build(case, os.path.join(root, "tpl", case["id"]))
+            templates[case["id"]] = os.path.join(root, "tpl", case["id"])
+            log(f"built {case['id']}")
+        # 同じ構成が続けて並ばないよう、試行 → 題材 → 構成の順に積む
+        jobs = [(case, config, n) for n in range(1, args.trials + 1) for case in cases for config in configs]
+        with concurrent.futures.ThreadPoolExecutor(args.jobs) as ex:
+            futures = [ex.submit(run_trial, case, config, n, templates[case["id"]], root, out, args.keep)
+                       for case, config, n in jobs]
+            for f in concurrent.futures.as_completed(futures):
+                f.result()
+    finally:
+        if not args.keep:
+            shutil.rmtree(root, ignore_errors=True)
+    log(f"結果: {out}")
+
+
+def cmd_build(args):
+    print(build(load_case(args.case), os.path.abspath(args.dest)))
+
+
+def main():
+    ap =argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    b = sub.add_parser("build")
+    b.add_argument("case")
+    b.add_argument("dest")
+    b.set_defaults(fn=cmd_build)
+    r = sub.add_parser("run")
+    r.add_argument("--out", required=True)
+    r.add_argument("--cases")
+    r.add_argument("--configs")
+    r.add_argument("--trials", type=int, default=3)
+    r.add_argument("--jobs", type=int, default=4)
+    r.add_argument("--keep", action="store_true", help="一時ディレクトリ(題材と試行の複製)を残す")
+    r.set_defaults(fn=cmd_run)
+    args = ap.parse_args()
+    args.fn(args)
+
+
+if __name__ == "__main__":
+    main()

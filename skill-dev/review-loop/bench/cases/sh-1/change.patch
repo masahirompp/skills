@@ -1,0 +1,53 @@
+diff --git a/skills/housekeeping/scripts/scan.sh b/skills/housekeeping/scripts/scan.sh
+index fe25739..9e16808 100755
+--- a/skills/housekeeping/scripts/scan.sh
++++ b/skills/housekeeping/scripts/scan.sh
+@@ -70,19 +70,19 @@ open_pr_based_on() {
+ 
+ has_commit() { git cat-file -e "$1^{commit}" 2>/dev/null; }
+ 
++# is_ancestor <a> <b>: a が b の祖先か(同じコミットも祖先に数える)
++is_ancestor() { git merge-base --is-ancestor "$1" "$2" 2>/dev/null; }
++
+ merged_into_default() {
+-  git merge-base --is-ancestor "$1" "refs/remotes/$hk_remote/$default" 2>/dev/null ||
+-    git merge-base --is-ancestor "$1" "refs/heads/$default" 2>/dev/null
++  is_ancestor "$1" "refs/remotes/$hk_remote/$default" || is_ancestor "$1" "refs/heads/$default"
+ }
+ 
+ # 既定ブランチの first-parent 履歴。ブランチの先端がここに無いのに既定ブランチに含まれていれば、merge コミットで取り込まれている。
+-# リモートとローカルのうち、存在する ref を渡す。
+-fp_refs=''
+-for r in "refs/remotes/$hk_remote/$default" "refs/heads/$default"; do
+-  git rev-parse -q --verify "$r^{commit}" >/dev/null && fp_refs="$fp_refs $r"
+-done
+-[ -n "$fp_refs" ] && git rev-list --first-parent $fp_refs -- >"$tmp/first-parent" 2>/dev/null &&
+-  [ -s "$tmp/first-parent" ] || { echo "error: $default の履歴を読めない" >&2; exit 1; }
++# リモートとローカルの両方をたどる(rev-list は ref を複数受け取り、和集合を返す)。
++git rev-list --first-parent "refs/remotes/$hk_remote/$default" "refs/heads/$default" -- >"$tmp/first-parent" 2>/dev/null
++
++# on_first_parent <sha>: 0 なら first-parent 上にある、1 なら無い、それ以外は履歴を読めない
++on_first_parent() { grep -qxF "$1" "$tmp/first-parent"; }
+ 
+ # verify_pr_merged <number> <headRefOid> <sha> → delete / ask / keep と理由(TAB 区切り)
+ verify_pr_merged() {
+@@ -90,7 +90,7 @@ verify_pr_merged() {
+   has_commit "$oid" || git fetch --quiet "$hk_remote" "refs/pull/$num/head" 2>/dev/null
+   if ! has_commit "$oid"; then
+     printf 'ask\tPR #%s はマージ済みだが PR の head コミットを取得できず、手元との差を照合できない\n' "$num"
+-  elif git merge-base --is-ancestor "$sha" "$oid"; then
++  elif is_ancestor "$oid" "$sha"; then
+     printf 'delete\tPR #%s マージ済み\n' "$num"
+   else
+     printf 'keep\tPR #%s のマージ後に追加コミットが %s 件ある\n' "$num" "$(git rev-list --count "$oid..$sha")"
+@@ -115,8 +115,8 @@ classify_branch() {
+     CLOSED) printf 'keep\tPR #%s は未マージのままクローズ\n' "$num" ;;
+     MERGED) verify_pr_merged "$num" "$oid" "$sha" ;;
+     NONE)
+-      grep -qxF "$sha" "$tmp/first-parent"
+-      on_fp=$? # 0: first-parent 上にある / 1: 無い / それ以外: 読めない
++      on_first_parent "$sha"
++      on_fp=$?
+       if ! merged_into_default "$sha"; then
+         printf 'keep\tPR なし・%s に未取り込みのコミットがある\n' "$default"
+       elif [ "$on_fp" -gt 1 ]; then

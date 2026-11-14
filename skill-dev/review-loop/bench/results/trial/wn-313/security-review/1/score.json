@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.1395616,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューはセキュリティの観点だけで、作業台の画面がつながったまま wbguide が消えたときに作り直されない問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "@wn_respawned には書き換えの権限の観点で触れただけで、通算で数えて数え直さない問題は指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "attach の結果の判定がシグナルで終わった場合を失敗と扱う問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が利用者の分割したペインを区別しない問題は指摘しておらず、分岐は安全だと結論している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなった問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide は「新しい入力はない」と退けただけで、セッションの有無だけで判定する問題は指摘していない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

@@ -1,0 +1,24 @@
+{
+ "case": "wn-313",
+ "kind": "ts",
+ "config": "code-review",
+ "trial": 1,
+ "status": "ok",
+ "tokens": {
+  "input": 658468,
+  "cache_read": 559203,
+  "output": 33075
+ },
+ "cost_usd": 2.4274506000000002,
+ "started_at": "2026-11-15T00:08:11",
+ "duration_s": 359,
+ "num_turns": 0,
+ "models": [
+  "claude-fable-5-2"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [],
+ "head_changed": false
+}

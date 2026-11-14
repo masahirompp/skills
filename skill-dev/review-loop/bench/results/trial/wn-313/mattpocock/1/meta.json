@@ -1,0 +1,24 @@
+{
+ "case": "wn-313",
+ "kind": "ts",
+ "config": "mattpocock",
+ "trial": 1,
+ "status": "ok",
+ "tokens": {
+  "input": 770054,
+  "cache_read": 617198,
+  "output": 22692
+ },
+ "cost_usd": 2.8280916,
+ "started_at": "2026-11-15T00:08:48",
+ "duration_s": 183,
+ "num_turns": 6,
+ "models": [
+  "claude-fable-5-2"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [],
+ "head_changed": false
+}

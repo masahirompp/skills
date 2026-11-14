@@ -1,0 +1,24 @@
+{
+ "case": "sh-1",
+ "kind": "shell",
+ "config": "mattpocock",
+ "trial": 1,
+ "status": "ok",
+ "tokens": {
+  "input": 370690,
+  "cache_read": 259255,
+  "output": 14676
+ },
+ "cost_usd": 1.942011,
+ "started_at": "2026-11-15T00:07:25",
+ "duration_s": 120,
+ "num_turns": 4,
+ "models": [
+  "claude-fable-5-2"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [],
+ "head_changed": false
+}

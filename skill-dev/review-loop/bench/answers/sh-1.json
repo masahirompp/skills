@@ -1,0 +1,33 @@
+{
+  "case": "sh-1",
+  "bugs": [
+    {
+      "id": "B1",
+      "origin": "history:61c619a",
+      "file": "skills/housekeeping/scripts/scan.sh",
+      "where": "first-parent の履歴を作る git rev-list の行と、classify_branch の NONE の分岐",
+      "summary": "ローカルかリモートの既定ブランチの ref が片方でも無いと、既定ブランチに含まれる PR なしのブランチが、未着手のものも含めて全て delete になる",
+      "mechanism": "git rev-list に無い ref を渡すとエラーになって何も出さない。エラーは 2>/dev/null で捨てられ、空の first-parent ファイルに対して grep が 1 を返すので「merge コミットで取り込み済み」の delete になる。存在する ref だけを渡す処理と、履歴が空なら止まる検査を差分が外した",
+      "trigger": "ローカルの既定ブランチ(main)を消したリポジトリ(worktree だけで作業する、detached で使うなど)で scan.sh を実行する",
+      "impact": "中",
+      "kind": "behavior",
+      "scope": "in",
+      "verified": "answers/repro/sh-1.sh。差分ありで fresh → delete(PR なし・merge コミットで main に取り込み済み)、今の HEAD では ask",
+      "detect_criteria": "rev-list に存在しない ref を渡すと失敗して first-parent が空になること(または空・失敗の検査が無くなったこと)と、その結果ブランチが誤って delete 側に判定されることの両方に触れている"
+    },
+    {
+      "id": "B2",
+      "origin": "new",
+      "file": "skills/housekeeping/scripts/scan.sh",
+      "where": "verify_pr_merged の is_ancestor の呼び出し",
+      "summary": "PR のマージ後に手元で追加のコミットを積んだブランチが delete になる(リモートブランチでも同じ判定)",
+      "mechanism": "is_ancestor の引数の向きが逆。元は「手元の先端が PR の head の祖先」を確かめていたが、差分のあとは「PR の head が手元の先端の祖先」を確かめる。追加コミットがあるほど delete になり、手元が PR の head より古いときは keep(追加コミット 0 件)になる",
+      "trigger": "マージ済みの PR のブランチに、マージ後のコミットを積んだ状態で scan.sh を実行する",
+      "impact": "高",
+      "kind": "behavior",
+      "scope": "in",
+      "verified": "answers/repro/sh-1.sh。差分ありで more-after → delete、今の HEAD では keep",
+      "detect_criteria": "verify_pr_merged の祖先判定の引数($oid と $sha)の向きが元と逆になったことを指摘している。結果として追加コミットのあるブランチが delete になることに触れていれば十分"
+    }
+  ]
+}

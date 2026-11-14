@@ -1,3 +1,7 @@
 .DS_Store
 .claude/settings.local.json
 __pycache__/
+
+# review-loop の検証: 子の stream は大きいので残さない
+skill-dev/review-loop/bench/results/**/*.jsonl
+skill-dev/review-loop/bench/results/**/*.stderr.txt
