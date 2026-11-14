@@ -97,7 +97,7 @@ if stat.S_ISREG(os.fstat(0).st_mode):  # 判定役(標準入力にレビュー�
     stdin = sys.stdin.read()
     record("judge", stdin=stdin)
     mode = os.environ.get("FAKE_JUDGE", "ok")
-    verdict = "## 指摘\n\n### F1: s\n- 観点: code-review\n- 場所: a.txt:1\n- 影響: 中。r\n\n## 競合\n\nなし\n"
+    verdict = "## 指摘\n\n### F1: s\n- 観点: code-review\n- 場所: a.txt:1\n- 影響: 中。r\n- 範囲: 差分の内\n- 再現: 対象外\n\n## 競合\n\nなし\n"
     if mode == "multi":
         multi("レビューを突き合わせています。", verdict, "")
     elif mode == "multishort":
