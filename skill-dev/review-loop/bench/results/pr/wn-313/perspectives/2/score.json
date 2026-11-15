@@ -1,0 +1,126 @@
+{
+ "cost_usd": 0.11868999999999999,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "案内のセッションを作り直すのが一覧の起動時と attach 前だけで、作業台の画面がつながったまま wbguide が消えると切り替えに失敗する、という指摘はない。detach-on-destroy への言及は W313-2 の結果として述べているだけである。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "`@wn_respawned` はペインに付く値で、増えるだけで減りません。このため「すぐ終わり続けるときに回り続けない」ための上限が、実際には「セッションが続く間の通算5回」になっています。",
+   "reason": "回数が通算で数えられて数え直されないため、たまに落ちるだけでも上限に達して案内が畳まれる、と正確に指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "detected",
+   "quote": "tmux がシグナルで終わると `res.status` は `null` になり、`null !== 0` は真です。一覧がまだ動いていれば「could not open the workbench screen」と出し、Ghostty の分割ではキーを待ちます。",
+   "reason": "status が null になる場合に、つなげなかったと誤って判定することを、場所と原因の両方で正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が、利用者の分割したペインと案内のペインを区別しないという指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道で、タイトルを消す OSC 2 が出なくなった点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定し、案内のペインがない場合に作り直さない、という指摘はない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/cli/workbench.ts:33",
+   "summary": "一覧を手早く起動し直したとき、新しい list を見て、つなげなかったと誤って判定する余地がある。",
+   "quote": "一覧を手早く起動し直したとき、新しい `list` を見て失敗と判断する余地も同じ条件にあります。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/cli/workbench.ts:17-27",
+   "summary": "WB_TTY の設定を ensureGuide より前に済ませているため、案内を作れずに終わっても @wn_wb_tty が残る。",
+   "quote": "`WB_TTY` の設定と `MAIN_TTY` の取り消しを、`ensureGuide` の前に済ませています。このため案内を作れずに終わっても、一覧はこの tty を作業台の画面と見なしたままになります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/cli/guide.ts:19",
+   "summary": "作り直す案内が whatnext workbench を呼んだプロセスの node・cli・環境で動くため、動いている一覧と版が食い違うことがある。",
+   "quote": "しかし利用者が別の端末で、更新後の `whatnext workbench` を手で打つと、動いている一覧とは版の違う案内が `@wn_guide` を読みます。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "lib/tmux/tmux.ts:51",
+   "summary": "案内の画面に写った claude のセッション名と cwd のパスが、サーバ全体のオプションにサーバが終わるまで残る。",
+   "quote": "案内の画面の末尾には、claude のセッション名と cwd のパスが写っています。それがサーバ全体のオプションに、サーバが終わるまで残ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "lib/tmux/tmux.ts:51",
+   "summary": "@wn_guide_died が終わるたびに上書きされ、原因の手がかりとして最も役立つ最初の1回の様子が残らない。",
+   "quote": "`@wn_guide_died` は終わるたびに上書きされ、最後の1回の様子しか残りません。原因を突き止めるための値なら、最初の1回が一番役に立つはずです。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "src/cli/list.ts:66-67",
+   "summary": "workbenchOptions を2回呼んでいて、呼び出しの約束がそろっていないので読みにくい。",
+   "quote": "`ensureGuide` は作ったときに `workbenchOptions` を呼びますが、そのすぐ後でもう一度呼んでいます。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "src/ops/names.ts:12",
+   "summary": "GUIDE_REFRESH = 'guide' という名前が汎用的で、何をするのか読み取りにくく、grep で誤って当たる。",
+   "quote": "`GUIDE_REFRESH = 'guide'` は、ほかの頼みごと(`key …`、`focus`、`agentview`)と比べて何をするのか読み取りにくい名前です。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "src/cli/workbench.ts:43-51",
+   "summary": "頼みごとを書いて SIGUSR2 を送る処理が3か所に重複している。",
+   "quote": "「頼みごとを書いて `@wn_pid` に SIGUSR2 を送る」処理は `guide.ts:74-80` にもあり、sh 版の `@wn_req_sh` と合わせて3か所目です。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "",
+   "summary": "案内が落ちる原因が分からないまま症状を抑える直し方になっており、issue に起票されているかを確かめるべきである。",
+   "quote": "今回の直し方は症状を抑えるもので、案内が落ちる原因は分かっていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "test/unit/cli.test.ts:26",
+   "summary": "zsh が入っていない環境ではテストが失敗する。",
+   "quote": "`it.each(['bash','zsh','sh'])` は zsh が入っていない環境では失敗します。",
+   "quote_ok": true
+  },
+  {
+   "n": 11,
+   "location": "lib/tmux/tmux.ts:400",
+   "summary": "signalGuide が読む @wn_guide_pid がどこにも書かれていないため、案内への知らせが届かない。",
+   "quote": "`signalGuide()` は `@wn_guide_pid` を読みますが、この値をどこにも書いていません(リポジトリ全体を `grep` して確かめました)。",
+   "quote_ok": true
+  }
+ ]
+}

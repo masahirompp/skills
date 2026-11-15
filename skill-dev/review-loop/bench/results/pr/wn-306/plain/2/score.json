@@ -1,0 +1,84 @@
+{
+ "cost_usd": 0.098942,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "最初の選べる行を選ぶと、`cursorBlock` が `[0, body.length]` になる。その上に並ぶ `(sub)` の行と見出しだけで窓を超えると、`blockLen >= avail` から `start = b0 = 0` になる。",
+   "reason": "render の cursorBlock に (sub) を含めたことと start = b0 の補正が原因で選んだ行が窓から外れることを指摘しており、b1 - avail による入力欄の押し出しも別の項目で挙げている。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "detected",
+   "quote": "区切りの最後の行を選ぶと、次の区切りの先頭に並ぶトップレベルの `(sub)` の行(その行の子ではない)が、空行と見出しも含めて同じ塊に入る。",
+   "reason": "trailing が区切りの境目で戻らず、次の区切りの (sub) の行まで塊に入ることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "選べる行がないときに通し番号が 0/0 になる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "条件を `selectableOrder` に変えたので、選んでいた行が更新で起動された行に変わった場合(DESIGN.md に追記された場面)もこの分岐に入る。",
+   "reason": "行が (sub) に変わった場合にも guard が立ち、『left the list』という事実と違う文言が出ることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に対象の行が (sub) に変わっても入力が閉じない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "openNote から判定を消した点を検討したうえで、attachKey の経路も含めて問題なしと結論している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の『Both can be selected』が実装と食い違う点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md:296",
+   "summary": "選べない行について「効くのは Enter と v だけ」と書いた文が、いまも Enter と v が効くと誤読される。",
+   "quote": "「効くのは `cwd` と `pid` を示す `Enter` と `v` だけだが」は、選べない行についての文です。いまでも `Enter` と `v` が効くと誤読できます。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "test/e2e/deps.test.ts:442-447",
+   "summary": "シナリオ 70 は並び順によって (sub) の行をまたがない場合があり、飛ばす動きを確かめられないことがある。",
+   "quote": "`other` が上に来ると、並びは `other, orchestrator, worker, worker-2` になり、どの `↑` `↓` も `(sub)` の行をまたがない。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/unit/screen.test.ts:136-154",
+   "summary": "窓に収まる数の (sub) の行しか試していないので、窓の位置合わせの不具合をテストで拾えない。",
+   "quote": "起動された行の数が窓に収まる場合だけを試しているので、先頭行が隠れる件も、入力欄が押し出される件も検出できない。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test/unit/model.test.ts:323-328",
+   "summary": "S が区切りの末尾にあるため、テストでは隣の行がどちらの向きに選ばれるかを区別できない。",
+   "quote": "`S` が区切りの末尾なので、「次の行」「前の行」「起動元」のどの規則でも結果が `P` になる。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.108954,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "その上に並ぶトップレベルの `(sub)` の行と見出しが窓の高さ以上あると、`blockLen >= avail` の分岐で `start = b0 = 0` になり、カーソルの行は窓の外に出ます。",
+   "reason": "render で塊の頭を0にして頭の (sub) を含めたため start = b0 で選んだ行が窓外に出ることを原因込みで指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "detected",
+   "quote": "`trailing` は区切りをまたいでもリセットされません。選んだ行が区切りの最後にあり、次の区切りがトップレベルの `(sub)` で始まると、見出しを越えて次の区切りの `(sub)` まで塊に入ります。",
+   "reason": "trailing が区切りの境目でリセットされず次の区切りの (sub) まで塊に入ることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "通し番号の異常は cursor が (sub) に乗った場合の 0/N として述べており、選べる行が無いとき 0/0 になる原因は指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "選んでいた行が残ったまま `(sub)` に変わった場合も、`goneName` が入って guard が張られます。",
+   "reason": "(sub) に変わった場合も guard が立ち『left the list』の文言が事実と合わないことを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモ入力中に対象が (sub) に変わっても note モードが閉じない問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "detected",
+   "quote": "起動元が分かる前に attach したセッションが、あとで起動された行に変わると、attach 先からメモ入力が開きます。",
+   "reason": "openNote の isSpawned 拒否を消したため attachKey 経由で (sub) の行にメモが開くことを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の『Both can be selected』の記述と実装の食い違いには触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "test/unit/screen.test.ts:136",
+   "summary": "追加の単体テストは (sub) が窓に収まる場合しか見ておらず、選んだ行が窓から外れる境界を通っていない。",
+   "quote": "追加の単体テストは `(sub)` が4行で窓に収まる場合しか見ていないので、この境界を通っていません(`test/unit/screen.test.ts:136`)。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/ops/app.ts:1068, :275",
+   "summary": "onReturn や pendingCursorId で選べるかを確かめずに this.cursor を代入するので、カーソルが (sub) の行に乗り、通し番号が 0/N になったり、↑↓ や窓の追従がおかしくなったりする。",
+   "quote": "`src/ops/app.ts:1068`(`onReturn`)、`:1197`、`:275`(`pendingCursorId`)は `this.cursor = row.sid` を選べるかどうかを見ずに代入している",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/model/cursor.ts:30-31",
+   "summary": "残ったまま (sub) に変わった行では、隣の行ではなく起動元へカーソルを戻すほうが自然ではないかという提案。",
+   "quote": "残ったまま `(sub)` に変わった行でも、前の並びの同じ区切りの「次の行」へ移ります。この場合、その行の起動元はすぐ上にいるので、起動元へ戻すほうが自然だと考えます。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "docs/PRODUCT.md:296",
+   "summary": "選べない行なのに Enter と v が効くように読めて、一文が読み違えやすい。",
+   "quote": "「起動された行は…選べない」の直後に「効くのは `cwd` と `pid` を示す `Enter` と `v` だけだが」とあり、選べない行でキーが効くように読めます。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "src/screen/screen.ts:213",
+   "summary": "最初の選べる行が2つ目の区切りにあると、1つ目の区切りの全部が塊に入ってしまう。",
+   "quote": "最初の選べる行が2つ目の区切りにあるときも、1つ目の区切りの全部が塊に入ります。",
+   "quote_ok": true
+  }
+ ]
+}

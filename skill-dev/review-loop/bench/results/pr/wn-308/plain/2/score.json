@@ -1,0 +1,77 @@
+{
+ "cost_usd": 0.07398199999999999,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは cleanupLeftovers での引き継ぎ(Y 分岐)にも、引き継いだ作業台に status-format を入れ直していないことにも触れていないため。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md:557-562",
+   "summary": "採った形と採らなかった形を、どちらも同じ幅60の実際の画面で並べて示しておらず、「見た目の決定」の規約に合っていない。",
+   "quote": "採った形が、採らなかった形と同じ幅60の画面で示されていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "docs/PRODUCT.md:442",
+   "summary": "冒頭の図の新しい行が手で作ったように見え、画面の例は実際の描画から取るという規約に合っていない可能性がある。",
+   "quote": "ただ、`^` の1文字で切れる絵は手で作ったように見えます。規約は、画面の例を実際の描画から取ることを求めています。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "docs/PRODUCT.md:556",
+   "summary": "根拠に issue 番号が書かれておらず、ほかの箇所のように番号で辿れない。",
+   "quote": "根拠が「2026-10-28、利用者の判断」としか書かれておらず、issue 番号がありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test/e2e/workbench.test.ts:117",
+   "summary": "狭い幅で右から欠けて `^Q%` が最後まで残ることを確かめるテストがない。",
+   "quote": "この変更でいちばん大事な主張は「狭いと右から欠けて、`^Q%` が最後まで残る」ことですが、それを確かめるテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test/e2e/workbench.test.ts:25",
+   "summary": "案内のセッション(GUIDE)ではキーを出さないという分岐を確かめるテストがなく、部分一致なのでキーが出ても通ってしまう。",
+   "quote": "`session === GUIDE` のときはキーを出さない(`lib/tmux/tmux.ts:338`)という分岐を確かめるテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "`│`・`─`・`·` は East Asian Ambiguous 幅の文字で、端末設定によって tmux の数える幅とずれ、右端の欠け方が変わりうる。",
+   "quote": "`│`、`─`、`·` は East Asian Ambiguous(環境によって1桁にも2桁にもなる文字)です。曖昧な幅を2桁で描く設定の端末では、tmux が数える幅とずれ、右端の欠け方が変わりえます。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "`^Q` という表示が `prefix C-q` の設定と別々に書かれていて、prefix を変えるときに両方を直す必要がある。",
+   "quote": "`^Q` という表示は、同じ関数の `prefix C-q`(`:324`)と別々に書かれています。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "",
+   "summary": "キーをウィンドウ一覧のあとに続ける設計では、ウィンドウを3〜4個使う人にはキーがほぼ見えなくなるので、それを許すかを PRODUCT.md に書くべきかもしれない。",
+   "quote": "一方で、ウィンドウを3〜4個使う人には、キーがほぼ見えなくなります。それを許すかどうかは、PRODUCT.md に一言あってもよいかもしれません。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "",
+   "summary": "Ghostty の分割での見え方が未確認なので、マージ前に実際の幅で tmux の capture を使って確かめるべき。",
+   "quote": "マージする前に、tmux の capture で一度は実際の幅で確かめておくことをおすすめします。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,119 @@
+{
+ "cost_usd": 0.123486,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "作業台の画面がつながったまま wbguide が消えた場合に一覧の追従・畳む前・pane-died で作り直されない、という指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "`@wn_respawned` はペインに付くオプションで、`respawn-pane` してもペインは同じなので、回数が戻りません。このため「起動してすぐ終わるときに回り続けないため」という理由とは違い、数日おきに1回落ちるだけでも、6回目にはセッションが畳まれます。",
+   "reason": "回数が通算で数えられて戻らず、続けて落ちていなくても上限に達して畳まれる、と原因と場所の両方を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "detected",
+   "quote": "`res.status` が `null`(シグナルで終わった)の場合も `!== 0` になり、一覧が生きていれば「つなげなかった」と出します。",
+   "reason": "workbench.ts の attach の結果の判定で、シグナルで終わった場合も失敗扱いになると正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が、利用者が分割したペインと案内のペインを区別しない、という指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなった、という指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定する問題への言及は無い。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md",
+   "summary": "新しいエラーメッセージ、キー待ち、案内を起動し直す挙動が、要件のファイルに書かれていない。",
+   "quote": "利用者から見える挙動が3つ増えていますが、要件のファイルに書かれていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/cli/guide.ts:19",
+   "summary": "whatnext workbench から案内を作り直すと、Ghostty の分割のシェルの環境や別の版の CLI が使われ、一覧とずれる。",
+   "quote": "`whatnext workbench` から案内を作り直すと、`paneCommand(env, 'guide')` には、一覧のプロセスではなく Ghostty の分割のシェルの環境(`PATH`、`CLAUDE_CONFIG_DIR`、`WHATNEXT_DEBUG_LOG`、`LANG`)が入ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/unit/cli.test.ts:26",
+   "summary": "zsh が入っていない環境ではテストが ENOENT で落ちる。",
+   "quote": "`zsh` が入っていない環境(Linux の CI など)では `execFileSync('zsh', ...)` が ENOENT で落ちます。入っていなければ飛ばすべきです。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test/e2e/workbench.test.ts:255",
+   "summary": "`/signal=kill/` は OS に依存し、Linux では成り立たないおそれがある。",
+   "quote": "Linux では `KILL` や番号になる可能性があるので、`/signal=(kill|KILL|9)/i` くらいに緩めるのが安全です。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "lib/tmux/tmux.test.ts:75-80",
+   "summary": "文字列を含むかだけを見るテストなので分岐が逆でも通り、5回を超えたら畳む側がどのテストでも動いていない。",
+   "quote": "文字列を含むかだけを見ているので、たとえば `-lt 5` と `kill-pane` の分岐が逆になっても通ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "src/cli/list.ts:66-67",
+   "summary": "ensureGuide が 'created' を返したとき、workbenchOptions が2回呼ばれる。",
+   "quote": "`ensureGuide` が `'created'` を返したときは、その中(`guide.ts:22`)で `workbenchOptions(GUIDE, '')` がもう呼ばれていて、`list.ts:67` で2回目になります。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "src/cli/workbench.ts:43-52",
+   "summary": "askListToRefreshGuide が、guide.ts の Enter の処理や tmux.ts の @wn_req_sh と重複している。",
+   "quote": "`askListToRefreshGuide` の中身は、`guide.ts` の Enter の処理(`@wn_req_…` を書いて `@wn_pid` に SIGUSR2 を送る)とほぼ同じです。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "src/ops/app.ts:1475",
+   "summary": "sh- などを映している間は GUIDE_REFRESH を受けても doFollow が先に抜けるので、作り直した案内のステータス行が空のままになる。",
+   "quote": "`GUIDE_REFRESH` を受けても、whatnext の画面が `sh-` や `trust-` などを映していると、`doFollow` はこの行で先に抜けます。その間、作り直した案内のステータス行は `workbench: ` のまま空になります。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "lib/tmux/tmux.ts:400",
+   "summary": "signalGuide が読む @wn_guide_pid がどこからも設定されておらず、SIGUSR2 が届いていない。",
+   "quote": "`Tmux.signalGuide`(`lib/tmux/tmux.ts:400`)が読む `@wn_guide_pid` は、どこからも設定されていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "test/real",
+   "summary": "Ghostty + bash の実機テストが流されておらず、マージ前に流すべき。",
+   "quote": "PR 本文にあるとおり、Ghostty + bash の実機(`test/real`)は流されていません。",
+   "quote_ok": true
+  }
+ ]
+}

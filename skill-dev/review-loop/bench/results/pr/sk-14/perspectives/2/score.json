@@ -1,0 +1,77 @@
+{
+ "cost_usd": 0.09434200000000001,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューはヒアドキュメントの一時ファイル依存を疑ったものの、検証して「確認済みで問題なし」と結論しており、fail-open を指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "scan.sh で一時ディレクトリの作成が git fetch --prune の後にあり、副作用が先に起きる点にはどこにも触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い、またはプロセスを見られないときに空の一覧を「使用中でない」と扱う点への言及が無い。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh:185-186",
+   "summary": "修正前の mktemp は macOS では TMPDIR を見ないので、追加された apply.sh のテストは修正前のコードでも通り、回帰を検出できない。",
+   "quote": "`skill-dev/housekeeping/test.sh:185-186` — apply.sh のテストが macOS で回帰を検出できない(要修正)",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skill-dev/housekeeping/test.sh:172-175",
+   "summary": "「片付ける」テストは、hk-tmp に一度もディレクトリが作られなかった場合でも空なので通ってしまう。",
+   "quote": "「片付ける」テストは、`hk-tmp` に一度も作られなかった場合でも空なので通ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "`!` で実行すればサンドボックスの外で動くという前提が検証されておらず、外で動かないなら案内しても同じエラーを繰り返すだけになる。",
+   "quote": "この案内は「`!` で実行すればサンドボックスの外で動く」ことを前提にしています。私はこの前提を検証していません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "scan.sh の出力ファイルにはブランチ名・パス・PR 番号が入るのに、読み終えたあと削除する手順が無く、ファイルが残り続ける。",
+   "quote": "読み終えたあと消す手順が書かれていないので、エージェント側の `$TMPDIR` に残り続けます。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "apply.sh は標準入力で行を受け取るのに、`!` で実行するときの具体的なコマンドの形が書かれていない。",
+   "quote": "apply.sh を `!` で実行するときのコマンドの形が書かれていない",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "apply.sh はもう一時ファイルを使わないので、サンドボックスで失敗する理由は別であり、「同じ理由で」という書き方は不正確。",
+   "quote": "apply.sh は一時ファイルを使わなくなったので、サンドボックスで失敗するとすれば理由は別です(push の通信、worktree の外への書き込みなど)。「同じ理由で」という書き方も正確ではありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skills/housekeeping/scripts/lib.sh:6",
+   "summary": "HOUSEKEEPING_TMPDIR は scan.sh しか使わないのに、lib.sh の共通の環境変数一覧に載っているので、apply.sh でも効くように読めてしまう。",
+   "quote": "`HOUSEKEEPING_TMPDIR` を使うのは scan.sh だけなのに、lib.sh の共通の環境変数一覧に載っています。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,98 @@
+{
+ "cost_usd": 0.11541,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "partial",
+   "quote": "拒否イベントの実物をまだ確かめていないことが一番の不確実性です。マージ前に、本物の stream で `source` と `reason_type` の値を1件確かめるべきだと考えます。",
+   "reason": "source: config だけで止めない判定は範囲が広すぎるという懸念と、reason_type の確認には触れているが、分類器による拒否が通ってしまうという原因の特定は無く、未確認のリスクとして述べるにとどまっているため partial とした。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "detected",
+   "quote": "`config_denied[msg.get(\"tool_use_id\")]` は、id がないと `None` をキーにします。その結果、`seen` に `None` が入ります。",
+   "reason": "id が無いと None をキーとして入り、seen によって permission_denials の id 無しの拒否まで除外されるという仕組みを、正確に指摘しているため detected とした。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "detected",
+   "quote": "判定役が判定のあとに「以上です」のような `result` 行を出すと、その文が `verdict.md` に入ります。下書きと最終版の2回判定を出すと、`## 指摘` と `## 競合` が2組そのまま入り、同じ `F1` が2つできます。",
+   "reason": "判定役の出力も result の行を全てつないで使うため、後の短い行や判定の出し直しが混ざるという点を、正解と同じ条件で指摘しているため detected とした。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "is_error の result の行をつなぐ対象から除いていない点への指摘が無いため missed とした。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "run_reviews で別の観点の失敗によって抜けるとき、動いている子の止めない拒否が記録から漏れる点への指摘が無いため missed とした。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "detected",
+   "quote": "`child_error` の詳細が `text[:500]`、つまりつないだテキストの先頭になりました。",
+   "reason": "child_error の詳細がつないだテキストの先頭になり、最後の行のエラーの文が切り落とされるという点を、正確に指摘しているため detected とした。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "review_loop.py:805",
+   "summary": "閉じフェンスを消す正規表現は末尾にしか効かないので、後ろに短い result の行が続くと、閉じフェンスが verdict.md の途中に残る。",
+   "quote": "`re.sub(r\"\\n```\\s*$\", ...)` は、閉じフェンスがテキストの末尾にあるときしか効きません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "review_loop.py:803",
+   "summary": "FAKE_JUDGE=multi のテストは最後の行が空の場合しか確かめておらず、判定役が複数の判定を出す場合のテストが無い。",
+   "quote": "テストの `FAKE_JUDGE=multi` は「最後の行が空」の場合しか確かめていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "review_loop.py:237",
+   "summary": "modelUsage がセッションの累計なのに「どの行も同じ値」と書いており、コメントが自己矛盾している。",
+   "quote": "「modelUsage はセッションの累計で、どの行も同じ値になる」とあります。累計なら行ごとに値は増えるはずで、「同じ値」とは両立しません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "review_loop.py:337-339",
+   "summary": "拒否されたコマンドの入力が、成功する試行でも denials.txt と stderr に残るため、トークンを含むコマンドが残るおそれがある。",
+   "quote": "以前は失敗したときだけ stderr に出ていました。今回から、成功する試行でも `denials.txt` と `warn:` の行に残ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "review_loop.py:243 付近",
+   "summary": "レビュー役の子が最後に本文をまとめ直して出すと、同じ本文が判定役に2回渡り、件数の見積もりが歪むかもしれない。",
+   "quote": "子が最後に本文をまとめ直して出すと、同じ本文が判定役に2回渡ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skill-dev/review-loop/test.py、fakes/claude",
+   "summary": "偽の claude の拒否は tool_use_id \"x\" の1件だけで、config の拒否と source の無い拒否が混ざる場合や、id の無いイベントを確かめるテストが無い。",
+   "quote": "偽の claude の拒否は、どれも `tool_use_id: \"x\"` の1件だけです。次の場合を確かめるテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "",
+   "summary": "許可ルールが無いための拒否も source: config で出る場合、permission_denied で止まっていた失敗が黙って通り、網羅性が落ちる。",
+   "quote": "その場合、`permission_denied` で止まっていた失敗が黙って通るようになります。",
+   "quote_ok": true
+  }
+ ]
+}

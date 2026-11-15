@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.10863400000000001,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "先頭の見出しと `(sub)` の行が窓の高さ以上あると、`:230` の `blockLen >= avail ? b0` で窓が先頭に固定され、選んだ行が画面に出ません。",
+   "reason": "render で頭の (sub) を含む塊が窓より長いと start=b0 で選んだ行が外れることと、b1 の延長で入力欄の補正がずれることの両方を、原因付きで指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "trailing が区切りの境目を越える点には触れているが、レビュー自身が問題ないと結論している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "選べる行がないときに通し番号が 0/0 になる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "選んでいた行が残ったまま `(sub)` に変わった場合もここに入ります。`prevLayout.order` にはまだあるので `goneName` が入り、guard が立ちます。",
+   "reason": "(sub) に変わってカーソルが移ったときも guard が立ち、『left the list』という誤った文言が出ることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に対象の行が (sub) に変わっても入力欄が閉じないことには触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "detected",
+   "quote": "そこで `e`、`f`、`v` を押すと、この PR で外した断りの処理がないので、メモの欄や待ち先のメニューが開きます。",
+   "reason": "attachKey などが選べるかを確かめずにカーソルを置く経路と、openNote の断りを外したためにメモが開くことを指摘しており、criteria を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の『Both can be selected』の食い違いには触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md:296",
+   "summary": "選べない行でも Enter と v が効くように読める、紛らわしい一文がある。",
+   "quote": "問題：選べない行で `Enter` と `v` が効くように読めます。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "test/unit/model.test.ts",
+   "summary": "(sub) に変わったときに guard が立つ経路を確かめるテストがない。",
+   "quote": "テスト：`test/unit/model.test.ts` の「選んでいた行が起動された行になったら」は `followCursor` だけを確かめていて、この経路は通っていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/unit/screen.test.ts:136",
+   "summary": "窓の位置合わせの不具合2件を捕まえるテストがない。",
+   "quote": "上の窓の不具合2件（先頭の `(sub)` の行が窓の高さ以上あるとき、すぐ下に続く `(sub)` の行と入力欄が重なるとき）は、どちらもこのテストで捕まりません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test/e2e/deps.test.ts:464-466",
+   "summary": "シナリオ71の「何も出ない」確認は 150ms 待つだけなので、描画が遅れても通ってしまう。",
+   "quote": "待つのはキーを送るたびの 150ms だけです。描画が遅れても通ってしまい、何も確かめていないのと同じになりえます。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test/e2e/deps.test.ts:446-449",
+   "summary": "シナリオ70の確認は、カーソルが消えた場合でも通ってしまう。",
+   "quote": "カーソルが消えた（`> ` のある行が1つもない）場合でも通ります。",
+   "quote_ok": true
+  }
+ ]
+}

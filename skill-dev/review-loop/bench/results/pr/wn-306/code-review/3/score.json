@@ -1,0 +1,70 @@
+{
+ "cost_usd": 0.09341400000000001,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "入力欄を窓に入れる補正 `if (s.inline && b1 > start + avail) start = b1 - avail` が、メモの入力欄ではなく最後の (sub) 行に合わせて窓を下げる。",
+   "reason": "指摘1と2が、cursorBlock に (sub) を含めたことと start = b1 - avail / b0 の補正のせいで、入力欄や選んだ行が窓から外れることを示している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "detected",
+   "quote": "trailing は次の選べる行が出るまで続き、区切りや親子を見ない。そのため、選んだ行の子孫でない (sub) 行も『すぐ下に続く起動された行』として block に入る。次の区切りの空行、見出し、トップレベルの (sub) 行",
+   "reason": "trailing が区切りの境目で切れず、次の区切りの (sub) 行まで塊に入ることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "選べる行がないときに通し番号が 0/0 になるという指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "行が一覧に残ったまま (sub) に変わっただけでも goneName が入って guard が立つ。直後の Ctrl+X で『left the list』という事実と違う文言が出る。",
+   "reason": "(sub) に変わったときも guard が立ち、文言が事実と違うことを正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "detected",
+   "quote": "選んでいた行が更新で起動された行に変わると、カーソルは隣へ移るが、mode(note か wait)は元の行の sid のまま残る。入力欄はカーソルのない (sub) 行の下に出続け、Enter で起動された行にメモが保存される。",
+   "reason": "メモの入力中に行が (sub) になっても mode が閉じず、起動された行にメモが付くことを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "detected",
+   "quote": "openNote から起動された行を断るガードを消したが、openNote はカーソル以外の経路からも呼ばれる。attachKey は sidOfSession(GUIDE なら guideTarget)の sid を this.cursor に入れてから openNote に渡す",
+   "reason": "ガードを消したため、attachKey の経路から (sub) の行にメモが開くことを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "detected",
+   "quote": "README に『Both can be selected but not attached』と書かれたまま残っている。(sub) 行は選べなくなったので、利用者向けの説明が実装と食い違う。",
+   "reason": "README の記述が実装と食い違うことを指摘している。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/screen/screen.ts:201",
+   "summary": "選べるかどうかの判定が画面側の marker とモデル側の selectableOrder の2か所にあり、片方だけ変わると数がずれる。",
+   "quote": "選べるかどうかの判定を、画面側では表示用の `r.marker !== 'sub'` から推し量り、モデル側では selectableOrder(n.spawned)で決めている。同じ規則の出どころが 2 つある。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/model/cursor.ts:6",
+   "summary": "selectableOrder が sid ごとに isSpawned で全ノードを走査するので O(n²) になる。",
+   "quote": "selectableOrder は order の各 sid について、isSpawned で全区切りの全ノードを走査するので O(n²) になる。↑↓ のキー入力ごとと、更新ごとに呼ばれる。",
+   "quote_ok": true
+  }
+ ]
+}

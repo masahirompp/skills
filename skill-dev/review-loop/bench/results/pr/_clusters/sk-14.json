@@ -1,144 +1,168 @@
 {
  "case": "sk-14",
- "cost_usd": 0.053333000000000005,
+ "cost_usd": 0.1078172,
  "clusters": [
   {
-   "title": "TMPDIR を存在しないディレクトリにしても bash が /tmp に退避するため、書き込めない TMPDIR の回帰テストとして機能していない",
-   "location": "skill-dev/housekeeping/test.sh:186",
+   "title": "一時ディレクトリの既定値の式 ${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}} が lib.sh と scan.sh のエラーメッセージに重複していて、ずれるおそれがある。",
+   "location": "skills/housekeeping/scripts/scan.sh:31",
    "members": [
-    "e1",
-    "e3"
+    "e5",
+    "e6",
+    "e17",
+    "e19",
+    "e30",
+    "e36",
+    "e43",
+    "e52"
    ],
    "id": "sk-14/c1",
    "class": "trivial",
    "scope": "na",
-   "ran": true,
-   "evidence": "apply.sh を main の版(input=$(mktemp))に一時的に戻して skill-dev/housekeeping/test.sh を実行すると「全件成功」になった(確認後に git checkout で元に戻した)。少なくとも macOS では、このテストは旧コードでも通り、回帰を検出しない。ただし通る理由は bash のヒアドキュメントの退避ではない。macOS の mktemp がテンプレート無しだと TMPDIR を見ないためで、`TMPDIR=/no-such-dir mktemp` は rc=0 で /var/folders/... を返した(c2 と同じ仕組み)。GNU mktemp は TMPDIR を見るので、Linux なら旧コードで失敗し、テストは効くはず(未実行)。apply.sh 本体の挙動は正しく、問題はテストの検出力だけなので trivial",
+   "ran": false,
+   "evidence": "lib.sh:18 と scan.sh:31 に ${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}} が重複しているのは事実。ただし今は両者が同じ式なので、メッセージに出る場所と実際に試す場所は一致する。片方だけを将来変えたときに初めて問題になる、重複の指摘。",
    "classified_by": "llm"
   },
   {
-   "title": "macOS の mktemp はテンプレートなしだと TMPDIR を見ないため、apply.sh のテストが旧コードでも通ってしまう",
-   "location": "test.sh(apply.sh のテスト)",
+   "title": "mktemp -d 成功後の `[ -n \"$d\" ] && [ -d \"$d\" ]` の検査は余分である。",
+   "location": "skills/housekeeping/scripts/lib.sh:20",
    "members": [
-    "e14"
+    "e8",
+    "e51"
    ],
    "id": "sk-14/c2",
    "class": "trivial",
    "scope": "na",
-   "ran": true,
-   "evidence": "`TMPDIR=/no-such-dir mktemp` と `mktemp -d` はどちらも rc=0 で /var/folders/5t/.../T/tmp.XXXX を作った。macOS の mktemp はテンプレート無しでは TMPDIR を見ない、という主張は事実(lib.sh:15 のコメントとも合う)。main の apply.sh に戻した状態でも test.sh は「全件成功」だった。回帰を検出できないのはテストの不足で、挙動の不具合ではないので trivial",
+   "ran": false,
+   "evidence": "lib.sh:20 の検査は、mktemp -d が成功すれば常に真になる余分な確認。挙動は変わらない(防御のための書き方の問題)。",
    "classified_by": "llm"
   },
   {
-   "title": "後片付けのテストが正常終了の経路しか確認しておらず、error 終了時の削除を検証していない",
-   "location": "test.sh:173-175",
+   "title": "TMPDIR を存在しないディレクトリにしても bash が /tmp に退避するので、書き込めない TMPDIR のテストは常に通り、回帰を検出できない。",
+   "location": "skill-dev/housekeeping/test.sh:186",
    "members": [
-    "e5"
+    "e2",
+    "e12",
+    "e25",
+    "e45"
    ],
    "id": "sk-14/c3",
    "class": "trivial",
    "scope": "na",
-   "ran": false,
-   "evidence": "test.sh の追加分では、hk-tmp での片付けを確かめるのは正常終了の1件だけ。scan.sh:34 の trap 'rm -rf \"$tmp\"' EXIT は mktemp の直後に置かれていて、以降の exit 1 でも動く。現状の挙動に問題は無い。テストケースが足りないという指摘なので trivial",
+   "ran": true,
+   "evidence": "`TMPDIR=/nonexist bash -c 'cat <<EOF ...'` は成功する(rc=0)ので、bash が /tmp に退避するのは事実。ただし今の apply.sh にヒアドキュメントは無く(grep '<<' で該当なし)、テストが通る今の理由はこれではない。どちらにせよ、テストの検出力が弱いという指摘で、利用者が触れる挙動の問題ではない。",
    "classified_by": "llm"
   },
   {
-   "title": "片付けのテストは hk-tmp が空かどうかしか見ておらず、一時ディレクトリの作成場所を検証していない",
-   "location": "skill-dev/housekeeping/test.sh:175",
+   "title": "macOS の mktemp はテンプレートなしだと TMPDIR を見ないので、apply.sh のテストは変更前のコードでも通り、回帰を検出できない。",
+   "location": "skill-dev/housekeeping/test.sh:185-186",
    "members": [
-    "e7",
-    "e8"
+    "e14",
+    "e16",
+    "e20",
+    "e21"
    ],
    "id": "sk-14/c4",
    "class": "trivial",
    "scope": "na",
-   "ran": false,
-   "evidence": "test.sh の追加分は `[ -z \"$(ls -A \"$root/hk-tmp\")\" ]` だけで、作成場所は確かめていない。この点は事実。ただし lib.sh:18-19 では HOUSEKEEPING_TMPDIR を使ってテンプレートを組んでおり、直前のテスト(no-such-dir を指定すると止まる)が通ることから、HOUSEKEEPING_TMPDIR が実際に効いていることも間接的に分かる。テストの検出力の問題なので trivial",
+   "ran": true,
+   "evidence": "`TMPDIR=/nonexist mktemp` は /var/folders/.../T/tmp.XXX を返して rc=0。main の apply.sh(input=$(mktemp))に差し替えて test.sh を流すと『ok apply: 飛ばした行があるので終了コード 1』となり、全件成功した。macOS ではテストが変更の前後を区別できないのは事実。ただしテストの検出力の問題で、製品の挙動には関わらない。",
    "classified_by": "llm"
   },
   {
-   "title": "既定値の連鎖 ${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}} が lib.sh と scan.sh のエラーメッセージに重複しており、ずれるおそれがある",
-   "location": "skills/housekeeping/scripts/scan.sh:31",
+   "title": "apply.sh が読まない HOUSEKEEPING_TMPDIR をテストで設定しており、ノイズになっている。",
+   "location": "skill-dev/housekeeping/test.sh:186",
    "members": [
-    "e12",
-    "e13",
-    "e16"
+    "e11"
    ],
    "id": "sk-14/c5",
    "class": "trivial",
    "scope": "na",
    "ran": false,
-   "evidence": "lib.sh:18 と scan.sh:31 の両方に ${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}} がある、という指摘は事実。現在は2か所が同じ式なので、表示されるパスは実際の場所と一致する。ずれるのは将来どちらか片方だけを変えたときなので trivial",
+   "evidence": "apply.sh は lib.sh を source するが、hk_mktemp_dir を呼ばないので、HOUSEKEEPING_TMPDIR は使われない。test.sh:186 で設定しているのはノイズにすぎず、挙動には影響しない。",
    "classified_by": "llm"
   },
   {
-   "title": "! で実行したコマンドがサンドボックス外で動くか、環境変数が異なるかという前提が検証されていない",
-   "location": "SKILL.md:35",
+   "title": "片付けのテストは hk-tmp が空かどうかしか見ておらず、一時ディレクトリが HOUSEKEEPING_TMPDIR の下に作られたかを確かめていない。",
+   "location": "skill-dev/housekeeping/test.sh:172-175",
    "members": [
-    "e2"
+    "e3",
+    "e13",
+    "e22",
+    "e23",
+    "e27",
+    "e32",
+    "e37",
+    "e46"
    ],
    "id": "sk-14/c6",
-   "class": "undetermined",
+   "class": "trivial",
    "scope": "na",
    "ran": false,
-   "evidence": "SKILL.md:35 は、`!` で実行したコマンドがサンドボックスの外で、ユーザーのシェルの環境変数のもとで動くことを前提にしている。これを確かめるには、Claude Code の対話セッションで `!` を実際に実行する必要がある。今回は非対話の環境なので確かめられなかった",
+   "evidence": "test.sh:172-175 は hk-tmp が空かどうかだけを見ており、作成場所は確かめていないのは事実。ただし直前のテスト(163-170)で、HOUSEKEEPING_TMPDIR=no-such-dir なら止まることを確かめているので、この変数を読んでいることは別のテストで担保されている。テストの網羅性の指摘。",
    "classified_by": "llm"
   },
   {
-   "title": "削除の実行を利用者に任せる前に、渡すファイルが承認した行だけであることを示す手順が無い",
-   "location": "SKILL.md:35",
+   "title": "後片付けのテストが正常終了の経路しか見ておらず、error で終わる経路での削除を確かめていない。",
+   "location": "test.sh:173-175",
    "members": [
-    "e4"
+    "e31"
    ],
    "id": "sk-14/c7",
    "class": "trivial",
    "scope": "na",
    "ran": false,
-   "evidence": "SKILL.md 手順3で承認を取り、手順4で承認した行を抜き出す流れは既にある。apply.sh(1-8行目、および各行の再確認)は、sha の変化や保護対象を削除の直前に確かめ直す。`!` で実行するコマンドはユーザーの目に見える。誤った行が渡されて消える経路は具体的に示されておらず、手順を足して安全性を上げようという提案なので trivial",
+   "evidence": "error で終わる経路の片付けを確かめるテストが無い、という指摘。scan.sh では mktemp の直後に trap 'rm -rf \"$tmp\"' EXIT を張っているので、exit 1 でも消える。テストが無いという指摘にあたる。",
    "classified_by": "llm"
   },
   {
-   "title": "apply.sh を ! で実行する案内に、標準入力へファイルを渡す形が書かれていない",
-   "location": "SKILL.md:35",
+   "title": "『止まる』テストが rc != 0 しか見ておらず、別の理由の失敗でも通る。",
+   "location": "skill-dev/housekeeping/test.sh:163-164",
    "members": [
-    "e6"
+    "e24"
    ],
    "id": "sk-14/c8",
-   "class": "trivial",
+   "class": "wrong",
    "scope": "na",
    "ran": false,
-   "evidence": "SKILL.md:35 は apply.sh について「同じように `!` で実行してもらう」とだけ書いており、標準入力に行を渡す形は書いていない。ただし、コマンドを組み立てるのはエージェントで、手順4(SKILL.md:58-60)と apply.sh の冒頭のコメントに、パイプで渡す例がある。仮に標準入力を渡さずに実行しても、行が無いので何も消えず、データは失われない。文書の詳しさの問題なので trivial",
+   "evidence": "test.sh:166 の条件は、rc != 0 に加えて、stdout が空であること([ ! -s scan-notmp.out ])と、stderr に『一時ディレクトリを作れない』があること(grep -q)も確かめている。別の理由で失敗すればこのメッセージは出ないので、テストは通らない。『rc != 0 しか見ていない』という主張はコードと食い違う。",
    "classified_by": "llm"
   },
   {
-   "title": "案内で \"$TMPDIR/housekeeping-scan.tsv\" をそのまま使っており、ユーザーのシェルでは別パスに展開され空入力で成功扱いになりうる",
+   "title": "apply.sh を ! で実行してもらう案内に、承認済みの行を標準入力で渡す具体的なコマンドの形が書かれていない。",
    "location": "skills/housekeeping/SKILL.md:35",
    "members": [
-    "e17"
+    "e9",
+    "e18",
+    "e33",
+    "e34",
+    "e38",
+    "e42",
+    "e47",
+    "e49"
    ],
    "id": "sk-14/c9",
-   "class": "real",
-   "scope": "in",
+   "class": "trivial",
+   "scope": "na",
    "ran": true,
-   "evidence": "SKILL.md:35 で追加された「手順4の apply.sh が同じ理由で失敗したときも、同じように `!` で実行してもらう」は、手順4の例(SKILL.md の `awk ... \"$TMPDIR/housekeeping-scan.tsv\" | <skill-dir>/scripts/apply.sh`)を指しています。この例は $TMPDIR を展開しないまま使っています。絶対パスに展開するよう明示した規則は scan.sh の案内の中にしかありません。「同じように」が展開の規則まで含むかは読み手次第で、エージェントが例をそのまま `!` に渡す経路は塞がれていません。ユーザーのシェルの $TMPDIR が別の場所を指すと、awk がファイルを開けず、apply.sh は空の入力で動きます。これを再現しました。一時ディレクトリにリポジトリを作り、origin/HEAD を設定してから `awk -F'\\t' '$2 != \"remote\"' /nonexistent/housekeeping-scan.tsv | scripts/apply.sh; echo rc=$?` を実行した結果は、stderr に `awk: can't open file` が出て、apply.sh の出力は無く、rc=0 でした。pipefail の無いシェルでは、何も消さないまま成功で終わります(awk のエラーは stderr に残ります)。この案内は今回の差分で加わったので scope は in です。",
+   "evidence": "SKILL.md:35 の apply.sh 向けの案内は「同じように `!` で実行してもらう」だけで、パイプの形は書かれていない。ただし同じ段落で「`<skill-dir>` と `<ファイル>` は展開済みの絶対パスで書く」と決めてあり、手順4(SKILL.md:58-61)には awk でフィルタして apply.sh にパイプする形がある。2つを組み合わせればコマンドを組み立てられる。足りないのは案内の具体さで、文書とコードは食い違っていない。参考までに、空の入力で実行すると `awk 'BEGIN{}' /nonexistent | apply.sh` は rc=0 で何も出力しなかった。それでもエージェントが組み立てを誤ることが前提になるので、挙動の欠陥とは言えない",
    "classified_by": "llm"
   },
   {
-   "title": "「同じ理由で失敗したとき」という条件が曖昧で、実際の失敗の種類と合っていない",
-   "location": "SKILL.md:35",
+   "title": "! 実行の案内で \"$TMPDIR/housekeeping-scan.tsv\" をそのまま使っており、ユーザーのシェルでは別のパスに展開され、空の入力で成功扱いになりうる。",
+   "location": "skills/housekeeping/SKILL.md:35",
    "members": [
-    "e11"
+    "e10"
    ],
    "id": "sk-14/c10",
    "class": "trivial",
    "scope": "na",
-   "ran": false,
-   "evidence": "「同じ理由」は、直前の箇条の「サンドボックスの制限(`Operation not permitted` など)」を指します。apply.sh でも、.git や worktree への書き込み、git push がサンドボックスに拒まれれば同じ種類の失敗になるので、条件として誤りではありません。apply.sh が mktemp を使わなくなった(apply.sh の差分で input=$(grep ...) に変わった)ため「一時ディレクトリを作れない」は起きませんが、これは例として挙げた文言の一部が当てはまらないだけです。案内される操作(`!` で実行してもらう)は変わりません。表現の明確さの問題なので trivial とします。",
+   "ran": true,
+   "evidence": "空の入力で成功扱いになる点は実行で確かめた。`awk ... | skills/housekeeping/scripts/apply.sh` に何も渡さないと rc=0 で出力は空だった。apply.sh は set -e を使っておらず、grep -v が1を返しても止まらない。ただし SKILL.md:35 は `!` で実行するときのパスについて「展開済みの絶対パスで書く(ユーザーのシェルの `$TMPDIR` はエージェントのものと違うことがある)」と明記しており、apply.sh も「同じように」と案内している。手順4の `$TMPDIR` をそのまま写すのは、この明記に反する誤用になる。書き方を補えばよい案内の曖昧さなので trivial とする",
    "classified_by": "llm"
   },
   {
-   "title": "apply.sh 失敗時にも ! で実行してもらう案内は仕様の範囲外の追加である",
-   "location": "SKILL.md",
+   "title": "削除の実行を利用者に任せる前に、渡すファイルが承認した行だけであることをエージェントが示す手順が無い。",
+   "location": "SKILL.md:35",
    "members": [
     "e15"
    ],
@@ -146,114 +170,209 @@
    "class": "trivial",
    "scope": "na",
    "ran": false,
-   "evidence": "仕様の範囲を超えて追加したという指摘で、挙動の不具合を主張していません。この追加によって起きうる誤りは c9 で別に扱いました。範囲の判断そのものは挙動に関わらないので trivial とします。",
+   "evidence": "手順を足したほうが安全だという提案で、今ある挙動の誤りは指していない。apply.sh は各行を削除の直前に確かめ直し、保護対象は入力にあっても消さない(apply.sh:1-8)。実行しなかったのは、確かめる対象になる挙動の主張が無いため",
    "classified_by": "llm"
   },
   {
-   "title": "SKILL.md の「サンドボックスの制限」の箇条が1文に3つの内容を詰めていて読みにくい",
-   "location": "SKILL.md「サンドボックスの制限」",
+   "title": "! で実行するときのカレントディレクトリに触れておらず、別のリポジトリを走査するおそれがある。",
+   "location": "skills/housekeeping/SKILL.md:35",
    "members": [
-    "e9"
+    "e41"
    ],
    "id": "sk-14/c12",
-   "class": "trivial",
+   "class": "undetermined",
    "scope": "na",
    "ran": false,
-   "evidence": "SKILL.md:35 の箇条は、確かに1文の中にコマンドの形、パスを展開する規則、出力先、apply.sh への適用を詰め込んでいます。ただしこれは読みやすさの問題で、挙動には関わりません。",
+   "evidence": "SKILL.md:35 は `!` で実行するときのカレントディレクトリに触れていない。`!` はユーザーの別の端末ではなく Claude Code のセッションのシェルで動くので、エージェントと同じディレクトリで実行されると考えられる。そうなら指摘は成り立たない。ただ、この環境からは `!` を実行できず確かめられなかった。なお手順1の scan.sh も、カレントディレクトリを対象のリポジトリとして走査する(SKILL.md:17)",
    "classified_by": "llm"
   },
   {
-   "title": "mktemp -d 成功直後の [ -n \"$d\" ] && [ -d \"$d\" ] は余分な確認である",
-   "location": "skills/housekeeping/scripts/lib.sh:20",
+   "title": "「同じ理由で失敗したとき」の「同じ理由」が、変更後の apply.sh では何を指すのか曖昧で不正確である。",
+   "location": "skills/housekeeping/SKILL.md:35",
    "members": [
-    "e10"
+    "e7",
+    "e29",
+    "e40"
    ],
    "id": "sk-14/c13",
    "class": "trivial",
    "scope": "na",
    "ran": false,
-   "evidence": "lib.sh:20 の hk_mktemp_dir では、`mktemp -d` が終了コード0で返ればディレクトリはできていて、そのパスが出力されています。そのため続く `[ -n \"$d\" ] && [ -d \"$d\" ]` はほぼ冗長で、指摘の内容は事実です。ただし残しておいても結果は変わらない防御的な確認なので、書き方の好みとして trivial とします。",
+   "evidence": "SKILL.md:35 の「同じ理由」は、同じ箇条の「サンドボックスの制限(`Operation not permitted` や…)」を指すと読める。apply.sh は mktemp を使わなくなった(diff の apply.sh:20-21)が、ほかの worktree の .git への書き込みや git push がサンドボックスで `Operation not permitted` になる可能性は残る。そのため条件として誤りではなく、言い回しが曖昧なだけで挙動には関わらない",
+   "classified_by": "llm"
+  },
+  {
+   "title": "! で実行したコマンドがサンドボックスの外で動くという前提が確かめられていない。",
+   "location": "skills/housekeeping/SKILL.md:35",
+   "members": [
+    "e28",
+    "e44",
+    "e48"
+   ],
+   "id": "sk-14/c14",
+   "class": "undetermined",
+   "scope": "na",
+   "ran": false,
+   "evidence": "案内全体が「`!` で実行したコマンドはサンドボックスの外で動く」という前提に立っているが、`!` が Claude Code のサンドボックスの対象外かどうかは、この非対話の環境では確かめられない。指摘も前提を検証していないと言っているだけで、外で動かないことを示してはいない",
+   "classified_by": "llm"
+  },
+  {
+   "title": "apply.sh が失敗したときにも ! 実行を案内するのは仕様の範囲外の追加である。",
+   "location": "SKILL.md",
+   "members": [
+    "e1"
+   ],
+   "id": "sk-14/c15",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "仕様の範囲についての指摘で、挙動の誤りではない。仕様の文書はリポジトリに無く、照らし合わせることもできない。追加された1文(SKILL.md:35 の末尾)は、誤った結果や失敗を引き起こさない",
+   "classified_by": "llm"
+  },
+  {
+   "title": "SKILL.md「サンドボックスの制限」の箇条が1文に3つの内容を詰めていて読みにくい。",
+   "location": "SKILL.md「サンドボックスの制限」",
+   "members": [
+    "e4"
+   ],
+   "id": "sk-14/c16",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:35 の箇条が長いのは事実だが、読みやすさの指摘で挙動には関わらない",
+   "classified_by": "llm"
+  },
+  {
+   "title": "HOUSEKEEPING_TMPDIR は scan.sh しか使わないのに lib.sh の共通の環境変数一覧に載っており、apply.sh でも効くように読める。",
+   "location": "skills/housekeeping/scripts/lib.sh:6",
+   "members": [
+    "e26"
+   ],
+   "id": "sk-14/c17",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "skills/housekeeping/scripts/lib.sh:6 はスクリプト内のコメントにすぎず、挙動は変わらない。利用者向けの文書である SKILL.md の「設定と前提」には『scan.sh は一時ディレクトリを $HOUSEKEEPING_TMPDIR … の下に作る … apply.sh は一時ファイルを使わない』と明記されているので、利用者が誤る経路も無い。コメントの置き場所の問題にとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "scan.sh の出力ファイルにはブランチ名・パス・PR 番号が入るのに、読み終えたあと削除する手順が無い。",
+   "location": "skills/housekeeping/SKILL.md:35",
+   "members": [
+    "e35"
+   ],
+   "id": "sk-14/c18",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "main の SKILL.md も手順1で scan.sh の出力を \"$TMPDIR/housekeeping-scan.tsv\" に書き、削除する手順を持たない(git show main:skills/housekeeping/SKILL.md の20行目と56行目)。差分で増えたのは、サンドボックスで失敗したときの代わりの手順だけ。ファイルの置き場所はエージェント自身のユーザーの $TMPDIR で、中身は同じユーザーがリポジトリから見られる情報(ブランチ名・パス・PR 番号)なので、他者に漏れることもデータが壊れることもない。後片付けの手順が無いという好みの問題で、挙動の不具合ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "HOUSEKEEPING_TMPDIR に相対パスを渡すと tmp も相対パスになり、将来 cd を足すと壊れる。",
+   "location": "skills/housekeeping/scripts/lib.sh:18-19",
+   "members": [
+    "e39"
+   ],
+   "id": "sk-14/c19",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "指摘自身が『現状の scan.sh は cd をサブシェル内でしか使わないので問題になりません』と書いており、将来 cd を足して初めて問題になる種類の指摘にあたる。lib.sh:18-19 の mktemp -d \"${base%/}/housekeeping.XXXXXX\" は相対パスでも作れ、trap の rm -rf も同じ cwd で動く。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "HOUSEKEEPING_TMPDIR はスクリプト自身にしか効かず、子プロセス(gh、jq、git)は書き込めない TMPDIR を引き継いで失敗し得る。",
+   "location": "skills/housekeeping/scripts/lib.sh:18",
+   "members": [
+    "e50"
+   ],
+   "id": "sk-14/c20",
+   "class": "wrong",
+   "scope": "na",
+   "ran": true,
+   "evidence": "github.com/octocat/Hello-World を clone した一時リポジトリで、TMPDIR=/nonexistent/x(存在しない場所)と HOUSEKEEPING_TMPDIR=/tmp/hk-c20b(書き込める場所)を指定して scan.sh を実行した。本物の git fetch、gh pr list、jq がすべて動いて rc=0 で終わり、TSV(ヘッダーと keep 行)が出た。stderr は空で、/tmp/hk-c20b も終了時に空になっていた。gh pr list を単独で TMPDIR=/nonexistent/x にして動かしても rc=0 で結果が返った。子プロセスが TMPDIR を引き継いで失敗するという主張は、試した範囲では起きなかった。スクリプトの中で TMPDIR を使うのは lib.sh の hk_mktemp_dir だけ(grep で確認)。",
    "classified_by": "llm"
   }
  ],
  "members": {
   "e1": {
-   "dir": "sk-14/perspectives/1",
-   "config": "perspectives",
+   "dir": "sk-14/mattpocock/1",
+   "config": "mattpocock",
    "trial": 1,
-   "n": 1
+   "n": 3
   },
   "e2": {
-   "dir": "sk-14/perspectives/1",
-   "config": "perspectives",
-   "trial": 1,
-   "n": 7
-  },
-  "e3": {
    "dir": "sk-14/code-review/1",
    "config": "code-review",
    "trial": 1,
    "n": 1
   },
+  "e3": {
+   "dir": "sk-14/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 3
+  },
   "e4": {
-   "dir": "sk-14/perspectives/1",
-   "config": "perspectives",
+   "dir": "sk-14/mattpocock/1",
+   "config": "mattpocock",
    "trial": 1,
-   "n": 6
+   "n": 2
   },
   "e5": {
-   "dir": "sk-14/perspectives/1",
-   "config": "perspectives",
-   "trial": 1,
+   "dir": "sk-14/plain/2",
+   "config": "plain",
+   "trial": 2,
    "n": 2
   },
   "e6": {
    "dir": "sk-14/perspectives/1",
    "config": "perspectives",
    "trial": 1,
-   "n": 4
+   "n": 3
   },
   "e7": {
-   "dir": "sk-14/mattpocock/1",
-   "config": "mattpocock",
+   "dir": "sk-14/perspectives/1",
+   "config": "perspectives",
    "trial": 1,
    "n": 5
   },
   "e8": {
-   "dir": "sk-14/code-review/1",
+   "dir": "sk-14/code-review/3",
    "config": "code-review",
-   "trial": 1,
-   "n": 2
+   "trial": 3,
+   "n": 5
   },
   "e9": {
-   "dir": "sk-14/mattpocock/1",
-   "config": "mattpocock",
-   "trial": 1,
+   "dir": "sk-14/code-review/3",
+   "config": "code-review",
+   "trial": 3,
    "n": 2
   },
   "e10": {
    "dir": "sk-14/code-review/1",
    "config": "code-review",
    "trial": 1,
-   "n": 5
+   "n": 3
   },
   "e11": {
-   "dir": "sk-14/perspectives/1",
-   "config": "perspectives",
+   "dir": "sk-14/plain/1",
+   "config": "plain",
    "trial": 1,
-   "n": 5
+   "n": 2
   },
   "e12": {
-   "dir": "sk-14/mattpocock/1",
-   "config": "mattpocock",
-   "trial": 1,
+   "dir": "sk-14/code-review/3",
+   "config": "code-review",
+   "trial": 3,
    "n": 1
   },
   "e13": {
-   "dir": "sk-14/perspectives/1",
-   "config": "perspectives",
+   "dir": "sk-14/code-review/1",
+   "config": "code-review",
    "trial": 1,
-   "n": 3
+   "n": 2
   },
   "e14": {
    "dir": "sk-14/mattpocock/1",
@@ -262,23 +381,233 @@
    "n": 4
   },
   "e15": {
-   "dir": "sk-14/mattpocock/1",
-   "config": "mattpocock",
+   "dir": "sk-14/perspectives/1",
+   "config": "perspectives",
    "trial": 1,
-   "n": 3
+   "n": 6
   },
   "e16": {
+   "dir": "sk-14/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 1
+  },
+  "e17": {
+   "dir": "sk-14/plain/3",
+   "config": "plain",
+   "trial": 3,
+   "n": 3
+  },
+  "e18": {
+   "dir": "sk-14/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 5
+  },
+  "e19": {
    "dir": "sk-14/code-review/1",
    "config": "code-review",
    "trial": 1,
    "n": 4
   },
-  "e17": {
+  "e20": {
+   "dir": "sk-14/plain/3",
+   "config": "plain",
+   "trial": 3,
+   "n": 2
+  },
+  "e21": {
+   "dir": "sk-14/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 1
+  },
+  "e22": {
+   "dir": "sk-14/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 4
+  },
+  "e23": {
+   "dir": "sk-14/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 1
+  },
+  "e24": {
+   "dir": "sk-14/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 3
+  },
+  "e25": {
+   "dir": "sk-14/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 1
+  },
+  "e26": {
+   "dir": "sk-14/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 7
+  },
+  "e27": {
+   "dir": "sk-14/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 2
+  },
+  "e28": {
+   "dir": "sk-14/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 3
+  },
+  "e29": {
+   "dir": "sk-14/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 6
+  },
+  "e30": {
+   "dir": "sk-14/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 1
+  },
+  "e31": {
+   "dir": "sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 2
+  },
+  "e32": {
+   "dir": "sk-14/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 5
+  },
+  "e33": {
+   "dir": "sk-14/plain/3",
+   "config": "plain",
+   "trial": 3,
+   "n": 4
+  },
+  "e34": {
+   "dir": "sk-14/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 3
+  },
+  "e35": {
+   "dir": "sk-14/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 4
+  },
+  "e36": {
+   "dir": "sk-14/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 4
+  },
+  "e37": {
+   "dir": "sk-14/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 1
+  },
+  "e38": {
+   "dir": "sk-14/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 4
+  },
+  "e39": {
+   "dir": "sk-14/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 7
+  },
+  "e40": {
+   "dir": "sk-14/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 4
+  },
+  "e41": {
+   "dir": "sk-14/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 4
+  },
+  "e42": {
+   "dir": "sk-14/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 2
+  },
+  "e43": {
+   "dir": "sk-14/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 2
+  },
+  "e44": {
+   "dir": "sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 7
+  },
+  "e45": {
+   "dir": "sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 1
+  },
+  "e46": {
+   "dir": "sk-14/plain/3",
+   "config": "plain",
+   "trial": 3,
+   "n": 1
+  },
+  "e47": {
+   "dir": "sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 4
+  },
+  "e48": {
+   "dir": "sk-14/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 3
+  },
+  "e49": {
+   "dir": "sk-14/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 5
+  },
+  "e50": {
+   "dir": "sk-14/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 3
+  },
+  "e51": {
    "dir": "sk-14/code-review/1",
    "config": "code-review",
    "trial": 1,
-   "n": 3
+   "n": 5
+  },
+  "e52": {
+   "dir": "sk-14/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 6
   }
  },
- "classify_cost_usd": 0.6918540000000001
+ "classify_cost_usd": 1.0315914
 }

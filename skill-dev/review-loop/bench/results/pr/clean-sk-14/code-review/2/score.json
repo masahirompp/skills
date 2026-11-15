@@ -1,0 +1,76 @@
+{
+ "cost_usd": 0.10675200000000001,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/scripts/lib.sh:96",
+   "summary": "hk_process_cwds は自分自身が lsof に見えれば確認できたとみなすが、サンドボックス外の他プロセスが見えている保証は無いため、使用中の worktree を消すおそれがある。",
+   "quote": "hk_process_cwds は自分自身($$)が lsof の一覧に出れば「プロセスを確かめられた」とみなすが、自分が見えても他のプロセスまで見えている保証にはならない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/SKILL.md:69",
+   "summary": "外で実行し直す条件が Operation not permitted と lsof の場合に限られており、ネットワーク制限で push が失敗したときに外での実行が案内されない。",
+   "quote": "apply.sh を `!` で外から実行し直す条件が「Operation not permitted」と lsof の場合しか挙がっていない。サンドボックスのネットワーク制限で push が失敗したときに、エージェントがそれと気づけない。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/SKILL.md:72",
+   "summary": "標準入力が端末のままだと apply.sh の grep が EOF を待って止まり、「何も渡さないと何も消さずに終わる」という記述と食い違う。",
+   "quote": "「何も渡さないと、何も消さずに終わる」とあるが、標準入力が端末のままだと apply.sh の `input=$(grep -v '^action\t')` は入力待ちで止まり、終わらない。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/SKILL.md:20",
+   "summary": "TMPDIR が未設定のとき、共有の /tmp に決まった名前のファイルを書き出すため、衝突や他人による差し替えが起こりうる。",
+   "quote": "TMPDIR が未設定のときの既定値 `/tmp` に、決まった名前の housekeeping-scan.tsv を書き出し、手順4でそこから読み戻している。共有の /tmp では衝突したり、他人に中身を差し替えられたりする。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/scripts/lib.sh:62",
+   "summary": "hk_is_protected が呼ばれるたびにサブシェルと git config を起動していて非効率なので、起動時に一度だけ求めれば足りる。",
+   "quote": "hk_is_protected が呼ばれるたびに、hk_protect_patterns のサブシェルと `git config --get-all` を起動している。保護パターンは実行中に変わらないので、起動時に一度だけ求めれば足りる。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/housekeeping/scripts/scan.sh:123",
+   "summary": "on_fp -gt 1 の分岐は、86行目の空チェックがあるため実際には到達しない。",
+   "quote": "`on_fp -gt 1`(first-parent 履歴を読めない)の分岐には実際には到達しない。86行目で `[ -s \\\"$tmp/first-parent\\\" ]` を確かめ、空なら exit しているため。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skills/housekeeping/scripts/apply.sh:37",
+   "summary": "入力に worktree の行が無くてもシステム全体の lsof を実行しており、無駄な待ち時間が生じる。",
+   "quote": "入力に worktree の行が無くても、hk_process_cwds がシステム全体を対象に lsof を実行する。この PR で、その出力を awk で2回なめるようにもなった。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "skills/housekeeping/scripts/lib.sh:94",
+   "summary": "lsof が無い環境では worktree を消せなくなり、/proc/*/cwd のような代替手段も無い。",
+   "quote": "lsof が無い環境では、worktree を消す手段が無くなった。lsof を入れる以外に回避できず、Linux なら使える /proc/*/cwd への代替も無い。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "skills/housekeeping/scripts/lib.sh:9",
+   "summary": "ヒアドキュメントを使わない規約と、test.sh で `<<` を grep する検査に頼った対処は壊れやすく、TMPDIR を export すれば仕組みの側で解決できる。",
+   "quote": "根本の原因(bash 5.1 未満ではヒアドキュメントが TMPDIR の一時ファイルを使う)に対して、ヒアドキュメントを使わないという規約と、test.sh で `<<` を grep する検査で対処している。この方式は壊れやすい。",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "skills/housekeeping/scripts/lib.sh:24",
+   "summary": "hk_mktemp_dir の条件に重複があり、hk_parse_action の case 分岐も冗長になっている。",
+   "quote": "hk_mktemp_dir の `[ -n \\\"$d\\\" ] && [ -d \\\"$d\\\" ]` は重複している(`[ -d \\\"\\\" ]` は必ず偽)。hk_parse_action でも、`''` の場合と `*)` の場合が同じく `action=''` で、分岐が冗長になっている。",
+   "quote_ok": true
+  }
+ ]
+}

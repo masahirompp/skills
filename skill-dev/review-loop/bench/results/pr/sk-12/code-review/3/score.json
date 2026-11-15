@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.110314,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "detected",
+   "quote": "`source == \"config\"` の拒否をすべて「止めない」側に分類するが、-p で許可ルールに当たらずに拒否された場合(SKILL.md の前提では失敗にすべきもの)も同じ source になるかどうかを確かめていない。",
+   "reason": "source == config だけで止めない拒否とみなすため、設定ルールの一部に当たっただけではない拒否まで止めずに成功として通る、という原因と結果を StreamTail の振り分けについて指摘しているので detected とした。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "detected",
+   "quote": "さらに seen に None が入るので、result の permission_denials のうち tool_use_id のない config 以外の拒否もすべて無視され、止めるべき試行が成功になる。",
+   "reason": "tool_use_id のない拒否が None をキーとして dict に入り、seen によって id なしの permission_denials まで除かれると指摘しており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "detected",
+   "quote": "判定役の result の行をすべてつないだあと、最初の見出しから末尾までを判定として切り出すため、判定より後の turn の result が判定に混ざる。",
+   "reason": "run_judge が全ての result の行をつないで使うため、再掲の判定や「変わりません」の行が判定に混ざると指摘しており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "result の行をつなぐときに is_error の行を除いていない点は、どの指摘でも扱っていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "detected",
+   "quote": "レビュー役の1つが拒否や timeout で raise すると、まだ poll していない他の子の config 拒否は denials.txt と stderr に残らない。",
+   "reason": "run_reviews で別の観点が失敗して抜けると、まだ読んでいない子の止めない拒否が記録から漏れると指摘しており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "detected",
+   "quote": "child_error の詳細が、最後の result の行のエラー文ではなく、つないだテキストの先頭500文字になった。",
+   "reason": "child_error の詳細に、最後のエラーの行ではなくつないだ全体の先頭が載るためエラー文が切れると指摘しており、正解と一致する。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/scripts/review_loop.py:803",
+   "summary": "テストの FAKE_JUDGE=multi は最後の行が空なので、判定のあとに行が続いて混ざる状況をテストで確かめていない。",
+   "quote": "テストの FAKE_JUDGE=multi は最後の行が空なので、この状況を確かめていない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/scripts/review_loop.py:308",
+   "summary": "fake の denylive に source がないため、config の拒否とそれ以外の拒否の区別がテストで検証されていない。",
+   "quote": "fake では denylive に source がなく、この区別は検証されていない。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/review-loop/scripts/review_loop.py:245",
+   "summary": "check_result は、tool_use_id が config の拒否と一致する permission_denials を無条件に飛ばすため、同じ id で別の理由の拒否があった場合や id の表記が違う場合に、拒否を見逃す。",
+   "quote": "check_result は result の permission_denials のうち、tool_use_id が config 拒否と一致するものを無条件に飛ばす。同じ id で config 以外の拒否もあった場合や、result 側の id の表記が違う場合を考えていない。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/review-loop/scripts/review_loop.py:786",
+   "summary": "run_judge の監視ループが run_reviews のループのほぼ写しになっており、共通の関数に括らないと、片方だけ直して挙動がずれやすい。",
+   "quote": "run_judge の監視ループ(poll → watch_denials → timeout → sleep → finish → 再 poll → watch_denials → check_result)が、run_reviews のループとほぼ同じ写しになっている。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/review-loop/scripts/review_loop.py:716",
+   "summary": "子が終わった周回で watch_denials を2回呼んでおり、1回目は冗長である。",
+   "quote": "子が終わった周回では watch_denials を2回呼んでいる(708行目の running=False と、716行目の再 poll 後)。1回目は冗長。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/review-loop/scripts/review_loop.py:237",
+   "summary": "modelUsage について「累計で、どの行も同じ値になる」と書いた docstring が自己矛盾しており、読んだ人が誤解すると、トークン数が少なく記録されるような変更を招く。",
+   "quote": "docstring に「modelUsage はセッションの累計で、どの行も同じ値になる」とあるが、累計なら行ごとに値は増えるので自己矛盾している(fake もすべての行に同じ値を出している)。",
+   "quote_ok": true
+  }
+ ]
+}

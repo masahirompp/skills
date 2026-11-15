@@ -66,13 +66,28 @@ SCHEMA = {
 }
 
 
-def excerpt(review, quote, before=300, after=900):
-    """レビューの出力から、引用のある指摘の前後を切り出す。見つからなければ引用だけを返す。"""
-    head = re.sub(r"\s+", "", quote)[:40]
-    m = re.search(r"\s*".join(re.escape(ch) for ch in head), review) if head else None
-    if not m:
+EXTRACT_PROMPT = """\
+コードレビューの出力と、その中の1つの指摘からの引用を渡す。その引用を含む**指摘1件だけ**の全文を、レビューの出力から
+一字一句そのまま抜き出す。ツールは使わない。
+
+- 指摘の見出しや箇条書きの先頭から、その指摘の終わり(次の指摘や次の見出しの手前)までを抜き出す
+- 隣の指摘、前置き、まとめは含めない
+- 言い換えや要約をしない。レビューの出力に連続して現れる文字列だけを返す
+"""
+EXTRACT_SCHEMA = {"type": "object", "required": ["text"], "additionalProperties": False,
+                  "properties": {"text": {"type": "string"}}}
+
+
+def extract(review, quote, cwd):
+    """レビューの出力から、引用を含む指摘1件の全文を抜き出す。前後を機械的に切り出すと隣の指摘が混ざり、検証役が
+    隣の指摘まで確かめてしまうので、LLM に抜き出させ、出力に実在することを照合する。照合できなければ引用だけを使う。"""
+    try:
+        out, _ = score.ask(EXTRACT_PROMPT + "\n\n===== 引用 =====\n" + quote + "\n\n===== レビューの出力 =====\n" + review,
+                           EXTRACT_SCHEMA, cwd)
+    except Exception:
         return quote
-    return review[max(0, m.start() - before):m.start() + after].strip()
+    text = out["text"].strip()
+    return text if score.quote_ok(text, review) and score.squash(quote)[:30] in score.squash(text) else quote
 
 
 def collect(outs, per_bug):
@@ -95,13 +110,13 @@ def collect(outs, per_bug):
             for b in s["bugs"]:
                 if b["verdict"] == "detected" and b["quote_ok"]:
                     seeded[(meta["case"], b["id"])].append({"kind": "seeded", "bug": b["id"], "config": meta["config"],
-                                                            "from": os.path.relpath(d, HERE), "text": excerpt(review, b["quote"])})
+                                                            "from": os.path.relpath(d, HERE), "quote": b["quote"]})
             for e in s["extras"]:
                 k = klass.get((d, e["n"]))
                 if k and k[0] and e["quote_ok"]:
                     extras[meta["case"]].append({"kind": "extra", "class": k[0], "scope": k[1], "cluster": k[2],
                                                  "config": meta["config"], "from": os.path.relpath(d, HERE),
-                                                 "text": excerpt(review, e["quote"])})
+                                                 "quote": e["quote"]})
     rng = random.Random(7)
     by_case = collections.defaultdict(list)
     for (case, _), items in sorted(seeded.items()):
@@ -122,6 +137,17 @@ def collect(outs, per_bug):
         rng.shuffle(items)
         for i, it in enumerate(items, 1):
             it["id"] = f"{case}/v{i}"
+    empty = tempfile.mkdtemp(prefix="rb-score-")
+
+    def fill(it):
+        with open(os.path.join(HERE, it["from"], "result.md"), encoding="utf-8") as f:
+            it["text"] = extract(f.read(), it["quote"], empty)
+        it["extracted"] = it["text"] != it["quote"]
+
+    try:
+        score.pool(6, fill, [it for items in by_case.values() for it in items])
+    finally:
+        shutil.rmtree(empty, ignore_errors=True)
     return by_case
 
 

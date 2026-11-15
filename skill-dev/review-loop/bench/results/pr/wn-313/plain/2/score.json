@@ -1,0 +1,105 @@
+{
+ "cost_usd": 0.102714,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "作業台の画面がつながったまま wbguide が消えたときに一覧の側で作り直されない、という指摘はありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "このため上限は「続けて落ちたら5回まで」ではなく、「サーバが動いている間の通算で5回まで」になっています。",
+   "reason": "@wn_respawned が respawn-pane のあとも残って通算で数えられ、6回目で kill-pane によりセッションが畳まれることを、原因と結果の両方で指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "detected",
+   "quote": "`src/cli/workbench.ts:33` 0 以外の終了をすべて「つなげなかった」とみなしている",
+   "reason": "つながったあとにクライアントが端末を失って終わった場合も「つなげなかった」と扱われると指摘し、res.signal などで見分けるよう提案しており、正解の条件と原因が一致しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が、利用者が分割したペインと案内のペインを区別しないという指摘はありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなった点には触れていません。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定し、案内のペインがない場合に作り直さない点には触れていません。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/DESIGN.md:227, docs/lib/tmux.md",
+   "summary": "ドキュメントの「ペインごとに 5 回まで」が、通算なのか連続なのか読み取れない。",
+   "quote": "`docs/DESIGN.md:227`、`docs/lib/tmux.md` の「ペインごとに 5 回まで」が通算か連続か読み取れない",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/cli/guide.ts:19",
+   "summary": "作り直した案内のプロセスが whatnext workbench 側の環境と版を引き継ぐため、一覧とは環境や版が食い違いうる。",
+   "quote": "`src/cli/guide.ts:19` 作り直した案内のプロセスが、`whatnext workbench` 側の環境と版を引き継ぐ",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/e2e/workbench.test.ts:255",
+   "summary": "`/signal=kill/` は macOS の書き方に頼っており、Linux では番号表記になって失敗しうる。",
+   "quote": "`test/e2e/workbench.test.ts:255` `/signal=kill/` が macOS の書き方に頼っている",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/cli/list.ts:66-67",
+   "summary": "ensureGuide が 'created' のときに workbenchOptions を二重に呼んでいる。",
+   "quote": "`ensureGuide` が `'created'` のときは中で `workbenchOptions(GUIDE, '')` を済ませているので、直後の呼び出しと二重になります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "src/cli/list.ts:66-67",
+   "summary": "一覧の側で ensureGuide の 'failed' を握りつぶしており、ログに出ない。",
+   "quote": "`ensureGuide` の `'failed'` も、一覧の側では握りつぶしていてログに出ません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "src/cli/workbench.ts:43-51",
+   "summary": "頼みごとを書いて SIGUSR2 を送る処理が guide.ts と重複している。",
+   "quote": "頼みごとを書いて `SIGUSR2` を送る処理が、`src/cli/guide.ts:74-79` とほぼ同じ形で2か所目になりました。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "lib/tmux/tmux.test.ts:75-81",
+   "summary": "文字列が含まれるかだけを見るテストなので、分岐や順序が逆になっても通ってしまう。",
+   "quote": "文字列が含まれるかだけを見るテストなので、`-lt 5` と `kill-pane` の順序や分岐が逆になっても通ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "test/real",
+   "summary": "Ghostty と bash の実機テストを流しておらず、exec exec の不具合を実機で確かめていない。",
+   "quote": "Ghostty と bash の実機(`test/real`)は流していません。`exec exec` の不具合は bash の実機でしか出ないので、マージの前に一度流すことを勧めます。",
+   "quote_ok": true
+  }
+ ]
+}

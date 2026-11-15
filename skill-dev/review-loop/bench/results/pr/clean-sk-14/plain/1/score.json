@@ -1,0 +1,41 @@
+{
+ "cost_usd": 0.08232400000000001,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/scripts/lib.sh:96",
+   "summary": "自分自身が lsof の一覧に出ればほかのプロセスも見えているという仮定は保証されず、サンドボックスで他プロセスが見えないとどの worktree も使用中でないと判定され削除候補になる(fail-open)。",
+   "quote": "「自分自身が lsof の一覧に出れば、ほかのプロセスも見えている」と仮定しています。この仮定は保証されません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skill-dev/housekeeping/test.sh:164",
+   "summary": "偽の lsof が exit 1 の場合しかテストしておらず、lsof が無い場合や自分の行だけを出す場合のテストが無い。",
+   "quote": "偽の lsof は `exit 1` で何も出さない場合しか試していません。次の2つの場合はテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/scripts/scan.sh:208",
+   "summary": "lsof で確かめられずに worktree を keep にしたとき、ブランチの理由が「worktree X で使用中」と表示され、実態と食い違う。",
+   "quote": "lsof で確かめられずに worktree を keep にしたとき、そのブランチの理由が「worktree X で使用中」になります。実際には使用中かどうか分かっていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/scripts/apply.sh:43 / scan.sh:165",
+   "summary": "hk_path_in_use の返す文字列をそのまま括弧に入れるため文言が重複し、「使用中」と「確かめられない」が1文に混ざって区別しにくい。",
+   "quote": "「プロセスが使用中か、確かめられない(lsof でプロセスを確かめられない)」と同じ言葉が重なります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/scripts/lib.sh:46",
+   "summary": "関数内の set -f は $(...) 内で呼ばれる前提でしか外に漏れず、将来直接呼ぶと呼び出し元のシェル設定を変えてしまう。",
+   "quote": "関数の中の `set -f` は、`$(...)` の中で呼ばれる前提でしか外に漏れません。",
+   "quote_ok": true
+  }
+ ]
+}

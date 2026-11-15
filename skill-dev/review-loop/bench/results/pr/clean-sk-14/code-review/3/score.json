@@ -1,0 +1,41 @@
+{
+ "cost_usd": 0.07938,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/scripts/lib.sh:96",
+   "summary": "hk_process_cwds は lsof に自プロセス($$)が出るかだけで可視性を判断しており、同じサンドボックス内しか見えない制限を見分けられず、使用中の worktree が削除されうる。",
+   "quote": "hk_process_cwds は lsof の一覧に自分自身($$)が出るかどうかだけで『プロセスを見られる』と判断している。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/SKILL.md:20",
+   "summary": "走査結果の保存先 ${TMPDIR:-/tmp}/housekeeping-scan.tsv が TMPDIR の無い環境では共有 /tmp の固定名になり、他ユーザーによる改ざんで任意ブランチ削除などが起こりうる。",
+   "quote": "走査結果の保存先を `${TMPDIR:-/tmp}/housekeeping-scan.tsv` に変えたため、TMPDIR の無い Linux では誰でも書ける /tmp 直下の決まった名前のファイルになる",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/scripts/scan.sh:165",
+   "summary": "本当に使用中の worktree と lsof で確認できなかった worktree が同じ理由文言になり、使用中のものまで外での再実行対象と誤解される。",
+   "quote": "本当に使用中の worktree と、lsof で確かめられなかった worktree が、どちらも『使用中か、確かめられない(...)』という同じ文言の理由になった。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/scripts/lib.sh:9",
+   "summary": "ヒアドキュメント禁止と `<<` を grep するテストは対症療法で、算術シフト等に誤反応し他の書き方は見逃すため、apply.sh 冒頭でも hk_mktemp_dir で止めるべき。",
+   "quote": "ヒアドキュメントの禁止と、それを grep で確かめるテスト(test.sh 204行目)は対症療法になっている。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/scripts/scan.sh:119",
+   "summary": "on_fp の grep が merged_into_default 判定前に全ブランチで走って無駄であり、`on_fp -gt 1` の分岐は事実上到達しないコードになっている。",
+   "quote": "on_fp を得る grep が merged_into_default の判定より前に、PR なしのブランチすべてで走る。",
+   "quote_ok": true
+  }
+ ]
+}

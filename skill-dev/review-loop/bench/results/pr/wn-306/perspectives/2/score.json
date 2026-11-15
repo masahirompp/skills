@@ -1,0 +1,77 @@
+{
+ "cost_usd": 0.100694,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "原因:`rowIndex.length === 1` のとき塊の始まりを 0 にするため、塊の長さが窓の高さを超えます。すると `start = b0 = 0` になり(`screen.ts:225`)、窓には先頭の見出しと `(sub)` の行しか入りません。",
+   "reason": "render の cursorBlock の頭に (sub) が入って start = b0 になる件と、trailing で伸びた b1 を入力欄の補正の基準にする件の両方を、原因まで示して指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "detected",
+   "quote": "選んだ行が区切りの最後の行で、次の区切りが起動元の出ていないトップレベルの `(sub)` の行で始まると、空行と見出しと無関係な `(sub)` の行まで同じ塊に入ります。",
+   "reason": "trailing が区切りの境目で false に戻らず、次の区切りの (sub) の行まで塊に入ることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "detected",
+   "quote": "小さな点:選べる行がなく一覧が溢れると、`0/0` が出ます(再現済み)。",
+   "reason": "選べる行がなく一覧が溢れると、通し番号に 0/0 が出ることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "このとき `Ctrl+X` を押すと `Ctrl+X ignored: worker left the list and the selection moved.` と出ます。行は一覧に残っているので、文言は事実と違います。",
+   "reason": "行が (sub) に変わってカーソルが移ったときにも guard が立ち、文言『left the list』が事実と違うことを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に対象の行が (sub) に変わっても入力欄が閉じない、という指摘が無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "detected",
+   "quote": "`sidOfSession` が返す `guideTarget` は前回の `doFollow` の時点の値なので、その間に行が `(sub)` に変わりえます。",
+   "reason": "openNote から断る処理を外したため、attachKey と guideTarget の経路から (sub) の行にメモが開きうることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の記述と実装の食い違いには触れておらず、docs は PRODUCT.md と DESIGN.md しか確かめていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "test/e2e/deps.test.ts:464-466、:447-450",
+   "summary": "e2e テストが描画を待たずに not.toMatch で確かめているため、メニューが遅れて出る不具合を見逃す。",
+   "quote": "71 では、`f` と `e` のあと待たずに `not.toMatch(/waits for:|can't/)` を確かめています。描画の前に確かめても通るので、メニューが遅れて出る不具合を見逃します。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/ops/app.ts:262-265",
+   "summary": "guard の文言を確かめる単体テストが無い。",
+   "quote": "単体テスト「選んでいた行が起動された行になったら」は `followCursor` しか確かめておらず、この文言は試されていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/screen/screen.ts",
+   "summary": "窓から外れる2件(頭の (sub) が窓より多い場合と、入力欄を出しているとき)を確かめる単体テストが無い。",
+   "quote": "上の正確性の2件(最初の選べる行の上の `(sub)` の行が窓より多い場合と、入力欄を出しているとき)も、単体テストに足すのが妥当です。",
+   "quote_ok": true
+  }
+ ]
+}

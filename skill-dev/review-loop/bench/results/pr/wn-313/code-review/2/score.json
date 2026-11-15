@@ -1,0 +1,77 @@
+{
+ "cost_usd": 0.094002,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "detected",
+   "quote": "案内のセッションがないときの作り直しは `whatnext workbench` の attach 前にしかない。`pane-died` の sh-* の分岐と一覧の doFollow は、wbguide があるものとしてそのまま `switch-client -t =wbguide` する。",
+   "reason": "作り直しが attach 前にしかなく、pane-died の sh-* 分岐と doFollow で wbguide が消えていると作業台の画面ごと離れることを指摘しており、基準を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "案内のペインの起動し直しの回数 `@wn_respawned` は、案内が正常に動いたあとも戻らない。このため「起動してすぐ終わるときの5回」ではなく「ペインが生きている間の通算5回」の上限になっている。",
+   "reason": "@wn_respawned が通算で数えられ、時間で数え直されないためいずれ上限に達して案内が畳まれると指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "detected",
+   "quote": "`res.status !== 0` は、tmux がシグナルで終わったとき(status が null)も『つなげなかった』と判定する。",
+   "reason": "シグナルで終わり status が null のときも『つなげなかった』と誤判定する点を、workbench() の attach 結果の判定として指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が利用者の分割ペインを区別せず起動し直す、という指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "detected",
+   "quote": "失敗の経路で早く return するため、以前は必ず出していたタイトル消し(OSC 2)が飛ばされる。",
+   "reason": "失敗の判定で早く return するため、以前は必ず出していた OSC 2 のタイトル消しが飛ばされると指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定し、案内ペインが無い場合に作り直さない、という指摘はない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/cli/workbench.ts:27",
+   "summary": "attach 前に askListToRefreshGuide で一覧へ知らせるため wbChanged が先に使われ、そのあとの client-attached で follow が走らず、作業台の画面が案内を映したままになる。",
+   "quote": "attach の前に askListToRefreshGuide で一覧に知らせるので、WB_TTY が変わったこと(wbChanged)がクライアントのつながる前に使われてしまう。あとの client-attached の知らせでは wbChanged が false になり、follow が走らない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/cli/guide.ts:19",
+   "summary": "whatnext workbench から作り直す案内が、一覧ではなく Ghostty の分割のシェルの環境変数を引き継ぐため、一覧が作った案内と環境が違ってしまう。",
+   "quote": "`whatnext workbench` から呼ぶ ensureGuide は、paneCommand(env, 'guide') が既定で読む process.env として、一覧ではなく Ghostty の分割のシェルの環境を使う。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/cli/list.ts:67",
+   "summary": "ensureGuide が 'created' のときに workbenchOptions を入れたあと、startList がもう一度同じものを入れており、処理が重複して責務があいまいになっている。",
+   "quote": "ensureGuide が 'created' のときに workbenchOptions(GUIDE, '') を入れたあと、startList がもう一度同じものを入れる。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/cli/workbench.ts:44",
+   "summary": "askListToRefreshGuide が guide.ts の頼みごとの送り方を写しているため、書式を変えるときに3か所を揃えて直す必要がある。",
+   "quote": "askListToRefreshGuide は、guide.ts の Enter の処理にある頼みごとの送り方(`@wn_req_<秒>_<pid>` を set して `@wn_pid` に SIGUSR2)をそのまま写している。",
+   "quote_ok": true
+  }
+ ]
+}

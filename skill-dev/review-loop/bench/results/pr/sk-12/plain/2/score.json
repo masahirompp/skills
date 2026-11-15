@@ -1,0 +1,84 @@
+{
+ "cost_usd": 0.09814200000000001,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "detected",
+   "quote": "または `reason_type` も条件に入れて、止めずに続ける場合を狭める(例: `subcommandResults` のように一部だけの拒否に限る)。",
+   "reason": "source: config だけで止めない拒否と判定しているため、reason_type を見ずに一部の拒否でない拒否まで素通りさせ成功扱いになる、と同じ場所で同じ原因を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "detected",
+   "quote": "さらに、`seen` に `None` が入ります(`:248`)。すると `result` の `permission_denials` のうち id のないものも全て除かれ、止めるべき拒否を見逃す方向にずれます。",
+   "reason": "tool_use_id のない拒否が config_denied[None] に入り、seen 経由で id なしの permission_denials まで除外されると、正解と同じ仕組みで指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "detected",
+   "quote": "判定役で行をつなぐと、見出しより後ろの余計な文が `verdict.md` に残る",
+   "reason": "判定役でも result の行を全てつなぐため、後の『変わりません』などの行やフェンスが判定に混ざると、run_judge と check_result の使い方を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "is_error の行をつなぐ対象から除いていない点への言及はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "別の観点の失敗でループを抜けたときに、他の子の止めない拒否が記録されない点への言及はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "child_error の詳細がつないだ本文の先頭500字になり、エラーの文が出ない点への言及はない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "review_loop.py:777",
+   "summary": "設定のルールでの拒否が judge-input.md にも verdict.md にも入らないため、判定役も最終の出力も入力の欠けを知ることができない。",
+   "quote": "`denials.txt` と stderr の `warn:` には残りますが、`judge-input.md` にも `verdict.md` にも入りません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "review_loop.py:803-805 / FAKE_JUDGE=multi",
+   "summary": "判定役の複数行のテストは最後の行が空の場合しか見ておらず、余計な文が残る問題を検出できない。",
+   "quote": "なお、テスト(`FAKE_JUDGE=multi`)は最後の行が空の場合しか見ていないので、この問題は検出できません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "review_loop.py:242",
+   "summary": "各ターンで本文を繰り返すスキルでは、行をつなぐことで同じ指摘が judge-input.md に二重に入る。",
+   "quote": "前の内容を含めて最後にまとめ直すスキルでは、同じ指摘が `judge-input.md` に2回入ります。判定役のトークンが増えるうえ、別々の指摘として数えられるおそれもあります。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "review_loop.py:305 / fakes/claude の multi()",
+   "summary": "result の行の parent_tool_use_id は実物で確かめた形ではないのに、fake がその形を作り、テストがそれを守っている。",
+   "quote": "CLI の `result` の行に `parent_tool_use_id` が付くかどうかは、確かめられていません。SDK の結果メッセージの型には、この項目がないはずです。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "review_loop.py:250-253",
+   "summary": "source のない拒否のイベントが複数あっても tail.denial には最初の1件しか入らず、stderr の要約が不完全になる。",
+   "quote": "ただ、`source` のない拒否のイベントが2件目以降にあっても、`tail.denial` に入るのは最初の1件だけです。2件目以降は、`result` に載らない限り要約に出ません。",
+   "quote_ok": true
+  }
+ ]
+}

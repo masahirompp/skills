@@ -1,0 +1,41 @@
+{
+ "cost_usd": 0.056330000000000005,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/ops/app.ts:853(openNew の src/ops/app.ts:944-950)",
+   "summary": "カーソル行の cwd がもう存在しない場合に、その場所が候補の先頭として選ばれた状態になり、存在しない cwd で claude --bg を起動して失敗しうる。",
+   "quote": "カーソル行の `cwd` がもう存在しないことがあります(worktree を消したあとに終わったセッションが残っている場合など)。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/ops/app.ts:951",
+   "summary": "エラーの間は見えない行のリポジトリを先頭にしないという docs の理由に対し、openNew は古い this.rows の cwd を2番目以降の候補に並べ続けており、理由と実装がずれている。",
+   "quote": "一方 `openNew` は、エラーの間も古い `this.rows` の `cwd` を候補の2番目以降に並べ続けます。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/ops/app.ts:946-948",
+   "summary": "git でない場所の根が realpath になるため、/tmp と /private/tmp が文字列の重複除きをすり抜け、同じ場所が2つの候補に並びうる。",
+   "quote": "そのため起動ディレクトリが `/tmp` で、カーソル行も `/tmp` のとき、文字列での重複除きをすり抜け、先頭と2番目に同じ場所が並びえます。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "docs/PRODUCT.md:591",
+   "summary": "行が1つでもあればカーソル行の場所が先頭になるため、起動ディレクトリが先頭に来る場面がほぼなくなり、どこから起動したかに意味を持たせる使い方ができなくなる。",
+   "quote": "そのため、起動ディレクトリが先頭になるのは、行が0件のときとエラーの間だけになります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test/e2e/ops.test.ts:103-121",
+   "summary": "カーソル行の cwd が worktree の場合に元のリポジトリへ寄せる処理を確かめるテストが、どの経路にも無い。",
+   "quote": "カーソル行の `cwd` を worktree にした場合は、`n`・`ctrl+q ctrl+n`・`f` のどの経路でも確かめられていません",
+   "quote_ok": true
+  }
+ ]
+}

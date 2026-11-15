@@ -1,0 +1,112 @@
+{
+ "cost_usd": 0.123382,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "detected",
+   "quote": "`skill_name()` は `split()[0]` なので `' code-review high {pr}'` から `code-review` が取れ、事前確認も `--instruct` の照合も通ります。",
+   "reason": "spec を正規化しないため、skill_name による照合・事前確認は通るのに、実際のプロンプトは `/ code-review ...` になると、場所と原因の両方を正解どおり指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "`review_loop.py:847` と `JUDGE_PROMPT`(`:797`〜): 判定役のプロンプトに、指示ブロックの扱いが書かれていない",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いが無く、指示で外した範囲の欠落判定や、判定役が指示を自分向けと読み違えることを指摘しており、detect_criteria に合う。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "名前が同じで引数だけ違う場合は記録されません。たとえば `--perspective 'code-review low {pr}'` を渡しても、`code-review high` の既定と区別がつきません。",
+   "reason": "既定との比較がスキル名だけで行われ、引数違いの観点が記録されないと正確に指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が、外した security-review に --instruct を渡しているため終了コード2になる、という指摘が無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "detected",
+   "quote": "状態コメントが手で `\"perspectives\":\"abc\"` と書き換えられると、文字列の各文字が `str` なので検証を通ります。表には `観点 a, b, c` と出ます。",
+   "reason": "valid_state が perspectives をリストか確かめず、文字列が通ると指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt で渡した指示がサブエージェントに届かない、という指摘が無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "指示ブロックとレビュー出力が同じ区切りで混ざり偽装されうる、という指摘が無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭の `/` を取り除かないため照合に失敗する、という指摘が無い。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "review_loop.py:961-964 付近、SKILL.md:57",
+   "summary": "--instruct の有無が状態に残らないため、検査を緩めた試行を表から見分けられず、付け忘れや付け足しにも気づけない。",
+   "quote": "**`--instruct` が状態に一切残らない(`review_loop.py:961-964` 付近、SKILL.md:57)**",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "review_loop.py:749",
+   "summary": "「指示を優先」の範囲が広く、NO_MUTATION との優先関係が書かれていないため、指示によって子が作業ツリーを変えない制約を破りうる。",
+   "quote": "「スキルの手順と食い違うときは、この指示を優先」とあります。しかし、同じシステムプロンプトにある `NO_MUTATION`(作業ツリーを変えない制約)との優先関係は書かれていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "SKILL.md:50 と PR 本文の例",
+   "summary": "例の指示文(.env の中身は確かめない)では、削除した .env が履歴に残るといった正当なセキュリティ指摘まで抑えてしまう恐れがある。",
+   "quote": "例の文面だと、`.env` の削除そのものに触れない方向へ誘導しかねません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "review_loop.py:762",
+   "summary": "指示の本文が --append-system-prompt のコマンドライン引数に載るため、同じマシンの他のユーザーから ps で見える。",
+   "quote": "`--append-system-prompt` の値なので、同じマシンの他のユーザーから `ps` で見えます。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skill-dev/review-loop/test.py:553-586",
+   "summary": "先頭に空白がある --perspective を確かめるテストが無い。",
+   "quote": "先頭に空白がある `--perspective` のケースがありません(正確性の1件目)。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skill-dev/review-loop/test.py:553-586",
+   "summary": "名前が同じで引数だけ違う --perspective を記録するかを確かめるテストが無い。",
+   "quote": "名前が同じで引数だけ違う `--perspective` を記録するかを確かめていません(正確性の2件目)。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skill-dev/review-loop/test.py:553-586",
+   "summary": "--instruct の指示が NO_MUTATION の後ろに入り、制約が残っていることを確かめるテストが無い。",
+   "quote": "`--instruct` の指示がシステムプロンプトの中で `NO_MUTATION` の後ろに入ること、つまり制約が残っていることも確かめていません。",
+   "quote_ok": true
+  }
+ ]
+}

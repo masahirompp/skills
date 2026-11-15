@@ -1,0 +1,55 @@
+{
+ "cost_usd": 0.06225,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/scripts/review_loop.py:863",
+   "summary": "判定役のプロンプトに PR のベースの ref と PR 本文が渡されていないため、差分の内か外かを正しく判定できない。",
+   "quote": "判定役に PR のベースと本文が渡されていない",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/SKILL.md:106",
+   "summary": "再現を1回試みて起きなかっただけで、影響が高の指摘まで却下され、継続の理由からも外れてしまう。",
+   "quote": "「再現を試みたが起きなかった」だけで、影響が高の指摘も採らなくなる",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/review-loop/SKILL.md:130",
+   "summary": "再レビューを省く条件を修正者である親が自分で判定するので、最後の修正が独立したレビューを通らない。また終了報告に、省いたことと省いた根拠が出ない。",
+   "quote": "再レビューを省く条件が、親の自己判定だけで成り立つ",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/review-loop/SKILL.md:109 と :130",
+   "summary": "再現なしで直す修正と再レビューを省く条件の関係が曖昧で、test_gap の修正を「実行で確かめていない」に数えるのかが読み取れない。",
+   "quote": "ただし、test_gap の修正(テストを足すこと)も「実行で確かめていない」に数えるのかが読み取れません。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/review-loop/scripts/review_loop.py:863",
+   "summary": "「PR の前から同じように起きる」という基準では、PR によって起きやすさが上がった既存の不具合を差分の外と判定するおそれがある。",
+   "quote": "「PR の前から同じように起きる」の「同じように」が、起きやすさの変化を拾えない",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/review-loop/SKILL.md:116 と :136",
+   "summary": "「リポジトリが公開なら」を確かめる方法が書かれておらず、判断が親の推測に任されている。",
+   "quote": "「リポジトリが公開なら」の確かめ方が書かれていない",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skill-dev/review-loop/test.py",
+   "summary": "テストが確かめるのは判定の見出しだけで、追加した「範囲」と「再現」の欄はテストの対象外になっている。",
+   "quote": "このテストが確かめるのは判定の見出しだけです。追加した「範囲」と「再現」の欄はテストの対象外で",
+   "quote_ok": true
+  }
+ ]
+}

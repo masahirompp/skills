@@ -1,0 +1,76 @@
+{
+ "cost_usd": 0.110652,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/scripts/lib.sh:96",
+   "summary": "lsof でプロセスが見えるかの判定が自分自身しか確かめておらず、他のプロセスが見えない環境(PID 名前空間で区切られたコンテナなど)では、使用中の worktree が delete と判定され得る。",
+   "quote": "「lsof にプロセスが見えているか」の判定が、自分自身が見えるかどうかしか確かめていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/scripts/scan.sh:143、:151、:156、:184",
+   "summary": "一時ファイルを作ったあとの書き込み(git worktree list の出力など)の失敗を確かめておらず、worktree の情報が欠けたままブランチを delete と判定し得る。",
+   "quote": "一時ファイルを作ったあとの書き込みの失敗を確かめていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/scripts/scan.sh:104-105 / lib.sh:62",
+   "summary": "hk_is_protected が保護パターンの一覧を取れなかったときも 0 を返すため、理由が「保護対象」と表示され、設定を読めなかったことが利用者に伝わらない。",
+   "quote": "`hk_is_protected` は、保護パターンの一覧を取れなかったときも 0 を返します(`lib.sh:62`)。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/scripts/lib.sh:101-109、SKILL.md:70、SKILL.md:79",
+   "summary": "「使用中」と「確かめられない」を1つの文字列で返すため、呼び出し側が区別できない。SKILL.md がメッセージの文言で見分けさせているのも壊れやすい。",
+   "quote": "「使用中」と「確かめられない」という別々の状態を、1つの文字列で返しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "lib.sh:89-97",
+   "summary": "lsof が無い環境では、すべての worktree が永久に keep になり、回避の手段も無い。",
+   "quote": "lsof が無い環境では、すべての worktree が永久に `keep` になり、回避の手段もありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skill-dev/housekeeping/test.sh",
+   "summary": "ヒアドキュメントを禁じるテストが `<<` で検出しているため、ビットシフト `$((1<<2))` でも失敗する(誤検出)。",
+   "quote": "`<<` で検出するので、`$((1<<2))` のようなビットシフトでも失敗します(誤検出)。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skill-dev/housekeeping/test.sh",
+   "summary": "偽の lsof は「何も出ない」場合しか試しておらず、「自分だけ見える」場合のテストが無い。",
+   "quote": "偽の lsof(`exit 1`)は「何も出ない」場合しか試していません。上の正確性の1件目にある「自分だけ見える」場合はテストされていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "SKILL.md:20、SKILL.md:61",
+   "summary": "走査結果を固定のファイル名に書くため、複数のセッションを並行して動かすと互いの scan.tsv を上書きし、別のリポジトリ向けの行が apply.sh に渡り得る。",
+   "quote": "走査結果を固定のファイル名 `${TMPDIR:-/tmp}/housekeeping-scan.tsv` に書いています。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "apply.sh:37",
+   "summary": "プロセスの一覧をループの前に1回だけ取っているため、取ったあとに worktree で動き出したプロセスを検出できない(時刻のずれによる問題)。",
+   "quote": "プロセスの一覧を、ループの前に1回だけ取っています。",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "SKILL.md:20",
+   "summary": "TMPDIR が未設定の Linux では、全ユーザーが書き込める /tmp の名前が予測できるファイルに書くため、シンボリックリンクの差し替えや行の仕込みの攻撃が考えられる。",
+   "quote": "`TMPDIR` が未設定の Linux では、全ユーザーが書き込める `/tmp` の、名前が予測できるファイルに `>` で書きます。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,26 @@
+{
+ "case": "clean-sk-14",
+ "kind": "shell",
+ "config": "perspectives",
+ "trial": 2,
+ "model": "claude-opus-5-5",
+ "pr_mode": true,
+ "status": "ok",
+ "tokens": {
+  "input": 379869,
+  "cache_read": 326771,
+  "output": 10152
+ },
+ "cost_usd": 0.6931142,
+ "started_at": "2026-11-15T23:39:33",
+ "duration_s": 122,
+ "num_turns": 9,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [],
+ "head_changed": false
+}

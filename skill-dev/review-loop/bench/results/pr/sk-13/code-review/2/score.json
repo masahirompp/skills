@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.102538,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "detected",
+   "quote": "review_config は `s.strip()` を空かどうかの判定にしか使わず、値そのものは整えない。そのため、先頭に空白のある --perspective は事前確認を通ったうえで、レビュー役に `/ code-review …` という壊れたプロンプトを渡す。",
+   "reason": "spec を整えないため skill_name での事前確認は通るが起動プロンプトが壊れる、という食い違いを正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "judge-input.md には追加の指示の区画を足したが、JUDGE_PROMPT にはその区画の扱いが書かれていない。",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いがなく、指示で外した範囲を判定役が観点の欠落として扱いうると指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "既定と違うかどうかをスキル名の並びだけで比べているので、引数を変えた観点は記録されず、並べ替えただけの既定の観点は既定と違うものとして記録される。",
+   "reason": "スキル名だけの比較で引数違いが記録されず、並べ替えが差として扱われる点を正確に指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "detected",
+   "quote": "SKILL.md のコマンド例が `--instruct 'security-review=…'` と、security-review を含まない `--perspective` 2つを組み合わせており、review_config がこれを拒否するので、例のとおりに実行すると必ず終了コード2で止まる。",
+   "reason": "SKILL.md の例が外した観点に --instruct を渡して終了コード2になると指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "detected",
+   "quote": "valid_state は perspectives の要素が str かどうかしか見ないので、perspectives が文字列でも通ってしまい、render が1文字ずつ区切って表示する。",
+   "reason": "リストかを確かめないため文字列が検査を通ると指摘しており、detect_criteria を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt の指示がサブエージェントに届かないという指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "指示ブロックとレビュー出力が同じ区切りで混ざり偽装されうるという指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭の `/` を取り除かないことによる照合失敗への言及はない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/scripts/review_loop.py:962",
+   "summary": "--instruct で範囲を絞った試行が状態や状態コメントに残らないため、後から範囲を狭めたレビューだったか確認できない。",
+   "quote": "--instruct で範囲を絞った試行が、状態にも状態コメントにもまったく残らないため、completed になった反復が範囲を狭めたレビューだったかを後から確かめられない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/SKILL.md:57",
+   "summary": "オプションを反復ごとに付け直すのが親の記憶頼みで、付け忘れても警告なく既定に戻る。",
+   "quote": "オプションを反復ごとに付け直す仕組みは、親が毎回覚えていることに頼っている。付け忘れても何も警告されず既定に戻る",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skill-dev/review-loop/test.py:570",
+   "summary": "「--instruct はほかの観点には渡さない」テストが既定値 \"x\" により呼び出しがなくても成功し、何も検証していない。",
+   "quote": "「--instruct はほかの観点には渡さない」のテストは、該当するレビューの呼び出しがなくても既定値 \"x\" で成功してしまい、何も確かめていない。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/review-loop/scripts/review_loop.py:409",
+   "summary": "観点のスキル名一覧を複数箇所で重複して作っており、直し漏れの原因になる。",
+   "quote": "観点のスキル名の一覧を、--instruct のループの中で毎回作り直しているうえ、iterate でも同じ一覧をもう一度作っている。",
+   "quote_ok": true
+  }
+ ]
+}

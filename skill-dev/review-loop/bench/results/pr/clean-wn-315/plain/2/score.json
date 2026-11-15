@@ -1,0 +1,41 @@
+{
+ "cost_usd": 0.048634,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md:513",
+   "summary": "`--json` を読めずにエラーを出している間の `ctrl+q ctrl+n` の挙動を docs に書いたが、それを確かめるテストが無い。",
+   "quote": "ただ、既存のテスト(`test/e2e/ops.test.ts:294`)はエラーでない状態しか見ていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "test/e2e/ops.test.ts:103-121",
+   "summary": "worktree のセッションで元のリポジトリが先頭に来ることを確かめるテストが無い。",
+   "quote": "PR 本文と `docs/PRODUCT.md:591` は「worktree なら元のリポジトリ」としていますが、テストの行はどれも `h.repo()` の直下の `cwd` です。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/e2e/ops.test.ts:117-120",
+   "summary": "後半のテストは `panel(s2)[1]` しか見ておらず、エラーの判定によって `lib` が先頭から外れたことまでは区別できず、テストとして弱い。",
+   "quote": "そのため「先頭が launchDir である」ことは確かめられても、`lib` が先頭から外れた理由がエラーの判定によるものかまでは区別できません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "docs/PRODUCT.md:513",
+   "summary": "理由の文が `:591` に移り、`:513` から `:591` を見出しの名前で参照していないため、`ctrl+q` の節だけを読む人には理由が見えない。",
+   "quote": "ただ `:513` から `:591` への見出しの参照(「操作」の節の `n` など)がないため、`ctrl+q` の節だけを読む人には理由が見えません。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "docs/PRODUCT.md:591",
+   "summary": "層2の決定なのに、エスカレーションの記録(issue 番号など)への参照が無い。",
+   "quote": "判断の日付は書かれていますが、エスカレーションの記録(issue 番号など)への参照がありません。",
+   "quote_ok": true
+  }
+ ]
+}

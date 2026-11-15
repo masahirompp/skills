@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.110878,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "detected",
+   "quote": "review_config は空白だけの観点を拒否するが、前後の空白は取り除かない。先頭に空白のある --perspective が事前確認を通り、壊れたスラッシュコマンドとして実行される。",
+   "reason": "spec を整えないまま返すため、skill_name での事前確認は通るのに '/' + expand(spec) のプロンプトが壊れる、という食い違いを正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "partial",
+   "quote": "JUDGE_PROMPT はこの区切りの意味(この観点だけの指示で、判定役への指示ではない)を説明していない。判定役が指示を全観点に当てはめたり、観点の出力と取り違えたりしうる。",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いが書かれていない、という場所と原因は合っているが、指示で外した範囲を観点の欠落と扱う、または避けた操作を判定役が行う、という正解の帰結には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "状態コメントに残すのは観点のスキル名だけで、それも既定と名前が違うときだけになる。引数の変更(レベルなど)と --instruct の範囲の絞り込みは、どこにも記録されない。",
+   "reason": "既定との比較がスキル名だけで行われ、引数違いの観点が記録されないことを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "detected",
+   "quote": "SKILL.md の起動例は、--perspective で外した security-review に --instruct を渡しており、review_config が必ず拒否する組み合わせになっている。",
+   "reason": "SKILL.md の例が、外した観点に --instruct を渡しているため終了コード2で止まる、と正確に指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "valid_state が perspectives をリストか確かめていない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt の指示がサブエージェントに届かない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "partial",
+   "quote": "追加の指示の本文をエスケープせずに判定役の入力へ書いており、本文に区切り行と同じ形の行があると、観点の区切りを偽装できる。",
+   "reason": "指示とレビューの出力を同じ区切りで混ぜることによる偽装は指摘しているが、偽装の向きが逆で、正解のようにレビューの出力が指示を偽装する場合を挙げていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭に `/` を付けたスキル名が照合で失敗する点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/SKILL.md:57",
+   "summary": "観点の入れ替えと指示を毎回の起動引数で渡す作りのため、付け忘れると黙って既定に戻り、同じシリーズの中で観点の違う判定が混ざる。",
+   "quote": "観点の入れ替えと指示を毎回の起動引数に頼っており、付け忘れると黙って既定に戻る。根本の対策として、シリーズの状態に保存して再利用する仕組みがない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skill-dev/review-loop/test.py:558",
+   "summary": "テストが run(wt, \"--new-run\") を続けて2回呼んでおり、1反復ぶんの実行が無駄に重なっている。",
+   "quote": "直前の行(551)で `run(wt, \"--new-run\")` を実行した直後に、新しい節の先頭でもう一度 `run(wt, \"--new-run\")` を呼んでおり、偽の claude による1反復ぶんが重複している。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skill-dev/review-loop/test.py:570",
+   "summary": "by_name.get の既定値を \"x\" にしているため、該当する呼び出しが無くてもチェックが成功してしまう。",
+   "quote": "『--instruct はほかの観点には渡さない』のチェックが by_name.get(..., \"x\") を既定値にしており、該当する呼び出しがなくても成功する。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/review-loop/scripts/review_loop.py:409",
+   "summary": "観点のスキル名の一覧を3か所で別々に計算しており、正規化を足すときに一部だけ直して食い違いやすい。",
+   "quote": "観点のスキル名の一覧を、review_config の中(重複確認と、--instruct の1件ごと)と iterate の962行で繰り返し計算しており、同じ値の導出が3か所に散らばっている。",
+   "quote_ok": true
+  }
+ ]
+}

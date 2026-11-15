@@ -1,0 +1,70 @@
+{
+ "cost_usd": 0.107434,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "最初の選べる行を選ぶと、窓の塊を一覧の先頭(0)から始める。上に並ぶ見出しと (sub) の行が窓の高さを超えると、blockLen >= avail で start = b0 = 0 になり、選んだ行が窓の外に出る。",
+   "reason": "screen.ts の render で、cursorBlock に (sub) を含めたことと start = b0 / b1 - avail の補正が原因で、選んだ行や入力欄が窓から外れることを、指摘1と指摘2で両方述べている。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "detected",
+   "quote": "trailing は区切りをまたいでも解けない。区切りの最後の行を選ぶと、空行、次の区切りの見出し、その区切りの先頭にある別の組のトップレベルの (sub) の行まで、選んだ行の塊に入れる。",
+   "reason": "trailing が区切りの境目で切れず、次の区切りの (sub) の行まで塊に入ることを正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "detected",
+   "quote": "選べる行がなく、(sub) の行だけが端末の高さを超えて並ぶと、`0/0` と出し、窓は先頭に固まる。",
+   "reason": "選べる行が無いときに通し番号が 0/0 になることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "選んでいた行が一覧に残ったまま起動された行に変わった場合にも、goneName が入り、Ctrl+X の受け付け止め(guard)と『left the list』の文言を出す。",
+   "reason": "(sub) に変わってカーソルが移ったときも guard が立ち、文言が事実と違うことを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に対象の行が (sub) に変わっても入力が閉じず、起動された行にメモが付く件には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "detected",
+   "quote": "openNote から起動された行を断る守りを消し、選べないことだけを頼りにした。しかし attachKey は sidOfSession(GUIDE→guideTarget)の sid を、選べるかを確かめずに this.cursor に入れ、openNote を呼ぶ。",
+   "reason": "openNote の判定を消したため、attachKey の経路から (sub) の行にカーソルが乗り、メモが開くことを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の記述と実装の食い違いには触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/model/cursor.ts:6",
+   "summary": "isSpawned を filter の中で呼ぶ selectableOrder が O(N²) で、キー入力や更新のたびに作り直すので重くなる。",
+   "quote": "isSpawned は毎回すべての区切りのすべてのノードを走査する。それを order.filter の中で呼ぶ selectableOrder は O(N²) で、キーを押すたび(listKey)と更新のたび(apply)に作り直す。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/screen/screen.ts:201",
+   "summary": "『選べる行』の定義が cursor.ts と screen.ts の2か所にあり、食い違うと通し番号と ↑↓ の並びがずれる恐れがある。",
+   "quote": "『選べる行』の定義が2か所にある。cursor.ts は Layout の node.spawned で、screen.ts は表示用の r.marker !== 'sub' で数える。",
+   "quote_ok": true
+  }
+ ]
+}

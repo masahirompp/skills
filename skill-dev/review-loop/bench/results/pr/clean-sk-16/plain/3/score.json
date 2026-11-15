@@ -1,0 +1,62 @@
+{
+ "cost_usd": 0.07400999999999999,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/SKILL.md:113, :99",
+   "summary": "差分の外として外した指摘を PR 本文に残す指示がない。このため次の反復で同じ指摘が出て分類し直しになり、判定の揺れで振動が起きうる。",
+   "quote": "`skills/review-loop/SKILL.md:113` と `:99`: 差分の外とした判断を PR 本文に残す指示がない",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/SKILL.md:106, :128",
+   "summary": "影響が高の指摘でも、親が組み直した再現の手順が誤っていれば、1回起きなかっただけで継続の理由から外れてしまう。差分の外の場合にある歯止めが、ここには無い。",
+   "quote": "`skills/review-loop/SKILL.md:106` と `:128`: 影響が高の指摘でも、再現が1回起きなかっただけで外せる",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/review-loop/SKILL.md:99",
+   "summary": "「再現もしない」と「影響が高ならベースで確かめてから外す」が矛盾して読め、ベースでの確認を読むだけで行うのか実行するのかが分からない。",
+   "quote": "`skills/review-loop/SKILL.md:99`: 「再現もしない」と、ベースで確かめてから外す指示がぶつかって読める",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/review-loop/scripts/review_loop.py:863",
+   "summary": "範囲の定義に、PR が書き換えた行に前からの不具合が残る逆向きの場合が書かれていない。ベースの取り方も判定役に示されていない。",
+   "quote": "`skills/review-loop/scripts/review_loop.py:863`: 範囲の定義に、逆向きの場合が書かれていない",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/review-loop/SKILL.md:130",
+   "summary": "終える・回すの判断に関わる条件が5つ以上、1つの箇条に詰め込まれていて、読み違えやすい。",
+   "quote": "`skills/review-loop/SKILL.md:130`: 1つの箇条に条件が5つ以上入っている",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skill-dev/review-loop/fakes/claude:100",
+   "summary": "偽の判定が JUDGE_PROMPT の欄と揃っておらず、分類などの欄が欠けたまま「再現」だけを足した半端な状態になっている。",
+   "quote": "`skill-dev/review-loop/fakes/claude:100`: 偽の判定が JUDGE_PROMPT の形とまだ揃っていない",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skills/review-loop/SKILL.md:107, :130",
+   "summary": "文書が中心の PR では「実行で確かめていない修正」が必ず残るため、このリポジトリ自身では再レビューを省けず、反復はほとんど減らない見込み。",
+   "quote": "`:130` は「実行で確かめていない修正が1つでもあれば回す」としているので、文書が中心の PR では再レビューを省ける場面がほぼありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "",
+   "summary": "再レビューを省くかどうかを「修正した箇所を通る既存のテスト」で判断するが、これはカバレッジなしの親の推測であり、推測が甘いと省くべきでない回まで省いてしまう。",
+   "quote": "ただ、「修正した箇所を通る既存のテスト」をカバレッジなしで判断するのは親の推測です。この推測が甘いと、省くべきでない回まで省くことになります。",
+   "quote_ok": true
+  }
+ ]
+}

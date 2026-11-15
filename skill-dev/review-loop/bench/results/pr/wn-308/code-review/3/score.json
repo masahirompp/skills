@@ -1,0 +1,56 @@
+{
+ "cost_usd": 0.063974,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは cleanupLeftovers で Y を選んだときに引き継いだ作業台へ workbenchOptions／status-format を入れ直していない点に一切触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md:557",
+   "summary": "tmux のウィンドウ一覧を「窓の一覧」と呼んでおり、既にスクロールの表示範囲を指す「窓」と用語が衝突している。",
+   "quote": "The new text calls the tmux window list 「窓の一覧」, but in PRODUCT.md and DESIGN.md 「窓」 already means the list's scroll viewport",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "docs/PRODUCT.md:558",
+   "summary": "採らない案は幅60の画面例で示しているが、採る案は同じ幅の画面例で示しておらず、並べて比べられない。",
+   "quote": "The rejected form is shown as a captured screen at width 60, but the adopted form is not shown at the same width, so the two cannot be compared side by side.",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "docs/PRODUCT.md:442",
+   "summary": "図の作業台側の最下行が手で書かれたように見え、実際の描画から作られていない(余白や window 名が実際と違う)。",
+   "quote": "The bottom line of the workbench side in the diagram (`0:zsh*  · ^│`) looks hand-edited to show truncation. Nothing indicates it was rebuilt from a real render.",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "キー表記 `^Q` が prefix の設定と別にハードコードされており、prefix を変えると表示がずれる。",
+   "quote": "The key text `^Q` is hard-coded separately from the `prefix C-q` set a few lines above and from the `^Q^X help` rendering in src/ops/keys.ts (ATTACH_KEYS_HELP).",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "`│` と `─` は East Asian Ambiguous 幅の文字で、ambiguous を全角扱いにする端末では表示がずれる。",
+   "quote": "`│` and `─` in the status line are East Asian Ambiguous width characters, so terminals set to treat ambiguous characters as 2 columns disagree with tmux's width calculation.",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "lib/tmux/tmux.ts:336",
+   "summary": "昇格済みモジュール lib の status-format を変えたのに lib/tmux/tmux.test.ts に単体テストが無く、e2e でしか確かめていない。",
+   "quote": "The status-format of lib/, a promoted module, changed without a unit test in lib/tmux/tmux.test.ts. It is covered only by an e2e test that depends on a real tmux and the shell's window name.",
+   "quote_ok": true
+  }
+ ]
+}

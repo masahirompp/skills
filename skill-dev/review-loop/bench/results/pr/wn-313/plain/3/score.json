@@ -1,0 +1,84 @@
+{
+ "cost_usd": 0.10213,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは一覧の側で作り直さないことを「判断として妥当です」と結論しており、作業台の画面がつながったまま wbguide が消えると作り直されないという問題を指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "`@wn_respawned` はペインのオプションです。`respawn-pane` してもペインの ID は変わらないので、値はずっと残ります。",
+   "reason": "起動し直しの回数が数え直されずに通算で積み上がり、まれに落ちるだけでも6回目で kill-pane に入ると、正解と同じ場所・原因で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "detected",
+   "quote": "一度つないだあと、一覧が生きたまま tmux のクライアントが 0 以外で終わる場合(端末を失った、外から SIGHUP や kill を受けたなど)にも、`could not open the workbench screen` と出ます。",
+   "reason": "workbench() の attach の結果の判定が、つないだあとにクライアントが kill などで止められた場合も「つなげなかった」と扱う、と指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が、利用者が分割したペインと案内のペインを区別していないという指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "detected",
+   "quote": "加えて、この経路は 38 行のタイトルを消す処理を通りません。つないでいた場合は古いタイトルが残り、DESIGN.md が防ぎたい「古いタイトルの分割へ移る」が起きえます。",
+   "reason": "失敗の経路ではタイトルを消す OSC 2 が出なくなる、と同じ場所で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定していて、案内のペインがない場合に作り直されないという指摘はない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/cli/guide.ts:19",
+   "summary": "作り直した案内の環境(PATH や WHATNEXT_DEBUG_LOG など)を、一覧ではなく whatnext workbench を動かしたプロセスの process.env から取っている。",
+   "quote": "`paneCommand(env, 'guide')` は既定で `process.env` を使います。そのため作り直した案内には、一覧ではなく Ghostty の分割のシェル(または手で `whatnext workbench` を打った端末)の",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/cli/list.ts:66-67",
+   "summary": "workbenchOptions を二重に呼んでおり、ensureGuide が 'failed' を返しても一覧は何も記録しない。",
+   "quote": "害はありませんが、`ensureGuide` が `'failed'` を返しても一覧は何も記録しません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "lib/tmux/tmux.test.ts:75-81",
+   "summary": "起動し直しの上限を文字列が含まれるかでしか確かめておらず、5回で止まる挙動や回数が戻らない問題を検出できるテストがない。",
+   "quote": "`'-lt 5'` や `kill-pane` が含まれるかを見ているだけで、「5回で止まる」挙動は誰も実行していません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "lib/tmux/tmux.ts:51",
+   "summary": "死んだペインに tmux が描く「Pane is dead」の行が capture-pane の末尾5行に混ざり、手がかりが1行減る可能性がある。",
+   "quote": "`capture-pane` の末尾5行にそれが入ると、手がかりの枠が1行減ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "",
+   "summary": "起動し直しで症状が隠れるのに、@wn_guide_died を誰がいつ見るのかが決まっていないと、手がかりが読まれずに終わる恐れがある。",
+   "quote": "`@wn_guide_died` を誰が、いつ見るのかは決まっているでしょうか。",
+   "quote_ok": true
+  }
+ ]
+}
