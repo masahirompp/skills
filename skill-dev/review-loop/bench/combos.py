@@ -3,8 +3,8 @@
 
     combos.py <結果の置き場>
 
-1反復 = 同じ番号の試行を、組み合わせた構成の数だけ並列に回したもの、として数える。検出は、組み合わせのどれかが
-検出すれば検出。時間は並列なので最長、費用と余計な指摘は合計(同じ指摘の重なりは、まとまりで1件に数える)。
+1反復 = 同じ番号の試行を、組み合わせた構成の数だけ並列に回したもの、として数える。構成によって試行の数が違うときは、
+組み合わせた構成の全てにある番号の試行だけを数える。検出は、組み合わせのどれかが検出すれば検出。時間は並列なので最長、費用と余計な指摘は合計(同じ指摘の重なりは、まとまりで1件に数える)。
 差の揺れは、不具合を単位にしたブートストラップ(同じ不具合の3回は独立でないので、不具合ごとまとめて引き直す)。
 """
 import collections
@@ -24,7 +24,7 @@ rows = score.trials(out)
 configs = [c for c in score.bench.CONFIGS if any(m["config"] == c for _, m in rows)]
 cases = sorted({m["case"] for _, m in rows})
 bugs = [(c, b["id"]) for c in cases for b in score.answers(c)["bugs"] if b.get("scope", "in") == "in"]
-ntrials = max(m["trial"] for _, m in rows)
+ran = {c: {m["trial"] for _, m in rows if m["config"] == c} for c in configs}  # 構成 -> 回した試行の番号
 
 det = collections.defaultdict(set)      # (構成, 試行) -> 検出した不具合
 extra = collections.defaultdict(set)    # (構成, 試行) -> 余計な指摘のまとまり(分類つき)
@@ -52,7 +52,7 @@ for d, m in rows:
 
 def measure(combo):
     found, noise, real, t, usd = [], [], [], [], []
-    for n in range(1, ntrials + 1):
+    for n in sorted(set.intersection(*[ran[c] for c in combo])):
         f = set().union(*[det[(c, n)] for c in combo])
         e = set().union(*[extra[(c, n)] for c in combo])
         found.append(len(f))
@@ -80,7 +80,7 @@ for _, combo, f, n, re_, t, u in sorted(table, key=lambda x: (len(x[1]), -x[0]))
           f"{mean(n) / len(cases):.1f} | {mean(re_) / len(cases):.1f} | {mean(t):.1f}分 | ${mean(u):.2f} |")
 
 # 構成どうしの差(検出率の差)の 95% の幅。不具合を単位に引き直す
-rate = {c: {b: sum(b in det[(c, n)] for n in range(1, ntrials + 1)) / ntrials for b in bugs} for c in configs}
+rate = {c: {b: sum(b in det[(c, n)] for n in ran[c]) / len(ran[c]) for b in bugs} for c in configs}
 rng = random.Random(1)
 print("\n## 構成どうしの検出率の差(不具合を単位にしたブートストラップ、95% の幅)\n")
 print("| 比べる構成 | 差(ポイント) | 95% の幅 | 0 をまたぐか |")

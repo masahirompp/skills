@@ -1032,35 +1032,92 @@ PR #{pr} に対するレビューの判定を、標準入力で渡す。判定�
 """
 
 
-def copy_ignored(src, dst):
+def copy_ignored(src, dst, timeout):
     """ignored のファイルやディレクトリを複製に写す。macOS では clonefile で速く、容量も使わない。"""
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     args = ["cp", "-Rc", src, dst] if sys.platform == "darwin" else ["cp", "-R", src, dst]
-    return subprocess.run(args, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=COPY_TIMEOUT)
+    return subprocess.run(args, capture_output=True, text=True, errors="replace", stdin=subprocess.DEVNULL,
+                          timeout=timeout)
 
 
-def make_verify_copy(wt, workdir, head):
-    """検証役が書き込める、worktree の複製を作って返す。
+def cut_paths_to_original(path, wt):
+    """写したものから、元のリポジトリに届く経路を取り除き、取り除いたパスを返す。
+
+    取り除くのは、linked worktree の作業ツリー(`.git` が、元の管理情報を絶対パスで指すファイル)と、元の worktree の
+    中を絶対パスで指すシンボリックリンク。残すと、複製の中の操作が、元のブランチや HEAD、ファイルを書き換える。"""
+    original = os.path.realpath(wt) + os.sep
+
+    def into_original(link):
+        target = os.readlink(link)
+        return os.path.isabs(target) and (os.path.realpath(target) + os.sep).startswith(original)
+
+    def absolute_gitdir(root):
+        git = os.path.join(root, ".git")
+        if os.path.islink(git) or not os.path.isfile(git):
+            return False
+        with open(git, encoding="utf-8", errors="replace") as f:
+            text = f.read(4096)
+        return text.startswith("gitdir:") and os.path.isabs(text[len("gitdir:"):].strip())
+
+    removed = []
+    if os.path.islink(path):
+        if into_original(path):
+            os.unlink(path)
+            removed.append(path)
+        return removed
+    for root, dirs, files in os.walk(path):
+        if absolute_gitdir(root):
+            shutil.rmtree(root)
+            removed.append(root)
+            dirs[:] = []
+            continue
+        for name in dirs + files:
+            p = os.path.join(root, name)
+            if os.path.islink(p) and into_original(p):
+                os.unlink(p)
+                removed.append(p)
+    return removed
+
+
+def make_verify_copy(wt, workdir, head, deadline):
+    """検証役が書き込める、worktree の複製を作って返す。deadline(time.monotonic の値)を過ぎたら、残りは写さない。
 
     worktree をそのまま写すと `.git` が元の worktree の管理情報を指し、複製の中の git の操作が元の HEAD や index を
     変えてしまう。そのため、clone して同じコミットをチェックアウトし、依存のディレクトリなど ignored のものだけを写す
-    (無いとテストを動かせないことが多い)。push 先を残さないよう、リモートは外す。"""
+    (無いとテストを動かせないことが多い)。push 先を残さないよう、リモートは外す。外す前に、元のブランチ(clone の
+    直後はリモート追跡の参照)をローカルのブランチにして、検証役がベースと比べられるようにする。"""
     copy = os.path.join(workdir, "verify-repo")
     run(["git", "clone", "-q", "--no-checkout", wt, copy], cwd=workdir)
     run(["git", "checkout", "-q", "--detach", head], cwd=copy)
+    run(["git", "remote", "set-head", "origin", "-d"], cwd=copy, check=False)
+    run(["git", "fetch", "-q", ".", "refs/remotes/origin/*:refs/heads/*"], cwd=copy, check=False)
     run(["git", "remote", "remove", "origin"], cwd=copy)
     ignored = run(["git", "status", "--porcelain", "--ignored", "-z"], cwd=wt).stdout
     for entry in ignored.split("\0"):
         if not entry.startswith("!! "):
             continue
         rel = entry[3:].rstrip("/")
+        left = deadline - time.monotonic()
+        if left <= 0:
+            log(f"warn: 検証用の複製に時間がかかり、{rel} から後の ignored のファイルを写していない")
+            break
+        dst = os.path.join(copy, rel)
         try:
-            r = copy_ignored(os.path.join(wt, rel), os.path.join(copy, rel))
+            r = copy_ignored(os.path.join(wt, rel), dst, min(COPY_TIMEOUT, left))
             failed = r.stderr.strip()[-200:] if r.returncode else ""
         except (OSError, subprocess.TimeoutExpired) as e:
             failed = str(e)
         if failed:  # 写せなくても検証は進める(検証役が、動かせなかったと書く)
             log(f"warn: 検証用の複製に {rel} を写せなかった: {failed}")
+        try:  # 途中まで写したものにも行う
+            for p in cut_paths_to_original(dst, wt):
+                log(f"warn: 検証用の複製から、元のリポジトリを指す {os.path.relpath(p, copy)} を取り除いた")
+        except OSError as e:  # 取り除けたか分からないので、写したものごと捨てる
+            log(f"warn: 検証用の複製の {rel} を確かめられず、写さなかった: {e}")
+            if os.path.isdir(dst) and not os.path.islink(dst):
+                shutil.rmtree(dst, ignore_errors=True)
+            elif os.path.lexists(dst):
+                os.unlink(dst)
     return copy
 
 
@@ -1075,7 +1132,18 @@ def run_verify(wt, env, pr_number, verdict, workdir, children, attempt, head):
     検証役の失敗では、試行を失敗にしない(判定は得られているので、捨てない)。失敗したことを節に書いて返し、
     親が自分で再現する。権限の拒否も、検証役は再現の手段を選び直せるので止めず、stderr に残すだけにする。"""
     try:
-        copy = make_verify_copy(wt, workdir, head)
+        return verify_in_copy(wt, env, pr_number, verdict, workdir, children, attempt, head)
+    except Interrupted:
+        raise
+    except Exception as e:
+        log(f"warn: 検証役の実行に失敗した: {type(e).__name__}: {e}")
+        return verify_failed("スクリプトの中で失敗した")
+
+
+def verify_in_copy(wt, env, pr_number, verdict, workdir, children, attempt, head):
+    started = time.monotonic()  # 複製を作る時間も VERIFY_TIMEOUT に含める(check_tools の時間の合計に収める)
+    try:
+        copy = make_verify_copy(wt, workdir, head, started + VERIFY_TIMEOUT)
     except Precondition as e:
         log(f"warn: 検証用の複製を作れなかった: {e}")
         return verify_failed("検証用の複製を作れなかった")
@@ -1092,7 +1160,6 @@ def run_verify(wt, env, pr_number, verdict, workdir, children, attempt, head):
             log(f"warn: 検証役を起動できなかった: {e.detail}")
             return verify_failed("起動できなかった")
     tail = StreamTail(base + ".stdout.jsonl")
-    started = time.monotonic()
     timed_out = False
     while p.poll() is None:
         tail.poll()

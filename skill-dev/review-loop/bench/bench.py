@@ -381,7 +381,7 @@ def run_trial(case, config, n, template, root, out, keep, model):
         # 利用枠の上限などで動けなかった試行は、結果として残さない(次に同じコマンドで回したときにやり直す)
         stop.set()
         shutil.rmtree(dest, ignore_errors=True)
-        log(f"stop  {case['id']} {config} #{n}: {meta['detail'][:200]}(残りの試行を始めない)")
+        log(f"stop  {case['id']} {config} #{n}: {str(meta.get('detail') or meta['status'])[:200]}(残りの試行を始めない)")
         return
     with open(os.path.join(dest, "meta.json"), "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=1)
@@ -400,6 +400,8 @@ def cmd_run(args):
     PR_MODE = args.pr
     os.environ[rl.GUARD_ENV] = "1"
     cases = [load_case(c) for c in (args.cases.split(",") if args.cases else all_cases())]
+    if PR_MODE and not args.cases:  # 元の PR が無く、検証用の PR を作れない題材は外す(publish.py と同じ条件)
+        cases = [c for c in cases if "pr" in c]
     configs = args.configs.split(",") if args.configs else list(CONFIGS)
     unknown = [c for c in configs if c not in CONFIGS]
     if unknown:

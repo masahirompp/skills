@@ -654,10 +654,20 @@ check(json.dumps(state()) == before, "観点の指定の誤りは状態に記録
 wt = setup()
 with open(os.path.join(wt, "dep.log"), "w") as f:  # ignored のファイル(依存のディレクトリの代わり)
     f.write("dep")
+# ignored の中にある、元のリポジトリに届く経路(入れ子の worktree と、元を絶対パスで指すシンボリックリンク)
+sh("git", "worktree", "add", "-q", "nested.log", "-b", "nested", cwd=wt)
+os.symlink(os.path.join(wt, "a.txt"), os.path.join(wt, "link.log"))
 rc, out, err = run(wt)
 wd = err.rstrip().splitlines()[-1]
 v = [c for c in calls() if c["kind"] == "verify"][-1]
 copy = os.path.join(wd, "verify-repo")
+check(rc == 0 and not os.path.lexists(os.path.join(copy, "nested.log"))
+      and not os.path.lexists(os.path.join(copy, "link.log")) and err.count("元のリポジトリを指す") == 2,
+      "複製には、入れ子の worktree と、元を絶対パスで指すシンボリックリンクを残さない")
+sh("git", "worktree", "remove", "--force", "nested.log", cwd=wt)
+os.remove(os.path.join(wt, "link.log"))
+check(subprocess.run(["git", "rev-parse", "-q", "--verify", "main"], cwd=copy, capture_output=True).returncode == 0,
+      "複製に、ベースのブランチを残す")
 check(rc == 0 and os.path.realpath(v["cwd"]) == os.path.realpath(copy) and v["cwd"] != wt,
       "検証役は worktree ではなく、作業ディレクトリの下の複製で動かす")
 check("### F1: s" in v["stdin"] and "## 検証" in v["args"][-1] and "PR #7" in v["args"][-1],
@@ -681,6 +691,10 @@ for mode, word in (("fail", "異常終了した"), ("noheading", "決めた形�
     check(rc == 0 and out.startswith("## 指摘") and f"検証役が結果を返さなかった({word})" in out
           and "warn: 検証役" in err and state()["attempts"][-1]["result"] == "completed",
           f"検証役が失敗しても({mode})試行は成功にし、確かめられていないと判定に書く")
+rc, out, err = run(wt, overrides={"VERIFY_PROMPT": "{nope}"})
+check(rc == 0 and out.startswith("## 指摘") and "検証役が結果を返さなかった(スクリプトの中で失敗した)" in out
+      and "warn: 検証役の実行に失敗した: KeyError" in err and state()["attempts"][-1]["result"] == "completed",
+      "検証の段でスクリプトが例外を出しても、試行は成功にし、判定を返す")
 rc, out, err = run(wt, overrides={"VERIFY_TIMEOUT": 2, "WATCHDOG_GRACE": 1}, FAKE_VERIFY="hang")
 hung = [c for c in calls() if c["kind"] == "verify"][-1]
 check(rc == 0 and "分を超えた" in out and not alive(hung["pid"]), "検証役が時間切れなら止めて、試行は成功にする")
