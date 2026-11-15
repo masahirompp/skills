@@ -26,10 +26,30 @@ python3 skill-dev/review-loop/bench/score.py report   skill-dev/review-loop/benc
 |---|---|
 | `bench.py` | 題材の組み立てと実行。構成ごとのプロンプトは `CONFIGS` |
 | `score.py` | 採点、余計な指摘のまとめと分類、集計。採点の基準は `SCORE_PROMPT` と `CLASSIFY_PROMPT` |
+| `combos.py` | 構成の組み合わせごとの集計(1反復で見つかる不具合、余計な指摘、時間、費用)と、構成どうしの差の揺れ |
+| `publish.py` | 題材を、GitHub の検証用の非公開リポジトリ(`rlbench-<題材>`)と PR にする。`bench.py run --pr` で、本番と同じ引数でレビューさせるため。`publish.py delete` で消す |
+| `verify.py` | レビューの指摘を実行で確かめる検証役の試し。本物の指摘を誤って落とす率を測る |
 | `cases/<題材>/` | 題材の定義(`case.json`)。skills の題材は `base.patch`(ベースへの加工)、`change.patch`(レビュー対象の差分)、`message.txt`(差分の意図) |
 | `answers/<題材>.json` | 正解の一覧。子からは見えない |
 | `answers/repro/` | 埋め込んだ不具合を再現するスクリプト |
 | `results/<名前>/` | 結果。試行ごとに `result.md`(レビューの出力)、`meta.json`、`score.json`。子の stream(`*.jsonl`)は大きいのでコミットしない |
+
+## これまでの結果
+
+Opus 5.5 で測った。数字の出どころは `results/` の各 `report.md` と `combos.md`。
+
+- `results/main`: PR なしの形。10題材 × 5構成 × 3回
+- `results/pr`: PR ありの形。code-review・観点明示型(perspectives)・観点を書かない形(plain)は3回、ほかは1回
+- `results/verify`: 検証役の試し。正解と一致した指摘58件と、正解に無い指摘58件
+
+分かったこと(PR ありの形、不具合41件):
+
+- code-review high が単独で最も多く見つけた(54%)。観点明示型 44%、観点を書かない形 38%。後の2つの差は誤差の範囲
+- security-review と mattpocock-skills:code-review は、それだけが見つけた不具合が0〜1件だった。ただし、題材にセキュリティの不具合がほとんど無い
+- 検証役は、本物の指摘を誤って落とさなかった(「起きなかった」3件は、どれも指摘の書いた経路が誤っていた)。正解に無い指摘は、半分強を落とした
+- この結果から、`review_loop.py` の既定の観点を code-review high の1つにし、判定のあとに検証役を足した
+
+言えないこと: 正解は全て、過去のレビューが見つけた不具合である。採点と分類は LLM の判断で、抜き取りでしか確かめていない。モデルは Opus 5.5 だけ。
 
 ## 題材の作り方
 

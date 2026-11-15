@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PR のレビューループを1反復だけ進める。
 
-    review_loop.py iterate <worktree の絶対パス> [--new-run] [--no-verify] [--perspective SPEC]... [--instruct SKILL=TEXT]...
+    review_loop.py iterate <worktree の絶対パス> [--new-run] [--no-verify] [--perspective SPEC]... [--focus TEXT]... [--instruct SKILL=TEXT]...
 
 観点別のレビュースキルを `claude -p` で並列に実行し、判定役の `claude -p` に突き合わせと
 競合の裁定をさせ、検証役の `claude -p` に worktree の複製の中で指摘を実行して確かめさせ、
@@ -40,14 +40,17 @@ import uuid
 # PR 番号を自動では足さない。
 # - 組み込みの code-review は、レベルを指定しないと利用者が最後に使ったレベルを引き継ぎ、反復ごとに
 #   深さが変わりうるので固定する
-# - mattpocock-skills:code-review は、引数を比較の起点(commit や branch)として読む。数字だけを渡すと
-#   起点として解決できず推測に頼るので、「PR #番号」と書く。スキルが PR からベースを起点に決め(ローカルの
-#   main か origin/main になる)、PR 本文を仕様として使う
+# - mattpocock-skills:code-review を --perspective で足すときは、引数を `PR #{pr}` と書く。このスキルは引数を
+#   比較の起点(commit や branch)として読むので、数字だけを渡すと起点として解決できず推測に頼る
+# 既定を1つにしているのは、不具合を含む PR で構成を比べた結果による(skill-dev/review-loop/bench)。
+# code-review high が単独で最も多く見つけ、security-review と mattpocock-skills:code-review は、それだけが見つけた
+# 不具合がほとんど無かった。観点を足すときは、--perspective か --focus を使う
 PERSPECTIVES = [
     "code-review high {pr}",
-    "security-review",
-    "mattpocock-skills:code-review PR #{pr}",
 ]
+
+# --focus で足す、スキルを使わないレビュー役のプロンプト。{pr} は PR 番号、{focus} は利用者の指定した観点
+FOCUS_PROMPT = "PR #{pr} の差分を、次の観点でレビューし、具体的な指摘を file:line 付きの箇条書きで出してください。\n\n観点: {focus}"
 
 SAFETY_MAX_ITER = 10          # シリーズあたりの反復の上限
 MAX_CONSECUTIVE_FAILURES = 3  # 連続失敗の上限
@@ -270,18 +273,19 @@ def check_result(label, rc, base, attempt, tail):
     return text
 
 
-# 試行を止めない拒否の (source, reason_type)。複合コマンド(`;`・`&&`・パイプなど)を、サブコマンドごとの
+# 試行を止めない拒否の decision_reason_type。複合コマンド(`;`・`&&`・パイプなど)を、サブコマンドごとの
 # 判定から拒否したもの。読み取りの一部が利用者の deny ルール(`Read(**/.env*)` など)に当たるといった形で
-# 普通に起き、子は該当部分を外してやり直せる。この2つの値からは、拒否されたのが一部か全部か、deny ルールに
-# 当たったのか許可ルールに無かったのかは見分けられない。source が config でも、auto mode の分類器の判定
-# (reason_type が classifier)のように、子が読めないまま進みうるものは含めない
-TOLERATED_DENIAL = ("config", "subcommandResults")
+# 普通に起き、子は該当部分を外してやり直せる。この値からは、拒否されたのが一部か全部か、deny ルールに
+# 当たったのか許可ルールに無かったのかは見分けられない。auto mode の分類器の判定(classifier)や安全確認
+# (safetyCheck)のように、子が読めないまま進みうるものは含めない。項目名と値は、本物の claude(2.1.325)が
+# stream に出す permission_denied のイベントに合わせてある(source や reason_type という項目は無い)
+TOLERATED_DENIAL = "subcommandResults"
 
 
 def tolerated(event):
     """試行を止めない拒否のイベントか。tool_use_id がないものは、result の permission_denials と
     突き合わせられないので止める側に倒す。"""
-    return (event.get("source"), event.get("reason_type")) == TOLERATED_DENIAL and bool(event.get("tool_use_id"))
+    return event.get("decision_reason_type") == TOLERATED_DENIAL and bool(event.get("tool_use_id"))
 
 
 class StreamTail:
@@ -358,7 +362,7 @@ class StreamTail:
     def take_tolerated(self):
         """まだ記録していない、止めない拒否の要約を返す。"""
         items, self.unrecorded = self.unrecorded, []
-        return [summarize_denials([self.denied_call(e)]) + f"(reason_type {e.get('reason_type')})" for e in items]
+        return [summarize_denials([self.denied_call(e)]) + f"(decision_reason_type {e.get('decision_reason_type')})" for e in items]
 
 
 def record_tolerated(label, tail, workdir):
@@ -414,6 +418,19 @@ def normalize_spec(spec):
 def default_perspectives():
     """既定の観点を、--perspective と同じ形に整えて返す。テストが PERSPECTIVES を差し替えるので、毎回作る。"""
     return [normalize_spec(s) for s in PERSPECTIVES]
+
+
+def focus_config(focus_args):
+    """--focus の値を、空白を詰めた形にして返す。"""
+    focuses = [" ".join(t.split()) for t in focus_args or []]
+    if not all(focuses):
+        raise Precondition("--focus に空のものがある")
+    return focuses
+
+
+def focus_name(i):
+    """--focus で足したレビュー役の名前(出力ファイルと、判定役への入力の区切りに使う)。"""
+    return f"focus-{i}"
 
 
 def review_config(perspective_args, instruct_args):
@@ -799,20 +816,21 @@ def review_system_prompt(instruction):
             "スキルの手順と食い違うときは、この指示を優先してください。" + INSTRUCTION_RULES + "\n" + instruction)
 
 
-def run_reviews(wt, env, pr, workdir, children, attempt, perspectives, instructions):
+def run_reviews(wt, env, pr, workdir, children, attempt, perspectives, instructions, focuses=()):
     """観点別レビューを並列に実行し、{観点: 結果のテキスト} を返す。1つでも失敗したら残りを止める。
 
+    レビュー役は、観点スキルごとに1つと、--focus で足した観点ごとに1つ(スキルを使わない)。
     出力は stream-json で受け、試行を止める権限の拒否が出たらその時点で止める(watch_denials)。"""
+    jobs = [(skill_name(spec), "/" + expand(spec, pr), instructions.get(skill_name(spec))) for spec in perspectives]
+    jobs += [(focus_name(i), FOCUS_PROMPT.format(pr=pr["number"], focus=text), None) for i, text in enumerate(focuses, 1)]
     running = {}
-    for spec in perspectives:
-        base = os.path.join(workdir, f"review-{safe_name(skill_name(spec))}")
-        prompt = "/" + expand(spec, pr)
+    for name, prompt, instruction in jobs:
+        base = os.path.join(workdir, f"review-{safe_name(name)}")
         with open(base + ".stdout.jsonl", "w") as out, open(base + ".stderr.txt", "w") as err:
             p = children.spawn(["claude", "-p", "--output-format", "stream-json", "--verbose",
-                                "--append-system-prompt", review_system_prompt(instructions.get(skill_name(spec))),
-                                prompt],
+                                "--append-system-prompt", review_system_prompt(instruction), prompt],
                                REVIEW_TIMEOUT, cwd=wt, env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=err)
-        running[skill_name(spec)] = (p, base, time.monotonic(), StreamTail(base + ".stdout.jsonl"))
+        running[name] = (p, base, time.monotonic(), StreamTail(base + ".stdout.jsonl"))
     results = {}
     try:
         while running:
@@ -837,7 +855,7 @@ def run_reviews(wt, env, pr, workdir, children, attempt, perspectives, instructi
         for name, (_, _, _, tail) in running.items():
             tail.poll()
             record_tolerated(f"review {name}", tail, workdir)
-    return {skill_name(s): results[skill_name(s)] for s in perspectives}
+    return {name: results[name] for name, _, _ in jobs}
 
 
 # 判定の見出し。JUDGE_PROMPT の出力の形と、偽の claude(skill-dev/review-loop/fakes/claude)の判定と揃える。判定の中身を読むのは親なので、スクリプトが確かめるのは
@@ -984,8 +1002,16 @@ PR #{pr} に対するレビューの判定を、標準入力で渡す。判定�
 確かめるのは、分類が defect で、範囲が「差分の内」の指摘。それ以外の指摘は、結論を「対象外」として、実行しない。
 判定の「再現」の欄は手がかりで、合っていなければ自分で組み直す。
 
+確かめるのは「コードがそう動くか」だけでなく、「実際の使い方で起きるか」まで。偽の入力や差し替えた部品で再現したときは、
+その入力や状態が、実物(本物のコマンドの出力、利用者の普通の操作、起こりうる環境)から生じるかを確かめる。
+実物の出力の形を確かめるための、本物のコマンドの小さな実行や、外部のサービスの読み取りは行ってよい
+(費用のかかるものは、最も安い手段で1〜2回にとどめる)。
+
 結論は次のどれか。
-- 再現した: 指摘どおりのことが起きるのを、実行して見た(失敗するテスト、再現スクリプト、コマンドの出力)
+- 再現した: 指摘どおりのことが起きるのを、実行して見た(失敗するテスト、再現スクリプト、コマンドの出力)。
+  かつ、その条件が実際の使い方で生じることを確かめたか、普通の操作だけで作れた
+- 人工の条件でだけ再現した: 実行すると起きるが、その条件(入力の形、状態、順序)は実物からは生じないと確かめた、
+  または生じる経路を見つけられなかった。どちらかを「条件」に書く
 - 起きなかった: 指摘が起きると言っている条件を作って実行したが、起きなかった。条件を作れずに試したもの、
   指摘とは違う条件で試したものは、これにしない
 - 実行では示せない: 文書やプロンプトの書き方、外部のサービスの挙動、狙って起こせないタイミング、この環境では作れない条件
@@ -998,7 +1024,8 @@ PR #{pr} に対するレビューの判定を、標準入力で渡す。判定�
 
 ## 検証
 
-### F1: 再現した / 起きなかった / 実行では示せない / 挙動に関わらない / 対象外
+### F1: 再現した / 人工の条件でだけ再現した / 起きなかった / 実行では示せない / 挙動に関わらない / 対象外
+- 条件: <起きる条件と、それが実際の使い方でどう生じるか。生じないと確かめたなら、その根拠> / なし
 - 実行: <実行したコマンドか、書いたテストの場所(複製の中の相対パス)> / なし
 - 出力: <出力の要点。親が同じコマンドで見比べられる程度に> / なし
 - 追跡: 成り立つ / 成り立たない / 分からない(「実行では示せない」のときだけ。ほかは「対象外」)
@@ -1123,13 +1150,14 @@ def find_contamination(wt, start):
 
 
 # --- 本体 --------------------------------------------------------------------
-def iterate(worktree, new_run, ctx, perspective_args, instruct_args, verify=True):
+def iterate(worktree, new_run, ctx, perspective_args, instruct_args, verify=True, focus_args=None):
     # 前提チェック。ロックを取る前なので、失敗しても状態には記録しない
     if os.environ.get(GUARD_ENV):
         raise Precondition(f"{GUARD_ENV} が設定済み。レビューループの中から再帰的に起動された")
     os.environ[GUARD_ENV] = "1"
     check_tools()
     perspectives, instructions = review_config(perspective_args, instruct_args)
+    focuses = focus_config(focus_args)
     env = child_env()
     wt = normalize_worktree(worktree)
     if git_status(wt).strip():
@@ -1160,14 +1188,14 @@ def iterate(worktree, new_run, ctx, perspective_args, instruct_args, verify=True
         # どの観点や指示で回したかを、あとから表で読めるようにする(指示の本文は PR に載せない)。観点は
         # 既定でも記録する。既定(PERSPECTIVES)はスクリプトの更新で変わりうるので、記録しないと前後で比べられない
         # 状態コメントの本文には GitHub の上限があるので、観点ごとに長さを抑える
-        attempt["perspectives"] = [p[:MAX_RECORDED_SPEC] for p in perspectives]
+        attempt["perspectives"] = [p[:MAX_RECORDED_SPEC] for p in perspectives + [f"focus {t}" for t in focuses]]
         if instructions:
             attempt["instructed"] = sorted(instructions)
         warn_option_change(state["attempts"], attempt)
         ctx["attempt"] = attempt
         ctx["workdir"] = make_workdir(start, state["run_id"], len(state["attempts"]) + 1)
         log(f"作業ディレクトリ: {ctx['workdir']}")
-        reviews = run_reviews(wt, env, start, ctx["workdir"], children, attempt, perspectives, instructions)
+        reviews = run_reviews(wt, env, start, ctx["workdir"], children, attempt, perspectives, instructions, focuses)
         verdict = run_judge(wt, env, start["number"], reviews, ctx["workdir"], children, attempt, instructions)
         if verify:
             verdict += "\n\n" + run_verify(wt, env, start["number"], verdict, ctx["workdir"], children, attempt,
@@ -1288,6 +1316,8 @@ def main():
                     help="検証役(指摘を worktree の複製の中で実行して確かめる)を回さない。利用者の指示があったときだけ使う")
     it.add_argument("--perspective", action="append", metavar="SPEC",
                     help="観点スキルとその引数(例: 'code-review high {pr}')。1つでも渡すと、既定の一覧の代わりに渡したものだけを使う。繰り返せる")
+    it.add_argument("--focus", action="append", metavar="TEXT",
+                    help="スキルを使わないレビュー役を1つ足し、この観点でレビューさせる。観点スキルの一覧には影響しない。繰り返せる")
     it.add_argument("--instruct", action="append", metavar="SKILL=TEXT",
                     help="その観点のレビュー役だけに渡す追加の指示。繰り返せる")
     args = ap.parse_args()
@@ -1297,7 +1327,7 @@ def main():
     ctx = {"workdir": "", "attempt": None}
     code = 0
     try:
-        verdict = iterate(args.worktree, args.new_run, ctx, args.perspective, args.instruct, not args.no_verify)
+        verdict = iterate(args.worktree, args.new_run, ctx, args.perspective, args.instruct, not args.no_verify, args.focus)
         print(verdict, flush=True)
         log("完了: 反復 {}、入力 {}、出力 {} トークン".format(ctx["attempt"]["iter"], *format_tokens(ctx["attempt"]["tokens"])))
     except BaseException as e:
