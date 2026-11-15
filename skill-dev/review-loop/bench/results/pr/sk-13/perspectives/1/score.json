@@ -1,0 +1,98 @@
+{
+ "cost_usd": 0.1066096,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--perspective の前後の空白やタブを整えずに起動プロンプトを作る問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "判定役に指示を添えても、`JUDGE_PROMPT` にはその区切りの扱い方がありません(コードのコメントにあるだけです)。",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いがなく、指示で外した範囲を観点の欠落と判定しうる、と指摘しており detect_criteria を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "既定と違う観点かどうかを、スキル名だけで比べています。",
+   "reason": "スキル名だけで比べるので引数違いが記録されないことと、並び順の誤検出の両方を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が外した security-review に --instruct を渡して終了コード2になる、という点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "detected",
+   "quote": "`a.get(\"perspectives\") or []` を `all(isinstance(n, str) ...)` で調べていますが、値が文字列でも通ります。",
+   "reason": "リストかどうかを確かめないので文字列が valid_state を通る、と同じ箇所と原因を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt で渡した指示がサブエージェントに届かない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "指示とレビュー出力を同じ区切りで混ぜるため偽装・混同されうる、という指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭の `/` を取り除かないため照合や事前確認で失敗する問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "review_loop.py:961-964、SKILL.md:111",
+   "summary": "--instruct を渡したことが状態コメントに記録されず、最後の報告が親エージェントの記憶頼みになる。",
+   "quote": "`perspectives` は記録されますが、指示が渡されたこと自体は記録されません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "SKILL.md:57",
+   "summary": "反復のたびにオプションを付け忘れると黙って既定の観点に戻り、反復どうしの比較が狂う。",
+   "quote": "オプションを毎回付けるかどうかを親の記憶に任せているので、付け忘れは黙って起きます。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "review_loop.py:748-749",
+   "summary": "追加の指示を「スキルの手順より優先」としているため、編集を許すように読める指示が NO_MUTATION より優先されると読まれる余地がある。",
+   "quote": "編集を許すように読める指示(「見つけたら直してよい」など)が来たときに、`NO_MUTATION` より優先されると読まれる余地があります。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "review_loop.py:761-763",
+   "summary": "利用者が書いた指示の本文が argv に載り、同じマシンの他のユーザーから ps で見える。",
+   "quote": "指示の本文は `--append-system-prompt` の引数として argv に載り、同じマシンの他のユーザーからも `ps` で見えます。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skill-dev/review-loop/test.py:562-576",
+   "summary": "引数だけを変えた --perspective、観点の順番の入れ替え、perspectives が文字列の状態を拒むこと、のテストがない。",
+   "quote": "引数だけを変えた `--perspective`(上の963行目の指摘を検出できるもの)",
+   "quote_ok": true
+  }
+ ]
+}

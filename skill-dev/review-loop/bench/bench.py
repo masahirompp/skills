@@ -68,6 +68,44 @@ CONFIGS = {
     "prove": {"prompt": PROVE_PROMPT, "system": OWN_COPY},
 }
 
+# PR ありの形(--pr)。本番の review_loop.py と同じ引数とシステムプロンプトで起動する。{pr} は PR 番号に置き換わる
+CONFIGS_PR = {
+    "code-review": {"prompt": "/code-review high {pr}", "system": rl.REVIEW_CONSTRAINT},
+    "security-review": {"prompt": "/security-review", "system": rl.REVIEW_CONSTRAINT},
+    "mattpocock": {"prompt": "/mattpocock-skills:code-review PR #{pr}", "system": rl.REVIEW_CONSTRAINT},
+    "perspectives": {"prompt": "PR #{pr} の差分を、正確性 / セキュリティ / 並行性 / プライバシー / 設計の観点でレビューし、"
+                               "具体的な指摘を file:line 付きの箇条書きで出してください。", "system": rl.REVIEW_CONSTRAINT},
+    "prove": {"prompt": PROVE_PROMPT.replace("この変更(main からこのブランチへの差分)", "この変更(PR #{pr})"),
+              "system": OWN_COPY},
+}
+
+# 子の PATH の先頭に置く gh の包み。検証用のリポジトリ以外を指す呼び出しを断る(元のリポジトリは公開で、
+# PR や issue にレビューで見つかった不具合が書いてある。認証があれば読めてしまう)
+GH_SHIM = r"""#!/usr/bin/env python3
+import os, re, sys
+real, allowed = os.environ["RB_REAL_GH"], os.environ["RB_REPO"].lower()
+args = sys.argv[1:]
+text = " ".join(args).lower()
+
+
+def deny():
+    sys.stderr.write("GraphQL: Could not resolve to a Repository with the name given. (repository)\n")
+    sys.exit(1)
+
+
+named = [m.group(1) for m in re.finditer(r"(?:-r|--repo)[ =]+(?:https?://)?(?:github\.com/)?([\w.-]+/[\w.-]+)", text)]
+named += [m.group(1) for m in re.finditer(r"(?:repos|github\.com)[/:]([\w.-]+/[\w.-]+?)(?:\.git)?(?:[/ ?#]|$)", text)]
+named += [m.group(0) for m in re.finditer(r"masahirompp/[\w.-]+", text)]
+if any(n not in (allowed, "{owner}/{repo}", ":owner/:repo") for n in named):
+    deny()
+if args[:1] == ["search"] or args[:2] in (["repo", "list"], ["repo", "clone"], ["repo", "fork"]) or "search/" in text:
+    deny()
+if args[:2] == ["api", "graphql"] and re.search(r"[\"']?(whatnext|skills)[\"']", text):
+    deny()
+os.environ.pop("GH_REPO", None)
+os.execv(real, [real] + args)
+"""
+
 TIMEOUT = rl.REVIEW_TIMEOUT
 MODEL = "claude-opus-5-5"  # 子に使わせるモデルの既定。--model で変える
 print_lock = threading.Lock()
@@ -97,7 +135,24 @@ def load_case(case_id):
     with open(os.path.join(d, "case.json"), encoding="utf-8") as f:
         case = json.load(f)
     case["dir"] = d
+    gh_path = os.path.join(d, "github.json")
+    if os.path.exists(gh_path):
+        with open(gh_path, encoding="utf-8") as f:
+            case["github"] = json.load(f)
     return case
+
+
+def attach_github(case, repo):
+    """組み立てた題材の origin を、検証用の GitHub のリポジトリに付け替える(gh が PR を引けるようにする)。"""
+    info = case["github"]
+    shutil.rmtree(os.path.join(os.path.dirname(repo), "origin.git"))
+    git(repo, "remote", "set-url", "origin", f"git@github.com:{info['repo']}.git")
+    git(repo, "fetch", "-q", "origin")
+    # まとめたコミットは、組み立てのたびに時刻が変わって別の SHA になる。中身が同じなら、PR の head に合わせる
+    if git(repo, "rev-parse", "HEAD^{tree}").strip() == git(repo, "rev-parse", info["head"] + "^{tree}").strip():
+        git(repo, "reset", "-q", "--hard", info["head"])
+    if git(repo, "rev-parse", "HEAD").strip() != info["head"]:
+        raise RuntimeError(f"{case['id']}: 組み立てた HEAD が、検証用の PR の head と一致しない")
 
 
 def all_cases():
@@ -172,16 +227,20 @@ def clone_trial(template, root, case):
     os.makedirs(os.path.dirname(trial), exist_ok=True)
     copy_tree(template, trial)
     repo = os.path.join(trial, case["repo_name"])
-    git(repo, "remote", "set-url", "origin", os.path.join(trial, "origin.git"))
+    if os.path.isdir(os.path.join(trial, "origin.git")):  # PR ありの形では、origin は GitHub のまま
+        git(repo, "remote", "set-url", "origin", os.path.join(trial, "origin.git"))
     return trial, repo
 
 
 # --- 子の出力の検査 ----------------------------------------------------------
-SUSPECT_CMD = re.compile(r"ghq/|masahirompp|\bgh\s+(pr|api|repo|issue|search|run)\b|review-loop/bench|/answers/")
+# PR なしの形では gh の呼び出しも拾う(PR が無いので、呼ぶなら元のリポジトリを探している)。PR ありの形では、
+# 元のリポジトリの名前だけを拾う
+SUSPECT_CMD = re.compile(r"ghq/|masahirompp/(skills|whatnext)\b|\bgh\s+(pr|api|repo|issue|search|run)\b|review-loop/bench|/answers/")
+SUSPECT_CMD_PR = re.compile(r"ghq/|masahirompp/(skills|whatnext)\b|review-loop/bench|/answers/")
 PATH_KEYS = ("file_path", "path", "notebook_path")
 
 
-def outside_access(jsonl, trial, root):
+def outside_access(jsonl, trial, root, pr_mode=False):
     """子(とサブエージェント)のツール呼び出しのうち、題材の外にある答えの手がかりを見に行った疑いのあるものを返す。
     見るのは、自分の試行の外のパス(一時ディレクトリと ~/.claude のスキルは除く)、GitHub や手元の clone に
     触れるコマンド、Web の検索と取得。"""
@@ -220,13 +279,24 @@ def outside_access(jsonl, trial, root):
                     if isinstance(v, str) and os.path.isabs(os.path.expanduser(v)) and not ok_path(v):
                         found.append(f"{name} {k}={v}")
                 cmd = inp.get("command")
-                if isinstance(cmd, str) and SUSPECT_CMD.search(cmd.replace(trial, "")):
+                if isinstance(cmd, str) and (SUSPECT_CMD_PR if pr_mode else SUSPECT_CMD).search(cmd.replace(trial, "")):
                     found.append(f"{name} {cmd[:300]}")
     return found
 
 
 # --- 実行 --------------------------------------------------------------------
-def child_env(root):
+def child_env(root, case=None):
+    if case is not None and "github" in case and PR_MODE:
+        # PR ありの形: gh は認証済みのまま、包みを通す
+        env = rl.child_env()
+        env.pop("GH_REPO", None)
+        env["RB_REAL_GH"], env["RB_REPO"] = REAL_GH, case["github"]["repo"]
+        env["PATH"] = os.path.join(root, "bin") + os.pathsep + env.get("PATH", "")
+        return env
+    return child_env_no_gh(root)
+
+
+def child_env_no_gh(root):
     """子の環境。gh を未認証にする。題材のコードからリポジトリ名が分かるので、認証があると、子が GitHub の issue や
     PR(レビューで見つかった不具合が書いてある)を読みに行ける。"""
     env = rl.child_env()
@@ -243,20 +313,23 @@ def run_trial(case, config, n, template, root, out, keep, model):
         return
     shutil.rmtree(dest, ignore_errors=True)
     os.makedirs(dest)
-    spec = CONFIGS[config]
+    spec = CONFIGS_PR[config] if PR_MODE else CONFIGS[config]
+    prompt, system = spec["prompt"], spec["system"] + "\n\n" + TARGET
+    if PR_MODE:
+        prompt, system = prompt.replace("{pr}", str(case["github"]["pr"])), spec["system"]
     trial, repo = clone_trial(template, root, case)
     head = git(repo, "rev-parse", "HEAD").strip()
     base = os.path.join(dest, "review")
     children = rl.Children()
-    meta = {"case": case["id"], "kind": case["kind"], "config": config, "trial": n, "model": model, "status": "error",
+    meta = {"case": case["id"], "kind": case["kind"], "config": config, "trial": n, "model": model, "pr_mode": PR_MODE, "status": "error",
             "tokens": rl.new_tokens(), "cost_usd": None, "started_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
     started = time.monotonic()
     log(f"start {case['id']} {config} #{n}")
     try:
         with open(base + ".stdout.jsonl", "w") as o, open(base + ".stderr.txt", "w") as e:
             p = children.spawn(["claude", "-p", "--model", model, "--output-format", "stream-json", "--verbose",
-                                "--append-system-prompt", spec["system"] + "\n\n" + TARGET, spec["prompt"]],
-                               TIMEOUT, cwd=repo, env=child_env(root), stdin=subprocess.DEVNULL, stdout=o, stderr=e)
+                                "--append-system-prompt", system, prompt],
+                               TIMEOUT, cwd=repo, env=child_env(root, case), stdin=subprocess.DEVNULL, stdout=o, stderr=e)
         tail = rl.StreamTail(base + ".stdout.jsonl")
         timed_out = False
         while p.poll() is None:
@@ -279,7 +352,7 @@ def run_trial(case, config, n, template, root, out, keep, model):
         meta["models"] = sorted((last.get("modelUsage") or {}).keys())
         meta["denials_blocking"] = [rl.summarize_denials([d]) for d in tail.blocking_denials()]
         meta["denials_tolerated"] = tail.take_tolerated()
-        meta["outside_access"] = outside_access(base + ".stdout.jsonl", trial, root)
+        meta["outside_access"] = outside_access(base + ".stdout.jsonl", trial, root, PR_MODE)
         meta["tree_changed"] = git(repo, "status", "--porcelain", "--untracked-files=all").strip().splitlines()[:50]
         meta["head_changed"] = git(repo, "rev-parse", "HEAD").strip() != head
         if timed_out:
@@ -313,7 +386,13 @@ def run_trial(case, config, n, template, root, out, keep, model):
         + (f" 題材の外へのアクセス {len(meta['outside_access'])} 件" if meta.get("outside_access") else ""))
 
 
+PR_MODE = False
+REAL_GH = shutil.which("gh")
+
+
 def cmd_run(args):
+    global PR_MODE
+    PR_MODE = args.pr
     os.environ[rl.GUARD_ENV] = "1"
     cases = [load_case(c) for c in (args.cases.split(",") if args.cases else all_cases())]
     configs = args.configs.split(",") if args.configs else list(CONFIGS)
@@ -326,8 +405,18 @@ def cmd_run(args):
     log(f"一時ディレクトリ: {root}")
     templates = {}
     try:
+        if PR_MODE:
+            missing = [c["id"] for c in cases if "github" not in c]
+            if missing:
+                sys.exit(f"検証用の PR が無い題材がある(publish.py create で作る): {', '.join(missing)}")
+            os.makedirs(os.path.join(root, "bin"))
+            with open(os.path.join(root, "bin", "gh"), "w") as f:
+                f.write(GH_SHIM)
+            os.chmod(os.path.join(root, "bin", "gh"), 0o755)
         for case in cases:
-            build(case, os.path.join(root, "tpl", case["id"]))
+            repo = build(case, os.path.join(root, "tpl", case["id"]))
+            if PR_MODE:
+                attach_github(case, repo)
             templates[case["id"]] = os.path.join(root, "tpl", case["id"])
             log(f"built {case['id']}")
         # 同じ構成が続けて並ばないよう、試行 → 題材 → 構成の順に積む
@@ -337,6 +426,17 @@ def cmd_run(args):
                        for case, config, n in jobs]
             for f in concurrent.futures.as_completed(futures):
                 f.result()
+        if PR_MODE:  # 子が検証用の PR に push していないか(禁じている操作)を、最後にまとめて確かめる
+            for case in cases:
+                info = case["github"]
+                r = subprocess.run([REAL_GH, "pr", "view", str(info["pr"]), "-R", info["repo"], "--json",
+                                    "headRefOid,comments,reviews", "--jq",
+                                    '"\\(.headRefOid) \\(.comments|length) \\(.reviews|length)"'],
+                                   capture_output=True, text=True)
+                head, _, counts = r.stdout.strip().partition(" ")
+                if head != info["head"] or counts != "0 0":
+                    log(f"warn: {case['id']}: 検証用の PR が変わった(head {head[:7]}、コメントとレビューの数 {counts})。"
+                        "子が push かコメントをした可能性がある")
     finally:
         if not args.keep:
             shutil.rmtree(root, ignore_errors=True)
@@ -363,6 +463,8 @@ def main():
     r.add_argument("--trials", type=int, default=3)
     r.add_argument("--jobs", type=int, default=4)
     r.add_argument("--model", default=MODEL, help=f"子のモデル(既定 {MODEL})")
+    r.add_argument("--pr", action="store_true",
+                   help="PR ありの形で回す(publish.py create で作った検証用の PR を、本番と同じ引数でレビューさせる)")
     r.add_argument("--keep", action="store_true", help="一時ディレクトリ(題材と試行の複製)を残す")
     r.set_defaults(fn=cmd_run)
     args = ap.parse_args()

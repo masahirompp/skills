@@ -1,0 +1,277 @@
+{
+ "case": "wn-308",
+ "cost_usd": 0.05751300000000001,
+ "clusters": [
+  {
+   "title": "契約ではキーを出す振る舞いを createWorkbench に書いているが、実際は workbenchOptions が置いて GUIDE で出し分けており、契約と実装が食い違っている",
+   "location": "docs/lib/tmux.md:31",
+   "members": [
+    "e1"
+   ],
+   "id": "wn-308/c1",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "lib/tmux/tmux.ts:313-318 で createWorkbench は workbenchOptions(s, name) を呼ぶので、createWorkbench で作った作業台には実際にキーが出る。契約の記述(docs/lib/tmux.md:31)は createWorkbench については正しい。足りないのは workbenchOptions の説明(GUIDE では出さない。src/cli/list.ts:68 が GUIDE で呼ぶ)で、これは契約の書き方の精度の問題。利用者が見る挙動は食い違わない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "PRODUCT.md の合成図が実際の描画(capture)から取ったものでなく手で書き換えられており、桁がずれうる",
+   "location": "docs/PRODUCT.md:442",
+   "members": [
+    "e2",
+    "e10"
+   ],
+   "id": "wn-308/c2",
+   "class": "wrong",
+   "scope": "na",
+   "ran": true,
+   "evidence": "使い捨ての tmux サーバに同じ status-format を置き、外側の tmux で幅33と34のクライアントを attach して capture-pane で取った。幅33は『workbench: fix-login  0:zsh*  · ^』、幅34は『… · ^Q』だった。図の右の分割は、枠の余白1桁と中身33桁でできている(他の行も ' $ docker…' のように1桁の余白から始まる)。最下行の『 workbench: fix-login  0:zsh*  · ^』は幅33の実際の描画と1字も違わず、桁もずれていない。手で書いたかどうかは手順の話で、『桁がずれうる』という主張は成り立たない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "「作業台では」の指す範囲が曖昧で、案内のセッションを除くことが明記されていない",
+   "location": "docs/lib/tmux.md",
+   "members": [
+    "e3"
+   ],
+   "id": "wn-308/c3",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/lib/tmux.md:31 の『作業台では』は文言の明確さの指摘。コード(lib/tmux/tmux.ts:337 の session === GUIDE の分岐)の挙動は変わらず、PRODUCT.md にも『案内を出しているときはセッション名だけ』と書いてある。挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "採らなかった形は実画面で示しているのに、採った形は括弧書きだけで実画面が並んでいない",
+   "location": "docs/PRODUCT.md",
+   "members": [
+    "e4"
+   ],
+   "id": "wn-308/c4",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/PRODUCT.md:555-562 で、採った形は括弧書きでだけ示している。CLAUDE.md の『見た目の決定』の手順に沿っているかという文書の書き方の指摘で、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "利用者向けのキー説明の文言を lib/tmux に直に書いており、使う側から渡す方針(@wn_keys など)とそろっていない",
+   "location": "lib/tmux/tmux.ts:340",
+   "members": [
+    "e5"
+   ],
+   "id": "wn-308/c5",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "lib/tmux/tmux.ts:340 に文言を直に書いているのは事実。ただ、claude の画面の @wn_keys(tmux.ts:301)を使う側から渡す形とそろっていないという、構造の好みの指摘。作業台のステータス行の表示は正しく出る(c2 で幅80のとき全部出ることを確かめた)。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "表示しているキーが tmux の prefix 表の既定バインドに頼っており、unbind などで表示だけ残って動かなくなっても検知するテストが無い",
+   "location": "lib/tmux/tmux.ts:340",
+   "members": [
+    "e6"
+   ],
+   "id": "wn-308/c6",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "lib/tmux/tmux.ts:125-127 で unbind しているのは wnq の表全体と、prefix の C-j と j だけ。%、\"、c の prefix の既定は残る。ATTACH_KEYS に bare の c も無い。今の時点では表示どおりにキーが効く。指摘は将来キーを足すか unbind したときに初めて起きる問題と、テストが無いことの話。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "典型の配置(34桁)ではステータス行が切れて、足したキーが1つも見えない",
+   "location": "docs/PRODUCT.md:442",
+   "members": [
+    "e7"
+   ],
+   "id": "wn-308/c7",
+   "class": "real",
+   "scope": "in",
+   "ran": true,
+   "evidence": "c2 と同じ再現で、幅33は『… 0:zsh*  · ^』、幅34は『… · ^Q』で切れ、足した3つのキーは1つも読めない。幅60でも『^Q% split │ · ^Q\" split ─ ·』までで、^Qc は出ない。全部出るのは幅80のとき。この差分の目的は、作業台を分けられることが分かるようにすることで、PRODUCT.md:556 は『続けると右から欠けるので、^Q% が最後まで残る』と書いている。しかし docs 自身の典型の配置(PRODUCT.md:442、作業台の画面33〜34桁)では ^Q% も残らず、目的を果たせない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "status-format の %% エスケープなどを確かめるテストが lib 側に無く、使い捨ての e2e にしか無い",
+   "location": "lib/tmux/tmux.test.ts:20",
+   "members": [
+    "e8",
+    "e14"
+   ],
+   "id": "wn-308/c8",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "lib/tmux/tmux.test.ts には serverConfig と parsePs のテストしか無く、status-format の %% や GUIDE の分岐を確かめるテストは無い。確かめているのは test/e2e/workbench.test.ts:117 だけ。テストが無いという指摘で、今の挙動は正しい(実機で % が出ることを確かめた)。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "ステータス行に tmux の既定キーを出す設計が DESIGN.md に反映されておらず、「tmux は利用者から隠す」とも食い違っている",
+   "location": "docs/DESIGN.md:230",
+   "members": [
+    "e9"
+   ],
+   "id": "wn-308/c9",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/DESIGN.md:230 は作業台のステータス行について「sh-<id> と案内のセッションにだけ出し、1行にする。whatnext の画面のステータス行とは別の書式にする」と書くだけで、中身(セッション名、窓の一覧)はもともと書いていない。中身は要件として docs/PRODUCT.md に書いてあり、差分でも更新している(PRODUCT.md:555-562、シナリオ 49)。DESIGN.md:206 の「tmux は利用者から隠す」は差分の前から、作業台で ctrl+q % を使うこと(シナリオ 26)や窓の一覧を出すことと並んで書かれていた。tmux の既定のキーを出しても、この文言が新たに利用者を誤らせることはない。文書の整え方の話で、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "e2e で案内のセッションにキーを出さないこと(およびウィンドウ2つの場合)を確かめていない",
+   "location": "test/e2e/workbench.test.ts:117",
+   "members": [
+    "e11",
+    "e13"
+   ],
+   "id": "wn-308/c10",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "テストが無いという指摘で、内容は事実。test/e2e/workbench.test.ts:25 は /workbench: alpha/ しか見ておらず、117行は窓が1つのときしか確かめていない。ただし実装はできている。lib/tmux/tmux.ts:337-340 では、session === GUIDE のときはキーの無い書式を使う。窓の一覧は #{W:...} で、窓の数によらず同じ書式でキーの前に展開される。挙動の問題ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "表示の `^Q` とプレフィックス設定 `C-q` が同じ事実を別々に持っており、プレフィックスを変えると表示が古いまま残る",
+   "location": "lib/tmux/tmux.ts",
+   "members": [
+    "e12"
+   ],
+   "id": "wn-308/c11",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "lib/tmux/tmux.ts:324 の 'prefix','C-q' と、340行の表示の文字列 '^Q%% split…' が、同じ事実を別々に持っているのは事実。ただし今はどちらも C-q で食い違っていない。問題になるのは将来プレフィックスを変えたときだけなので、分類の基準では trivial。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "狭い幅で右から欠けて ^Q% が残るという決定の要を確かめるテストが無い",
+   "location": "test/e2e/workbench.test.ts:117",
+   "members": [
+    "e15"
+   ],
+   "id": "wn-308/c12",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "テストが無いという指摘で、内容は事実(e2e は幅を狭めた場合を確かめていない)。挙動そのものは実機で確かめた。tmux 3.8 で、外側のサーバに幅60のペインを作り、その中で作業台の書式の sh-x に attach して capture-pane を取ると、名前が fix-login なら最下行は 'workbench: fix-login  0:zsh*  · ^Q% split │ · ^Q\" split ─ ·' で、右から欠けて ^Q% が残った。テストが無いだけで、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "@wn_name を切り詰めていないため、名前が長いと ^Q% を含むキーがまるごと消え、docs の「^Q% が最後まで残る」は言い過ぎになる",
+   "location": "docs/PRODUCT.md:557",
+   "members": [
+    "e16"
+   ],
+   "id": "wn-308/c13",
+   "class": "real",
+   "scope": "in",
+   "ran": true,
+   "evidence": "tmux 3.8 で、幅60の外側のペインから作業台の書式のセッションに attach して最下行を capture した。@wn_name を 'a-very-long-session-name-for-refactoring-auth'(45文字)にすると 'workbench: a-very-long-session-name-for-refactoring-auth  0:' となり、窓の一覧の途中で切れて ^Q% を含むキーがまるごと消えた。fix-login なら ^Q% は残る。lib/tmux/tmux.ts:331 の @wn_name は escapeFormat だけを通り、切り詰めていない。一方、docs/PRODUCT.md:557 は、右寄せを採らない理由として「続けると右から欠けるので、^Q% が最後まで残る」と言い切っている。名前が長いときは、退けた右寄せ(キーが右端に残る)のほうがキーを見せられるので、この決定の根拠が成り立たない場合がある。キーを見せて分けられることを知らせる、という差分の目的が果たせない場面が再現できた。docs の主張も実際と食い違う。",
+   "classified_by": "llm"
+  }
+ ],
+ "members": {
+  "e1": {
+   "dir": "wn-308/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 6
+  },
+  "e2": {
+   "dir": "wn-308/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 4
+  },
+  "e3": {
+   "dir": "wn-308/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 3
+  },
+  "e4": {
+   "dir": "wn-308/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 5
+  },
+  "e5": {
+   "dir": "wn-308/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e6": {
+   "dir": "wn-308/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 1
+  },
+  "e7": {
+   "dir": "wn-308/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 3
+  },
+  "e8": {
+   "dir": "wn-308/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 1
+  },
+  "e9": {
+   "dir": "wn-308/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 5
+  },
+  "e10": {
+   "dir": "wn-308/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 4
+  },
+  "e11": {
+   "dir": "wn-308/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 7
+  },
+  "e12": {
+   "dir": "wn-308/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 2
+  },
+  "e13": {
+   "dir": "wn-308/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 6
+  },
+  "e14": {
+   "dir": "wn-308/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 2
+  },
+  "e15": {
+   "dir": "wn-308/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 3
+  },
+  "e16": {
+   "dir": "wn-308/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 2
+  }
+ },
+ "classify_cost_usd": 0.9384948
+}

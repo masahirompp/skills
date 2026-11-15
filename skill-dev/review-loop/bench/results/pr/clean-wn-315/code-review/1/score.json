@@ -1,0 +1,41 @@
+{
+ "cost_usd": 0.0470776,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/ops/app.ts:853",
+   "summary": "カーソル行の cwd が存在しない場合に、無いパスが候補の先頭として選ばれ、claude --bg をその cwd で起動しようとして失敗する。",
+   "quote": "カーソルのある行の cwd がもう無いと(worktree を消したあとの停止済みの行など)、無いパスが候補の先頭に入って選ばれた状態になる。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "docs/PRODUCT.md:513",
+   "summary": "--json を読めないエラー中でも ctrl+q ctrl+n がいたセッションのリポジトリを先頭にするという新しい仕様を、確かめるテストが無い。",
+   "quote": "「ctrl+q ctrl+n は --json を読めずにエラーを出している間も、いたセッションのリポジトリを先頭にする」という仕様を新しく書いたが、確かめるテストがない。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/ops/app.ts:951",
+   "summary": "openNew のループで rootOfSid と同じ式を手で重複して書いており、寄せ方がずれると重複候補が残るおそれがある。",
+   "quote": "openNew のループで、this.p.locations.get(r.cwd)?.root ?? r.cwd を手で書いている。同じことをする rootOfSid がすぐ下にあり、463 行目にも同じ式がある。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/ops/app.ts:943",
+   "summary": "openNew の waitFor と preferredFrom の2つの引数が紛らわしく、両方渡すと preferredFrom が黙って無視されるため、1つの引数にまとめるべき。",
+   "quote": "waitFor と preferredFrom を両方渡すと preferredFrom は黙って無視される。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "docs/PRODUCT.md:591",
+   "summary": "決定の日付 2026-11-02 がコミット日と合わず、別の作業の日付を写した可能性がある。",
+   "quote": "決定の日付が「2026-11-02、利用者の判断」になっているが、コミット日(2026-11-15)と合わない。",
+   "quote_ok": true
+  }
+ ]
+}

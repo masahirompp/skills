@@ -8,5 +8,9 @@
     "path": ".",
     "base": "86d7cb6",
     "head": "a1bccb6"
+  },
+  "pr": {
+    "repo": "masahirompp/skills",
+    "number": 16
   }
 }

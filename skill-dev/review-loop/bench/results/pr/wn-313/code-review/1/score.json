@@ -1,0 +1,105 @@
+{
+ "cost_usd": 0.1131896,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "partial",
+   "quote": "そのあと一覧の `doFollow` の `switchClient(wb, GUIDE)` と、`sh-*` の最後のシェルの `switch-client -t =wbguide` はどちらも失敗する。このため、作業台を畳んだときにも作業台の画面ごと離れる。",
+   "reason": "wbguide が消えたあとに doFollow と sh-* の切り替えが失敗して画面が離れるという場所と結果は合っているが、案内を作り直すのが一覧の起動時と attach 前だけだという原因には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "`@wn_respawned` を元に戻す処理がないので、上限の5回は「立て続けに落ちた回数」ではなく、ペインの一生の合計になっている。",
+   "reason": "@wn_respawned が通算で数えられて数え直されないため、散発的に落ちるだけでも上限に達して案内が畳まれる、と指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "attach の結果の判定で、シグナルで終わり status が null になる場合を誤ってエラーと扱う点への指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "detected",
+   "quote": "`pane-died` の `wbguide)` の分岐が、案内のプログラムのペインに限らず、案内のセッションにあるすべてのペインを起動し直してしまう。",
+   "reason": "wbguide の分岐が案内のペインと利用者が分割したペインを区別せず、どのペインも起動し直すと指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなった点への指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定しているため、案内のペインがない場合に作り直されない点への指摘はない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/ops/app.ts:1475",
+   "summary": "頼みごと guide の処理で doFollow が早く戻る経路では、作り直した案内に @wn_name が入らず、ステータス行が空になる。",
+   "quote": "頼みごと `guide` は `lastGuide` を消して `follow()` を呼ぶだけで、`doFollow` が早く戻る経路では、作り直した案内に名前(`@wn_name`)が入らない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/cli/workbench.ts:22",
+   "summary": "whatnext workbench が案内を作り直すとき、一覧ではなく自分のプロセスの node・cli・PATH を使うので、一覧と版がずれうる。",
+   "quote": "`whatnext workbench` が案内のセッションを作り直すとき、`paneCommand(env, 'guide')` には、一覧ではなく `whatnext workbench` のプロセスの `node`、`cli`、`PATH`、`LANG` が入る。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/cli/workbench.ts:43",
+   "summary": "askListToRefreshGuide が guide.ts と同じ頼みごとの送信手順を重複して書いており、変更したときにずれる恐れがある。",
+   "quote": "`askListToRefreshGuide` は、`guide.ts` の Enter の処理と同じ手順(`@wn_req_<秒>_<pid>` を置き、`@wn_pid` を読み、SIGUSR2 を送る)をもう一度書いている。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/cli/list.ts:67",
+   "summary": "ensureGuide と startList が workbenchOptions を重ねて呼んでおり、どちらが責任を持つのかがはっきりしない。",
+   "quote": "`ensureGuide` は作ったときに `workbenchOptions(GUIDE, '')` を呼ぶのに、`startList` がその直後にもう一度同じ呼び出しをしている。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "lib/tmux/tmux.ts:48",
+   "summary": "案内のプログラムが終わる根本の原因を調べず起動し直しで症状を抑えており、例外も記録されない。",
+   "quote": "根本の原因(案内のプログラムがなぜ終わるか)を調べないまま、起動し直しで症状を抑えている。原因の手がかりも画面の末尾5行に限られる。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "docs/DESIGN.md:229",
+   "summary": "観測できる挙動の変更を DESIGN.md にだけ書き、PRODUCT.md を直していない。",
+   "quote": "観測できる挙動の変更(新しいエラーの文言、分割でキーを待つこと、案内の作り直し)を DESIGN.md にだけ書き、PRODUCT.md(490行、シナリオ 59)を直していない。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "test/e2e/workbench.test.ts:255",
+   "summary": "テストが macOS のシグナル名の形や zsh が入っていることに頼っており、Linux では落ちる。",
+   "quote": "`/signal=kill/` は、macOS の `sys_signame`(小文字)に頼っている。test/unit/cli.test.ts の `it.each(['bash','zsh','sh'])` も、zsh が入っている前提になっている。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "",
+   "summary": "@wn_guide_pid を書く箇所がどこにもないので、signalGuide は何もしない。",
+   "quote": "`@wn_guide_pid` を書いている箇所がどこにもありません。そのため `signalGuide` は何もせず、案内は300msごとに読み直す処理だけで更新されています。",
+   "quote_ok": true
+  }
+ ]
+}

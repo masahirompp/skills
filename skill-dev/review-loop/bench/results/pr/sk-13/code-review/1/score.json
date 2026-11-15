@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.0997296,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--perspective の空白を正規化しないまま起動プロンプトを作り、照合結果と食い違うという指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "判定役の入力に追加の指示のブロックを足したが、JUDGE_PROMPT にはその扱いが書かれていない。判定役が、自分への指示と受け取るか、指示で外した範囲を観点の欠落と判定するおそれがある。",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いがなく、指示で外した範囲を観点の欠落と判定しうる、と正解と同じ原因と結果を述べている。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "既定の観点と同じかどうかをスキル名の並びだけで比べている。引数の違いは状態に残らず、並び順が違うだけでも「既定と違う」と記録される。",
+   "reason": "引数を無視したスキル名だけの比較と、並び順による誤検出の両方を、正解と同じ場所で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が外した観点に --instruct を渡していて終了コード2になる、という指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "detected",
+   "quote": "perspectives の検証が「要素を順に取り出せて、各要素が str」かどうかしか見ておらず、リストかどうかを確かめていない。文字列が通ってしまう。",
+   "reason": "valid_state がリストかどうかを確かめず文字列が通る、と正解と同じ原因と結果を述べている。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt だけで渡すためサブエージェントに指示が届かない、という指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "partial",
+   "quote": "指示の本文を区切り行の中にそのまま書いている。本文に区切り行と同じ形の文字列が入っていると、判定役の入力の区切りが崩れる。",
+   "reason": "同じ区切りで混ぜると取り違えが起きる、という場所は合っているが、指示の本文の側が区切りを崩す話として述べており、レビュー出力が本物の指示を偽装しうるという正解の原因とは向きが違う。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭の `/` を取り除かないため照合や事前確認で失敗する、という指摘はない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/scripts/review_loop.py:962",
+   "summary": "--instruct で範囲を絞った試行が状態コメントに残らず、次の反復で付け忘れると警告なしに既定へ戻る。",
+   "quote": "--instruct で範囲を絞った試行が状態コメントに一切残らない。スクリプトは反復をまたいでオプションを覚えないので、付け忘れると黙って既定に戻る。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/scripts/review_loop.py:749",
+   "summary": "利用者の指示を優先するよう添えているが、NO_MUTATION の制約より下だと明示していないため、レビュー役が編集を始めうる。",
+   "quote": "利用者の指示を「スキルの手順と食い違うときは優先」と添えているが、作業ツリーを変えないという制約(NO_MUTATION)より下だとは明示していない。指示の内容によっては、レビュー役が編集を始めうる。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/review-loop/scripts/review_loop.py:412",
+   "summary": "--perspective では {pr} を置き換えるのに --instruct の本文では置き換えず、書き方の規則が食い違う。",
+   "quote": "--perspective では `{pr}` を置き換えるが、--instruct の本文では置き換えない。同じ起動行の中で書き方の規則が食い違う。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/review-loop/scripts/review_loop.py:409",
+   "summary": "観点名の一覧を何度も作り直しており、一度だけ作って使い回すべき(cleanup)。",
+   "quote": "同じ観点名の一覧を何度も作り直している。",
+   "quote_ok": true
+  }
+ ]
+}

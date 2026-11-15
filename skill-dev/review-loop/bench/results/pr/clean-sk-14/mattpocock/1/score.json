@@ -1,0 +1,55 @@
+{
+ "cost_usd": 0.092644,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "コミット 8a3b4f6(コミットの範囲)",
+   "summary": "コミットの件名(mktemp/TMPDIR)と関係しない fail-open の修正が6つ混ざっているので、件名を変えるかコミットを分けるべきだという指摘。",
+   "quote": "件名は「mktemp の失敗で止まり、一時ディレクトリを TMPDIR に従わせる」です。しかし実際には、件名と関係しない fail-open の修正が少なくとも6つ入っています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "lib.sh hk_path_in_use / scan.sh:165",
+   "summary": "hk_path_in_use の戻り値の文字列が「使用中」と「判定できない」の2つの意味を兼ねており、理由の表示が曖昧で関数名とも合わないので、終了コードで分けるべきだという指摘。",
+   "quote": "`hk_path_in_use` の戻り値の文字列が、2つの意味を兼ねています。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "scan.sh parse_pr_info / lib.sh hk_parse_action",
+   "summary": "1行の出力をグローバル変数に切り分ける同じ形の関数が2つある(軽度。今はまとめなくてよいとしている)。",
+   "quote": "「1行の出力をグローバル変数に切り分ける」という同じ形の関数が2つあります(scan.sh の `parse_pr_info` と lib.sh の `hk_parse_action`)。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "lib.sh hk_protect_patterns",
+   "summary": "hk_protect_patterns が local を2行に分けており、既存の関数の書き方(1行)と揃っていない。",
+   "quote": "`hk_protect_patterns` は `local` を2行に分けています。既存の関数は1行にまとめています。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test.sh:164 / lib.sh:96 / apply.sh:42",
+   "summary": "lsof が使えない場合のテストが不十分で、偽の lsof は exit 1 の1通りだけ、自分自身が一覧に無い場合も apply.sh の skipped 経路も確かめていない。",
+   "quote": "一覧は出るのに自分自身が無い場合(`lib.sh:96` の `$1 == self`)は確かめていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "scan.sh:20",
+   "summary": "jq が無いときに止まる処理にテストが無い。",
+   "quote": "本文の「jq が無い…ときは止まる」は `scan.sh:20` に実装されていますが、テストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "lib.sh hk_path_in_use(lsof の自己確認の基準)",
+   "summary": "自分自身は見えるが他のプロセスは見えないサンドボックス環境では lsof の確認を通ってしまい、使用中の worktree を削除する側に倒れる恐れがある。",
+   "quote": "サンドボックスの中で自分は見えるが、ほかのプロセスは見えない環境では、この確認を通ってしまいます。",
+   "quote_ok": true
+  }
+ ]
+}

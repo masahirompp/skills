@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.10562960000000002,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "detected",
+   "quote": "`source == \"config\"` の拒否をすべて止めない扱いにしているが、`reason_type` を見ていない。そのため、-p で許可ルールに当たらずに自動で拒否されたもの(前提違反)まで警告扱いになり、試行が成功したことになるおそれがある。",
+   "reason": "source == config だけで止めない拒否とみなし reason_type を見ないため、ルールの一部に当たっただけではない拒否も通ると、同じ場所と原因を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "detected",
+   "quote": "tool_use_id のない source=config のイベントが1つあると seen に None が入る。その後、tool_use_id のない本当の拒否が result の permission_denials に載っても既に記録済みとみなされ、止まらない。",
+   "reason": "tool_use_id が None のまま config_denied/seen に入り、result の id なしの拒否まで除外されるという仕組みを正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "detected",
+   "quote": "判定役の result の行もすべてつなぐようになったため、見出しの前の前置きは落とせても、判定より後ろの行は落とせない。",
+   "reason": "run_judge が result の行を全てつないだテキストを使うため、判定の出し直しや後の短い文が混ざると指摘しており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "detected",
+   "quote": "途中の行が is_error やエラーの subtype(API エラーの文など)でも、その文がそのままレビューの出力として判定役に渡る。",
+   "reason": "check_result が is_error の行を除かずにつなぐので、エラー文が本文に入り成功扱いになると指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "別の観点の失敗で抜けたとき、まだ動いている子の止めない拒否が記録されないという指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "child_error の詳細に、最後の行ではなく、つないだ本文の先頭500字が載るという指摘はない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/scripts/review_loop.py:305",
+   "summary": "parent_tool_use_id の付いたサブエージェントの result の行を丸ごと捨てるので、その行の permission_denials を確かめず、拒否を見落とすおそれがある。",
+   "quote": "parent_tool_use_id の付いた result の行(サブエージェントのもの)は丸ごと捨てているので、その行の permission_denials も確かめなくなった。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/scripts/review_loop.py:786",
+   "summary": "run_judge の待機ループが run_reviews の内側のループの写しになっており、片方だけ直すと振る舞いがずれる。",
+   "quote": "run_judge の待機ループ(tail.poll、watch_denials、制限時間の判定、sleep、finish、もう一度 poll と watch_denials)が、run_reviews の内側のループとほぼ同じコードの写しになっている。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/review-loop/scripts/review_loop.py:708",
+   "summary": "子が終わっているときに watch_denials が重ねて呼ばれ、708行目の呼び出しが無駄で、どちらが記録を担うのか読み取りにくい。",
+   "quote": "子が終わっているとき(rc が None でないとき)、708行目の watch_denials(running=False) と716行目の呼び出しが重なっていて、708行目のほうは役に立っていない。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skill-dev/review-loop/test.py:503",
+   "summary": "偽の claude がどの行にも同じ modelUsage を入れるため、トークン数を最後の行だけで数えるテストは、累計という前提が外れても通ってしまう。",
+   "quote": "トークン数を最後の result の行の modelUsage だけで数えることのテストは、偽の claude がどの行にも同じ値を入れているので、「modelUsage はセッションの累計」という前提が外れても通ってしまう。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/review-loop/scripts/review_loop.py:252",
+   "summary": "check_result が拒否の要約を自前で組み立てており、StreamTail.summary と重複している。",
+   "quote": "check_result が tool_name と tool_input の dict を自前で組み立てているが、StreamTail.summary と同じことをしている(重複)。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/review-loop/scripts/review_loop.py:242",
+   "summary": "途中経過の文が入る原因(バックグラウンドのサブエージェント)の手前で直さず、全ての result の行をつなぐ後追いの対処になっていて、judge-input.md などに途中経過の文が入る。",
+   "quote": "途中経過の文が入る原因は子がサブエージェントをバックグラウンドで動かすことなのに、その手前で直さず、すべての子のすべての result の行をつなぐという後追いの対処になっている。",
+   "quote_ok": true
+  }
+ ]
+}

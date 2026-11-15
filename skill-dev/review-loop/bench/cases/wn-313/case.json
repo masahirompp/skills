@@ -3,6 +3,23 @@
   "kind": "ts",
   "repo_name": "whatnext",
   "branch": "wbguide-recover",
-  "source": {"type": "repo", "path": "~/ghq/github.com/masahirompp/whatnext", "base": "0771970", "head": "d212b82"},
-  "setup": [["npm", "ci", "--silent", "--no-audit", "--no-fund"]]
+  "source": {
+    "type": "repo",
+    "path": "~/ghq/github.com/masahirompp/whatnext",
+    "base": "0771970",
+    "head": "d212b82"
+  },
+  "setup": [
+    [
+      "npm",
+      "ci",
+      "--silent",
+      "--no-audit",
+      "--no-fund"
+    ]
+  ],
+  "pr": {
+    "repo": "masahirompp/whatnext",
+    "number": 313
+  }
 }

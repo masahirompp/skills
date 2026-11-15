@@ -1,0 +1,514 @@
+{
+ "case": "wn-313",
+ "cost_usd": 0.077877,
+ "clusters": [
+  {
+   "title": "Ghostty の分割から起動したときのキー待ちを確かめる e2e テストがない",
+   "location": "e2e",
+   "members": [
+    "e1"
+   ],
+   "id": "wn-313/c1",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "test/e2e/workbench.test.ts に WHATNEXT_WORKBENCH_SPLIT を渡すテストがないのは事実。ただし、これはテストが無いという指摘で、挙動の誤りではない。キー待ちの本体は src/cli/workbench.ts の fail() で、env が '1' で stdin が TTY のときだけ待つ。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "sleep 1 の間 ensureGuide が 'exists' を返すため、attach 時に「Pane is dead」が最大1秒見える",
+   "location": "lib/tmux/tmux.ts:56-57",
+   "members": [
+    "e2"
+   ],
+   "id": "wn-313/c2",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "tmux -L <tmp> -f /dev/null で remain-on-exit on のペインを exit 3 で終わらせて capture-pane を取ると『Pane is dead (status 3, ...)』が出た。lib/tmux/tmux.ts の GUIDE の分岐は sleep 1 のあと respawn-pane するので、その間はセッションがあり、ensureGuide は 'exists' を返す。つまり主張は事実だが、見えるのは最大1秒だけで、そのあと案内は起動し直る(e2e の『案内のプログラムが終わっても…起動し直す』でクライアントが wbguide に残ることを確かめている)。誤った結果や失敗が残るわけではないので、一時的な見た目の問題にとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "whatnext is not running の経路も fail() を通るようになり、不要なキー待ちが増えた",
+   "location": "src/cli/workbench.ts fail()",
+   "members": [
+    "e3"
+   ],
+   "id": "wn-313/c3",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/cli/workbench.ts の『whatnext is not running』の経路が return await fail() になったのは事実。ただし fail() がキーを待つのは WHATNEXT_WORKBENCH_SPLIT=1 のとき(Ghostty の分割から exec で起動したとき)だけで、そのときは待たないと分割ごと閉じて、エラーが読めない。これは fail() の目的(DESIGN.md の『キーを待ってから終わる』)と合っている。手で打った whatnext workbench には影響しない。不具合ではなく、設計の範囲の話。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "案内を作り直すとき一覧ではなく呼び出し側プロセスの環境(node・cli・PATH・CLAUDE_CONFIG_DIR)を使うので、一覧と別の版の案内になりうる",
+   "location": "src/cli/guide.ts:18",
+   "members": [
+    "e4",
+    "e12",
+    "e14"
+   ],
+   "id": "wn-313/c4",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/cli/guide.ts の ensureGuide は paneCommand(env,'guide') を呼ぶ。env は呼んだ側のプロセスの readEnv で、PATH などは process.env から入る(src/cli/env.ts paneCommand)。なので主張は事実。ただし、分割から起動したときは、一覧が渡す workbenchCommand(env) に一覧の node と cli が入るので、版は同じになる。版がずれるのは、利用者が別の checkout や npx で手で打ったときだけ。案内のプログラム(guide())が使うのは tmux のソケット、@wn_guide の JSON、頼みごとの書式だけで、CLAUDE_CONFIG_DIR は読まない。今の版の組み合わせで壊れる具体的な経路は示されていない。版の間で書式が変わって初めて問題になるので、将来の変更に依存する指摘とした。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "頼みごと guide の処理で doFollow が早く戻ると @wn_name が入らず、ステータス行が空になる",
+   "location": "src/ops/app.ts:1475",
+   "members": [
+    "e5"
+   ],
+   "id": "wn-313/c5",
+   "class": "real",
+   "scope": "in",
+   "ran": false,
+   "evidence": "src/ops/app.ts の request() の GUIDE_REFRESH は lastGuide=undefined; follow() だけを行う。doFollow(1467行〜)は、!this.wbTty のときと、mainSession が LIST でも claude のセッションでもないとき(例: trust() が whatnext の画面を信頼の確認のセッションに切り替えている間、1068行付近の trust)に、setSessionName(GUIDE, ...) の前で return する。作り直した wbguide には @wn_name がないので、ステータス行が『workbench: 』の空のまま残る。名前が入るのは、次に follow() が呼ばれたとき(カーソルの移動や attach)まで。この経路は差分で入った作り直しが原因なので in とした。ただし条件は狭く、一時的なもの。実機での再現はしていない(信頼の確認の最中に案内を消して whatnext workbench を打つ、という状況を作る必要があるため)。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "実測で分かった tmux の罠2つが working-with-tmux スキルに足されていない",
+   "location": "working-with-tmux スキル",
+   "members": [
+    "e6"
+   ],
+   "id": "wn-313/c6",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "指摘はスキル文書(.claude/skills の working-with-tmux)に学びが足されていないというもので、プログラムの挙動には関わらない。差分は docs/DESIGN.md と docs/lib/tmux.md に罠(exec の重複、pane-died で案内が消える)を書いている。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "頼みごとの種類が文字列直書きの if 連鎖で、足し忘れが再発しうる",
+   "location": "app.ts",
+   "members": [
+    "e7"
+   ],
+   "id": "wn-313/c7",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/ops/app.ts の request() が parts[0] === '...' の if を並べているのは書き方と構造の好みの話で、将来足し忘れたときに初めて問題になる。今回足した GUIDE_REFRESH は names.ts の定数で、正しく分岐している。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "案内の分岐のテストが回数の境目を確かめていない",
+   "location": "lib/tmux/tmux.test.ts:75-81",
+   "members": [
+    "e8"
+   ],
+   "id": "wn-313/c8",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "lib/tmux/tmux.test.ts の新しいテストは toContain('-lt 5') の文字列の確認で、回数の境目を実行では確かめていないのは事実。ただし、これはテストの強さの指摘。実装(lib/tmux/tmux.ts の if [ \"$n\" -lt 5 ] と set @wn_respawned n+1)は、docs/lib/tmux.md の『5回まで』のとおり。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "docs/lib/tmux.md の「名前の約束」に guide と @wn_guide_died / @wn_respawned が反映されていない",
+   "location": "docs/lib/tmux.md",
+   "members": [
+    "e9"
+   ],
+   "id": "wn-313/c9",
+   "class": "wrong",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/lib/tmux.md:19(差分で追加)に「終わったときの時刻と終了の状態と画面の末尾を `@wn_guide_died` に残す」「ペインごとに 5 回まで」と書かれており、@wn_guide_died は反映済み。@wn_respawned は回数を数えるための内部の値で、名前は出ていないが、5回の上限という挙動は書かれている。頼みごと `guide` を書くのは lib のキーやフックではなく src/cli/workbench.ts の askListToRefreshGuide で、名前も src/ops/names.ts の GUIDE_REFRESH にある。tmux.md:10 の一覧は「キーとフックは…」として lib が書く頼みごとを並べたものなので、lib の契約に載せる対象ではない。この頼みごとは DESIGN.md に書かれている。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "ensureGuide と startList が workbenchOptions を重ねて呼び、責任の所在が不明",
+   "location": "src/cli/list.ts:67",
+   "members": [
+    "e10",
+    "e31"
+   ],
+   "id": "wn-313/c10",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/cli/guide.ts の ensureGuide は 'created' のときに workbenchOptions(GUIDE,'') を呼び、src/cli/list.ts:67 もその直後にもう一度呼ぶ。指摘のとおり重なっている。ただ workbenchOptions(lib/tmux/tmux.ts:361)は tmux の set を出すだけで、2回呼んでも結果は同じ。挙動には影響がなく、責任の分け方の問題にとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "起動直後に落ちる原因だと、上限到達後に ensureGuide が同じコマンドで作り直して落ちるのを繰り返す",
+   "location": "src/cli/guide.ts ensureGuide",
+   "members": [
+    "e11"
+   ],
+   "id": "wn-313/c11",
+   "class": "wrong",
+   "scope": "na",
+   "ran": false,
+   "evidence": "ensureGuide を呼ぶのは、一覧の起動時(list.ts startList)と、利用者が `whatnext workbench` を実行したとき(workbench.ts)だけ。pane-died のフック(lib/tmux/tmux.ts:48-61)は5回を超えると kill-pane するだけで、ensureGuide にはつながらない。そのため、上限を使い切ったあとに自動で作り直して落ちる、が繰り返されることはない。起きるのは、利用者が workbench を実行するたびに、最大6回の起動と1秒の待ちで止まるところまでで、回数に上限がある。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "e2e テストが macOS のシグナル名(小文字 signal=kill)や zsh の存在に依存し、Linux で落ちる",
+   "location": "test/e2e/workbench.test.ts:255",
+   "members": [
+    "e13",
+    "e21"
+   ],
+   "id": "wn-313/c12",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "tmux 3.8(macOS)で、remain-on-exit on のペインを SIGKILL し、`#{pane_dead_signal}` を表示すると `signal=kill` になった。名前の形は sig2name/sys_signame に頼っており、Linux では数字になる見込みなので、事実としては正しい。ただ、このリポジトリには CI(.github/workflows)がなく、製品も Ghostty の AppleScript など macOS を前提にしている。影響はテストの移植性に限られ、利用者の挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "案内が6回目に kill-pane されると tmux の終了コード次第で誤って「could not open」と出る",
+   "location": "src/cli/workbench.ts",
+   "members": [
+    "e15"
+   ],
+   "id": "wn-313/c13",
+   "class": "wrong",
+   "scope": "na",
+   "ran": true,
+   "evidence": "別の tmux サーバのペインの中から `tmux -L I attach -t =g` を実行した(detach-on-destroy on、ほかに list セッションあり)。そのうえで `kill-pane -t g` でセッションを消すと、画面には `[exited]` が出て、終了コードは rc=0 だった。workbench.ts の条件 `res.status !== 0 && hasSession(LIST)` は成り立たないので、「could not open」は出ない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "@wn_guide_pid を書く箇所がなく、signalGuide が何もしない",
+   "location": "lib/tmux/tmux.ts:400",
+   "members": [
+    "e16",
+    "e26"
+   ],
+   "id": "wn-313/c14",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "grep の結果、@wn_guide_pid を読むのは lib/tmux/tmux.ts:400 だけで、書く箇所はない。main でも同じ(main の tmux.ts:386)。ただ guide.ts は setInterval で 300ms ごとに読み直しており、DESIGN.md:49 にも「送るシグナルは契約にないので…0.3 秒ごとにも読み直す(#275)」と、この前提で設計したと書かれている。利用者に見えるのは最大0.3秒の遅れだけで、文書どおりに動いている。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "同時作成時に相手側の workbenchOptions が未設定で、既定のステータス行が一瞬見えうる",
+   "location": "src/cli/guide.ts:19-20",
+   "members": [
+    "e17"
+   ],
+   "id": "wn-313/c15",
+   "class": "undetermined",
+   "scope": "na",
+   "ran": false,
+   "evidence": "経路そのものはある。ensureGuide の new-session が同時に作られて失敗すると 'exists' を返し、workbench.ts はオプションを入れずに attach する。相手(一覧の startList)の workbenchOptions がまだなら、既定のステータス行が一瞬出うる。一覧の側も 'exists' に関係なくすぐ workbenchOptions を呼ぶので、見えるのはごく短い間だけ。狙って起こせないタイミングなので、再現していない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "案内が終わる根本原因を調べず再起動で症状を抑えており、例外も記録されない",
+   "location": "lib/tmux/tmux.ts:48",
+   "members": [
+    "e18"
+   ],
+   "id": "wn-313/c16",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "根本の原因が分かっていないことは、DESIGN.md の差分に「案内のプログラムがなぜ終わったかは、まだ分かっていない(@wn_guide_died はその手がかりを残すため)」と明記されている。進め方への意見で、コードの誤りではない。guide.ts に uncaughtException の処理はない。ただ Node の既定の動作で、例外のスタックはペインの標準エラーに出て、@wn_guide_died の画面の末尾5行に入りうる。まったく記録されないわけではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "テストのファイル名が実際に確かめている中身より広い",
+   "location": "test/unit/cli.test.ts",
+   "members": [
+    "e19"
+   ],
+   "id": "wn-313/c17",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "test/unit/cli.test.ts は splitWorkbench と workbenchCommand の組み合わせだけを確かめている(差分で確認)。指摘の内容は事実だが、ファイル名の付け方の話で、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "attach が0以外で終わり一覧も消えていた場合の終了コードが、仕様に書かれないまま 0 に変わった",
+   "location": "src/cli/workbench.ts",
+   "members": [
+    "e20"
+   ],
+   "id": "wn-313/c18",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/cli/workbench.ts では、res.status!==0 で一覧(LIST)が消えていると、エラーの分岐を通らずに return 0 になる。main では res.status ?? 0 を返していたので、変化があるのは事実。ただし DESIGN.md の追記(「whatnext の終了でサーバごと閉じたときも tmux は 0 以外で終わるので、一覧があるかで見分ける」)は、この場合を失敗として扱わないことを意図して書いている。PRODUCT.md にこの場合の終了コードの約束はなく、利用者が誤って受け取る食い違いもない。意図した変更で、問題になる挙動ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "askListToRefreshGuide が guide.ts や lib の頼みごと送信手順と重複し、@wn_pid 等の文字列も散らばっている",
+   "location": "src/cli/workbench.ts:43",
+   "members": [
+    "e22",
+    "e24"
+   ],
+   "id": "wn-313/c19",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "askListToRefreshGuide(src/cli/workbench.ts:43)と src/cli/guide.ts 74〜80行は、どちらも @wn_req_<秒>_<pid> を置き、@wn_pid を読み、SIGUSR2 を送る同じ手順で、重複は事実。ただし今の挙動はどちらも正しく、将来どちらかだけを変えたときに初めて問題になる、重複と構造の話。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "Ghostty + bash の実機テストを流しておらず、bash 固有の exec 重複の修正を確かめていない",
+   "location": "test/real",
+   "members": [
+    "e23"
+   ],
+   "id": "wn-313/c20",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "実機の test/real を流していないという、検証のやり方の指摘で、コードの欠陥を示していない。`npx vitest run test/unit/cli.test.ts` は 4件とも通った。この中には、打ち込む文字列を bash・zsh・sh の -c で実行し、exec が1つだけで正しく動くことを確かめるテストも含まれる。bash で起きていた `exec exec` の重複は、これで直っていると確かめられた。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "観測できる挙動の変更(新しいエラー文言・キー待ち)を PRODUCT.md に反映していない",
+   "location": "PRODUCT.md",
+   "members": [
+    "e25",
+    "e29"
+   ],
+   "id": "wn-313/c21",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/PRODUCT.md の490行とシナリオ59(771行)は「whatnext が動いていないとき、`whatnext is not running. Start whatnext first.` と示して終了コード 1」と書いている。fail() はキーを待つ場合も最後に 1 を返すので、終了コードとメッセージは記述どおりで、食い違わない。キーを待つのは WHATNEXT_WORKBENCH_SPLIT=1 のとき、つまり一覧が作った Ghostty の分割から起動したときだけで、一覧が動いていない場面とはほぼ重ならない。案内を作れなかったときの新しい文言が PRODUCT.md に書かれていないのは事実だが、利用者が誤って受け取る記述ではなく、文書の網羅の話。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "sh 本文を indexOf で切り出し文字列断片で確かめるテストが脆い",
+   "location": "lib/tmux/tmux.test.ts",
+   "members": [
+    "e27"
+   ],
+   "id": "wn-313/c22",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "lib/tmux/tmux.test.ts は indexOf(`${GUIDE})`) と lastIndexOf('*)') で本文を切り出し、文字列の断片を toContain で確かめている。テストの書き方が脆いという好みの話で、製品の挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "DESIGN.md の未解明点の記述が issue を参照せず、issue #1 にラベルもマイルストーンもない",
+   "location": "DESIGN.md / issue #1",
+   "members": [
+    "e28"
+   ],
+   "id": "wn-313/c23",
+   "class": "wrong",
+   "scope": "na",
+   "ran": true,
+   "evidence": "`gh issue view 1` を実行した。issue #1 は「サイクル1 実装の進め方」で、ラベル decision-log とマイルストーン cycle-1 が付いており、「ラベルもマイルストーンもない」という主張は事実と食い違う。#1 は案内のプログラムが終わる原因とも関係がない。DESIGN.md の該当の文が issue を参照していないのは事実だが、それ自体は挙動に関わらない文書の書き方の話。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "fail() が環境変数を readEnv を通さず直接読んでいる",
+   "location": "src/cli/workbench.ts fail()",
+   "members": [
+    "e30"
+   ],
+   "id": "wn-313/c24",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/cli/env.ts の readEnv が扱うのは socket・port・version・node・cli だけで、WHATNEXT_WORKBENCH_SPLIT の正規化はしない。この値を置くのは src/ops/app.ts:1444 の '1' だけで、fail() の `!== '1'` の判定とずれは起きない。読み方の一貫性の話で、挙動には関わらない。",
+   "classified_by": "llm"
+  }
+ ],
+ "members": {
+  "e1": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 11
+  },
+  "e2": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 3
+  },
+  "e3": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 12
+  },
+  "e4": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 1
+  },
+  "e5": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e6": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 4
+  },
+  "e7": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 7
+  },
+  "e8": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 5
+  },
+  "e9": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 1
+  },
+  "e10": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 6
+  },
+  "e11": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 7
+  },
+  "e12": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 14
+  },
+  "e13": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 7
+  },
+  "e14": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 2
+  },
+  "e15": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 15
+  },
+  "e16": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 8
+  },
+  "e17": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 4
+  },
+  "e18": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 5
+  },
+  "e19": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 10
+  },
+  "e20": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 13
+  },
+  "e21": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 2
+  },
+  "e22": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 5
+  },
+  "e23": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 8
+  },
+  "e24": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 3
+  },
+  "e25": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 2
+  },
+  "e26": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 6
+  },
+  "e27": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 9
+  },
+  "e28": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 3
+  },
+  "e29": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 6
+  },
+  "e30": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 8
+  },
+  "e31": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 4
+  }
+ },
+ "classify_cost_usd": 1.522523
+}

@@ -1,0 +1,296 @@
+{
+ "case": "sk-16",
+ "cost_usd": 0.061489,
+ "clusters": [
+  {
+   "title": "出力形式に「差分の内」で「確かめられなかった」と注記する場所が無く、親が決め直せない。",
+   "location": "review_loop.py:863, review_loop.py:879",
+   "members": [
+    "e1"
+   ],
+   "id": "sk-16/c1",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "review_loop.py:863 は確かめられなければ「差分の内」とし、確かめられなかったと書くよう指示している。879 の雛形は「差分の内 / 差分の外。<差分の外なら根拠>」で、その後ろには自由に書ける。根拠の欄(878)もある。書く場所が全く無いわけではなく、雛形の文言が本文の指示を写しきっていないだけ。注記が無くても既定は「差分の内」なので PR の中で直す安全な側に倒れる。SKILL.md:107 によって、親はいつでも自分で決め直せる。プロンプトの書き方の問題で挙動は変わらない。LLM の出力の揺れに当たるので、実行では確かめていない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "issue にするかを尋ねて作成する段落は、仕様に無いスコープの膨張である。",
+   "location": "SKILL.md:134",
+   "members": [
+    "e2"
+   ],
+   "id": "sk-16/c2",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "gh pr view は失敗した(GitHub のリモートが無い)ので PR 本文は読めなかった。この段落(SKILL.md:134)はコミット a1bccb6『差分の外の指摘を、終了時に issue にするか尋ねる』で意図して足されたもの。issue は尋ねてから、言われたものだけ作るので、勝手な外部への操作は起きない。スコープの話は挙動の誤りではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "「実行では示せない」の例の列挙が2か所に重複しており、食い違うおそれがある。",
+   "location": "SKILL.md:103, review_loop.py:865",
+   "members": [
+    "e3"
+   ],
+   "id": "sk-16/c3",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:103 と review_loop.py:865 に同じ例(文書の書き方、外部のサービス、狙って起こせないタイミング)があるのは事実。今は食い違っていない。食い違うのは将来どちらか片方だけを直したときで、重複の指摘に当たる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "競合状態の指摘を1回試して起きなかっただけで「起きなかった」として捨てられる抜け道がある。",
+   "location": "SKILL.md:102-103",
+   "members": [
+    "e4"
+   ],
+   "id": "sk-16/c4",
+   "class": "real",
+   "scope": "in",
+   "ran": false,
+   "evidence": "SKILL.md で経路を追った。103 行は、実行で示せない扱いを『手段がないときだけ』に限り、試すことを求めている。だから親は競合状態でもまず試す。1回走らせて起きなければ、102 行『再現を試みたが、起きなかった: 採らない。「起きうる」という推論だけでは採らない』が文字どおり当てはまる。126 行は『再現を試みて起きなかった指摘は、影響の段階に関係なく継続の理由にしない』。影響が高の競合状態も捨てられて、終了の判断から外れうる。タイミングの指摘では、1回起きなかったことを不採用の根拠にしない、という但し書きはどこにも無い。3つの段落はどれも main からの差分で足されたもの。LLM がどう解釈するかに左右されるので、実行での再現はしていない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "テスト用の偽の判定に分類の行が無く、JUDGE_PROMPT と整合しない。",
+   "location": "skill-dev/review-loop/fakes/claude:100",
+   "members": [
+    "e5",
+    "e10"
+   ],
+   "id": "sk-16/c5",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "cd skill-dev/review-loop && python3 test.py → 『全て成功』。review_loop.py の VERDICT_SECTIONS のコメントのとおり、スクリプトが判定で確かめるのは『## 指摘』と『## 競合』の見出しだけ。main の偽の判定(git show main:fakes/claude:100)にも分類の行は無い。SKILL.md:83-89 の欄の一覧に分類が無いのも事実だが、JUDGE_PROMPT が正と書いてある。テストの忠実さと記述の問題で、挙動は変わらない。テストは指摘の主張を確かめるものではなく、偽の判定のままで通ることを見ただけなので、ran は false にした。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "見送った差分の外の指摘が記録されないため、毎回の反復で出し直されて検討し直しになる。",
+   "location": "skills/review-loop/SKILL.md:107, review_loop.py:863",
+   "members": [
+    "e6",
+    "e11"
+   ],
+   "id": "sk-16/c6",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:111 で理由を残すよう求めているのは『判定と異なる判断』だけ。判定役が差分の外とした指摘を見送るのは、判定どおりの判断なので記録の対象にならない。117 行のとおり子には過去の判定が渡らないので、同じ指摘はまた出る点は事実。ただし 126 行で継続の理由から外れ、134 行は『反復をまたいで同じ指摘が出ていたら、1件にまとめる』と繰り返し出ることを想定している。起きるのはトークンと仕分けの手間が増えることで、結果の誤りではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "「再現は defect にだけ書く」と「ほかの分類では対象外と書く」が食い違い、SKILL.md に「対象外」の説明が無い。",
+   "location": "review_loop.py(判定役プロンプト)、SKILL.md 手順4",
+   "members": [
+    "e7"
+   ],
+   "id": "sk-16/c7",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "review_loop.py:865 の『defect にだけ書く』は、手順の中身の話。『ほかの分類では「対象外」と書く』と並べると文面は少し揺れるが、880 の雛形に『/ 対象外』が選択肢としてあるので、何を書くかは決まる。SKILL.md:87 に対象外の説明が無いのは事実だが、81 行で形は JUDGE_PROMPT が正と書いてある。書き方の問題で、挙動は変わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "新しい欄の名前「範囲」が、既存の --instruct の「範囲」と同じ語で衝突している。",
+   "location": "skills/review-loop/SKILL.md:132, review_loop.py:850, review_loop.py:863",
+   "members": [
+    "e8"
+   ],
+   "id": "sk-16/c8",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:132 では『--instruct で範囲を絞った』と『範囲が「差分の外」』で同じ語を使っている。review_loop.py:850 と 863 も同じ。ただ、文脈で見分けられるので、命名の指摘に当たる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "issue を作る前に既存の issue との重複を確かめる手順が無く、重複した issue が作られる。",
+   "location": "skills/review-loop/SKILL.md:134",
+   "members": [
+    "e9",
+    "e12"
+   ],
+   "id": "sk-16/c9",
+   "class": "real",
+   "scope": "in",
+   "ran": false,
+   "evidence": "skills/review-loop/SKILL.md:134 は、差分の外の指摘を issue にするか利用者に尋ね、言われたものを `gh issue create` で作ると定めている。既存の issue を検索する手順は無い。重複をまとめる規定は「反復をまたいで同じ指摘が出ていたら、1件にまとめる」だけで、範囲は同じループの中に限られる。:107 と :126 により差分の外の不具合は直されず残るので、同じ箇所に触れる次の PR でもまた見つかり、:134 の手順でまた起票を勧められる。経路はこの PR で足された手順の中で最後まで追える。ただし起票には利用者の承認が要る(「尋ねずに作らない」)ので、実際に重複するのは利用者が既存の issue に気づかず承認したときに限られる。文書(プロンプト)の手順で、実行では確かめられないため実行していない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "再レビューの但し書き(修正が大きければ回す)が仕様に無い。",
+   "location": "SKILL.md:128",
+   "members": [
+    "e13"
+   ],
+   "id": "sk-16/c10",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:128 の但し書き「(修正が大きく、再現が確かめた範囲を超えて挙動を変えているなら回す)」は、コミット cc9c5ef の説明(「再現で確かめた修正だけなら、そのための再レビューは回さない」)には無く、指摘の事実は合っている。ただしこの但し書きは再レビューを足す側に働くだけで、誤った結果や確かめ漏れは生まない。挙動の問題ではなく、仕様の書き方と範囲の違いにとどまる。元の仕様(issue など)はリポジトリに無いので、コミットの説明と照らした。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "再レビューを省く条件の「どの修正も」が、基準に当たらない修正を含むかが曖昧である。",
+   "location": "SKILL.md:128",
+   "members": [
+    "e14"
+   ],
+   "id": "sk-16/c11",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:128 は「直前の判定で、上の基準に当たる指摘を採って直したとき…どの修正も」と書いている。文脈から読むと「どの修正も」は基準に当たる修正を指すのが自然で、その場合の扱いは main(git show main:SKILL.md の該当箇所)と同じになる。基準に当たらない修正はもともと再レビューのきっかけにならない。逆に含める読み方をしても、再レビューが増えるだけで安全側に倒れる。どちらに読んでも誤った結果にはならず、指摘は書き方の曖昧さにとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "書いたテストを回帰テストとして残すことは、仕様が求めていない。",
+   "location": "SKILL.md 手順5",
+   "members": [
+    "e15"
+   ],
+   "id": "sk-16/c12",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:101「書いたテストは、プロジェクトにテストの置き場があれば回帰テストとして残す」は、コミットの説明に挙がっていない追加で、指摘の事実は合っている。ただしテストを残しても誤った挙動は起きない。仕様の範囲と構造の好みの問題で、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "「実行では示せない」defect をコードで追って却下した場合が継続の理由から除かれておらず、ループが続く。",
+   "location": "skills/review-loop/SKILL.md:126",
+   "members": [
+    "e16"
+   ],
+   "id": "sk-16/c13",
+   "class": "real",
+   "scope": "in",
+   "ran": false,
+   "evidence": "SKILL.md:125 は、影響が高の指摘を、起きやすさに関係なく継続の理由とする。:126 が除外しているのは「差分の外」と「再現を試みて起きなかった」の2つだけである。:103 で「実行では示せない」defect をコードで追って却下した場合は、この除外に入らない。:132 の「残った指摘(採らなかったものはその理由も)」から、却下した指摘も「残った指摘」に数えられる。:126 が再現しなかった指摘をわざわざ除外していることも、そう読ませる。このため、影響が高で実行では示せない指摘を却下しても、文字どおりに読めば継続の理由になる。差分の目的(確かめられない指摘で反復が伸びるのを止める)から見て直し残しである。ただし「毎回ループが続く」は言い過ぎで、次の反復で同じ指摘が再指摘されれば :129 の蒸し返しの規定で打ち切れる。5回の目安もあるので、無駄になるのは1回程度で、ループが止まらなくなるわけではない。文書の手順なので実行はしていない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "回帰テストとして残すテストが、再レビューを省く条件と組み合わさると、レビューされずに PR に入りうる。",
+   "location": "SKILL.md:101",
+   "members": [
+    "e17"
+   ],
+   "id": "sk-16/c14",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:101(テストを回帰テストとして残す)と :128(再現が修正前に失敗して修正後に通れば、再レビューを回さずに終えてよい)を組み合わせると、残したテストのコードはループでレビューされないまま PR に入る。経路の事実は合っている。ただし、再現で確かめた修正を再レビューしないのは :128 が意図した設計で、修正本体も同じ扱いになる。テストは修正前に失敗し修正後に通ることを確かめてあり、誤った結果やデータの消失には結びつかない。PR は人のレビューも受ける。挙動の問題ではなく、運用の方針の好みにとどまる。",
+   "classified_by": "llm"
+  }
+ ],
+ "members": {
+  "e1": {
+   "dir": "sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 7
+  },
+  "e2": {
+   "dir": "sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 4
+  },
+  "e3": {
+   "dir": "sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 2
+  },
+  "e4": {
+   "dir": "sk-16/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 1
+  },
+  "e5": {
+   "dir": "sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 3
+  },
+  "e6": {
+   "dir": "sk-16/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 3
+  },
+  "e7": {
+   "dir": "sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 8
+  },
+  "e8": {
+   "dir": "sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 1
+  },
+  "e9": {
+   "dir": "sk-16/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 2
+  },
+  "e10": {
+   "dir": "sk-16/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 4
+  },
+  "e11": {
+   "dir": "sk-16/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 3
+  },
+  "e12": {
+   "dir": "sk-16/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 4
+  },
+  "e13": {
+   "dir": "sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 6
+  },
+  "e14": {
+   "dir": "sk-16/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 2
+  },
+  "e15": {
+   "dir": "sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 5
+  },
+  "e16": {
+   "dir": "sk-16/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e17": {
+   "dir": "sk-16/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 5
+  }
+ },
+ "classify_cost_usd": 0.8116912000000001
+}

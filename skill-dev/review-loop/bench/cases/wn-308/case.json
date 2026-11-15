@@ -17,5 +17,9 @@
       "--no-audit",
       "--no-fund"
     ]
-  ]
+  ],
+  "pr": {
+    "repo": "masahirompp/whatnext",
+    "number": 308
+  }
 }

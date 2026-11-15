@@ -1,0 +1,63 @@
+{
+ "cost_usd": 0.0891296,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lib.sh の hk_is_protected / hk_path_in_use がヒアドキュメントで一時ファイルに依存し、作れないと fail-open になる点には一切触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "detected",
+   "quote": "実装は仕様どおりで、mktemp の前に `git fetch --prune` が走ります。",
+   "reason": "scan.sh で一時ディレクトリ作成の前に git fetch --prune が走り、SKILL.md の『作れなければ何もせずに止まる』と食い違うと指摘しており detect_criteria を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い・プロセスを見られないときに空一覧を『使用中でない』と扱う問題には言及していない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib.sh / scan.sh",
+   "summary": "既定値の連鎖 ${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}} が hk_mktemp_dir と scan.sh のエラーメッセージの2か所に重複しており、片方だけ変えるとエラーに出るパスがずれる。",
+   "quote": "既定値の連鎖 `${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}}` が、`hk_mktemp_dir` の中と scan.sh のエラーメッセージの2か所にあります。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "SKILL.md「サンドボックスの制限」",
+   "summary": "SKILL.md の箇条が1文に3つの内容を詰めていて読みにくい。",
+   "quote": "「サンドボックスの制限」の箇条は1文に3つの内容を詰めています。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "SKILL.md",
+   "summary": "apply.sh が失敗したときにも ! で実行してもらう案内は、仕様の範囲外の追加である。",
+   "quote": "SKILL.md が、apply.sh が失敗したときも `!` で実行してもらうよう案内しています。仕様は scan.sh についての案内だけを挙げています。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test.sh(apply.sh のテスト)",
+   "summary": "macOS の mktemp はテンプレートなしだと TMPDIR を見ないので、apply.sh のテストは変更前のコードでも通り、回帰を検出できない。",
+   "quote": "macOS の `mktemp` はテンプレートなしだと TMPDIR を見ません。そのため、変更前の `input=$(mktemp)` のままでも、`TMPDIR=$root/no-such-dir` を渡したこのテストは通ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test.sh(片付けのテスト)",
+   "summary": "片付けのテストは実行後に hk-tmp が空かどうかしか見ておらず、scan.sh が別の場所に作って消し忘れても検出できない。",
+   "quote": "そのため、scan.sh が `HOUSEKEEPING_TMPDIR` を無視して別の場所に作った場合でも通ります。消し忘れがそこで起きていても検出できません。",
+   "quote_ok": true
+  }
+ ]
+}

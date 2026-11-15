@@ -1,0 +1,55 @@
+{
+ "cost_usd": 0.0758536,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "最初の選べる行を選んでいるとき、窓に入れる範囲(cursorBlock)の始まりを一覧の先頭(0)にします。その範囲が窓より長いと、`start = b0`(= 0)になり、窓には先頭の見出しと `(sub)` の行だけが入ります。",
+   "reason": "screen.ts の render で cursorBlock の頭を 0 にしたうえ start = b0 になるため、頭の (sub) が多いと選んだ行が窓から外れると、正解の条件 (1) と原因を正しく示している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "cursorBlock が次の区切りの見出しをまたいで伸びることには触れているが、選んだ行は映るはずだとして指摘にしないと自分で結論しており、上の行が見えなくなる不具合として挙げていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "選べる行がないときに通し番号が 0/0 になることには触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "app.ts の guard の文言『left the list』が事実と違うことには触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に行が (sub) に変わっても入力欄が閉じないことには触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "openNote の判定を消したため attachKey 経由で (sub) の行にメモが開くことには触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の『Both can be selected』の記述が実装と食い違うことには触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

@@ -1,0 +1,284 @@
+{
+ "case": "sk-14",
+ "cost_usd": 0.053333000000000005,
+ "clusters": [
+  {
+   "title": "TMPDIR を存在しないディレクトリにしても bash が /tmp に退避するため、書き込めない TMPDIR の回帰テストとして機能していない",
+   "location": "skill-dev/housekeeping/test.sh:186",
+   "members": [
+    "e1",
+    "e3"
+   ],
+   "id": "sk-14/c1",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "apply.sh を main の版(input=$(mktemp))に一時的に戻して skill-dev/housekeeping/test.sh を実行すると「全件成功」になった(確認後に git checkout で元に戻した)。少なくとも macOS では、このテストは旧コードでも通り、回帰を検出しない。ただし通る理由は bash のヒアドキュメントの退避ではない。macOS の mktemp がテンプレート無しだと TMPDIR を見ないためで、`TMPDIR=/no-such-dir mktemp` は rc=0 で /var/folders/... を返した(c2 と同じ仕組み)。GNU mktemp は TMPDIR を見るので、Linux なら旧コードで失敗し、テストは効くはず(未実行)。apply.sh 本体の挙動は正しく、問題はテストの検出力だけなので trivial",
+   "classified_by": "llm"
+  },
+  {
+   "title": "macOS の mktemp はテンプレートなしだと TMPDIR を見ないため、apply.sh のテストが旧コードでも通ってしまう",
+   "location": "test.sh(apply.sh のテスト)",
+   "members": [
+    "e14"
+   ],
+   "id": "sk-14/c2",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "`TMPDIR=/no-such-dir mktemp` と `mktemp -d` はどちらも rc=0 で /var/folders/5t/.../T/tmp.XXXX を作った。macOS の mktemp はテンプレート無しでは TMPDIR を見ない、という主張は事実(lib.sh:15 のコメントとも合う)。main の apply.sh に戻した状態でも test.sh は「全件成功」だった。回帰を検出できないのはテストの不足で、挙動の不具合ではないので trivial",
+   "classified_by": "llm"
+  },
+  {
+   "title": "後片付けのテストが正常終了の経路しか確認しておらず、error 終了時の削除を検証していない",
+   "location": "test.sh:173-175",
+   "members": [
+    "e5"
+   ],
+   "id": "sk-14/c3",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "test.sh の追加分では、hk-tmp での片付けを確かめるのは正常終了の1件だけ。scan.sh:34 の trap 'rm -rf \"$tmp\"' EXIT は mktemp の直後に置かれていて、以降の exit 1 でも動く。現状の挙動に問題は無い。テストケースが足りないという指摘なので trivial",
+   "classified_by": "llm"
+  },
+  {
+   "title": "片付けのテストは hk-tmp が空かどうかしか見ておらず、一時ディレクトリの作成場所を検証していない",
+   "location": "skill-dev/housekeeping/test.sh:175",
+   "members": [
+    "e7",
+    "e8"
+   ],
+   "id": "sk-14/c4",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "test.sh の追加分は `[ -z \"$(ls -A \"$root/hk-tmp\")\" ]` だけで、作成場所は確かめていない。この点は事実。ただし lib.sh:18-19 では HOUSEKEEPING_TMPDIR を使ってテンプレートを組んでおり、直前のテスト(no-such-dir を指定すると止まる)が通ることから、HOUSEKEEPING_TMPDIR が実際に効いていることも間接的に分かる。テストの検出力の問題なので trivial",
+   "classified_by": "llm"
+  },
+  {
+   "title": "既定値の連鎖 ${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}} が lib.sh と scan.sh のエラーメッセージに重複しており、ずれるおそれがある",
+   "location": "skills/housekeeping/scripts/scan.sh:31",
+   "members": [
+    "e12",
+    "e13",
+    "e16"
+   ],
+   "id": "sk-14/c5",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "lib.sh:18 と scan.sh:31 の両方に ${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}} がある、という指摘は事実。現在は2か所が同じ式なので、表示されるパスは実際の場所と一致する。ずれるのは将来どちらか片方だけを変えたときなので trivial",
+   "classified_by": "llm"
+  },
+  {
+   "title": "! で実行したコマンドがサンドボックス外で動くか、環境変数が異なるかという前提が検証されていない",
+   "location": "SKILL.md:35",
+   "members": [
+    "e2"
+   ],
+   "id": "sk-14/c6",
+   "class": "undetermined",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:35 は、`!` で実行したコマンドがサンドボックスの外で、ユーザーのシェルの環境変数のもとで動くことを前提にしている。これを確かめるには、Claude Code の対話セッションで `!` を実際に実行する必要がある。今回は非対話の環境なので確かめられなかった",
+   "classified_by": "llm"
+  },
+  {
+   "title": "削除の実行を利用者に任せる前に、渡すファイルが承認した行だけであることを示す手順が無い",
+   "location": "SKILL.md:35",
+   "members": [
+    "e4"
+   ],
+   "id": "sk-14/c7",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md 手順3で承認を取り、手順4で承認した行を抜き出す流れは既にある。apply.sh(1-8行目、および各行の再確認)は、sha の変化や保護対象を削除の直前に確かめ直す。`!` で実行するコマンドはユーザーの目に見える。誤った行が渡されて消える経路は具体的に示されておらず、手順を足して安全性を上げようという提案なので trivial",
+   "classified_by": "llm"
+  },
+  {
+   "title": "apply.sh を ! で実行する案内に、標準入力へファイルを渡す形が書かれていない",
+   "location": "SKILL.md:35",
+   "members": [
+    "e6"
+   ],
+   "id": "sk-14/c8",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:35 は apply.sh について「同じように `!` で実行してもらう」とだけ書いており、標準入力に行を渡す形は書いていない。ただし、コマンドを組み立てるのはエージェントで、手順4(SKILL.md:58-60)と apply.sh の冒頭のコメントに、パイプで渡す例がある。仮に標準入力を渡さずに実行しても、行が無いので何も消えず、データは失われない。文書の詳しさの問題なので trivial",
+   "classified_by": "llm"
+  },
+  {
+   "title": "案内で \"$TMPDIR/housekeeping-scan.tsv\" をそのまま使っており、ユーザーのシェルでは別パスに展開され空入力で成功扱いになりうる",
+   "location": "skills/housekeeping/SKILL.md:35",
+   "members": [
+    "e17"
+   ],
+   "id": "sk-14/c9",
+   "class": "real",
+   "scope": "in",
+   "ran": true,
+   "evidence": "SKILL.md:35 で追加された「手順4の apply.sh が同じ理由で失敗したときも、同じように `!` で実行してもらう」は、手順4の例(SKILL.md の `awk ... \"$TMPDIR/housekeeping-scan.tsv\" | <skill-dir>/scripts/apply.sh`)を指しています。この例は $TMPDIR を展開しないまま使っています。絶対パスに展開するよう明示した規則は scan.sh の案内の中にしかありません。「同じように」が展開の規則まで含むかは読み手次第で、エージェントが例をそのまま `!` に渡す経路は塞がれていません。ユーザーのシェルの $TMPDIR が別の場所を指すと、awk がファイルを開けず、apply.sh は空の入力で動きます。これを再現しました。一時ディレクトリにリポジトリを作り、origin/HEAD を設定してから `awk -F'\\t' '$2 != \"remote\"' /nonexistent/housekeeping-scan.tsv | scripts/apply.sh; echo rc=$?` を実行した結果は、stderr に `awk: can't open file` が出て、apply.sh の出力は無く、rc=0 でした。pipefail の無いシェルでは、何も消さないまま成功で終わります(awk のエラーは stderr に残ります)。この案内は今回の差分で加わったので scope は in です。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "「同じ理由で失敗したとき」という条件が曖昧で、実際の失敗の種類と合っていない",
+   "location": "SKILL.md:35",
+   "members": [
+    "e11"
+   ],
+   "id": "sk-14/c10",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "「同じ理由」は、直前の箇条の「サンドボックスの制限(`Operation not permitted` など)」を指します。apply.sh でも、.git や worktree への書き込み、git push がサンドボックスに拒まれれば同じ種類の失敗になるので、条件として誤りではありません。apply.sh が mktemp を使わなくなった(apply.sh の差分で input=$(grep ...) に変わった)ため「一時ディレクトリを作れない」は起きませんが、これは例として挙げた文言の一部が当てはまらないだけです。案内される操作(`!` で実行してもらう)は変わりません。表現の明確さの問題なので trivial とします。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "apply.sh 失敗時にも ! で実行してもらう案内は仕様の範囲外の追加である",
+   "location": "SKILL.md",
+   "members": [
+    "e15"
+   ],
+   "id": "sk-14/c11",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "仕様の範囲を超えて追加したという指摘で、挙動の不具合を主張していません。この追加によって起きうる誤りは c9 で別に扱いました。範囲の判断そのものは挙動に関わらないので trivial とします。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "SKILL.md の「サンドボックスの制限」の箇条が1文に3つの内容を詰めていて読みにくい",
+   "location": "SKILL.md「サンドボックスの制限」",
+   "members": [
+    "e9"
+   ],
+   "id": "sk-14/c12",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:35 の箇条は、確かに1文の中にコマンドの形、パスを展開する規則、出力先、apply.sh への適用を詰め込んでいます。ただしこれは読みやすさの問題で、挙動には関わりません。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "mktemp -d 成功直後の [ -n \"$d\" ] && [ -d \"$d\" ] は余分な確認である",
+   "location": "skills/housekeeping/scripts/lib.sh:20",
+   "members": [
+    "e10"
+   ],
+   "id": "sk-14/c13",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "lib.sh:20 の hk_mktemp_dir では、`mktemp -d` が終了コード0で返ればディレクトリはできていて、そのパスが出力されています。そのため続く `[ -n \"$d\" ] && [ -d \"$d\" ]` はほぼ冗長で、指摘の内容は事実です。ただし残しておいても結果は変わらない防御的な確認なので、書き方の好みとして trivial とします。",
+   "classified_by": "llm"
+  }
+ ],
+ "members": {
+  "e1": {
+   "dir": "sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 1
+  },
+  "e2": {
+   "dir": "sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 7
+  },
+  "e3": {
+   "dir": "sk-14/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e4": {
+   "dir": "sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 6
+  },
+  "e5": {
+   "dir": "sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 2
+  },
+  "e6": {
+   "dir": "sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 4
+  },
+  "e7": {
+   "dir": "sk-14/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 5
+  },
+  "e8": {
+   "dir": "sk-14/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 2
+  },
+  "e9": {
+   "dir": "sk-14/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 2
+  },
+  "e10": {
+   "dir": "sk-14/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 5
+  },
+  "e11": {
+   "dir": "sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 5
+  },
+  "e12": {
+   "dir": "sk-14/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 1
+  },
+  "e13": {
+   "dir": "sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 3
+  },
+  "e14": {
+   "dir": "sk-14/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 4
+  },
+  "e15": {
+   "dir": "sk-14/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 3
+  },
+  "e16": {
+   "dir": "sk-14/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 4
+  },
+  "e17": {
+   "dir": "sk-14/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 3
+  }
+ },
+ "classify_cost_usd": 0.6918540000000001
+}

@@ -1,0 +1,63 @@
+{
+ "cost_usd": 0.0922336,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "detected",
+   "quote": "hk_is_protected は return 1(保護対象でない)を返し、hk_path_in_use は空(使用中でない)を返す。その結果、entire/* や main の偽装行、プロセスが使っている worktree が削除に進む。",
+   "reason": "lib.sh の hk_is_protected と hk_path_in_use がヒアドキュメントに依存し、一時ファイルを作れないと保護対象でない・使用中でない側に倒れる(fail-open)ことを指摘しており、detect_criteria を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "detected",
+   "quote": "一時ディレクトリの作成が git fetch --prune と hk_default_branch(gh を呼ぶ)の後にある。作れずに止まる場合もリモート追跡ブランチの prune は済んでおり、SKILL.md の『作れなければ何もせずに止まる』と食い違う。",
+   "reason": "scan.sh で一時ディレクトリの作成が fetch --prune より後にあり、止まっても副作用が残って SKILL.md の記述と食い違うことを、正解と同じ場所と原因で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い、またはプロセスを見られないときに hk_process_cwds の空の一覧が使用中でないと扱われる問題には、どの指摘も触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh:186",
+   "summary": "TMPDIR を存在しないディレクトリにしても bash は /tmp に退避するので、apply.sh が一時ファイルを使わないことをテストで確かめられず、回帰を見逃す。",
+   "quote": "TMPDIR を存在しないディレクトリにして apply.sh を走らせても『一時ファイルを使わない』ことは確かめられない。bash はヒアドキュメント用の一時ファイルを /tmp に退避して作るため、テストは常に通る。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skill-dev/housekeeping/test.sh:175",
+   "summary": "HOUSEKEEPING_TMPDIR のテストは hk-tmp が空かどうかしか見ておらず、作成場所を検証していない。",
+   "quote": "『HOUSEKEEPING_TMPDIR の下に作り、終了時に消す』のテストは hk-tmp が空かどうかしか見ていない。HOUSEKEEPING_TMPDIR が無視されて別の場所に作られても pass する。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "apply.sh を ! で実行するよう案内する手順で \"$TMPDIR/housekeeping-scan.tsv\" をそのまま使っているため、ユーザーのシェルでは別のパスに展開され、空の入力で成功扱いになりうる。",
+   "quote": "apply.sh を『同じように ! で実行』と案内しているが、手順4の例は \"$TMPDIR/housekeeping-scan.tsv\" をそのまま使っている。ユーザーのシェルでは別のパスに展開され、apply.sh に何も渡らないまま成功で終わりうる。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/scripts/scan.sh:31",
+   "summary": "エラーメッセージが一時ディレクトリの場所の決め方を lib.sh の hk_mktemp_dir と二重に持っており、片方だけ変えると実際と違うパスを表示する。",
+   "quote": "エラーメッセージが一時ディレクトリの場所の決め方 `${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}}` を lib.sh の hk_mktemp_dir と二重に持っている。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/scripts/lib.sh:20",
+   "summary": "mktemp -d が成功した直後の `[ -n \"$d\" ] && [ -d \"$d\" ]` は余分な確認である。",
+   "quote": "mktemp -d が成功した直後の `[ -n \"$d\" ] && [ -d \"$d\" ]` は余分な確認で、`d=$(mktemp ...) || return 1` だけで同じ働きになる。",
+   "quote_ok": true
+  }
+ ]
+}

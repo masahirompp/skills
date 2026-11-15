@@ -1,0 +1,76 @@
+{
+ "cost_usd": 0.09064159999999999,
+ "bugs": [
+  {
+   "id": "S16-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "範囲の定義によって直し残しが差分の外に入る点に、レビューは一切触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再現の手順と差分の外の規則の矛盾について、言及が無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再現を行う場所が限られていない点に、触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "gh issue create には触れたが確認がある形なので問題ないと結論しており、操作の順の公開による悪用手順の露出は指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再レビューを省く条件の「既存のテストが通る」が空でも満たせる点に、言及が無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "差分の外になる横展開の候補の行き先が定まっていない点に、触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "前提の環境を作れないまま試して起きなかった場合の扱いに、言及が無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "差分の外の判断を確かめずに受け入れられる非対称に、触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-9",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再レビューを省けない条件が修正の大きさに結び付いている点に、言及が無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-10",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再現したら採用して直す規則が、PR の意図した変更を戻しうる点に、触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

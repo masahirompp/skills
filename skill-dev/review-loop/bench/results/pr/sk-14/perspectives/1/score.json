@@ -1,0 +1,77 @@
+{
+ "cost_usd": 0.10540560000000002,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "detected",
+   "quote": "全部に書けないと `cannot create temp file for here document` になり、`while read` が1回も回らずに `return 1`(保護しない)を返します。",
+   "reason": "lib.sh の hk_is_protected がヒアドキュメントに依存しており、一時ファイルを作れないと「保護しない」側に倒れることを、原因まで含めて正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "detected",
+   "quote": "`scan.sh:22` の `git fetch --prune` は一時ディレクトリを作るより前に走るので、リモート追跡ブランチの削除という副作用は起きた後です。",
+   "reason": "一時ディレクトリの作成が fetch --prune より後にあるため、止まる時点で副作用が済んでおり、「何もせずに止まる」という記述と合わないことを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "hk_path_in_use についてはヒアドキュメントの観点でしか述べておらず、lsof が無い・プロセスを見られないときに空の一覧を「使用中でない」と扱う原因には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh:186",
+   "summary": "TMPDIR=no-such-dir は bash が /tmp に退避するので「書き込めない TMPDIR」を検証できず、macOS では旧コードでも通るため、回帰テストとして効いていない。",
+   "quote": "`TMPDIR=no-such-dir` は存在しないディレクトリなので、bash は `/tmp` に退避して普通に動きます。これでは「書き込めない TMPDIR」の検証になりません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "test.sh:173-175",
+   "summary": "後片付けのテストが正常終了の経路しか見ておらず、error で終わる経路での削除を確かめていない。",
+   "quote": "error で終わる経路(PR 一覧の取得失敗など)でも消えることを確かめる1件があると、`trap` の位置が変わったときの退行を拾えます。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "scan.sh:31 と lib.sh:18",
+   "summary": "既定値の連鎖 ${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}} が2か所に重複していて、ずれるおそれがある。",
+   "quote": "既定値の連鎖 `${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}}` が2か所に重複している",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "SKILL.md:35",
+   "summary": "apply.sh を ! で実行してもらう案内に、標準入力へファイルを渡す形が書かれておらず、ユーザーが正しく実行できない。",
+   "quote": "apply.sh は標準入力から読むので、`! <skill-dir>/scripts/apply.sh < <承認済みファイル>` の形まで書かないと、ユーザーが正しく実行できません。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "SKILL.md:35",
+   "summary": "「同じ理由で失敗したとき」という条件が曖昧で、実際に起きる失敗の種類と合っていない。",
+   "quote": "「同じ理由で失敗したとき」も曖昧です。apply.sh は mktemp を使わなくなったので、実際に起きる失敗は `.git` や worktree への書き込み、`git push` の制限が中心です。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "SKILL.md:35",
+   "summary": "削除の実行を利用者に任せる際に、渡すファイルが承認した行だけであることをエージェントが先に示す手順が無い。",
+   "quote": "削除を実行する操作を利用者に任せるなら、渡すファイルの中身が承認した行だけであることを、エージェントが先に示す手順も入れたほうが安全です。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "SKILL.md:35",
+   "summary": "! で実行したコマンドが本当にサンドボックスの外で動くのか、環境変数が違うのかという前提が確かめられていない。",
+   "quote": "`!` で実行したコマンドが本当にサンドボックスの外で動くのか、また環境変数(`$TMPDIR`)がエージェントと違うのかは、この環境では確かめられませんでした。",
+   "quote_ok": true
+  }
+ ]
+}

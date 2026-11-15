@@ -1,0 +1,69 @@
+{
+ "cost_usd": 0.07115360000000001,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md:591",
+   "summary": "「2026-11-02、利用者の判断」という日付の裏付けが main の PRODUCT.md にも issue にも無く、実際の判断日と合っているか確かめる必要がある。",
+   "quote": "591行目に「2026-11-02、利用者の判断」とあります。この日付の裏付けは、main の PRODUCT.md にも issue にも見つかりませんでした。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "docs/PRODUCT.md",
+   "summary": "「見えない行のリポジトリを先頭にしない」が、ほぼ同じ文言で app.ts の注釈にもあり、重複に近い。",
+   "quote": "「見えない行のリポジトリを先頭にしない」が、ほぼ同じ文言で app.ts の注釈にもあります。害は小さいです。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/ops/app.ts:853",
+   "summary": "openNew は省略できる位置引数が2つ並び、先頭に undefined を渡す呼び出しが増えている(Data Clumps / Primitive Obsession)。",
+   "quote": "`openNew(waitFor?, preferredFrom?)` は、省略できる位置引数が2つ並んでいます。先頭に `undefined` を渡す呼び出しも2箇所になりました。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test/e2e/ops.test.ts",
+   "summary": "1つの it で2つのことを確かめているため、前半が落ちると後半が確かめられない。",
+   "quote": "1つの `it` で2つのことを確かめています(カーソルのある行のリポジトリが先頭になること、エラーの間は起動したディレクトリが先頭になること)。前半が落ちると、後半は確かめられないまま終わります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test/e2e/ops.test.ts",
+   "summary": "PR 本文の「worktree なら元のリポジトリ」に対し、worktree の行で n を押す場合のテストが無い。",
+   "quote": "テストは素のリポジトリしか使っておらず、worktree の行で `n` を押す場合を確かめていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "test/e2e/ops.test.ts",
+   "summary": "slice(1, 3) で先頭の2つしか見ておらず、先頭のリポジトリが候補の後ろに重複して出ないことをテストしていない。",
+   "quote": "先頭のリポジトリが候補の後ろにもう一度出ないことも、テストは確かめていません。`slice(1, 3)` で先頭の2つしか見ていないためです。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "docs/PRODUCT.md",
+   "summary": "--json を読めずにエラーを出している間は起動したディレクトリを先頭にする、という挙動が PR 本文にも利用者の判断にも無く、層2の判断を経ずに仕様に入っている。",
+   "quote": "「`--json` を読めずにエラーを出している間は、whatnext を起動したディレクトリが先頭になる」という文は、PR 本文にも 2026-11-02 の利用者の判断にもありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "docs/PRODUCT.md",
+   "summary": "ctrl+q ctrl+n の節に「エラーの間も同じにする」が追加され、既存の挙動を利用者の判断なしに仕様に書いている。",
+   "quote": "`ctrl+q ctrl+n` の節にも「エラーの間も同じにする」が加わりました。コードは変わっておらず、既存の挙動を初めて仕様に書いたものです。これも同じ扱いがよいです。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "",
+   "summary": "Other... を空のまま Enter で確定すると起動したディレクトリで起動し、候補の先頭と行き先が食い違って利用者が戸惑うおそれがある。",
+   "quote": "`Other...` を空のまま `Enter` で確定すると、今も whatnext を起動したディレクトリで起動します。候補の先頭と空の `Enter` の行き先が食い違うようになりました。",
+   "quote_ok": true
+  }
+ ]
+}

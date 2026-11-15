@@ -1,0 +1,77 @@
+{
+ "cost_usd": 0.1093536,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "そのため 233 行の「入力欄は最後の行まで窓に入れる」補正が、入力欄ではなく最後の `(sub)` の行に合わせて窓を下げます。",
+   "reason": "延びた b1 を基準にした入力欄の補正と、塊が窓以上のとき start = b0 になることの両方を原因として示している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "detected",
+   "quote": "選んだ行が区切りの最後にあり、次の区切りの先頭がトップレベルの `(sub)` の行だと、空行と次の区切りの見出しまで同じ塊になります。",
+   "reason": "trailing が区切りの境で切れず、次の区切りの (sub) まで塊に含まれることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "選べる行が無いときに通し番号が 0/0 になる件には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "このとき行は一覧に残っていますが、直後の `Ctrl+X` には `Ctrl+X ignored: X left the list and the selection moved.`(1215 行)が出ます。",
+   "reason": "(sub) に変わっただけでもガードが立ち、left the list という誤った文言が出ることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に行が (sub) に変わっても mode が閉じない件には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "detected",
+   "quote": "ところが、作業台のキーの処理(1197 行の `this.cursor = sid` のあと `openNote`/`openWait`)と `onReturn`(1068 行)は、`selectableOrder` を通さずにカーソルを置きます。",
+   "reason": "openNote から isSpawned の確認を外したため、作業台のキーの経路から (sub) の行にメモを付けられることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の『Both can be selected』の食い違いには触れておらず、挙げているのは PRODUCT.md の別の文だけである。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/screen/screen.ts:201",
+   "summary": "選べるかどうかの判定が、描画 (marker !== 'sub') とモデル (selectableOrder) の2か所に分かれていて、将来ずれるおそれがある。",
+   "quote": "描画は表示用の `marker !== 'sub'` で、モデルは `selectableOrder`(`spawned`)で判定しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "docs/PRODUCT.md:296",
+   "summary": "仕様に Enter と v が効くと書いてあるが、選べない行にはどのキーも届かず、挙動と食い違っている。",
+   "quote": "「効くのは `cwd` と `pid` を示す `Enter` と `v` だけだが」とありますが、選べない行には `Enter` も `v` も届きません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/unit/screen.test.ts",
+   "summary": "入力欄と下に続く (sub)、先頭の前に長い (sub) の列という組み合わせを覆うユニットテストが無い。",
+   "quote": "ユニットテストは「入力欄+下に続く `(sub)`」と「先頭の前に長い `(sub)` の列」の組み合わせを覆っていません。",
+   "quote_ok": true
+  }
+ ]
+}

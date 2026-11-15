@@ -1,0 +1,455 @@
+{
+ "case": "clean-sk-14",
+ "cost_usd": 0.112092,
+ "clusters": [
+  {
+   "title": "hk_process_cwds が自分自身($$)が lsof に見えるかどうかだけで判定しているため、一部のプロセスしか見えないサンドボックスでは使用中の worktree を delete と判定して削除しうる。",
+   "location": "skills/housekeeping/scripts/lib.sh:96",
+   "members": [
+    "e3",
+    "e6",
+    "e23",
+    "e24"
+   ],
+   "id": "clean-sk-14/c1",
+   "class": "real",
+   "scope": "in",
+   "ran": true,
+   "evidence": "偽の lsof を用意して再現した。この lsof は、呼び出し元の祖先プロセスだけを cwd=/ として出す(自分は見えるが、ほかのプロセスは見えないサンドボックスを模したもの)。別のプロセス(sleep)を $T/busy で動かしておく。本物の lsof では n.../busy と出て、使用中なのが分かる。この状態で HEAD の lib.sh を source し、hk_process_cwds が返す11行を hk_path_in_use に渡すと in_use=[](未使用)になった。lib.sh:96 は「$$ が一覧に出るか」しか見ていないので、この確認を通ってしまう。scan.sh の handle_wt はこれを使用中でないと判定し、apply.sh:42 の確認も同じように通るので、worktree remove まで進む。main の lib.sh でも結果は同じ in_use=[] だった。ただし、この差分は「サンドボックスでプロセスを見られないときは残す」ために $$ の確認を足している。一部のプロセスだけが見える場合はその直し残しなので、in とした。なお、この実行環境の lsof には1150件が見えるため、偽の lsof で模した。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "jq が無いときに止まる処理にテストが無い。",
+   "location": "scan.sh:20",
+   "members": [
+    "e1"
+   ],
+   "id": "clean-sk-14/c2",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "scan.sh:20 に jq が無いときに止まる処理があり、test.sh にはこれを確かめるテストが無い(grep で jq が出るのは、41行の fixture 生成と240行のコメントだけ)。テストが無いという指摘で、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "ヒアドキュメントを禁じる grep の静的チェックは3つのファイルしか見ておらず、ほかのスクリプトや今後足す関数は守られない。",
+   "location": "skills/housekeeping/scripts/lib.sh 冒頭のコメントと test.sh の静的チェック",
+   "members": [
+    "e2"
+   ],
+   "id": "clean-sk-14/c3",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "ls skills/housekeeping/scripts の結果は apply.sh, lib.sh, scan.sh の3つだけで、静的チェックはこの3つをすべて見ている。lib.sh を source するほかのスクリプトはいまは存在しない。将来ファイルを足したときに初めて問題になる指摘。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "temp_usage の静的チェックは行全体がコメントの行しか除外しないため誤検出が起き、source 先のファイルも検出できない。",
+   "location": "skill-dev/housekeeping/test.sh:202",
+   "members": [
+    "e26"
+   ],
+   "id": "clean-sk-14/c4",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "test.sh:200-202 の temp_usage は、行頭が # の行だけを除外する。これは事実だが、いまのスクリプトで test.sh を実行すると「全件成功」で、誤検出は起きていない。行末のコメントや算術式に '<<' を書いたときに初めて起きることで、テストの壊れやすさの指摘にとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "TMPDIR が相対パスでもそのまま使うので、カレントの worktree の中にディレクトリができる。",
+   "location": "skills/housekeeping/scripts/lib.sh:24",
+   "members": [
+    "e4"
+   ],
+   "id": "clean-sk-14/c5",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "TMPDIR=rel で hk_mktemp_dir を実行すると rel/housekeeping.09PC87 ができ、カレントの下に作られることを確かめた。ただし scan.sh はメインのシェルで cd しないので、trap の rm -rf \"$tmp\" は同じ相対パスで正しく消える。また、カレントを含む worktree はいつも「このスキャンを実行している作業ディレクトリ」として keep になる。判定の結果やデータの消失には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "コミットの件名(mktemp/TMPDIR)と関係しない fail-open の修正が混ざっており、件名を変えるかコミットを分けるべき。",
+   "location": "コミット 8a3b4f6",
+   "members": [
+    "e5"
+   ],
+   "id": "clean-sk-14/c6",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "コミットの件名と内容の範囲についての指摘で、挙動には関わらない(該当するコミットは実際には 528162a)。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "既定ブランチの first-parent 履歴を読めないと scan.sh 全体が error 終了し、止める範囲が広すぎるうえ on_fp>1 の分岐を通らない。",
+   "location": "skills/housekeeping/scripts/scan.sh:85",
+   "members": [
+    "e7"
+   ],
+   "id": "clean-sk-14/c7",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "scan.sh:85-86 では、first-parent の履歴を作れないと error で exit 1 する。これは残す側に倒した止め方で、誤って delete を出したりデータを失ったりはしない。また、ファイルの存在と中身があることは前もって確かめているので、classify_branch の grep が 2 以上を返すことは実際にはなく、on_fp>1 の分岐(scan.sh:123)は通らない死んだコードになっている。どちらも、止める範囲の広さという設計の好みと、冗長なコードの指摘。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "hk_protect_patterns が local を2行に分けており、既存の関数の書き方と揃っていない。",
+   "location": "lib.sh hk_protect_patterns",
+   "members": [
+    "e8"
+   ],
+   "id": "clean-sk-14/c8",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "lib.sh:45 と 47 で local が2行に分かれている。書き方の統一についての指摘で、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "「何も渡さないと何も消さずに終わる」という説明は標準入力が端末のときには成り立たず、apply.sh が入力待ちで止まる。",
+   "location": "skills/housekeeping/SKILL.md:72",
+   "members": [
+    "e9"
+   ],
+   "id": "clean-sk-14/c9",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "SKILL.md:72 の「何も渡さないと」は、直前に示した `! awk ... <ファイル> | apply.sh` というパイプの形を前提にしている。awk が1行も出さなければ標準入力は空になり、`printf '' | grep -v '^action\\t'` は rc=1 で即座に終わる(実行で確認)。input が空なので rows も空になり、何も消さない。標準入力が端末だと grep が入力を待って止まるのは事実だが、文書は apply.sh をパイプなしで実行する手順を示していない。また apply.sh が標準入力を読むことは main の時点から変わらない。文言が曖昧という問題にとどまり、手順どおりに使えば挙動は誤らない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "git config --get-all の終了コード 1 はキー名が不正な場合も含むのに、コメントが「キーが無いだけ」と言い切っている。",
+   "location": "skills/housekeeping/scripts/lib.sh:51",
+   "members": [
+    "e10"
+   ],
+   "id": "clean-sk-14/c10",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "`git config --get-all invalidkey` は 'error: key does not contain a section' を出して rc=1 で終わり、キーが無いとき(rc=1)と区別できないことを確認した。ただし lib.sh:50 が読むキーは固定の 'housekeeping.protect' で、名前は正しい。このため実際に rc=1 になるのはキーが無いときだけで、挙動は変わらない。言い切りすぎているのはコメントの正確さの問題にとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "git config の読み取りに失敗すると hk_is_protected が黙って全ブランチを保護し、原因が利用者に伝わらない。",
+   "location": "skills/housekeeping/scripts/lib.sh:52",
+   "members": [
+    "e17"
+   ],
+   "id": "clean-sk-14/c11",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "lib.sh:50-52 と :62 では、git config の rc が 2 以上だと保護対象として扱う(安全側に倒す)。設定ファイルを壊す(.git/config に '[bad' を足す)と、git config は rc=128 になる。ただしこのとき git rev-parse --git-dir も同じ 'fatal: bad config line' で rc=128 になった。scan.sh:19 と apply.sh:16 はこの rev-parse で先に error を出して止まるので、黙って全ブランチを保護する経路には現実的には入らない。仮に入っても、branch 行の reason には「保護対象(既定ブランチ・監査用・設定による保護)」と出るので、まったく黙っているわけでもない。原因が分かりにくいという診断性の話で、誤って消すことはない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "umask 022 だと /tmp の TSV が 0644 で作られ、パスやブランチ名などがほかのユーザーから読める。",
+   "location": "skills/housekeeping/SKILL.md:20, :61",
+   "members": [
+    "e11"
+   ],
+   "id": "clean-sk-14/c12",
+   "class": "real",
+   "scope": "in",
+   "ran": true,
+   "evidence": "umask 022 でファイルを作ると -rw-r--r-- (0644) になることを確認した。差分で SKILL.md:20 と :61 が `${TMPDIR:-/tmp}/housekeeping-scan.tsv` になった。TMPDIR が無い環境(Linux によくある)では、走査結果が共有の /tmp に誰でも読める権限で置かれる。中身はリポジトリのパス、ブランチ名、ignored のファイル名、使用中のプロセスの pid とコマンド名(scan.sh:165 の reason)。main では `$TMPDIR/...` だったので、TMPDIR が無いと /housekeeping-scan.tsv になり、一般ユーザーは書き込めずに失敗していた。共有の /tmp に置くようになったのはこの差分から。macOS では TMPDIR がユーザー専用の 0700 のディレクトリを指すので起きない。ほかのユーザーに見えるのは情報の露出で、深刻度は低い。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "TMPDIR が無いときの退避先が共有 /tmp の固定ファイル名なので、ほかのユーザーが先に作ったファイルで delete 行を差し込め、sha 照合も通る。",
+   "location": "skills/housekeeping/SKILL.md:20, :61",
+   "members": [
+    "e14"
+   ],
+   "id": "clean-sk-14/c13",
+   "class": "real",
+   "scope": "in",
+   "ran": false,
+   "evidence": "経路をコードで追った。TMPDIR が無いと出力先は固定名の /tmp/housekeeping-scan.tsv になる(SKILL.md:20、:61)。ほかのユーザーがこのファイルを先に 0666 で作っておくと、`>` のリダイレクトはファイルの持ち主と権限を変えずに上書きする(0666 のファイルへの上書きで、権限が残ることは自分のユーザーで確認した)。scan と apply の間に、そのユーザーがファイルを読んで sha を知り、keep の行を delete に書き換えることも、delete の行を足すこともできる。手順4の awk は、apply の時点のファイルから delete の行をすべて抜き出す。apply.sh:53-56 が branch 行で確かめるのは、保護対象でないことと、先端が行の sha と一致することだけなので、未マージのブランチでも git branch -D で消える。他ユーザーを用意できないので、ユーザーをまたいだ再現はしていない。Linux の fs.protected_regular=1(systemd の既定)では、sticky ディレクトリにある他人のファイルを O_CREAT で開けないので防がれる。macOS では TMPDIR があるので起きない。main は /tmp に退避しなかったので、差分が原因。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "ファイル名が固定なので、同時に走る2つの housekeeping が互いの結果を上書きし、他方の行が apply.sh の照合を通る。",
+   "location": "skills/housekeeping/SKILL.md:20, :61",
+   "members": [
+    "e25"
+   ],
+   "id": "clean-sk-14/c14",
+   "class": "real",
+   "scope": "out",
+   "ran": false,
+   "evidence": "SKILL.md:20 と :61 の出力先は固定名の housekeeping-scan.tsv。同じユーザーの2つのセッションが同時に走ると、後から走った scan が先の結果を上書きし、先のセッションの apply が他方の結果の delete 行を流す。同じリポジトリ(別 worktree からのセッションなど)なら sha が一致するので、apply.sh:41 と :55 の照合を通る。その結果、ユーザーが一覧で承認していない行まで消える。別のリポジトリの行なら、branch は sha の不一致か『見つからない』で skipped になり、worktree は git worktree remove が自リポジトリの worktree ではないとして拒否するので消えない。git show main:skills/housekeeping/SKILL.md でも `\"$TMPDIR/housekeeping-scan.tsv\"` という固定名なので、main から同じように起きる。2つのセッションを同時に動かす再現はしていない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "サンドボックス内では worktree をすべて残して外で実行してもらう方針は、運用の手間が大きく、ユーザーが耐えられるか確かめる必要がある。",
+   "location": "",
+   "members": [
+    "e12"
+   ],
+   "id": "clean-sk-14/c15",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "運用の手間とユーザーが受け入れられるかについての意見で、コードの誤りを指していない。サンドボックスの中で確かめられないときに残す動き(lib.sh:89-106、SKILL.md:67-72)は、安全側に倒すという設計どおりの挙動。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "worktree が「確かめられない」ために keep になった場合でも、ブランチの理由が「worktree … で使用中」と誤って表示される。",
+   "location": "skills/housekeeping/scripts/scan.sh:208",
+   "members": [
+    "e13"
+   ],
+   "id": "clean-sk-14/c16",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "scan.sh:207-208 は、wt_action が keep のとき、worktree が残った理由に関わらず branch 行の reason を「worktree <path> で使用中」にする。この文言は、そのブランチが worktree でチェックアウトされて使われているという意味で、事実として正しい。worktree が残った具体的な理由(「確かめられない」など)は worktree の行に出る。ロックや未コミットの変更で残った場合も同じ文言で、これは main から変わらない。判定は keep で正しく、文言の細かさだけの問題。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "hk_path_in_use の戻り値が「使用中(pid)」と「判定できない」を同じ形式で兼ねており、理由の表示が曖昧になるので終了コードで分けるべき。",
+   "location": "skills/housekeeping/scripts/lib.sh:104",
+   "members": [
+    "e20",
+    "e22"
+   ],
+   "id": "clean-sk-14/c17",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "lib.sh:102-110。hk_path_in_use は一覧が空なら『lsof でプロセスを確かめられない』を、使用中なら『pid <pid> <cmd>』を返す。呼び出し側の scan.sh:164-165 と apply.sh:42-43 は、どちらの場合も残す(keep / skip)。理由の括弧の中に返り値がそのまま入るので、利用者は2つを区別できる。指摘は文言と戻り値の設計の好みで、判定の結果は変わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "parse_pr_info などで空白・行の分割を手作業で実装しており、プロセス置換と read を使えば簡潔になる。",
+   "location": "skills/housekeeping/scripts/scan.sh:49",
+   "members": [
+    "e15"
+   ],
+   "id": "clean-sk-14/c18",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "scan.sh の parse_pr_info はパラメータ展開で st/num/oid に分けている。read とプロセス置換で書けば短くなるのは事実だが、書き方の好みで挙動の問題は示していない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "1行の出力をグローバル変数に切り分ける同じ形の関数が2つある。",
+   "location": "scan.sh parse_pr_info / lib.sh hk_parse_action",
+   "members": [
+    "e19"
+   ],
+   "id": "clean-sk-14/c19",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "scan.sh の parse_pr_info と lib.sh:74 の hk_parse_action は、どちらも1行をグローバル変数に分ける同じ形の関数である。重複・構造の指摘で、挙動には関わらない(指摘自身も軽度としている)。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "hk_protect_patterns 内の set -f は $(...) 内で呼ばれる前提でしか戻らず、直接呼ぶと漏れる。またコメントが実装と食い違っている。",
+   "location": "skills/housekeeping/scripts/lib.sh:46",
+   "members": [
+    "e16"
+   ],
+   "id": "clean-sk-14/c20",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "hk_protect_patterns を呼ぶのは lib.sh:62 の rest=$(hk_protect_patterns ...) だけ(grep で確認)で、サブシェルの中なので set -f は外に漏れない。lib.sh:14 は source した時点で、もともと set -f を全体にかけている。直接呼ぶと漏れるという点は、将来呼び方を変えて初めて問題になる。コメント(lib.sh:58)は hk_is_protected 自身のループが単語分割を使わないことを書いたもので、その範囲では正しい。不正確に読める点があっても、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "lsof が使えない場合のテストが不十分で、偽の lsof は exit 1 の1通りだけ、自分自身が一覧に無い場合や apply.sh の skipped 経路も確かめていない。",
+   "location": "test.sh:164 / lib.sh:96 / apply.sh:42",
+   "members": [
+    "e18"
+   ],
+   "id": "clean-sk-14/c21",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "テストが無いという指摘。test.sh:162-170 の偽の lsof は exit 1 の1通りだけ、というのは事実。挙動も確かめた。自分自身を含まない一覧(p1/init/n/)を出す偽の lsof で実行すると、hk_process_cwds は空を返し(cwds=[])、hk_path_in_use は『lsof でプロセスを確かめられない』を返した。つまり残す側に倒れており、挙動の問題は無い。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "lsof のテストは何も見えないケースしか試しておらず、一部のプロセスだけ見えるケースを再現するテストが無い。",
+   "location": "skill-dev/housekeeping/test.sh:164",
+   "members": [
+    "e21"
+   ],
+   "id": "clean-sk-14/c22",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "テスト(test.sh:162-170)が、何も見えないケースしか試していないという指摘。テストが足りないという指摘で、コードが誤った結果を出すことは示していない。",
+   "classified_by": "llm"
+  }
+ ],
+ "members": {
+  "e1": {
+   "dir": "clean-sk-14/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 6
+  },
+  "e2": {
+   "dir": "clean-sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 9
+  },
+  "e3": {
+   "dir": "clean-sk-14/prove/1",
+   "config": "prove",
+   "trial": 1,
+   "n": 1
+  },
+  "e4": {
+   "dir": "clean-sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 6
+  },
+  "e5": {
+   "dir": "clean-sk-14/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 1
+  },
+  "e6": {
+   "dir": "clean-sk-14/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e7": {
+   "dir": "clean-sk-14/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 3
+  },
+  "e8": {
+   "dir": "clean-sk-14/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 4
+  },
+  "e9": {
+   "dir": "clean-sk-14/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 7
+  },
+  "e10": {
+   "dir": "clean-sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 7
+  },
+  "e11": {
+   "dir": "clean-sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 2
+  },
+  "e12": {
+   "dir": "clean-sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 10
+  },
+  "e13": {
+   "dir": "clean-sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 5
+  },
+  "e14": {
+   "dir": "clean-sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 1
+  },
+  "e15": {
+   "dir": "clean-sk-14/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 6
+  },
+  "e16": {
+   "dir": "clean-sk-14/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 8
+  },
+  "e17": {
+   "dir": "clean-sk-14/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 2
+  },
+  "e18": {
+   "dir": "clean-sk-14/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 5
+  },
+  "e19": {
+   "dir": "clean-sk-14/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 3
+  },
+  "e20": {
+   "dir": "clean-sk-14/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 2
+  },
+  "e21": {
+   "dir": "clean-sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 8
+  },
+  "e22": {
+   "dir": "clean-sk-14/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 4
+  },
+  "e23": {
+   "dir": "clean-sk-14/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 7
+  },
+  "e24": {
+   "dir": "clean-sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 4
+  },
+  "e25": {
+   "dir": "clean-sk-14/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 3
+  },
+  "e26": {
+   "dir": "clean-sk-14/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 5
+  }
+ },
+ "classify_cost_usd": 1.710263
+}

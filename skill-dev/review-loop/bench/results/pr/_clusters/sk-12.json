@@ -1,0 +1,282 @@
+{
+ "case": "sk-12",
+ "cost_usd": 0.058309,
+ "clusters": [
+  {
+   "title": "config の拒否で試行を止めなくなったため、子が deny ルールを別の手段で回り込める。このリスクが SKILL.md に書かれていない",
+   "location": "review_loop.py:308-309",
+   "members": [
+    "e1"
+   ],
+   "id": "sk-12/c1",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "review_loop.py の StreamTail.poll(source が config なら config_denied に入れ、denial にしない)と watch_denials を読んだ。main の SKILL.md にも『子は拒否されても作業を続けるが、スクリプトは…止める』とあり、拒否で止める処理の目的は時間と費用を省くこと(main のコメントにもそう書いてある)で、deny ルールを守らせる仕組みではない。main でも、子は拒否より前や POLL_SECONDS=2 の間に別のコマンドを打てる。grep で回り込めるかどうかは利用者の allow/deny ルールと Claude Code の権限判定で決まり、スクリプトはそれを変えない。指摘は SKILL.md に注意書きを足す提案で、スクリプトの挙動の誤りではない",
+   "classified_by": "llm"
+  },
+  {
+   "title": "子が終わった後に watch_denials が重ねて呼ばれており、708行目の呼び出しが無駄で、どちらが記録を担うのかも読み取りにくい",
+   "location": "skills/review-loop/scripts/review_loop.py:708",
+   "members": [
+    "e2"
+   ],
+   "id": "sk-12/c2",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "review_loop.py:708 では rc が None でなければ running=False で呼ばれ、config の拒否の記録だけをする。716 は2回目の poll で増えた分だけを記録する(new_config_denials の reported カウンタで二重には書かない)。重複して記録されることも、取りこぼすこともない。python3 test.py は全て成功し、denials.txt の内容の確認も通った。読みやすさと重複の問題にとどまる",
+   "classified_by": "llm"
+  },
+  {
+   "title": "判定役の最後の行が短い文のケース、判定が2回出るケース、tool_use_id のない拒否、config 由来でない拒否を確かめるテストがない",
+   "location": "skill-dev/review-loop/fakes/claude:92 と test.py:506",
+   "members": [
+    "e3"
+   ],
+   "id": "sk-12/c3",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "fakes/claude の FAKE_JUDGE には multi(最後の行が空)しかなく、短い文で終わるケースや判定が2回出るケースはない。tool_use_id のない拒否のケースもない(source のない拒否は denylive で確かめている)。テストが無いという指摘なので trivial",
+   "classified_by": "llm"
+  },
+  {
+   "title": "判定役が source のない拒否で途中で止まる経路のテストがなく、FAKE_JUDGE にも拒否を出すモードがない",
+   "location": "skill-dev/review-loop/test.py / FAKE_JUDGE",
+   "members": [
+    "e4"
+   ],
+   "id": "sk-12/c4",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "FAKE_JUDGE のモードは ok/noheading/empty/fenced/conflictfirst/multi/denyconfig で、source のない拒否を出すモードはない。run_judge の while ループでは watch_denials(running=True) を呼ぶので、経路そのものはある。テストが無いという指摘なので trivial",
+   "classified_by": "llm"
+  },
+  {
+   "title": "run_reviews と run_judge で子を見張る待機ループが重複しており、片方だけ直すと振る舞いがずれる",
+   "location": "skills/review-loop/scripts/review_loop.py:786 (run_reviews / run_judge)",
+   "members": [
+    "e5",
+    "e8"
+   ],
+   "id": "sk-12/c5",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "run_reviews(705-718行)と run_judge(785-795行)は、poll → watch_denials → 制限時間の確認 → finish → poll → watch_denials → check_result を同じ順で書いている。指摘のとおり重複しているが、今の時点では両方とも同じに振る舞う。将来片方だけ直したときに初めて問題になる",
+   "classified_by": "llm"
+  },
+  {
+   "title": "偽の claude がどの行にも同じ modelUsage を入れるため、トークンが累計であるという前提が外れてもテストが通ってしまう",
+   "location": "skill-dev/review-loop/test.py:503",
+   "members": [
+    "e6"
+   ],
+   "id": "sk-12/c6",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "fakes/claude の result() は、どの行にも同じ modelUsage(outputTokens 300)を入れる。test.py は output==4*300(観点3つ+判定役。multi の行を足していれば値が大きくなる)を確かめ、通る。足していないことは確かめられているが、本物の claude で modelUsage が累計だという前提は偽物では確かめられない。テストの強さの問題で、挙動の問題ではない",
+   "classified_by": "llm"
+  },
+  {
+   "title": "check_result が拒否の要約を自前で組み立てており、StreamTail.summary と重複している",
+   "location": "skills/review-loop/scripts/review_loop.py:252",
+   "members": [
+    "e7"
+   ],
+   "id": "sk-12/c7",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "review_loop.py:252-253 では check_result が {tool_name, tool_input: tool_inputs.get(tool_use_id)} を組み立てており、StreamTail.summary の中の dict と同じ形をしている。結果は summarize_denials に渡され、どちらで作っても同じになる。重複だけの問題",
+   "classified_by": "llm"
+  },
+  {
+   "title": "denials.txt を確かめる指示が「失敗したとき」の節にしかなく、終了コード 0 で成功したときの手順に入っていない",
+   "location": "skills/review-loop/SKILL.md:70 と :103",
+   "members": [
+    "e9"
+   ],
+   "id": "sk-12/c8",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:103(失敗したとき/permission_denied の項)に『観点の欠落が出たときは、denials.txt に読めなかったものがないかも確かめる』がある。手順4の観点の欠落の段落(:70)にはない。ただし手順3(:48)で denials.txt が残ることを書いており、指示も同じ文書の中にある。文書とコードの食い違いではなく、指示をどこに置くかという文書の構成の問題",
+   "classified_by": "llm"
+  },
+  {
+   "title": "途中経過の文が入る原因を元で直さず、result の行を全部つなぐ後追いの対処をしているため、judge-input.md などに途中経過の文が混ざる",
+   "location": "skills/review-loop/scripts/review_loop.py:242",
+   "members": [
+    "e10"
+   ],
+   "id": "sk-12/c9",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "review_loop.py:229-246 の check_result は、空でない最上位の result の行をすべてつなぐ。docstring と SKILL.md「3. 結果を受け取る」には、途中経過の文が混ざることを承知のうえで、欠けるよりよいとして選んだと明記されている。混入は文書どおりの意図した挙動で、誤った結果や失敗にはつながらない。観点スキルがサブエージェントをバックグラウンドで動かすかどうかはスキル側の実装で、このスクリプトからは制御できない。どこで直すかは設計の好みの問題。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "parent_tool_use_id の付いたサブエージェントの result の行を丸ごと捨てるため、その行の permission_denials を見落とすおそれがある",
+   "location": "skills/review-loop/scripts/review_loop.py:305",
+   "members": [
+    "e11"
+   ],
+   "id": "sk-12/c10",
+   "class": "wrong",
+   "scope": "na",
+   "ran": true,
+   "evidence": "StreamTail.poll は、system の permission_denied を parent_tool_use_id の有無にかかわらず拾う。parent_tool_use_id で除いているのは result の行だけ。一時スクリプトで再現した。stream の内容は、サブエージェント内の tool_use、parent_tool_use_id 付きの permission_denied イベント、parent_tool_use_id 付きの result の行(permission_denials あり)、最上位の成功の result の行。実行すると results は1件、denial にイベントが入り、check_result は AttemptFailed('permission_denied') を投げた。サブエージェントの result の行を捨てても、拒否はイベントから検出される。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "SKILL.md は「source がなければ止める」と書いているが、コードは config 以外をすべて止めており、記述と実装が合っていない",
+   "location": "SKILL.md「失敗したとき」",
+   "members": [
+    "e12"
+   ],
+   "id": "sk-12/c11",
+   "class": "wrong",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md「失敗したとき」は、まず source が config の拒否だけを止めないと書き、そのあとに source がない場合も止める側に倒すと補っている。つまり config 以外はすべて止めるという意味で、review_loop.py:308-312 の『source が config なら config_denied に記録し、それ以外は denial にする』と一致する。「source がなければ止める」は止める場合をすべて挙げた文ではないので、食い違いはない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "{tool_name, tool_input} の dict を何か所かで組み立てており、Primitive Obsession / Data Clumps にあたる",
+   "location": "review_loop.py",
+   "members": [
+    "e13"
+   ],
+   "id": "sk-12/c12",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "{tool_name, tool_input} の dict は check_result と StreamTail.summary で組み立てて、summarize_denials に渡している。構造の好みの問題で、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "denial_summary を StreamTail.summary に改名したため、引数が拒否のイベントであることが名前から読めなくなった",
+   "location": "StreamTail.summary",
+   "members": [
+    "e14"
+   ],
+   "id": "sk-12/c13",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "StreamTail.summary(d) という命名の問題で、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "watch_denials が、拒否の記録と止める拒否での例外送出の2つの仕事を、フラグ引数 running で切り替えて兼ねている",
+   "location": "watch_denials",
+   "members": [
+    "e15"
+   ],
+   "id": "sk-12/c14",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "watch_denials(label, tail, workdir, running) は、config の拒否の記録と、running が真のときの例外の送出を兼ねている。関数の分け方の好みの問題で、挙動には関わらない。呼び出し側はどれも意図どおりに動く。",
+   "classified_by": "llm"
+  }
+ ],
+ "members": {
+  "e1": {
+   "dir": "sk-12/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 2
+  },
+  "e2": {
+   "dir": "sk-12/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 3
+  },
+  "e3": {
+   "dir": "sk-12/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 1
+  },
+  "e4": {
+   "dir": "sk-12/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 6
+  },
+  "e5": {
+   "dir": "sk-12/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 2
+  },
+  "e6": {
+   "dir": "sk-12/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 4
+  },
+  "e7": {
+   "dir": "sk-12/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 5
+  },
+  "e8": {
+   "dir": "sk-12/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 2
+  },
+  "e9": {
+   "dir": "sk-12/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 3
+  },
+  "e10": {
+   "dir": "sk-12/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 6
+  },
+  "e11": {
+   "dir": "sk-12/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e12": {
+   "dir": "sk-12/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 1
+  },
+  "e13": {
+   "dir": "sk-12/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 5
+  },
+  "e14": {
+   "dir": "sk-12/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 4
+  },
+  "e15": {
+   "dir": "sk-12/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 3
+  }
+ },
+ "classify_cost_usd": 0.7797468
+}

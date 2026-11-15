@@ -1,0 +1,588 @@
+{
+ "case": "clean-sk-16",
+ "cost_usd": 0.10553699999999999,
+ "clusters": [
+  {
+   "title": "SKILL.md と JUDGE_PROMPT が範囲と再現の定義を二重に書いていて、すでに食い違いが出ている",
+   "location": "SKILL.md 手順4・5 / JUDGE_PROMPT",
+   "members": [
+    "e1"
+   ],
+   "id": "clean-sk-16/c1",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "grep -n \"確かめられなければ\\|確かめられず\" で確かめた。この文言は skills/review-loop/scripts/review_loop.py:863 と 879 にだけあり、SKILL.md には無い(grep は一致なしで終了コード 1)。ただし SKILL.md:81 は「範囲、再現の定義は JUDGE_PROMPT が正」と書いていて、SKILL.md:87 の範囲の説明にもこの規則と反する記述は無い。判定役はこの規則に従って「確かめられずに差分の内とした」と verdict に書き、親はそれを読んで動く。そのため挙動は食い違わない。残るのは定義を二度書いているという重複で、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "修正箇所を通る既存のテストがあるかを親が主観で決めてしまう",
+   "location": "SKILL.md:130",
+   "members": [
+    "e2"
+   ],
+   "id": "clean-sk-16/c2",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:130 は、修正した箇所を通る既存のテストがあるかで、もう1回回すかを決めさせている。その見分け方(カバレッジなど)は書いていない。指摘の内容は事実だが、判断基準の厳密さの問題で、誤った結果になる経路を示すものではない。LLM の判断に頼る部分で、実行して確かめる対象も無い。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "公開リポジトリで悪用手順を書かない歯止めが PR 本文にしかなく、公開かどうかを確かめる方法も書かれていない",
+   "location": "skills/review-loop/SKILL.md:115",
+   "members": [
+    "e3"
+   ],
+   "id": "clean-sk-16/c3",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "grep -n \"公開\" skills/review-loop/SKILL.md で、116 行(PR 本文)のほかに 136 行の issue 作成の段落にも「公開なら起きる操作の順を書かず、利用者に尋ねる」という歯止めがあることを確かめた。「PR 本文にしかない」という主張は事実と違う。回帰テストを残すのは「再現した: 採用して直す」の場合だけ(SKILL.md:105)なので、直していない指摘の悪用手順がテストに残る経路は無い。コードコメントに悪用手順まで書く経路も、文書からは導けない。公開かどうかの確かめ方が無い点は書き足しの好みで、gh で分かる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "PR の目的の直し残しを差分の内に入れる例外が PR 本文に無い",
+   "location": "SKILL.md / JUDGE_PROMPT",
+   "members": [
+    "e4"
+   ],
+   "id": "clean-sk-16/c4",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "gh pr view は、リモートが GitHub を指していないため失敗し、実際の PR 本文は見られなかった。代わりに git log main..HEAD --format='%B' でコミット a4b0600 のメッセージ(PR 本文の元)を読んだ。変更3は「PR の前から同じように起きる指摘は、この PR では直さず」とだけ書き、PR の目的の直し残しを例外とする記述は無い。この点は事実。ただし食い違っているのは変更の説明文で、利用者と判定役が従う SKILL.md:99 と review_loop.py:863 は互いに一致している。スキルの挙動は変わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "終了の判断と issue を作る段落に条件や関心事が詰め込まれていて読みにくい",
+   "location": "SKILL.md 終了の判断・issue 作成の段落",
+   "members": [
+    "e5"
+   ],
+   "id": "clean-sk-16/c5",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:130(終了の判断)と 136(issue 作成)は、確かに長い1項目・1段落になっている。ただし読みやすさの指摘で、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "JUDGE_PROMPT の再現欄の書き方が矛盾していて、親が再現する範囲とのずれも説明されていない",
+   "location": "JUDGE_PROMPT 再現欄",
+   "members": [
+    "e6"
+   ],
+   "id": "clean-sk-16/c6",
+   "class": "wrong",
+   "scope": "na",
+   "ran": false,
+   "evidence": "review_loop.py:865 の「再現は、分類が defect の指摘にだけ書く。…ほかの分類では『対象外』と書く」は、中身を書くのは defect だけで、それ以外は欄に「対象外」と書く、という意味になる。879 行の書式「<手順> / 実行では示せない。<理由> / 対象外」もこれと合っていて、矛盾は無い。判定役は defect すべてに手順を書き、親はそのうち影響が高のものと、中で普通の使い方で起きるものだけを再現する(SKILL.md:101)。これは役割の分け方で、判定役の書いた手順が使われずに残るだけなので、挙動はずれない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "再現の手順を写すと、ローカルの絶対パスなどが PR 本文や issue に混ざる恐れがある",
+   "location": "SKILL.md:116 / :136",
+   "members": [
+    "e7"
+   ],
+   "id": "clean-sk-16/c7",
+   "class": "undetermined",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:107 は「試した手順と結果を、採らなかった理由として残す」と書き、理由を残す先は SKILL.md:115-116 のコードコメントと PR 本文になる。再現は一時ディレクトリで行うので、手順にパスが入る可能性はある。一方、issue の本文(SKILL.md:136)に書かせているのは「起きる操作の順」で、再現のコマンドを写すようには指示していない。実際に絶対パスが混ざるかは LLM の出力しだいで、狙って起こせない。利用者名が GitHub のログイン名と同じ場合など、害が小さいこともあり、確かめられなかった。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "差分の外の指摘について「再現しない」と「影響が高ならベースで確かめる」が矛盾している",
+   "location": "skills/review-loop/SKILL.md:99",
+   "members": [
+    "e8",
+    "e33"
+   ],
+   "id": "clean-sk-16/c8",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:99 の「差分の外の指摘は…再現もしない」は、差分の外と決まった指摘の扱いを述べている。そのあとの「影響が高の指摘を差分の外として外すときは、PR のベースで…確かめてから外す」は、差分の外と決める前に範囲を確かめる手順で、当てはまる順が違う。手順として両立していて、具体的な指示のほうに従えば挙動は一意に決まる。言葉の上で紛らわしいだけ。中影響の指摘が判定役の判断だけで外れる点は、「判断が疑わしければ同じように確かめて」とあるとおり意図した設計の選択で、不具合ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "issue を作るリポジトリが明示されておらず、fork からの PR では upstream に issue が作られる恐れがある",
+   "location": "SKILL.md:136",
+   "members": [
+    "e9"
+   ],
+   "id": "clean-sk-16/c9",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:136 は `gh issue create` を --repo なしで書いている。ただ、スクリプト自身も PR を `gh pr view --json number,...`(review_loop.py:454)で --repo なしに解決していて、ループ全体が gh の既定のリポジトリ=PR のあるリポジトリを前提にしている。issue も同じリポジトリに作られるので、PR と食い違うことはない。本文の「見つけた PR の番号」が意味を持つのもそのリポジトリだけで、差分の外の不具合は PR の先のコードにあるので、そこに起票するのは筋が通る。さらに、作るのは利用者が選んだものだけで、尋ねずには作らない(同じ行)。この環境のリモートは GitHub ではなく(gh: none of the git remotes ... known GitHub host)、fork の構成を作って gh の解決を実行で確かめることはしていない。誤った結果につながる経路が無いので、明示の追加は書き方の改善にとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "セキュリティ指摘の扱いが PR 本文に無い追加になっている",
+   "location": "SKILL.md",
+   "members": [
+    "e10"
+   ],
+   "id": "clean-sk-16/c10",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "HEAD のコミットメッセージ(PR 本文の元)の「変更」1〜3には、確かにセキュリティ指摘の扱いが無い。SKILL.md:116 と :136 で足された文言がそれに当たる。ただ、これは PR の説明の書き漏れで、スキルの挙動(親がすること)は SKILL.md の文言どおりになる。利用者が挙動を誤る食い違いではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "新しい欄が JUDGE_PROMPT に入っていることを確かめるテストが無い",
+   "location": "skill-dev/review-loop/fakes/claude:100",
+   "members": [
+    "e11"
+   ],
+   "id": "clean-sk-16/c11",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "テストが無いという指摘で、分類の定義上 trivial。test.py を grep しても「範囲」「再現」への言及は無く、事実としては正しい。ただ、スクリプトが判定から検査するのは VERDICT_SECTIONS=(\"## 指摘\",\"## 競合\") の見出しだけ(review_loop.py:839, :949-953)で、欄の有無は挙動に関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "手順5の末尾の「手順1に戻る」が早期終了の条件と食い違い、回さずに終えるときのコミット・push が決まっていない",
+   "location": "skills/review-loop/SKILL.md:120 / :130",
+   "members": [
+    "e12",
+    "e29"
+   ],
+   "id": "clean-sk-16/c12",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:120「修正したら手順1に戻る。」と :130「回さずに終えてよい」は文言としては食い違う。ただ main の時点でも、:120 が同じで、終了の判断は基準に当たらない指摘(低など)を直したあと回さずに終えることを許していた(git show main:SKILL.md)。一般の決まりと終了の例外が並ぶ構造は前からある。コミット・push については、終了時の報告に「最後に判定を受けた SHA と終了時の HEAD の差(そのあとに入れた修正)」(:134)とあり、最後の修正が HEAD に入っている(=コミット済み)前提で読める。親が未コミットのまま終える経路は、文書の読み違いを仮定しないと起きない。文言の整合の問題として trivial にした。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "差分の外と判断した指摘が記録されず、毎回出直して確かめ直すコストがかかる",
+   "location": "SKILL.md:99 / :113",
+   "members": [
+    "e13"
+   ],
+   "id": "clean-sk-16/c13",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "判定役は過去の判定を受け取らないので、差分の外の指摘は毎回出直しうる(SKILL.md:118)。ただ、親の責務に「過去の判定と、採らなかった指摘とその理由を持ち続け、採否と終了の判断に使う」(SKILL.md:16)とあり、同じ指摘をまた確かめ直す必要は無い。指摘の中心は確かめ直すコストという効率の話で、誤った結果やデータの消失にはつながらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "再現するのが PR を書いた親自身なので、高影響の指摘を外したい動機が働く",
+   "location": "SKILL.md:106 / :128",
+   "members": [
+    "e14"
+   ],
+   "id": "clean-sk-16/c14",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "LLM の親に「外したい動機」が働くかは、実行で確かめられる挙動ではなく、設計への懸念。文書はすでに歯止めを入れている。「再現を試みたが、起きなかった」ときは試した手順と結果を理由として残す(SKILL.md:106)、別の条件で起きる指摘はその条件を作らずに試した結果を「起きなかった」に数えない(:103)、終了時に利用者へ報告する(:134)。コードの誤りや文書との食い違いは無く、設計の好みの範囲。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "偽の判定に一部の欄しか足しておらず、JUDGE_PROMPT の形と揃っていない",
+   "location": "skill-dev/review-loop/fakes/claude:100",
+   "members": [
+    "e15",
+    "e16"
+   ],
+   "id": "clean-sk-16/c15",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "fakes/claude:100 の偽の判定は、範囲と再現を足したが分類・起きやすさ・再指摘・根拠・横展開・競合の欄は無い(後ろの欄が無いのは main の時点から)。スクリプトは見出し2つしか検査しない(review_loop.py:949-953)。`python3 skill-dev/review-loop/test.py` を実行し、出力の末尾は「全て成功」。欄が揃っていなくても挙動は変わらず、テスト用の偽の出力の書き方の揃えにとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "回さずに終えると、再現のために残した回帰テストがレビューされないままマージされる",
+   "location": "SKILL.md:130",
+   "members": [
+    "e17"
+   ],
+   "id": "clean-sk-16/c16",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:105 は再現のテストを回帰テストとして残すとし、:130 はそのテストが修正前に失敗して修正後に通れば回さずに終えてよいとしている。そのテストがレビューを受けないままになることは事実。ただ、テストが修正前に失敗し修正後に通ることは、実行で確かめている(:105, :130)。また、終了時の報告に最後に判定を受けた SHA と HEAD の差を載せる(:134)。何かが誤った結果になったり消えたりする経路は無く、レビューの網羅という手順の好みの範囲。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "再現が1回起きなかっただけで高影響の指摘が捨てられ、再現手順の誤りを疑う手当てがない",
+   "location": "skills/review-loop/SKILL.md:106",
+   "members": [
+    "e18"
+   ],
+   "id": "clean-sk-16/c17",
+   "class": "wrong",
+   "scope": "na",
+   "ran": false,
+   "evidence": "「再現手順の誤りを疑う手当てがない」は SKILL.md と食い違う。101行に「判定の手順が合っていなければ、自分で組み直す」とある。103行には、環境の条件を作らずに試して起きなかったものは「起きなかった」に数えないこと、隔離して再現できないものは「実行では示せない」に回すことが書かれている。手順の誤りを疑う手当ては文書にある。高影響の指摘でも起きなければ採らない点は、PR の目的(コミット本文の変更1「再現を試みて起きなければ採らない」)どおりの意図した設計。文書を読めば判断できるため実行はしていない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "早期終了の条件にある「どの修正も」「1つでも」がどこまでかかるのか曖昧",
+   "location": "skills/review-loop/SKILL.md:130",
+   "members": [
+    "e19",
+    "e24"
+   ],
+   "id": "clean-sk-16/c18",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:130 の段落は「直前の判定で、継続の理由になる指摘を採って直したとき」で始まる。「どの修正も」「1つでも」はこの条件の中にあるので、継続の理由になる指摘の修正を指すと読める。影響の低い修正だけなら、この段落はそもそも当てはまらない(main の時点でも、基準に当たる指摘を直したときだけ回していた)。もっと明示的に書ける余地はあるが、言い回しの問題にとどまる。経路の外まで挙動を変えたかどうかの判断が親に任されているのは、既存の「あなたが総合的に判断する」(124行)と同じ設計。文書の解釈の問題なので実行はしていない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "PR 本文では任意だったベースでの確認を、SKILL.md が高影響の指摘について必須にしている",
+   "location": "SKILL.md",
+   "members": [
+    "e20"
+   ],
+   "id": "clean-sk-16/c19",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "PR 本文(コミット本文の「確かめていないこと」)は「親が PR のベースで確かめて決め直せるようにしてある」と書いている。SKILL.md:99 は、影響が高の指摘を差分の外として外すときにベースでの確認を求めている。SKILL.md のほうが厳しいだけで、スキルの挙動は SKILL.md で決まる。PR の説明の書き方の差で、利用者がスキルの挙動を誤る経路は無い。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "「判定役もレビュー役も実行して確かめてはいない」という記述が保証されていない",
+   "location": "skills/review-loop/SKILL.md:93",
+   "members": [
+    "e21"
+   ],
+   "id": "clean-sk-16/c20",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "指摘の事実関係は正しい。review_loop.py:805 と 923 は、子を `claude -p` でツールを絞らずに起動している。課している制約は NO_MUTATION(77行)と DELEGATE_CONSTRAINT だけで、実行は禁じていない。このため、SKILL.md:93 の「実行して確かめてはいない」は保証されない。ただし、この記述から親がとる行動は、指摘を仮説として扱い自分で再現することで、安全側に倒れる。子が実際に実行していても、親が確かめ直すだけで誤った結果にはならない。記述の正確さの問題として trivial とした。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "観点の欠落の指摘で範囲をどう書くかが決まっていない",
+   "location": "skills/review-loop/scripts/review_loop.py:863",
+   "members": [
+    "e22"
+   ],
+   "id": "clean-sk-16/c21",
+   "class": "wrong",
+   "scope": "na",
+   "ran": false,
+   "evidence": "観点の欠落の指摘で「範囲」の書き方が決まっていないこと自体は事実(review_loop.py:863 の範囲の定義は通常の指摘を前提にしている)。しかし「終了の判断が曖昧になる」は文書と食い違う。SKILL.md:91 は、観点の欠落を範囲と無関係に「確かめてから回し直す」と定めている。終了の判断の126行も「観点の欠落がある判定では終えない」を独立した項目として置いている。128行の「差分の外は継続の理由にしない」は、127行の影響の基準に付いた「ただし」で、126行を上書きしない。範囲に何が書かれても終了の判断は変わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "再現の安全の規則が PR 本文に無い追加になっている",
+   "location": "SKILL.md 手順4",
+   "members": [
+    "e23"
+   ],
+   "id": "clean-sk-16/c22",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:103 の隔離実行などの規則が、PR 本文(コミット本文)の変更の説明に載っていないという指摘で、PR の説明の網羅性の問題にすぎない。規則の中身は差分の目的(再現して確かめる)の安全のための補足で、スキルの挙動に問題は無い。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "手順4で判定の項目を並べた箇所に「分類」が抜けている",
+   "location": "skills/review-loop/SKILL.md:83",
+   "members": [
+    "e25"
+   ],
+   "id": "clean-sk-16/c23",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:83-89 の一覧に「分類」が無いのは事実で、main の時点でも無かった(差分の文脈行で確認)。一方、SKILL.md:81 は判定の形の正を JUDGE_PROMPT としており、JUDGE_PROMPT(review_loop.py の出力の形)には「分類: defect / ...」の欄がある。SKILL.md:87、101、109 も「分類が defect」と明示しているので、親が分類を読み落とす経路は無い。文書の網羅性の問題。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "影響の高い見逃しが差分の外として流れ、その備えを利用者が終了時の報告を読むことに頼っている",
+   "location": "SKILL.md",
+   "members": [
+    "e26"
+   ],
+   "id": "clean-sk-16/c24",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "差分の外の高影響の不具合を同じ PR で直さないことは、PR の意図した設計で、コミット本文の「確かめていないこと」に #14 の例付きで明記されている。手当てとして、SKILL.md:99 は高影響の指摘を外す前にベースでの確認を求めている。134行は終了報告に影響の段階を載せることを、136行は issue にするかを尋ね、高影響のものを先頭に置くことを定めている。設計上のトレードオフへの意見で、文書とコードの食い違いや誤動作ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "issue を作るときの追加手順が PR 本文に無い追加になっている",
+   "location": "SKILL.md issue 作成",
+   "members": [
+    "e27"
+   ],
+   "id": "clean-sk-16/c25",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "`git log main..HEAD` で見た PR 本文(コミット a4b0600)の変更3には「報告に続けて issue にするかを尋ね、言われたものだけを作る」としか書いていない。一方 SKILL.md:136 には、既存 issue の重複確認、反復をまたいだ統合、影響が高のものを先頭に置くこと、本文に書く項目が加わっている。追加が本文に無いのは事実。ただ、どれも issue を作る手順を細かく決めたもので、本文に書いた方針(尋ねてから作る)と矛盾しない。挙動を決めるのは SKILL.md なので、本文が詳しく書いていないことで利用者が誤った操作をすることはない。PR 本文の書き方の問題にとどまる。文書の照合なので実行はしていない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "公開してよいかを、リポジトリが公開かどうかだけで判断している",
+   "location": "SKILL.md:116 / :136",
+   "members": [
+    "e28"
+   ],
+   "id": "clean-sk-16/c26",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:116(PR 本文の箇条)と :136(issue 作成)は、どちらも「リポジトリが公開なら」悪用の手順を書かない、としている。判断がリポジトリの公開・非公開だけで決まるのは事実。ただ、private リポジトリの外部の協力者は、権限を与えられてアクセスしている人である。『あとで公開する』は将来の変更があって初めて問題になるもの。今の差分で誤った結果やデータの消失が起きる経路はない。方針の厳しさの好みであり、分類の基準では trivial に当たる。文書の内容なので実行はしていない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "悪用手順を書かないというセキュリティの規則が2か所に重複している",
+   "location": "SKILL.md PR 本文の箇条 / issue 作成の段落",
+   "members": [
+    "e30"
+   ],
+   "id": "clean-sk-16/c27",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "`git diff main...HEAD` で確かめた。SKILL.md:116 に「リポジトリが公開なら、直していないセキュリティの指摘の悪用の手順は書かない」、:136 に「セキュリティに関わる指摘は、リポジトリが公開なら…起きる操作の順を書かず」がある。2か所にあるのは事実。ただし対象が違い(PR 本文と issue)、内容も矛盾しない。重複は書き方の問題で、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "新しい欄の名前「範囲」が、既存の別の意味の「範囲」と重なっている",
+   "location": "JUDGE_PROMPT / SKILL.md",
+   "members": [
+    "e31"
+   ],
+   "id": "clean-sk-16/c28",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "`grep -n 範囲` で調べた。review_loop.py の JUDGE_PROMPT は、新しい欄の「範囲」(:863, :879)のほかに、「直す範囲を決められる材料」(:843)、「指示で外した範囲」「範囲を絞るだけの指示」(:850)、「コードで確かめた範囲」(:861)と、別の意味でもこの語を使っている。SKILL.md:63, :134 の「--instruct で範囲を絞った」も同じ。語が重なっているのは事実。ただ、欄の定義(:863)は「差分の内 / 差分の外」という決まった値で書かれていて、他の箇所は一般の名詞として使われている。取り違えが実際に起きるかは示されておらず、命名の問題にとどまる。LLM の挙動は狙って再現できないので、実行はしていない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "再レビューの条件が「修正が大きければ」から「大きさに関係なく回す」に変わっているのに、PR 本文で説明されていない",
+   "location": "SKILL.md 再レビューの条件",
+   "members": [
+    "e32"
+   ],
+   "id": "clean-sk-16/c29",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "PR 本文(コミット a4b0600)の変更2は「(修正が大きく、再現が確かめた範囲を超えて挙動を変えているなら回す)」。SKILL.md:130 は「(共有している関数の変更や横展開の修正のように、再現が確かめた経路の外の挙動も変えているなら、修正の大きさに関係なく回す)」で、条件が『大きい かつ 範囲外』から『範囲外』だけに変わっている。食い違いと、それを本文が説明していないことは事実。ただ、挙動を決めるのは SKILL.md で、SKILL.md のほうが厳しい(回す場合が増える)。このためレビューを省いてしまう方向の誤りは起きない。本文の記述が古いという PR 説明の不備で、skill の利用者が誤った操作をする経路はない。文書の照合なので実行はしていない。",
+   "classified_by": "llm"
+  }
+ ],
+ "members": {
+  "e1": {
+   "dir": "clean-sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 1
+  },
+  "e2": {
+   "dir": "clean-sk-16/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 8
+  },
+  "e3": {
+   "dir": "clean-sk-16/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 5
+  },
+  "e4": {
+   "dir": "clean-sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 5
+  },
+  "e5": {
+   "dir": "clean-sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 3
+  },
+  "e6": {
+   "dir": "clean-sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 12
+  },
+  "e7": {
+   "dir": "clean-sk-16/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 11
+  },
+  "e8": {
+   "dir": "clean-sk-16/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 3
+  },
+  "e9": {
+   "dir": "clean-sk-16/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 9
+  },
+  "e10": {
+   "dir": "clean-sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 6
+  },
+  "e11": {
+   "dir": "clean-sk-16/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 4
+  },
+  "e12": {
+   "dir": "clean-sk-16/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 1
+  },
+  "e13": {
+   "dir": "clean-sk-16/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 6
+  },
+  "e14": {
+   "dir": "clean-sk-16/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 5
+  },
+  "e15": {
+   "dir": "clean-sk-16/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 7
+  },
+  "e16": {
+   "dir": "clean-sk-16/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 3
+  },
+  "e17": {
+   "dir": "clean-sk-16/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 7
+  },
+  "e18": {
+   "dir": "clean-sk-16/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 4
+  },
+  "e19": {
+   "dir": "clean-sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 11
+  },
+  "e20": {
+   "dir": "clean-sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 9
+  },
+  "e21": {
+   "dir": "clean-sk-16/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 8
+  },
+  "e22": {
+   "dir": "clean-sk-16/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 9
+  },
+  "e23": {
+   "dir": "clean-sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 8
+  },
+  "e24": {
+   "dir": "clean-sk-16/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 2
+  },
+  "e25": {
+   "dir": "clean-sk-16/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 6
+  },
+  "e26": {
+   "dir": "clean-sk-16/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 12
+  },
+  "e27": {
+   "dir": "clean-sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 7
+  },
+  "e28": {
+   "dir": "clean-sk-16/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 10
+  },
+  "e29": {
+   "dir": "clean-sk-16/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e30": {
+   "dir": "clean-sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 4
+  },
+  "e31": {
+   "dir": "clean-sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 2
+  },
+  "e32": {
+   "dir": "clean-sk-16/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 10
+  },
+  "e33": {
+   "dir": "clean-sk-16/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 2
+  }
+ },
+ "classify_cost_usd": 2.3360692
+}

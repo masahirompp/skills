@@ -9,5 +9,10 @@
     "base": "1a2c98d",
     "head": "dcef303",
     "squash": true
+  },
+  "pr": {
+    "repo": "masahirompp/skills",
+    "number": 14,
+    "final": true
   }
 }

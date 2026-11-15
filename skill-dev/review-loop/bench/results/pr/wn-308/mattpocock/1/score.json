@@ -1,0 +1,56 @@
+{
+ "cost_usd": 0.0629176,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは cleanupLeftovers で Y を選んで引き継いだ作業台に workbenchOptions/status-format を入れ直さない点に一切触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib/tmux/tmux.ts",
+   "summary": "`%%` のエスケープを含むステータス行の変更を確かめるテストが lib 側になく、使い捨ての e2e にしかないため、cycle-end で e2e を消すと守るテストがなくなる。",
+   "quote": "しかし `%%` のエスケープを含むこの変更を確かめているのは、使い捨て層の `test/e2e/workbench.test.ts` だけです。cycle-end で e2e を消すと、この挙動を守るテストがなくなります。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "lib/tmux/tmux.ts",
+   "summary": "表示の文字列 `^Q` とプレフィックス設定 `'prefix', 'C-q'` が同じ事実を別々に持っており、プレフィックスを変えると表示だけ古いまま残る。",
+   "quote": "表示の文字列 `^Q` と、プレフィックスの設定 `'prefix', 'C-q'` が、同じ事実を別々に持っています。プレフィックスを変えると、表示だけ古いまま残ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "docs/lib/tmux.md",
+   "summary": "「作業台では」がどこを指すか曖昧で、案内のセッションを除くことが明記されていない。",
+   "quote": "「作業台では」がどこを指すのか曖昧です。「作業台(案内のセッションを除く)」と書けば、コードの `session === GUIDE` の分岐と一致します。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "docs/PRODUCT.md:442",
+   "summary": "合成図が手で書き換えられており、右の分割の最下行は capture から取れたはず。",
+   "quote": "442行の合成図 `0:zsh*  · ^│` は、手で書き換えた形跡があります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "docs/PRODUCT.md",
+   "summary": "採らなかった形は幅60の実画面で示しているのに、採った形は括弧書きだけで実画面が並んでいない。",
+   "quote": "採らなかった形は幅60の実際の画面で示しています。一方、採った形は文中の括弧書きだけです。同じ幅60の実際の画面を並べると、「見た目の決定」の規約によく沿います。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "test/e2e/workbench.test.ts:25",
+   "summary": "案内のセッションではキーを出さないという要件を確かめるテストがない。",
+   "quote": "ただ `test/e2e/workbench.test.ts:25` は `workbench: alpha` を確かめるだけです。`not.toMatch(/\\^Q%/)` を1行足せば守れます。",
+   "quote_ok": true
+  }
+ ]
+}

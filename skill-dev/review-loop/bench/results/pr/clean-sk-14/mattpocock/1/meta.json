@@ -1,0 +1,26 @@
+{
+ "case": "clean-sk-14",
+ "kind": "shell",
+ "config": "mattpocock",
+ "trial": 1,
+ "model": "claude-opus-5-5",
+ "pr_mode": true,
+ "status": "ok",
+ "tokens": {
+  "input": 605824,
+  "cache_read": 497946,
+  "output": 16344
+ },
+ "cost_usd": 1.0683141999999999,
+ "started_at": "2026-11-15T21:04:42",
+ "duration_s": 164,
+ "num_turns": 8,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [],
+ "head_changed": false
+}

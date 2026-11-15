@@ -1,0 +1,105 @@
+{
+ "cost_usd": 0.1051176,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--perspective の値を正規化しないまま起動プロンプトを作るため、照合した名前と実際のプロンプトが食い違うという指摘はありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "しかし判定役のプロンプト `JUDGE_PROMPT` は変わっていません。「観点の欠落」の規則(`review_loop.py:805`)には、指示で外した範囲を除く旨がありません。",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いがなく、指示で外した範囲を観点の欠落と扱いうる、と正解と同じ場所・原因を指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "逆に、引数だけ変えた観点(例: `code-review medium {pr}`)は載りません。",
+   "reason": "既定との比較がスキル名だけで行われるため、引数違いの観点が記録されず、並べ替えは差とみなされる、と両方の誤りを指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が、外した security-review に --instruct を渡しているため終了コード2になる、という指摘はありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "valid_state が perspectives をリストか確かめない点への言及はありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt で渡した指示がサブエージェントに届かない点への言及はありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "partial",
+   "quote": "区切りの形も、観点の出力の区切り(`===== 観点: X =====`)と紛らわしいです。",
+   "reason": "指示ブロックとレビュー出力の区切りが紛らわしいという場所は合っていますが、レビュー出力の側から指示を偽装・混同されうるという原因までは述べていません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭の `/` を取り除かないために、事前確認や照合で失敗するという指摘はありません。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "review_loop.py(review_config, iterate, preflight, run_reviews)",
+   "summary": "観点を文字列のまま持ち回っており、各関数が skill_name(s) でスキル名を取り出す処理が重複している。",
+   "quote": "観点を文字列のまま持ち回っています。`review_config`、`iterate`、`preflight`、`run_reviews` が、それぞれ `skill_name(s)` でスキル名を取り出しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "review_loop.py(run_reviews)",
+   "summary": "perspectives と instructions が常に組で渡されるため、run_reviews の引数が8個に増えている。",
+   "quote": "`perspectives` と `instructions` が常に組で渡されています。そのため `run_reviews` の引数が8個になりました。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "review_loop.py",
+   "summary": "specs/perspectives と instructs/instructions は、語尾の違いだけで生の値と解釈済みの値を区別しており、名前が分かりにくい。",
+   "quote": "`specs`/`perspectives` と `instructs`/`instructions` は、語尾の違いだけで「生の値」と「解釈済みの値」を区別しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "review_loop.py(review_constraint)",
+   "summary": "review_constraint() はシステムプロンプト全体を返すので、関数名が中身に合っていない。",
+   "quote": "`review_constraint()` が返すのはシステムプロンプト全体なので、`review_system_prompt` などのほうが中身に合います。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "review_loop.py(iterate)",
+   "summary": "iterate の specs=None と instructs=None の既定値は、呼び出し元が常に両方を渡すため使われていない。",
+   "quote": "`iterate(..., specs=None, instructs=None)` の既定値 `None` は使われていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "test.py:551, 558",
+   "summary": "run(wt, \"--new-run\") が続けて2回呼ばれており、反復が1回余分である。",
+   "quote": "`run(wt, \"--new-run\")` が 551行と 558行で続けて呼ばれていて、反復が1回余分です(確認済み)。",
+   "quote_ok": true
+  }
+ ]
+}

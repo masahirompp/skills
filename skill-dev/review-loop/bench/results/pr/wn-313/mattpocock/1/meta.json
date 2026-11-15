@@ -1,0 +1,26 @@
+{
+ "case": "wn-313",
+ "kind": "ts",
+ "config": "mattpocock",
+ "trial": 1,
+ "model": "claude-opus-5-5",
+ "pr_mode": true,
+ "status": "ok",
+ "tokens": {
+  "input": 719855,
+  "cache_read": 595493,
+  "output": 17892
+ },
+ "cost_usd": 1.2048186000000003,
+ "started_at": "2026-11-15T20:55:25",
+ "duration_s": 140,
+ "num_turns": 0,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [],
+ "head_changed": false
+}
