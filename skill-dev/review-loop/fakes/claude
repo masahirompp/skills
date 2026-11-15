@@ -23,6 +23,8 @@
 #                            / partiallater(判定のあとに、見出しを一部だけ持つ訂正の result の行を出す)
 #                            / redo(前置きとフェンスで包んだ下書きの判定を出したあと、直した判定を出す)
 #                            / denyconfig(設定のルールでの拒否のイベントを出したあと、正常に終わる)
+#   FAKE_VERIFY              ok(既定) / fail(異常終了) / noheading(決めた見出しがない) / hang / dirty(複製の中にファイルを作る)
+#                            / deny(拒否のイベントを出したあと、正常に終わる) / push(origin へ push を試みる)
 # 出力は本物と同じく stream-json(1行1イベント)。事前確認以外は init の行から始める
 import json
 import os
@@ -92,6 +94,36 @@ if args[-1] == "ok":  # 事前確認(レビュー役も stream-json を使うの
     sys.exit(0)
 
 emit({"type": "system", "subtype": "init", "cwd": os.getcwd()})
+
+if "## 検証" in args[-1]:  # 検証役(プロンプトに、出力の形の見出しがある)
+    import subprocess
+    stdin = sys.stdin.read()
+    mode = os.environ.get("FAKE_VERIFY", "ok")
+    remotes = subprocess.run(["git", "remote"], capture_output=True, text=True).stdout.split()
+    record("verify", stdin=stdin, remotes=remotes, files=sorted(os.listdir(".")))
+    section = "## 検証\n\n### F1: 再現した\n- 実行: scratch/repro.sh\n- 出力: x\n- 追跡: 対象外\n- 根拠: r\n"
+    if mode == "fail":
+        print("boom", file=sys.stderr)
+        sys.exit(1)
+    elif mode == "noheading":
+        result("確かめました")
+    elif mode == "hang":
+        time.sleep(120)
+        record("verify-not-killed")
+    elif mode == "dirty":
+        os.makedirs("scratch", exist_ok=True)
+        open("scratch/repro.sh", "w").write("x")
+        result(section)
+    elif mode == "deny":
+        deny()
+        result(section, permission_denials=[{"tool_name": "Bash", "tool_use_id": "x", "tool_input": {"command": "rm -rf x"}}])
+    elif mode == "push":
+        r = subprocess.run(["git", "push", "origin", "HEAD:refs/heads/feature"], capture_output=True, text=True)
+        record("verify-push", rc=r.returncode)
+        result(section)
+    else:
+        result("以下が検証の結果です。\n\n" + section)
+    sys.exit(0)
 
 if stat.S_ISREG(os.fstat(0).st_mode):  # 判定役(標準入力にレビューの出力のファイルを受け取るのは判定役だけ)
     stdin = sys.stdin.read()

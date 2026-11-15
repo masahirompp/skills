@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """PR のレビューループを1反復だけ進める。
 
-    review_loop.py iterate <worktree の絶対パス> [--new-run] [--perspective SPEC]... [--instruct SKILL=TEXT]...
+    review_loop.py iterate <worktree の絶対パス> [--new-run] [--no-verify] [--perspective SPEC]... [--instruct SKILL=TEXT]...
 
 観点別のレビュースキルを `claude -p` で並列に実行し、判定役の `claude -p` に突き合わせと
-競合の裁定をさせ、判定(Markdown のテキスト)を標準出力に出す。コードは修正しない。
+競合の裁定をさせ、検証役の `claude -p` に worktree の複製の中で指摘を実行して確かめさせ、
+判定と検証の結果(Markdown のテキスト)を標準出力に出す。コードは修正しない。
 ループの状態は PR のコメント1つ(マーカー付き)に記録する。
 
 終了コード:
@@ -54,11 +55,13 @@ MAX_CONSECUTIVE_FAILURES = 3  # 連続失敗の上限
 PREFLIGHT_TIMEOUT = 2 * 60    # 事前確認(init を受け取るまで)
 REVIEW_TIMEOUT = 40 * 60      # レビュー役1つあたり
 JUDGE_TIMEOUT = 20 * 60       # 判定役
+VERIFY_TIMEOUT = 20 * 60      # 検証役
 MARGIN = 5 * 60               # Bash の制限時間に対する余裕(事前確認の後の gh の呼び出しなど)
 LOCK_MARGIN = 15 * 60         # ロックを持ったまま行う git・gh の呼び出し(各 COMMAND_TIMEOUT まで)の余裕
 BASH_TIMEOUT = 90 * 60        # SKILL.md で Bash ツールに指定する制限時間
 BASH_TIMEOUT_MAX = 120 * 60   # Bash ツールの最大制限時間
-STALE_LOCK_AFTER = REVIEW_TIMEOUT + JUDGE_TIMEOUT + LOCK_MARGIN
+STALE_LOCK_AFTER = REVIEW_TIMEOUT + JUDGE_TIMEOUT + VERIFY_TIMEOUT + LOCK_MARGIN
+COPY_TIMEOUT = 5 * 60         # 検証用の複製に、ignored のファイルを写す1回の cp
 WATCHDOG_GRACE = 60           # 子の見張り役が、親のタイムアウトに加えて待つ時間
 LOCK_SETTLE_SECONDS = 3       # nonce を書いてから読み直すまで
 POLL_SECONDS = 2
@@ -79,6 +82,8 @@ NO_MUTATION = "ファイルの編集、checkout、commit、stash、pushなど、
 DELEGATE_CONSTRAINT = "サブエージェントやサブタスクに作業を任せるときは、この制約をその依頼文にも含めてください。"
 REVIEW_CONSTRAINT = "他のレビューと並列に、同じworktreeで実行しています。" + NO_MUTATION + DELEGATE_CONSTRAINT
 JUDGE_CONSTRAINT = "レビュー対象のworktreeで実行しています。" + NO_MUTATION + DELEGATE_CONSTRAINT
+VERIFY_CONSTRAINT = ("レビュー対象のworktreeの複製で実行しています。この複製の中では、ファイルを作り、コマンドを実行して構いません。"
+                     "複製の外のファイルは変えないでください。commit と push はしないでください。" + DELEGATE_CONSTRAINT)
 # 利用者の指示を足すときに添える文。指示より作業ツリーの制約を優先させ、指示も依頼文に含めるよう頼む
 INSTRUCTION_RULES = "上の作業ツリーやブランチを変えない制約は、この指示よりも優先します。サブエージェントやサブタスクに作業を任せるときは、この指示もその依頼文に含めてください。"
 
@@ -394,7 +399,8 @@ def check_tools():
     missing = [c for c in ("git", "gh", "claude") if shutil.which(c) is None]
     if missing:
         raise Precondition(f"コマンドが見つからない: {', '.join(missing)}")
-    if PREFLIGHT_TIMEOUT + REVIEW_TIMEOUT + JUDGE_TIMEOUT + MARGIN > BASH_TIMEOUT or BASH_TIMEOUT > BASH_TIMEOUT_MAX:
+    if (PREFLIGHT_TIMEOUT + REVIEW_TIMEOUT + JUDGE_TIMEOUT + VERIFY_TIMEOUT + MARGIN > BASH_TIMEOUT
+            or BASH_TIMEOUT > BASH_TIMEOUT_MAX):
         raise Precondition("タイムアウトの合計が Bash ツールの制限時間を超えている(スクリプト冒頭の設定を見直す)")
 
 
@@ -963,6 +969,136 @@ def run_judge(wt, env, pr_number, reviews, workdir, children, attempt, instructi
     return verdict
 
 
+# 検証の見出し。VERIFY_PROMPT の出力の形と、偽の claude の検証と揃える
+VERIFY_SECTION = "## 検証"
+
+VERIFY_PROMPT = """\
+PR #{pr} に対するレビューの判定を、標準入力で渡す。判定の指摘は、コードを読んだだけの仮説で、誤っていることもある。
+あなたの役割は、指摘を実行して確かめ、修正する人(親)が採否を決められる材料を返すこと。修正はしない。
+
+今いるディレクトリは、PR のブランチの複製(リモートは外してある)。この中でファイルを作り、コマンドを実行してよい。
+再現は、テストの中、この複製の下の `scratch/`、一時ディレクトリに作ったリポジトリなど、隔離した場所で行う。
+利用者の本物のリポジトリやデータ、外部のサービスに対して、消す・書き換える操作を実行しない。
+再現に使ったスクリプトやテストは、親が流し直せるよう、この複製の中に残す。
+
+確かめるのは、分類が defect で、範囲が「差分の内」の指摘。それ以外の指摘は、結論を「対象外」として、実行しない。
+判定の「再現」の欄は手がかりで、合っていなければ自分で組み直す。
+
+結論は次のどれか。
+- 再現した: 指摘どおりのことが起きるのを、実行して見た(失敗するテスト、再現スクリプト、コマンドの出力)
+- 起きなかった: 指摘が起きると言っている条件を作って実行したが、起きなかった。条件を作れずに試したもの、
+  指摘とは違う条件で試したものは、これにしない
+- 実行では示せない: 文書やプロンプトの書き方、外部のサービスの挙動、狙って起こせないタイミング、この環境では作れない条件
+  (別の OS、サンドボックスなど)。テストを書くのが手間、は理由にならない。このときは、コードや文面を追って、
+  指摘が成り立つかを「追跡」に書く
+- 挙動に関わらない: 指摘の内容は事実だが、利用者から見える挙動は変わらない
+- 対象外: 分類が defect でない、または範囲が差分の外
+
+次の形の Markdown だけを出力する。判定の指摘を、id の順に全て載せる。指摘がなければ、見出しの下に「なし」と書く。
+
+## 検証
+
+### F1: 再現した / 起きなかった / 実行では示せない / 挙動に関わらない / 対象外
+- 実行: <実行したコマンドか、書いたテストの場所(複製の中の相対パス)> / なし
+- 出力: <出力の要点。親が同じコマンドで見比べられる程度に> / なし
+- 追跡: 成り立つ / 成り立たない / 分からない(「実行では示せない」のときだけ。ほかは「対象外」)
+- 根拠: <出力や追ったコードから分かること。起きなかったなら、試した条件。実行では示せないなら、その理由>
+"""
+
+
+def copy_ignored(src, dst):
+    """ignored のファイルやディレクトリを複製に写す。macOS では clonefile で速く、容量も使わない。"""
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    args = ["cp", "-Rc", src, dst] if sys.platform == "darwin" else ["cp", "-R", src, dst]
+    return subprocess.run(args, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=COPY_TIMEOUT)
+
+
+def make_verify_copy(wt, workdir, head):
+    """検証役が書き込める、worktree の複製を作って返す。
+
+    worktree をそのまま写すと `.git` が元の worktree の管理情報を指し、複製の中の git の操作が元の HEAD や index を
+    変えてしまう。そのため、clone して同じコミットをチェックアウトし、依存のディレクトリなど ignored のものだけを写す
+    (無いとテストを動かせないことが多い)。push 先を残さないよう、リモートは外す。"""
+    copy = os.path.join(workdir, "verify-repo")
+    run(["git", "clone", "-q", "--no-checkout", wt, copy], cwd=workdir)
+    run(["git", "checkout", "-q", "--detach", head], cwd=copy)
+    run(["git", "remote", "remove", "origin"], cwd=copy)
+    ignored = run(["git", "status", "--porcelain", "--ignored", "-z"], cwd=wt).stdout
+    for entry in ignored.split("\0"):
+        if not entry.startswith("!! "):
+            continue
+        rel = entry[3:].rstrip("/")
+        try:
+            r = copy_ignored(os.path.join(wt, rel), os.path.join(copy, rel))
+            failed = r.stderr.strip()[-200:] if r.returncode else ""
+        except (OSError, subprocess.TimeoutExpired) as e:
+            failed = str(e)
+        if failed:  # 写せなくても検証は進める(検証役が、動かせなかったと書く)
+            log(f"warn: 検証用の複製に {rel} を写せなかった: {failed}")
+    return copy
+
+
+def verify_failed(reason):
+    return (f"{VERIFY_SECTION}\n\n検証役が結果を返さなかった({reason})。指摘は実行で確かめられていない。"
+            "採否を決める前の再現は、親が行う。")
+
+
+def run_verify(wt, env, pr_number, verdict, workdir, children, attempt, head):
+    """検証役に、worktree の複製の中で指摘を確かめさせ、判定に足す「## 検証」の節を返す。
+
+    検証役の失敗では、試行を失敗にしない(判定は得られているので、捨てない)。失敗したことを節に書いて返し、
+    親が自分で再現する。権限の拒否も、検証役は再現の手段を選び直せるので止めず、stderr に残すだけにする。"""
+    try:
+        copy = make_verify_copy(wt, workdir, head)
+    except Precondition as e:
+        log(f"warn: 検証用の複製を作れなかった: {e}")
+        return verify_failed("検証用の複製を作れなかった")
+    input_path = os.path.join(workdir, "verify-input.md")
+    with open(input_path, "w", encoding="utf-8") as f:
+        f.write(verdict + "\n")
+    base = os.path.join(workdir, "verify")
+    with open(input_path, "rb") as fin, open(base + ".stdout.jsonl", "w") as out, open(base + ".stderr.txt", "w") as err:
+        try:
+            p = children.spawn(["claude", "-p", "--output-format", "stream-json", "--verbose",
+                                "--append-system-prompt", VERIFY_CONSTRAINT, VERIFY_PROMPT.format(pr=pr_number)],
+                               VERIFY_TIMEOUT, cwd=copy, env=env, stdin=fin, stdout=out, stderr=err)
+        except AttemptFailed as e:
+            log(f"warn: 検証役を起動できなかった: {e.detail}")
+            return verify_failed("起動できなかった")
+    tail = StreamTail(base + ".stdout.jsonl")
+    started = time.monotonic()
+    timed_out = False
+    while p.poll() is None:
+        tail.poll()
+        if time.monotonic() - started > VERIFY_TIMEOUT:
+            timed_out = True
+            break
+        try:
+            p.wait(POLL_SECONDS)
+        except subprocess.TimeoutExpired:
+            pass
+    rc = p.poll()
+    children.finish(p)
+    tail.poll()
+    for d in tail.blocking_denials() + [tail.denied_call(e) for e in tail.unrecorded]:
+        log(f"warn: verify: 権限の設定で拒否された(検証は続ける): {summarize_denials([d])}")
+    texts = tail.texts()
+    with open(base + ".result.md", "w", encoding="utf-8") as f:
+        f.write("\n\n".join(texts) + "\n")
+    if tail.results:
+        add_tokens(attempt["tokens"], tail.results[-1])
+    if timed_out:
+        log(f"warn: 検証役が {VERIFY_TIMEOUT // 60} 分を超えた")
+        return verify_failed(f"{VERIFY_TIMEOUT // 60} 分を超えた")
+    found = [t for t in texts if re.search(rf"^{re.escape(VERIFY_SECTION)}", t, re.M)]
+    if rc != 0 or not found:
+        log(f"warn: 検証役が決めた形の結果を返さなかった(終了コード {rc})。出力は {base}.result.md")
+        return verify_failed("異常終了した" if rc != 0 else "決めた形の出力がない")
+    text = found[-1]
+    section = text[re.search(rf"^{re.escape(VERIFY_SECTION)}", text, re.M).start():].strip()
+    return re.sub(r"\n```\s*$", "", section).rstrip() if text[:text.index(section[:20])].count("```") % 2 else section
+
+
 def find_contamination(wt, start):
     """子が作業ツリーやブランチを変えていないか、PR の head が試行中に動いていないかを確かめる。
     問題があれば (種類, 詳細) を、なければ None を返す。"""
@@ -987,7 +1123,7 @@ def find_contamination(wt, start):
 
 
 # --- 本体 --------------------------------------------------------------------
-def iterate(worktree, new_run, ctx, perspective_args, instruct_args):
+def iterate(worktree, new_run, ctx, perspective_args, instruct_args, verify=True):
     # 前提チェック。ロックを取る前なので、失敗しても状態には記録しない
     if os.environ.get(GUARD_ENV):
         raise Precondition(f"{GUARD_ENV} が設定済み。レビューループの中から再帰的に起動された")
@@ -1033,6 +1169,9 @@ def iterate(worktree, new_run, ctx, perspective_args, instruct_args):
         log(f"作業ディレクトリ: {ctx['workdir']}")
         reviews = run_reviews(wt, env, start, ctx["workdir"], children, attempt, perspectives, instructions)
         verdict = run_judge(wt, env, start["number"], reviews, ctx["workdir"], children, attempt, instructions)
+        if verify:
+            verdict += "\n\n" + run_verify(wt, env, start["number"], verdict, ctx["workdir"], children, attempt,
+                                           start["head"])
         children.kill_all()
         found = find_contamination(wt, start)
         if found:
@@ -1145,6 +1284,8 @@ def main():
     it = sub.add_parser("iterate", help="レビューを1反復だけ実行する")
     it.add_argument("worktree", help="PR のブランチをチェックアウトした worktree の絶対パス")
     it.add_argument("--new-run", action="store_true", help="新しいシリーズを始める(利用者の指示があったときだけ使う)")
+    it.add_argument("--no-verify", action="store_true",
+                    help="検証役(指摘を worktree の複製の中で実行して確かめる)を回さない。利用者の指示があったときだけ使う")
     it.add_argument("--perspective", action="append", metavar="SPEC",
                     help="観点スキルとその引数(例: 'code-review high {pr}')。1つでも渡すと、既定の一覧の代わりに渡したものだけを使う。繰り返せる")
     it.add_argument("--instruct", action="append", metavar="SKILL=TEXT",
@@ -1156,7 +1297,7 @@ def main():
     ctx = {"workdir": "", "attempt": None}
     code = 0
     try:
-        verdict = iterate(args.worktree, args.new_run, ctx, args.perspective, args.instruct)
+        verdict = iterate(args.worktree, args.new_run, ctx, args.perspective, args.instruct, not args.no_verify)
         print(verdict, flush=True)
         log("完了: 反復 {}、入力 {}、出力 {} トークン".format(ctx["attempt"]["iter"], *format_tokens(ctx["attempt"]["tokens"])))
     except BaseException as e:
