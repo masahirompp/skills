@@ -44,12 +44,12 @@ import uuid
 #   比較の起点(commit や branch)として読むので、数字だけを渡すと起点として解決できず推測に頼る
 # 既定を1つにしているのは、不具合を含む PR で構成を比べた結果による(skill-dev/review-loop/bench)。
 # code-review high が単独で最も多く見つけ、security-review と mattpocock-skills:code-review は、それだけが見つけた
-# 不具合がほとんど無かった。観点を足すときは、--perspective か --focus を使う
+# 不具合がほとんど無かった
 PERSPECTIVES = [
     "code-review high {pr}",
 ]
 
-# --focus で足す、スキルを使わないレビュー役のプロンプト。{pr} は PR 番号、{focus} は利用者の指定した観点
+# --focus で足す、スキルを使わないレビュー役のプロンプト
 FOCUS_PROMPT = "PR #{pr} の差分を、次の観点でレビューし、具体的な指摘を file:line 付きの箇条書きで出してください。\n\n観点: {focus}"
 
 SAFETY_MAX_ITER = 10          # シリーズあたりの反復の上限
@@ -278,7 +278,7 @@ def check_result(label, rc, base, attempt, tail):
 # 普通に起き、子は該当部分を外してやり直せる。この値からは、拒否されたのが一部か全部か、deny ルールに
 # 当たったのか許可ルールに無かったのかは見分けられない。auto mode の分類器の判定(classifier)や安全確認
 # (safetyCheck)のように、子が読めないまま進みうるものは含めない。項目名と値は、本物の claude(2.1.325)が
-# stream に出す permission_denied のイベントに合わせてある(source や reason_type という項目は無い)
+# stream に出す permission_denied のイベントに合わせてある
 TOLERATED_DENIAL = "subcommandResults"
 
 
@@ -819,7 +819,6 @@ def review_system_prompt(instruction):
 def run_reviews(wt, env, pr, workdir, children, attempt, perspectives, instructions, focuses=()):
     """観点別レビューを並列に実行し、{観点: 結果のテキスト} を返す。1つでも失敗したら残りを止める。
 
-    レビュー役は、観点スキルごとに1つと、--focus で足した観点ごとに1つ(スキルを使わない)。
     出力は stream-json で受け、試行を止める権限の拒否が出たらその時点で止める(watch_denials)。"""
     jobs = [(skill_name(spec), "/" + expand(spec, pr), instructions.get(skill_name(spec))) for spec in perspectives]
     jobs += [(focus_name(i), FOCUS_PROMPT.format(pr=pr["number"], focus=text), None) for i, text in enumerate(focuses, 1)]
@@ -994,7 +993,7 @@ VERIFY_PROMPT = """\
 PR #{pr} に対するレビューの判定を、標準入力で渡す。判定の指摘は、コードを読んだだけの仮説で、誤っていることもある。
 あなたの役割は、指摘を実行して確かめ、修正する人(親)が採否を決められる材料を返すこと。修正はしない。
 
-今いるディレクトリは、PR のブランチの複製(リモートは外してある)。この中でファイルを作り、コマンドを実行してよい。
+今いるディレクトリは、PR のブランチの複製(リモートは外してある)。
 再現は、テストの中、この複製の下の `scratch/`、一時ディレクトリに作ったリポジトリなど、隔離した場所で行う。
 利用者の本物のリポジトリやデータ、外部のサービスに対して、消す・書き換える操作を実行しない。
 再現に使ったスクリプトやテストは、親が流し直せるよう、この複製の中に残す。
@@ -1018,7 +1017,7 @@ PR #{pr} に対するレビューの判定を、標準入力で渡す。判定�
   (別の OS、サンドボックスなど)。テストを書くのが手間、は理由にならない。このときは、コードや文面を追って、
   指摘が成り立つかを「追跡」に書く
 - 挙動に関わらない: 指摘の内容は事実だが、利用者から見える挙動は変わらない
-- 対象外: 分類が defect でない、または範囲が差分の外
+- 対象外: 上の、確かめる指摘に当たらない
 
 次の形の Markdown だけを出力する。判定の指摘を、id の順に全て載せる。指摘がなければ、見出しの下に「なし」と書く。
 
