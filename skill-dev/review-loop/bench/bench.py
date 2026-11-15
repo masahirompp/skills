@@ -65,6 +65,9 @@ CONFIGS = {
     "security-review": {"prompt": "/security-review", "system": READ_ONLY},
     "mattpocock": {"prompt": "/mattpocock-skills:code-review main", "system": READ_ONLY},
     "perspectives": {"prompt": PERSPECTIVES_PROMPT, "system": READ_ONLY},
+    # 観点を書かない形。観点明示型との差が、観点の一覧の効果になる
+    "plain": {"prompt": "main からこのブランチへの差分をレビューし、具体的な指摘を file:line 付きの箇条書きで出してください。",
+              "system": READ_ONLY},
     "prove": {"prompt": PROVE_PROMPT, "system": OWN_COPY},
 }
 
@@ -75,6 +78,8 @@ CONFIGS_PR = {
     "mattpocock": {"prompt": "/mattpocock-skills:code-review PR #{pr}", "system": rl.REVIEW_CONSTRAINT},
     "perspectives": {"prompt": "PR #{pr} の差分を、正確性 / セキュリティ / 並行性 / プライバシー / 設計の観点でレビューし、"
                                "具体的な指摘を file:line 付きの箇条書きで出してください。", "system": rl.REVIEW_CONSTRAINT},
+    "plain": {"prompt": "PR #{pr} の差分をレビューし、具体的な指摘を file:line 付きの箇条書きで出してください。",
+              "system": rl.REVIEW_CONSTRAINT},
     "prove": {"prompt": PROVE_PROMPT.replace("この変更(main からこのブランチへの差分)", "この変更(PR #{pr})"),
               "system": OWN_COPY},
 }

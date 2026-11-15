@@ -1,0 +1,26 @@
+{
+ "case": "wn-306",
+ "kind": "ts",
+ "config": "perspectives",
+ "trial": 2,
+ "model": "claude-opus-5-5",
+ "pr_mode": true,
+ "status": "ok",
+ "tokens": {
+  "input": 546779,
+  "cache_read": 497397,
+  "output": 8891
+ },
+ "cost_usd": 0.6722674,
+ "started_at": "2026-11-15T21:58:10",
+ "duration_s": 116,
+ "num_turns": 11,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [],
+ "head_changed": false
+}
