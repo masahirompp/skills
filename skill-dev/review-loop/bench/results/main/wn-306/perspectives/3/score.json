@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.1022776,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "起動された行が多いと、選んだ行と入力欄が上へ押し出されます。",
+   "reason": "render の範囲が (sub) の分だけ延びて窓より長くなり、start = b0 と b1 基準の補正のせいで選んだ行と入力欄が窓から外れることを、2つの場合とも原因つきで指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "detected",
+   "quote": "このとき、空行、見出し、選んだ行と関係のない `(sub)` まで同じ塊になります。",
+   "reason": "trailing が区切りの境目で切れず、次の区切りの (sub) まで選んだ行の塊に入ることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "detected",
+   "quote": "選べる行がなく、一覧が窓に収まらないときは `0/0` が出ます。",
+   "reason": "選べる行がないときに通し番号が 0/0 になることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "選んでいた行が更新で起動された行に変わると、その行はまだ `prevLayout.order` にあるので `goneName` が入り、`guard` が張られます。",
+   "reason": "行が (sub) に変わったときも guard が立ち、一覧に残っている行について『left the list』と出ることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に対象の行が (sub) に変わっても入力欄が閉じないことには触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "detected",
+   "quote": "作業台のキーから届く経路(`attachKey` → `app.ts:1197-1202`)があり、そこでは `sidOfSession` の結果をそのまま `this.cursor` に入れて開きます。",
+   "reason": "openNote から isSpawned の判定を消したため、attachKey の経路から (sub) の行にカーソルが乗り、メモが開くことを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の『Both can be selected』の記述が実装と食い違うことには触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/screen/screen.ts:201",
+   "summary": "選べる行を表示の印 (marker !== 'sub') から推しているので、印の出し方を変えると、モデルが決める選べる行とずれるおそれがある。",
+   "quote": "画面は `r.marker !== 'sub'` で選べる行を数え、モデルは `node.spawned` で決めています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/model/cursor.ts:3,6",
+   "summary": "selectableOrder が行ごとに全ノードを走査するので O(n²) になり、キーを押すたびと更新のたびに走る。",
+   "quote": "`selectableOrder` は行ごとに `isSpawned` で全区切りの全ノードを走査するので、O(n²) です。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/e2e/deps.test.ts:464-466",
+   "summary": "シナリオ71が、キー入力のあと waitFor を挟まずに否定の判定をしているので、何も起きていなくても通ってしまう。",
+   "quote": "`h.keys('f'); h.keys('e');` の直後に、`waitFor` を挟まず `not.toMatch(/waits for:|can't/)` を確かめています。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test/e2e/deps.test.ts:442",
+   "summary": "シナリオ70が並び順を実行時に判定しているので、確かめたい並び (other が P の下) に固定されていない。",
+   "quote": "`below ? 'Down' : 'Up'` で並び順を実行時に判定しているので、`other` が上下どちらに並んでも通ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test/unit/screen.test.ts:136",
+   "summary": "窓から外れる2つの場合 (先頭に (sub) が多いとき、入力欄の下に (sub) が多いとき) を確かめるテストがない。",
+   "quote": "上の窓の 2 件(先頭の `(sub)` が多いとき、入力欄の下に `(sub)` が多いとき)を確かめるテストがありません。",
+   "quote_ok": true
+  }
+ ]
+}

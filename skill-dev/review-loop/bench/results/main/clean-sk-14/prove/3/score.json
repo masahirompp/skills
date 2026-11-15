@@ -1,0 +1,13 @@
+{
+ "cost_usd": 0.0381496,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib.sh hk_process_cwds",
+   "summary": "$$(自分自身)が見えるかどうかでプロセスの可視性を判定しているため、same-sandbox 制限下では外部プロセスが見えないのに確認済みと見なされ、使用中の worktree が delete 判定されて apply.sh で消える(fail-open)。",
+   "quote": "実装 `lib.sh` の `hk_process_cwds` は、`$$`(自分自身)が一覧に出るかどうかで、プロセスを見られるかを判定しています。",
+   "quote_ok": true
+  }
+ ]
+}

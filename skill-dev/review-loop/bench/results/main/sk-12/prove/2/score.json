@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.0704416,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "source == 'config' だけで振り分けて reason_type を見ていない点には触れておらず、設定のルール以外の拒否は意図どおり止まると結論しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "tool_use_id のない拒否で config_denied に None が入り、seen で id なしの拒否が除外される点には触れていません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "detected",
+   "quote": "どちらも判定役(judge)が `result` の行を複数出したときに起きます。今回の変更で、判定役の `result` の行もすべてつなぐようになったことが原因です。",
+   "reason": "run_judge が result の行を全てつないで使うため、判定の出し直しや後に続く短い文が判定に混ざり、見出しの確認も重なりを見逃すと、正解の trigger の (a)(b) の両方を指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "is_error の result の行がつながれて本文に混ざる点には触れていません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "run_reviews が別の観点の失敗で抜けたときに止めない拒否の記録が漏れる点には触れていません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "child_error の詳細にエラーの文ではなく、つないだ本文の先頭500字が載る点には触れていません。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

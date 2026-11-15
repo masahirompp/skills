@@ -1,0 +1,112 @@
+{
+ "cost_usd": 0.14253359999999998,
+ "bugs": [
+  {
+   "id": "S16-1",
+   "verdict": "detected",
+   "quote": "A PR fixes bug X in path A, and the judge points out that path B still triggers X. Path B behaves the same before and after the PR, so it gets \"差分の外\". The PR ships with an incomplete fix",
+   "reason": "PR の前から起きるという範囲の定義のせいで直し残しが差分の外になり、直されず継続の理由にもならないと指摘しており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-2",
+   "verdict": "partial",
+   "quote": "Line 99 also says \"終了の基準に当たる\" findings must be reproduced, while the stop criteria at line 126 themselves depend on the repro result, which is circular.",
+   "reason": "「終了の基準に当たる」が曖昧だという点には触れているが、差分の外の指摘を再現して直してしまうことと、L107 の規則と食い違うことは述べていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-3",
+   "verdict": "detected",
+   "quote": "Nothing says to do this in a throwaway environment, yet the high-impact findings that need it are exactly the ones about data loss or deleting things that should stay.",
+   "reason": "再現を行う場所が限られておらず、本物のリポジトリで破壊的な操作を実行しうると指摘しており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-4",
+   "verdict": "detected",
+   "quote": "On a public repository, a pre-existing vulnerability with impact \"高: セキュリティ\" is listed first when the user is asked. The user agrees, and the parent publishes it as an issue with the exact steps to trigger it.",
+   "reason": "公開リポジトリで issue に起きる操作の順を書くと、未修正の脆弱性を公開することになると指摘しており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-5",
+   "verdict": "detected",
+   "quote": "The fix also changes behaviour on another branch of the code with no existing test, introducing a new bug. Under the new rule the parent stops without re-running, and the new bug is never reviewed.",
+   "reason": "既存のテストが修正箇所を通らなくても再レビューを省く条件が満たされ、副作用を確かめないまま終わると指摘しており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "差分の外になる横展開の候補が、終了時の報告にも issue の確認にも載らないという点は指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-7",
+   "verdict": "detected",
+   "quote": "A data-loss bug only shows up with GNU sed on Linux, or only on a specific git version. The parent tries it once on macOS, sees nothing, and rejects it.",
+   "reason": "指摘の前提となる環境を作れないまま試して起きなかった場合でも、採らず継続の理由にもしないで済むと指摘しており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "判定役の範囲の判断を、読んだだけの仮説のまま確かめずに受け入れてよいという非対称は指摘していない(項目7の原因は、判定役にベースの ref が渡されないことで、正解とは別)。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-9",
+   "verdict": "partial",
+   "quote": "Any regression the fix introduces outside what the repro covers, and any cross-path changes bundled into the same fix, reach the end without review.",
+   "reason": "再現の外の退行がレビューされないことと「大きく」が主観的なことには触れているが、例外が修正の大きさに結び付いているため小さい修正がすり抜ける、という原因は明確に述べていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-10",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "PR が意図して変えた挙動への指摘でも、再現すれば採用して戻してしまうという点は指摘していない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/SKILL.md:111",
+   "summary": "差分の外として先送りした指摘を PR の本文やコメントに記録する定めがないため、毎回のイテレーションで同じ指摘が戻ってくる。",
+   "quote": "Findings deferred as \"差分の外\" are not covered by \"判定と異なる判断\", so nothing tells the parent to record them in the PR body or code comments.",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/scripts/review_loop.py:863",
+   "summary": "JUDGE_PROMPT はベースの ref や SHA を渡さないので、判定役がベースを推測し、範囲を誤判定しうる。",
+   "quote": "JUDGE_PROMPT gives it only the PR number, not the base ref or SHA. It has to guess the base, and the stale-local-base problem listed in Known limitations (SKILL.md:148) can lead it to the wrong answer.",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/review-loop/SKILL.md:128",
+   "summary": "「実行で確かめていない修正が1つでもあれば」が、基準に当たった修正だけを指すのか、低影響の修正や横展開の変更を含む全ての修正を指すのかが曖昧。",
+   "quote": "It is unclear whether \"実行で確かめていない修正が1つでもあれば\" means only the fixes that met the criteria or every fix in the iteration, including low-impact ones and bundled cross-path changes.",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skill-dev/review-loop/fakes/claude:100",
+   "summary": "偽の判定に「分類」の欄がなく、「再現: 対象外」の使い方がプロンプトの規則と合わない。",
+   "quote": "The fake verdict gains only \"範囲\" and \"再現\" and still has no \"分類\" field, so \"再現: 対象外\" does not match the prompt's rule that this value is for non-defect findings.",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skill-dev/review-loop/fakes/claude:100",
+   "summary": "新しい欄を確かめるテストがなく、この変更でカバレッジが増えない。",
+   "quote": "No test checks these fields either, so the change adds no coverage.",
+   "quote_ok": true
+  }
+ ]
+}

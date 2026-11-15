@@ -1,0 +1,27 @@
+{
+ "case": "sk-12",
+ "kind": "python",
+ "config": "mattpocock",
+ "trial": 1,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 698636,
+  "cache_read": 561206,
+  "output": 14790
+ },
+ "cost_usd": 1.1923062000000004,
+ "started_at": "2026-11-15T07:18:55",
+ "duration_s": 615,
+ "num_turns": 7,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [
+  "Bash cat /Users/masahirompp/.claude/projects/-private-var-folders-5t-j2015ppn7pj1lf0h39j3c5jm0000gn-T-rb-v3u49r-y-w-03be44abbb-skills/fc9b85d6-05b7-4ca1-99d2-443ff55ebbf7/tool-results/bw4477gf0.txt"
+ ],
+ "tree_changed": [],
+ "head_changed": false
+}

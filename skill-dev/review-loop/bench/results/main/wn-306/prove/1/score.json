@@ -1,0 +1,55 @@
+{
+ "cost_usd": 0.0814696,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "cursorBlock の終わりが、最後の (sub) の行まで伸びます。そこへ既存の「入力欄は最後の行まで窓に入れる」(`start = b1 - avail`)が効き、窓が (sub) の行の末尾に合わさります。",
+   "reason": "render の cursorBlock に (sub) を含めたことと start = b1 - avail / start = b0 の補正を原因として、入力欄や選んだ行が窓から外れる2つの起き方をどちらも指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "trailing が区切りの境目で切れず、次の区切りの (sub) まで塊に入ることには触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "選べる行がないときの通し番号 0/0 には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "app.ts の guard の文言『left the list』には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に対象の行が (sub) に変わっても入力が閉じない問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "openNote の判定を消したことや attachKey の経路には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の記述との食い違いには触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.0627296,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューはセキュリティの観点だけを扱っていて、wbguide が消えたあとに作り直されない問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "@wn_respawned の回数が通算で数えられ、数え直されないことについての指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "attach の結果の判定で、シグナルで終わって status が null になる場合を誤って失敗と扱う点に触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "pane-died の wbguide の分岐が、利用者が分割したペインまで起動し直す問題を指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗と判定された道でタイトルを消す OSC 2 が出なくなった点に触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide はシェル注入の観点でしか見ておらず、セッションの有無だけで案内があると判定する問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

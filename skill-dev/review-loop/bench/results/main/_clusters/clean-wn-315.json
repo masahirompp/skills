@@ -1,0 +1,761 @@
+{
+ "case": "clean-wn-315",
+ "cost_usd": 0.1250134,
+ "clusters": [
+  {
+   "title": "エラー中も、画面に出ていない古い this.rows の cwd が2番目以降の候補に入り、「行が見えない」という理由と矛盾する",
+   "location": "src/ops/app.ts:952",
+   "members": [
+    "e1",
+    "e17",
+    "e18",
+    "e26"
+   ],
+   "id": "clean-wn-315/c1",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/ops/app.ts:952 では、this.rows のすべての行の cwd を候補に足している。この行は差分で変わっていない。エラーの間、this.rows は残る(239行で error を立てて return し、267行の差し替えに届かない)ので、指摘のとおり古い行の cwd が2番目以降の候補に入る。ただ、PRODUCT.md が「見えない行のリポジトリを先頭にしない」と定めているのは先頭だけで、候補に「--json の各行の cwd」を含めるという記述とは食い違わない。利用者が誤る挙動ではなく、理由づけの筋の揃え方の問題にとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "locations.refresh は tier !== null の行しか解決しないため、idle の行の worktree パスが元のリポジトリに寄せられないまま候補に入る",
+   "location": "src/ops/app.ts:950",
+   "members": [
+    "e5"
+   ],
+   "id": "clean-wn-315/c2",
+   "class": "real",
+   "scope": "out",
+   "ran": false,
+   "evidence": "lib/tier/classify.ts:60 で、interactive かつ idle の行は tier が null になる。src/input/observe.ts の observe() は、この行を除かずに rows に入れて返す。app.ts:267 の this.rows にもそのまま入る。一方 locations.refresh は tier !== null の cwd だけを引く(app.ts:244、1542)。そのため app.ts:952 の this.p.locations.get(r.cwd)?.root ?? r.cwd は、この行では生の cwd になる。worktree にいる対話セッションなら、worktree のパスがそのまま候補に入り、PRODUCT.md の「worktree に移ったセッションの cwd は git で元のリポジトリのパスに寄せる」に反する。ただし952行は main から変わっておらず、差分で足した先頭の候補(カーソルの行は見える行なので tier は null でない)とも関係しない。よって範囲は out。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "候補の先頭はカーソル行のリポジトリなのに、Other... を空で確定すると起動ディレクトリになり、既定が2つある",
+   "location": "src/ops/app.ts:978",
+   "members": [
+    "e2",
+    "e28",
+    "e31",
+    "e53"
+   ],
+   "id": "clean-wn-315/c3",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "resolveDir(app.ts:972付近)は、空の入力に this.p.launchDir を返す。PRODUCT.md の n の節も、変更後に「空のまま Enter を押すと whatnext を起動したディレクトリで起動し、入力欄に Enter confirm (empty: <起動したディレクトリ>) と示す」と明記しており、画面に既定の場所が出る。文書とコードは一致していて、利用者が誤る経路はない。既定を候補の先頭に揃えるかどうかは、仕様の好みの問題である。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "起動直後は initialCursor が置いた行のリポジトリが先頭になり、n Enter が起動ディレクトリで起動しなくなる",
+   "location": "src/ops/app.ts:853",
+   "members": [
+    "e22",
+    "e40",
+    "e56"
+   ],
+   "id": "clean-wn-315/c4",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "起動直後、カーソルは initialCursor(app.ts:294)が置いた行にあり、n を押すとその行のリポジトリが先頭になる。これは事実である。ただ、PRODUCT.md の変更後の文面は「カーソルのあるセッションのリポジトリ」を先頭にすると定め、起動直後を例外にしていない。先頭が起動ディレクトリになるのは「行がないとき」と「エラーの間」だけで、2026-11-02 の利用者の判断として書かれている。シナリオ8 にも追記がある。意図して変えた仕様どおりの挙動で、不具合ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "止めている途中・削除している途中の行で、n だけがその行のリポジトリを先頭に使い、方針が揃っていない",
+   "location": "src/ops/app.ts:853",
+   "members": [
+    "e3"
+   ],
+   "id": "clean-wn-315/c5",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "app.ts:856-861 で、busy(this.deleting.has(sid))の行では Enter・e・f・w・v を断っている。n はその前の852行で処理されるので、止めている途中の行のリポジトリも先頭に使う。ただ n は、その行のセッションに触れない。使うのはリポジトリのパスだけで、パスは削除の途中でも有効なので、誤った結果や失敗にはつながらない。方針の揃え方の問題にとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "エラー中の先頭の規則を docs で2回述べていて冗長",
+   "location": "docs/PRODUCT.md:591",
+   "members": [
+    "e4"
+   ],
+   "id": "clean-wn-315/c6",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/PRODUCT.md:591 の「エラーを出している間は、whatnext を起動したディレクトリが先頭になる。エラーの間は行が画面に出ていないので、見えない行のリポジトリを先頭にしない。」は、規則とその理由を述べている。重なりは文章の書き方の問題で、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "重複除去が文字列一致のみで、realpath 済みの root と未正規化の launchDir が二重に出る",
+   "location": "src/ops/app.ts:944",
+   "members": [
+    "e6"
+   ],
+   "id": "clean-wn-315/c7",
+   "class": "wrong",
+   "scope": "na",
+   "ran": true,
+   "evidence": "launchDir は src/cli/list.ts:89 の process.cwd() で決まる。`cd /tmp && node -e \"console.log(process.cwd())\"` は /private/tmp を出した。process.cwd() はシンボリックリンクを解いた物理パスを返すので、launchDir は正規化されていないという前提が誤っている。カーソルの行の root も、git でない場所なら realpathSync(cwd)(src/input/where.ts:29)、git の場所なら git が返す絶対パスである。どちらの場合も、launchDir と同じ表記になる。さらに、同じ root は main の時点から952行の rows のループで足されており、差分で生まれた重複でもない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "513行の「同じ」の重なりや「違い」との近接で文意が曖昧",
+   "location": "docs/PRODUCT.md:513",
+   "members": [
+    "e7",
+    "e20"
+   ],
+   "id": "clean-wn-315/c8",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/PRODUCT.md:513 の「一覧の n と同じく候補の先頭をいたセッションのリポジトリにする。…も同じにする(一覧の n と違い…)」の言い回しの問題である。文意は追え、挙動とも食い違わない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "ctrl+q ctrl+n の文から移した理由などについて、n の節を参照する言葉を足すべき",
+   "location": "docs/PRODUCT.md:513",
+   "members": [
+    "e37"
+   ],
+   "id": "clean-wn-315/c9",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/PRODUCT.md:513 の書き方(相互参照の言葉を足すか)の提案。理由は :591 の n の節にあり、読み手が誤る挙動の食い違いはない。文書の書き方の好みにあたる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "エラー中の ctrl+q ctrl+n の振る舞いを確かめるテストがない",
+   "location": "test/e2e/ops.test.ts:294",
+   "members": [
+    "e8",
+    "e9",
+    "e15",
+    "e36",
+    "e54"
+   ],
+   "id": "clean-wn-315/c10",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "テストが無いという指摘。挙動は一時テストで確かめた。libby に attach したあと agentsFail にして ctrl+q ctrl+n を押すと、New session in: の先頭が '> lib' になった。テストは削除済み。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "worktree・git でない cwd・(tty)・行なしの各分岐にテストがない",
+   "location": "test/e2e/ops.test.ts",
+   "members": [
+    "e12",
+    "e16"
+   ],
+   "id": "clean-wn-315/c11",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "worktree・git でない cwd・(tty)・行なしの分岐に、テストが無いという指摘。openNew(src/ops/app.ts:943-963)と rootOfSid(:965-969)は locations の root か cwd を先頭に、行が無ければ launchDir を先頭に置く。テストの不足で、挙動の問題ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "行がないときと git でない場所のときの先頭候補のテストがない",
+   "location": "test/e2e/ops.test.ts:103",
+   "members": [
+    "e19"
+   ],
+   "id": "clean-wn-315/c12",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "テストが無いという指摘。行が無いと sid が undefined で prefRoot が無く、launchDir が先頭になる(app.ts:853, 944-950)。git でない場所では rootOfSid が r.cwd を返す。コードは docs と合っている。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "worktree の行で元のリポジトリに寄るかを確かめるテストがない",
+   "location": "test/e2e/ops.test.ts:103-121",
+   "members": [
+    "e38",
+    "e42"
+   ],
+   "id": "clean-wn-315/c13",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "テストが無いという指摘。rootOfSid は locations.get(r.cwd)?.root を使うので、worktree は元のリポジトリに寄る(app.ts:965-969)。この経路は main にもある。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "attach していたセッションがまだ一覧に無いと rootOfSid が undefined になり、launchDir が先頭になる",
+   "location": "src/ops/app.ts:1260",
+   "members": [
+    "e10"
+   ],
+   "id": "clean-wn-315/c14",
+   "class": "wrong",
+   "scope": "na",
+   "ran": true,
+   "evidence": "ctrl+q ctrl+n の sid は sidOfSession(app.ts:1222-1227)が this.rows から引く。行に無いと sid は undefined で、attachKey の :1255『if (!sid || this.isSpawned(sid)) return;』で戻り、openNew は呼ばれない。このため rootOfSid が undefined で launchDir が先頭になる経路は無い。一時テストで、エラー中に起動したセッション(rows に無い)から ctrl+q ctrl+n を押した。結果は New session のパネルが出ずに一覧へ戻るだけで、launchDir が先頭の候補は出なかった。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "エラー中は古い this.rows を引くため、エラー後に起動したセッションでは ctrl+q ctrl+n の先頭が起動ディレクトリに戻る",
+   "location": "src/ops/app.ts:1256-1260",
+   "members": [
+    "e27"
+   ],
+   "id": "clean-wn-315/c15",
+   "class": "wrong",
+   "scope": "na",
+   "ran": true,
+   "evidence": "一時テストで次を確かめた。agentsFail のあと、n の Other... で lib を選んで起動・attach し、C-q C-n を押した。画面はエラー行と一覧のキー説明だけで、'New session in:' は出ない。主張の『先頭が起動ディレクトリに戻る』は起きず、sid が引けずに app.ts:1255 で戻るので n が開かない(別の挙動)。エラー前に attach していた行では、古い rows から引けて先頭は lib になった(docs どおり)。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "決定の日付 2026-11-02 がコミット日 2026-11-15 と合わない",
+   "location": "docs/PRODUCT.md:591",
+   "members": [
+    "e11",
+    "e33"
+   ],
+   "id": "clean-wn-315/c16",
+   "class": "wrong",
+   "scope": "na",
+   "ran": true,
+   "evidence": "gh issue list の結果: #316『一覧の n で、候補の先頭をカーソルのあるセッションのリポジトリにする』(spec-change)と #317 の作成日は 2026-11-02T14:35Z / 14:39Z だった。利用者の判断は 11-02 で、コミットは 11-15 になっただけ。日付は誤りではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "エラー中は非表示の行を使わない規則が呼び出し側ごとに散らばり、経路追加時に漏れやすい",
+   "location": "src/ops/app.ts:853",
+   "members": [
+    "e13",
+    "e44"
+   ],
+   "id": "clean-wn-315/c17",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/ops/app.ts:823 のガードで n を通し、853 で `this.error ? undefined : sid` としているのは事実。ただし、今の挙動はどの経路でも正しく、指摘は構造の好みと、将来キーを足したときの書き忘れの懸念にとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "openNew の省略可能な位置引数2つにより undefined を渡す呼び出しが増え、読みにくい",
+   "location": "src/ops/app.ts:852-853",
+   "members": [
+    "e14",
+    "e23",
+    "e30"
+   ],
+   "id": "clean-wn-315/c18",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "`openNew(waitFor?, preferredFrom?)`(app.ts:943)の先頭に undefined を渡す呼び出しは 853 と 1260 の2か所で、指摘の内容は事実。中では `waitFor ?? preferredFrom` にまとめているだけで、挙動には関わらない。読みやすさの指摘。decision-log #317 にも、差分を小さく保つために変えなかったと記録がある。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "followCursor がカーソルを黙って移した直後の n で、意図しないリポジトリが先頭になる(guard がない)",
+   "location": "src/ops/app.ts:853",
+   "members": [
+    "e21",
+    "e32",
+    "e45"
+   ],
+   "id": "clean-wn-315/c19",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "app.ts:301-302 で、followCursor がカーソルを動かしたときに guard を立てるが、n はこれを見ない(853)。これは事実。ただし PRODUCT.md の仕様は『カーソルのあるセッションのリポジトリ』を先頭にすることで、移った後のカーソルは画面に出ており、仕様どおりに動いている。n はすぐには起動しない。候補の一覧を出し、先頭の名前を見せてから Enter を待つ。起動は不可逆な操作でもない。guard は Ctrl+X の削除のような取り返しのつかない操作のためのもの。n に守りが無いのは設計の好みの問題で、挙動の誤りではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "エラー中の先頭の扱いについて利用者への層2エスカレーションの記録がない",
+   "location": "docs/PRODUCT.md:591",
+   "members": [
+    "e24",
+    "e48",
+    "e49"
+   ],
+   "id": "clean-wn-315/c20",
+   "class": "wrong",
+   "scope": "na",
+   "ran": false,
+   "evidence": "main の app.ts:852 は `this.openNew()` で、エラーの間の一覧の n は main の時点で既に起動したディレクトリを先頭にしていた。ctrl+q ctrl+n(main:1259、HEAD:1260 の `openNew(undefined, sid)`)は差分で変わっていない。差分がエラーの間に新しく持ち込んだ観測できる変化は無く、利用者が決めた変更(2026-11-02、#316)を見えない行に広げなかっただけ。また、記録が無いという主張も誤り。decision-log の #317『エラーの間の n と ctrl+q ctrl+n の候補の先頭を書き分けた』に層1として記録があり、確認フェーズで利用者に確かめると書いてある。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "1つの it で2つを確かめており、前半が落ちると後半が実行されない",
+   "location": "test/e2e/ops.test.ts",
+   "members": [
+    "e25"
+   ],
+   "id": "clean-wn-315/c21",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "test/e2e/ops.test.ts:103-121 の1つの it が、通常の場合とエラーの間の場合を続けて確かめているのは事実。前半が落ちると後半は流れないが、テストの構成の話で、製品の挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "1つの it に2つの場合が入っているのに、テスト名がエラー中の場合を表していない",
+   "location": "test/e2e/ops.test.ts:103",
+   "members": [
+    "e34",
+    "e41"
+   ],
+   "id": "clean-wn-315/c22",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "テスト名『8: 一覧の n では、候補の先頭がカーソルのあるセッションのリポジトリ』は、後半のエラーの間の場合に触れていない。これは事実だが、命名の指摘で挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "テスト名は「8:」なのに、後半のエラー中の扱いがシナリオ8の文に含まれていない",
+   "location": "test/e2e/ops.test.ts",
+   "members": [
+    "e35"
+   ],
+   "id": "clean-wn-315/c23",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "PRODUCT.md のシナリオ 8 に足した文は『カーソルを別のリポジトリの行に置いて n を押すと先頭はそのリポジトリ』だけ。エラーの間の扱いは n の節(591行)にしか書いていないので、指摘の内容は事実。ただしテスト名と docs の対応づけの話で、仕様そのものは n の節に書いてあり、利用者が誤ることはない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "e2e がタイムアウトし、テストが通るか確認できていない",
+   "location": "test/e2e/ops.test.ts",
+   "members": [
+    "e29"
+   ],
+   "id": "clean-wn-315/c24",
+   "class": "wrong",
+   "scope": "na",
+   "ran": true,
+   "evidence": "`npm run build` のあと `npx vitest run test/e2e/ops.test.ts --no-file-parallelism --testTimeout 60000` を流すと、Tests 14 passed (14) で、新しいテストも通った。既定の 5000ms で流すと Test timed out in 5000ms で落ちる。指摘のタイムアウトは、npm run test:e2e の設定(--testTimeout 60000)を使わなかったためとみられる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "(tty) の行で git でない cwd も先頭になり、先頭が変わるのが初めてなので妥当か確認が要る",
+   "location": "src/ops/app.ts:968",
+   "members": [
+    "e39"
+   ],
+   "id": "clean-wn-315/c25",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/ops/app.ts:853 は cursor の sid をそのまま openNew に渡し、rootOfSid(app.ts:964-968)は locations の root を返す。git でない場所なら where.ts の plain(root = cwd の実パス)になる。(tty) の行の cwd も先頭になるという事実は合っている。ただし docs/PRODUCT.md:591 は「カーソルのあるセッションのリポジトリ(git でない場所ならその場所)」と書いていて、(tty) の行を除くとはしていない。この cwd は main の時点でも候補に入っていた(各行の cwd)。変わったのは並びの順だけで、文書どおりに動く。指摘は欠陥を示しておらず、仕様をもう一度確かめたらどうかという提案にとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "コミットメッセージがエラー中の分岐や ctrl+q ctrl+n との違いを正しく書いていない",
+   "location": "コミットメッセージ",
+   "members": [
+    "e43",
+    "e46",
+    "e52"
+   ],
+   "id": "clean-wn-315/c26",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "git log main..HEAD のコミット本文は「ctrl+q ctrl+n と同じ扱い」「openNew(undefined, sid) を呼ぶ」と書いている。実装(app.ts:853)は this.error ? undefined : sid で、エラーの間は ctrl+q ctrl+n(app.ts:1260、常に sid を渡す)と違う。食い違いは事実だが、利用者が読む docs/PRODUCT.md:510,591 にはエラーの間の違いが正しく書いてある。コミットメッセージの書き方の問題で、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "n で起動したセッションから離脱直後は行がまだ一覧に無く、次の n の先頭が前の行のリポジトリになる",
+   "location": "src/ops/app.ts:853",
+   "members": [
+    "e47"
+   ],
+   "id": "clean-wn-315/c27",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "onReturn(app.ts:1110-1123)は、行がまだないと pendingCursorId を置くだけで、cursor は変えない。行が観測に現れた更新(app.ts:311-319)で初めて cursor が移る。そのため、離脱した直後から refresh が終わるまでの間に n を押すと、前の行のリポジトリが先頭になる。経路は指摘どおり。ただしこの間、画面のカーソルは前の行にあり、新しい行はまだ表示されていない。文書の規則「カーソルのあるセッションのリポジトリ」(PRODUCT.md:591)のとおりで、見えている状態とも合う。誤りではなく、短い時間窓での好みの問題なので、挙動の欠陥とはしない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "spec-change の issue が起票済みか確かめられていない",
+   "location": "",
+   "members": [
+    "e50"
+   ],
+   "id": "clean-wn-315/c28",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "issue を起票したかという作業の手順の確認で、コードの挙動には関わらない。gh の認証に頼るので、ここでは確かめていない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "場所を解決できない(worktree 削除など)と、存在しない cwd が検証されないまま先頭に置かれ起動に失敗する",
+   "location": "src/ops/app.ts:853",
+   "members": [
+    "e51"
+   ],
+   "id": "clean-wn-315/c29",
+   "class": "real",
+   "scope": "in",
+   "ran": true,
+   "evidence": "where.ts の locate は、git の問い合わせに失敗すると {root: real} を返す(realpath に失敗すれば生の cwd)。Locations は1回だけ前回の値を使い、そのあとは plain になる。そのため、worktree が消えた行の root は存在しない cwd になる。openNew(app.ts:943-952)はこれを先頭に add し、mode の sel は 0 なので既定で選ばれる。dir の Enter(app.ts:757-761)は it.path をそのまま model の段に渡し、存在するかを確かめない(resolveDir で確かめるのは Other... だけ)。startSession(app.ts:986-1009)は、run('claude', ..., {cwd: dir}) が execFile の ENOENT で失敗すると、出力が空のまま 'claude --bg did not start a session:' の画面になる。`node -e \"execFile('true',[],{cwd:'/nonexistent/x'},...)\"` を実行すると e.code=ENOENT、stdout と stderr は空だった。main でもこの候補はリストの中にあったが、先頭で既定の選択になったのは今回の差分による。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "591行は「f と同じ」としつつ書き添えた点が643行と違い、差があるのか迷う",
+   "location": "docs/PRODUCT.md:591,643",
+   "members": [
+    "e55"
+   ],
+   "id": "clean-wn-315/c30",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "PRODUCT.md:591 は「f の New session で待ち元のリポジトリを先頭に置くのと同じ」と書き、git でない場所とエラーの間の扱いを書き添えている。643 にはそれがない。違いは場面の違いから来ている。f はエラーの間は受け付けず(app.ts:823 の早期 return)、(tty) の行では断るので、待ち元はいつも background の行になる。二つの規則に挙動の矛盾はなく、文書の読みやすさの指摘にとどまる。",
+   "classified_by": "llm"
+  }
+ ],
+ "members": {
+  "e1": {
+   "dir": "clean-wn-315/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 4
+  },
+  "e2": {
+   "dir": "clean-wn-315/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 2
+  },
+  "e3": {
+   "dir": "clean-wn-315/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 4
+  },
+  "e4": {
+   "dir": "clean-wn-315/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 1
+  },
+  "e5": {
+   "dir": "clean-wn-315/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 6
+  },
+  "e6": {
+   "dir": "clean-wn-315/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 6
+  },
+  "e7": {
+   "dir": "clean-wn-315/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 4
+  },
+  "e8": {
+   "dir": "clean-wn-315/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 3
+  },
+  "e9": {
+   "dir": "clean-wn-315/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 2
+  },
+  "e10": {
+   "dir": "clean-wn-315/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 2
+  },
+  "e11": {
+   "dir": "clean-wn-315/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 8
+  },
+  "e12": {
+   "dir": "clean-wn-315/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 5
+  },
+  "e13": {
+   "dir": "clean-wn-315/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 7
+  },
+  "e14": {
+   "dir": "clean-wn-315/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 2
+  },
+  "e15": {
+   "dir": "clean-wn-315/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 1
+  },
+  "e16": {
+   "dir": "clean-wn-315/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 7
+  },
+  "e17": {
+   "dir": "clean-wn-315/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 5
+  },
+  "e18": {
+   "dir": "clean-wn-315/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 7
+  },
+  "e19": {
+   "dir": "clean-wn-315/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 6
+  },
+  "e20": {
+   "dir": "clean-wn-315/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 3
+  },
+  "e21": {
+   "dir": "clean-wn-315/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 2
+  },
+  "e22": {
+   "dir": "clean-wn-315/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 7
+  },
+  "e23": {
+   "dir": "clean-wn-315/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 1
+  },
+  "e24": {
+   "dir": "clean-wn-315/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 1
+  },
+  "e25": {
+   "dir": "clean-wn-315/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 5
+  },
+  "e26": {
+   "dir": "clean-wn-315/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 3
+  },
+  "e27": {
+   "dir": "clean-wn-315/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 1
+  },
+  "e28": {
+   "dir": "clean-wn-315/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 3
+  },
+  "e29": {
+   "dir": "clean-wn-315/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 6
+  },
+  "e30": {
+   "dir": "clean-wn-315/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 2
+  },
+  "e31": {
+   "dir": "clean-wn-315/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 7
+  },
+  "e32": {
+   "dir": "clean-wn-315/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 3
+  },
+  "e33": {
+   "dir": "clean-wn-315/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 5
+  },
+  "e34": {
+   "dir": "clean-wn-315/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 2
+  },
+  "e35": {
+   "dir": "clean-wn-315/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 4
+  },
+  "e36": {
+   "dir": "clean-wn-315/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 2
+  },
+  "e37": {
+   "dir": "clean-wn-315/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 4
+  },
+  "e38": {
+   "dir": "clean-wn-315/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 4
+  },
+  "e39": {
+   "dir": "clean-wn-315/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 4
+  },
+  "e40": {
+   "dir": "clean-wn-315/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 1
+  },
+  "e41": {
+   "dir": "clean-wn-315/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 3
+  },
+  "e42": {
+   "dir": "clean-wn-315/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 5
+  },
+  "e43": {
+   "dir": "clean-wn-315/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 5
+  },
+  "e44": {
+   "dir": "clean-wn-315/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 3
+  },
+  "e45": {
+   "dir": "clean-wn-315/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 3
+  },
+  "e46": {
+   "dir": "clean-wn-315/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 8
+  },
+  "e47": {
+   "dir": "clean-wn-315/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 1
+  },
+  "e48": {
+   "dir": "clean-wn-315/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 5
+  },
+  "e49": {
+   "dir": "clean-wn-315/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 6
+  },
+  "e50": {
+   "dir": "clean-wn-315/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 4
+  },
+  "e51": {
+   "dir": "clean-wn-315/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e52": {
+   "dir": "clean-wn-315/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 6
+  },
+  "e53": {
+   "dir": "clean-wn-315/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 2
+  },
+  "e54": {
+   "dir": "clean-wn-315/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 4
+  },
+  "e55": {
+   "dir": "clean-wn-315/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 3
+  },
+  "e56": {
+   "dir": "clean-wn-315/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 1
+  }
+ },
+ "classify_cost_usd": 2.1893522000000005
+}

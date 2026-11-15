@@ -1,0 +1,98 @@
+{
+ "cost_usd": 0.1145376,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "作業台の画面がつながったまま wbguide が消えたときに一覧の追従・killSafely・pane-died の切り替えで作り直されない、という指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "案内のペインの起動し直しの回数(`@wn_respawned`)は、ペインが長く動いても0に戻りません。そのため上限の5回は短時間の連続ではなく、セッションの一生の累計になっています。",
+   "reason": "@wn_respawned が通算で数えられ数え直されないため、間をおいて落ちても上限に達して案内が畳まれる、と正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "detected",
+   "quote": "attach に成功したあとで tmux が 0 以外で終わった場合も、一覧がまだあれば「つなげなかった」として扱います。その経路では誤った文言を出し、OSC 2 でのタイトル消しも飛ばします。",
+   "reason": "つながったあとにクライアントが止められた場合([terminated] など)も失敗と判定し、誤ったエラーを出すと指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が利用者の分割したペインと案内のペインを区別しない、という指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "detected",
+   "quote": "さらに `\\x1b]2;\\x07` が送られないので、端末のタイトルが `whatnext workbench` のまま残ります。",
+   "reason": "失敗と判定した道でタイトルを消す OSC 2 が出なくなる、と具体的に指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定し、案内のペインが無い場合に作り直さない、という指摘は無い。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/lib/tmux.md:43",
+   "summary": "契約 docs の splitWorkbench の項に、先頭に exec を付けることが書かれておらず、契約を読んだ実装が exec exec の不具合を再発させうる。",
+   "quote": "しかし昇格済みモジュールの契約 docs では `splitWorkbench(run, command, env)` が「`command` を打ち込む」としか書かれておらず、先頭に ` exec ` を付けることも、末尾の改行も書かれていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/cli/guide.ts:20",
+   "summary": "whatnext workbench が案内を作り直すと workbench のプロセスの env を使うので、動いている一覧と版の違う案内が動きうる。",
+   "quote": "そのため、動いている一覧とは別の版の案内のプログラムが動くことがあります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/cli/workbench.ts:43",
+   "summary": "askListToRefreshGuide の頼みごとを書いて SIGUSR2 を送る処理が3か所に重複していて、変更の漏れで頼みごとが取りこぼされうる。",
+   "quote": "これは src/cli/guide.ts の Enter の処理(74-80行)とほぼ同じで、tmux.ts の `@wn_req_sh` も同じことをしています。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/ops/app.ts:1156",
+   "summary": "@wn_name がセッションのオプションで @wn_guide がサーバ全体のオプションという非対称が根本の原因で、専用の頼みごとで補う設計は場当たり的であり、作り直した直後に名前の空白も出る。",
+   "quote": "根本の原因は、名前(`@wn_name`)だけがセッションのオプションで、中身(`@wn_guide`)はサーバ全体のオプションだという非対称です。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "lib/tmux/tmux.ts:48",
+   "summary": "案内が終わる原因が分からないまま起動し直しで症状を抑えていて、原因を追う issue や uncaughtException・unhandledRejection のログが修正に含まれていない。",
+   "quote": "案内のプログラムがなぜ終わるかが分からないまま、`pane-died` で起動し直す処理で症状を抑えています。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "src/cli/list.ts:67",
+   "summary": "ensureGuide と startList が同じ workbenchOptions(GUIDE, '') を二重に呼んでいる。",
+   "quote": "そのすぐあとで startList がもう一度同じ `workbenchOptions(GUIDE, '')` を呼ぶので、作った場合は二重に送っています。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "test/unit/cli.test.ts:26",
+   "summary": "単体テストが zsh の入った環境を前提にしていて、zsh の無い CI では ENOENT で失敗する。",
+   "quote": "`it.each(['bash', 'zsh', 'sh'])` は、zsh が入っている環境を前提にしています。",
+   "quote_ok": true
+  }
+ ]
+}

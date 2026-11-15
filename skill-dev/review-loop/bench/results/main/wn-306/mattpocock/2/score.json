@@ -1,0 +1,98 @@
+{
+ "cost_usd": 0.1080016,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "原因: `screen.ts` の `cursorBlock = [rowIndex.length === 1 ? 0 : start, …]` で、窓の始まりが先頭に固定されます。",
+   "reason": "先頭の (sub) が窓の高さを超えると選んだ行が窓の外に出ることを、cursorBlock の頭を 0 にする処理が原因だとして指摘しており、正解の条件(1)と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "partial",
+   "quote": "「選んだ行のすぐ下に続く (sub)」が区切りをまたぐかが書かれていません。実装はまたいで、次の区切りの見出しまで窓に入れます。",
+   "reason": "塊が区切りをまたぐという実装の挙動には触れているが、docs に書かれていない点として扱っており、選んだ行が窓の先頭に寄って上の行が見えなくなる不具合としては述べていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "detected",
+   "quote": "選べる行がないとき、(sub) の行が窓の外に残ります。**\n   - スクロールの手段がなく、`0/0` と出ます。",
+   "reason": "選べる行がないときに通し番号が 0/0 と出ることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "選んでいた行が (sub) に変わっただけで、`Ctrl+X` の守りが立ちます。**\n   - 押すと `… left the list` と出ますが、その行は一覧に残っているので文言が事実と食い違います。",
+   "reason": "行が (sub) に変わったときにも guard が立ち、文言『left the list』が事実と違うことを applyObservation の該当箇所とあわせて指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に対象の行が (sub) に変わっても入力欄が閉じない問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "openNote の判定を消したため、attachKey などの経路から (sub) の行にメモが開ける問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の『Both can be selected』という記述と実装の食い違いには触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/model/cursor.ts と src/screen/screen.ts",
+   "summary": "「選べる行」の規則がモデルと画面の2か所に重複しており、規則が変わると両方を直す必要がある。",
+   "quote": "「選べる行」の規則が2か所にあります。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/screen/screen.ts:201",
+   "summary": "選べるかどうかを表示用の印の文字列 'sub' で判定しており、見た目の印に操作の規則が乗っている。",
+   "quote": "選べるかどうかを、表示の印の文字列 `'sub'` で判定しています。見た目の印に操作の規則が乗っている形です。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/ops/app.ts:262",
+   "summary": "!selectableOrder(this.lay).includes(this.cursor) の判定が followCursor の中と重複している。",
+   "quote": "`!selectableOrder(this.lay).includes(this.cursor)` は、`followCursor` の中の判定と同じです。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "docs/PRODUCT.md",
+   "summary": "PRODUCT は (sub) の行で Enter と v が効くと書く一方で、選べないとも書いており、記述が食い違っている。",
+   "quote": "PRODUCT は (sub) の行で「効くのは `Enter` と `v` だけ」と書く一方で、起動された行は選べないとも書いています。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "CLAUDE.md「見た目の決定」",
+   "summary": "窓のスクロールの変え方を、実際の画面の例で合意したかどうかを確かめられない。",
+   "quote": "CLAUDE.md「見た目の決定」は、窓のスクロールの変え方を実際の画面の例で合意することを求めています。画面の例を示したかどうかは、差分からは分かりません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "CLAUDE.md「学びの捕捉」",
+   "summary": "判断を decision-log の issue に記録したかを確かめられない。",
+   "quote": "CLAUDE.md「学びの捕捉」が求める `decision-log` の issue に記録したかは、`gh` が未認証で確かめられていません。",
+   "quote_ok": true
+  }
+ ]
+}

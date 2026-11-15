@@ -1,0 +1,76 @@
+{
+ "cost_usd": 0.07717760000000001,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/SKILL.md:106, :128",
+   "summary": "再現が1回起きなかっただけで影響が高の指摘を採らず、継続の理由からも外してしまい、再現の手順の誤りと不具合の不在を区別できない。",
+   "quote": "再現が1回起きなかっただけで、影響が「高」の指摘でも採らず、継続の理由からも外れます。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/SKILL.md:99",
+   "summary": "影響が高の指摘を差分の外として外す前の「確かめる」が、実行のことか読むことかが曖昧で、読むだけで済むと取れる。",
+   "quote": "この「確かめる」が、実行のことか、コードを読むことかが書かれていません。前の文の「再現もしない」と並ぶと、読むだけで十分と取れます。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/review-loop/scripts/review_loop.py:863 (SKILL.md:86)",
+   "summary": "範囲の基準「PR の前から同じように起きるか」では、PR の前からある不具合を PR が普通の使い方で起きるようにした場合を扱えず、直されない。",
+   "quote": "PR の前からある不具合を、PR の変更が「普通の使い方」で起きるようにした場合が扱えません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/review-loop/SKILL.md:130",
+   "summary": "「実行で確かめていない修正が1つでもあれば、もう1回回す」の「修正」の範囲が曖昧で、全ての修正と読まれると反復が増える。",
+   "quote": "一方で文だけを読むと、全ての修正が対象とも取れます。そう読まれると、命名の修正1つで反復が1回増え、この PR の目的(反復を減らす)と逆になります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/review-loop/SKILL.md:130",
+   "summary": "再レビューを省く条件を親が自分で書いたテストで判断するため、修正が新しく持ち込んだ不具合を誰も独立に検出しない。",
+   "quote": "修正もテストも同じ親が書いており、修正が新しく持ち込んだ不具合(テストが見ていない側の影響)は、この条件では捕まりません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/review-loop/SKILL.md:99, :136",
+   "summary": "差分の外の指摘を PR 本文やコードコメントに残す決まりがないため、毎回再指摘され、確かめ直す手間とトークンがかかる。",
+   "quote": "差分の外の指摘は、PR 本文にもコードコメントにも残す決まりがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skill-dev/review-loop/fakes/claude:100",
+   "summary": "偽の判定に `範囲` と `再現: 対象外` を足したが、`分類` の行が無く、JUDGE_PROMPT の決まりと合わない。",
+   "quote": "偽の判定に `範囲` と `再現: 対象外` を足しましたが、`分類` の行がありません(これは前からです)。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "skills/review-loop/SKILL.md:116, :136",
+   "summary": "リポジトリが公開かどうかの判定方法が書かれておらず、推測で決めると悪用の手順が公開の場所に書かれる恐れがある。",
+   "quote": "「リポジトリが公開なら」の判定方法が書かれていません(例: `gh repo view --json visibility`)。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "skills/review-loop/SKILL.md:103",
+   "summary": "隔離の規則が消す・書き換える操作だけを禁じており、gh で PR にコメントするなど外部のサービスへの投稿が含まれるかが曖昧である。",
+   "quote": "隔離の規則が「消す・書き換える」操作だけを禁じています。この repo のスクリプトのように `gh` で PR にコメントするコードを再現に使うと、外部のサービスに投稿が残ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "skills/review-loop/SKILL.md:103",
+   "summary": "「一時ディレクトリへの取り出し」に git worktree add が当てはまるが、これは .git の worktree 一覧を書き換えるため、作業ツリーを変えない制約との境界があいまいである。",
+   "quote": "「一時ディレクトリへの取り出し」には `git worktree add` も当てはまりますが、これは `.git` の worktree 一覧を書き換えます。",
+   "quote_ok": true
+  }
+ ]
+}

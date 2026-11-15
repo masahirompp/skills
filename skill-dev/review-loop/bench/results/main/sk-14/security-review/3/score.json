@@ -1,0 +1,27 @@
+{
+ "cost_usd": 0.0586016,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "hk_is_protected は「差分の前後で変わっていない」と確認されただけで、ヒアドキュメントが一時ファイルに頼っていて fail-open になる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "一時ディレクトリを作れないと exit 1 で止まる点を改善として評価しているだけで、その前に git fetch --prune が実行されることや SKILL.md の記述と食い違うことは指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い、またはプロセスを見られないとき、空の一覧を「使用中でない」と扱ってしまう問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

@@ -1,0 +1,27 @@
+{
+ "cost_usd": 0.0731896,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "detected",
+   "quote": "`lib.sh` の `hk_is_protected` はヒアドキュメント(`<<EOF`)で保護パターンを読んでいます。bash 3.2 はヒアドキュメントに一時ファイルを使うので、それが作れないと保護パターンが空になり、関数は「保護対象ではない」(戻り値 1)を返します。",
+   "reason": "lib.sh の hk_is_protected がヒアドキュメントに依存しているため、一時ファイルを作れないと保護対象でない側に倒れる(fail-open)ことを、正解と同じ原因で指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "scan.sh で一時ディレクトリの作成が git fetch --prune より後にあり、止まる前に副作用が起きる点には触れていません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い、またはプロセスを見られないときに空の一覧を『使用中でない』と扱う問題には触れていません。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

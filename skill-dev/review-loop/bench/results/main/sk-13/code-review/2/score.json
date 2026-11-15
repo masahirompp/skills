@@ -1,0 +1,98 @@
+{
+ "cost_usd": 0.1084616,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "detected",
+   "quote": "--perspective の値は空かどうかを確かめるだけで前後の空白を除かないため、先頭に空白がある値では「/」の直後に空白が入り、スラッシュコマンドとして起動されない。",
+   "reason": "未整形の spec を '/' + expand で起動し、split()[0] による照合・事前確認は通るという食い違いを正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "judge-input.md に「追加の指示」の区画を足したのに、JUDGE_PROMPT はその区画の扱いを説明しておらず、観点の欠落の規則も指示を考慮するよう更新されていない。",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いがなく、指示で外した範囲が観点の欠落として扱われうると指摘しており、基準を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "既定と違う観点を記録するかどうかを、スキル名の並びだけで比べている。引数だけを変えた観点は記録されず、並べ替えただけの既定は記録される。",
+   "reason": "スキル名だけで比べるので引数の違いが無視されること、並び順まで比べることの両方を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が、外した security-review に --instruct を渡していて終了コード2になる、という指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "detected",
+   "quote": "valid_state が perspectives の型をリストに限らないので、文字列や dict でも妥当と判定し、render が1文字ずつ区切って表示する。",
+   "reason": "リストかどうかを確かめないため文字列や辞書が検査を通る、と正確に指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt だけで渡す指示がサブエージェントに届かない、という指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "partial",
+   "quote": "利用者の指示の文をそのまま区切り行の間に書き込むので、指示に区切りの文字列が含まれると、判定役の入力の区画構造が崩れる。",
+   "reason": "同じ区切りで混ぜることの危険は指摘しているが、偽装の向きが逆(レビュー出力ではなく指示の側に区切りが紛れ込む)で、信頼できない入力であるレビュー出力から偽装されるという核心に届いていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭の '/' を取り除かないため照合や事前確認で失敗する、という問題としての指摘がない(9で直し方の例として触れただけ)。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/scripts/review_loop.py:962",
+   "summary": "--instruct で範囲を絞った試行が状態コメントに残らず、絞った反復を後から見分けられない。",
+   "quote": "--instruct で範囲を絞った試行が状態コメントに何も残らないので、完了した反復のうち範囲を絞ったものを後から見分けられない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/SKILL.md:57",
+   "summary": "観点と指示が反復をまたいで残らず、付け忘れると黙って既定に戻る。",
+   "quote": "観点と指示が反復をまたいで残らず、毎回同じオプションを付けることを親 LLM の記憶に頼っている。付け忘れると、黙って既定に戻る。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/review-loop/SKILL.md:49",
+   "summary": "起動例が複数行と引用符付きの引数を使っており、文字列で照合する sandbox の除外ルールと食い違う恐れがある。",
+   "quote": "起動例がバックスラッシュでの改行継続と、空白や日本語を含む引用符付きの引数を使っている。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/review-loop/scripts/review_loop.py:409",
+   "summary": "観点の名前の一覧を複数の箇所で作り直しており、照合の基準を変えるときに直し漏れが起きやすい。",
+   "quote": "観点の名前の一覧 [skill_name(s) for s in perspectives] を、review_config の --instruct のループの中で毎回作り直し、iterate でも作り直している。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skill-dev/review-loop/test.py:557",
+   "summary": "テストで --new-run を2回続けて実行しており、反復1回分が無駄になっている。",
+   "quote": "直前の節の終わり(551行)で `run(wt, \"--new-run\")` を実行した直後に、新しい節の先頭でもう一度 `run(wt, \"--new-run\")` を実行しており、反復1回分が無駄になっている。",
+   "quote_ok": true
+  }
+ ]
+}

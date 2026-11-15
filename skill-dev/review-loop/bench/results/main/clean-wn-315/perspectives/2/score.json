@@ -1,0 +1,41 @@
+{
+ "cost_usd": 0.0586016,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md:513, src/ops/app.ts:1256-1260",
+   "summary": "docs には「`ctrl+q ctrl+n` はエラーの間も同じにする」と書いたが、実装はエラー中に古い `this.rows` を引く。このため、エラー後に起動したセッションでは先頭が起動したディレクトリに戻り、仕様と食い違う。",
+   "quote": "しかし `ctrl+q ctrl+n` の経路(`src/ops/app.ts:1256-1260`)は、エラーの間は古い `this.rows` を引きます。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "test/e2e/ops.test.ts:294",
+   "summary": "今回 docs に初めて仕様として書いた `ctrl+q ctrl+n` のエラー時の振る舞いを確かめるテストがない。",
+   "quote": "**今回 docs に足した `ctrl+q ctrl+n` の振る舞いにテストがない**",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/ops/app.ts:974, docs/PRODUCT.md:592",
+   "summary": "候補の先頭はカーソルの行のリポジトリになったが、`Other...` を空で確定すると今も起動したディレクトリになり、既定が2つある。",
+   "quote": "**`Other...` を空のまま確定したときの既定と、候補の先頭がずれる** — 候補の先頭はカーソルの行のリポジトリになりました。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/ops/app.ts:968",
+   "summary": "`(tty)` の行で git でない cwd(ホームなど)も候補の先頭になる。`(tty)` の行で先頭が変わるのは今回が初めてで、これでよいかは確かめる価値がある。",
+   "quote": "確認が要るのは、この行のリポジトリが `(tty)` の行のときも先頭になる点です。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test/e2e/ops.test.ts:103-121",
+   "summary": "コミットメッセージにある「worktree なら元のリポジトリ」を確かめるテストがない。",
+   "quote": "ただ、コミットメッセージにある「worktree なら元のリポジトリ」は確かめていません。",
+   "quote_ok": true
+  }
+ ]
+}

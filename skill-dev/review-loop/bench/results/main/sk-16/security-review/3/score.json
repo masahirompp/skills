@@ -1,0 +1,76 @@
+{
+ "cost_usd": 0.08952560000000001,
+ "bugs": [
+  {
+   "id": "S16-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "PR の目的の直し残しが差分の外に入る問題には一切触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再現して直す手順と差分の外は直さない規則の関係を論じていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再現を実行する場所が限られていない危険について指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "gh issue create には触れたが利用者の確認があるので問題なしと結論しており、操作の順を公開する危険は指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再レビューを省く条件の既存テストの空振りについて指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "差分の外の横展開の候補の行き先について指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "環境の違いで再現しなかった場合の扱いについて指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "判定役の差分の外の判断を確かめずに受け入れる非対称について指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-9",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "小さい修正が再レビューの例外から漏れる点について指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-10",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "意図した変更を再現して戻してしまう点について指摘がない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

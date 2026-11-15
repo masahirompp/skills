@@ -1,0 +1,55 @@
+{
+ "cost_usd": 0.0549656,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューの出力は利用上限のエラー文だけで、指摘が1件もない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューの出力は利用上限のエラー文だけで、指摘が1件もない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューの出力は利用上限のエラー文だけで、指摘が1件もない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューの出力は利用上限のエラー文だけで、指摘が1件もない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューの出力は利用上限のエラー文だけで、指摘が1件もない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューの出力は利用上限のエラー文だけで、指摘が1件もない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューの出力は利用上限のエラー文だけで、指摘が1件もない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

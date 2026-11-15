@@ -1,0 +1,55 @@
+{
+ "cost_usd": 0.0744416,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/ops/app.ts:853",
+   "summary": "起動直後のカーソルは initialCursor が自動で置いた位置なのに、n がその行のリポジトリを候補の先頭にする。そのため、起動したディレクトリが先頭に来ず、既定の場所が2通りに割れる。",
+   "quote": "起動直後のカーソルは利用者が選んだ位置ではなく initialCursor が自動で置いた位置(294行)なのに、n はその行のリポジトリを候補の先頭にする。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/ops/app.ts:301",
+   "summary": "行が一覧から消えると followCursor がカーソルを黙って別の行へ移す。n はその移った先のリポジトリを先頭にするが、Ctrl+X と違って guard の守りがない。",
+   "quote": "行が一覧から消えると、followCursor がカーソルを別の行へ黙って移す(pendingCursorId の解決でも移る)。n の候補の先頭はこの移った先に従うが、Ctrl+X と違って guard の守りがない。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/ops/app.ts:955",
+   "summary": "エラーの間に preferredFrom を外しても、openNew は画面に出ていない古い this.rows の cwd を2番目以降の候補に並べてしまい、PRODUCT.md の理由づけと食い違う。",
+   "quote": "openNew は this.rows(エラー前の古い行で、画面には出ていない)の cwd を、2番目以降の候補にそのまま並べている。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/ops/app.ts:853",
+   "summary": "止めている途中・削除している途中の行では他の操作を断っているのに、n だけはその行のリポジトリを候補の先頭に使い、方針が揃っていない。",
+   "quote": "止めている途中・削除している途中の行(this.deleting.has(sid))では、e・f・w・v・Enter を断っている(859行)のに、n だけはその行のリポジトリを候補の先頭に使う。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "docs/PRODUCT.md:591",
+   "summary": "エラーの間の n と ctrl+q ctrl+n の先頭の扱いは観測できる挙動の二択なのに、利用者に確かめた記録がなく、CLAUDE.md のエスカレーション規則に反している可能性がある。",
+   "quote": "PRODUCT.md で利用者の判断として記録されているのは、カーソルの行を先頭にすることだけで、エラーの間の扱いを利用者に確かめた記録がない。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "test/e2e/ops.test.ts:103",
+   "summary": "行がないときと git でない場所のときの先頭候補を確かめるテストが無い。",
+   "quote": "PRODUCT.md に書いた『行がないときは起動したディレクトリが先頭』と『git でない場所ならその場所』(対話セッションの (tty) の行など)は確かめていない。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "src/ops/app.ts:823",
+   "summary": "エラーの間の n の扱いが、ガードと三項演算子の2か所に分かれ、呼び出し側ごとに散らばっているので、経路を足したときに書き忘れやすい。",
+   "quote": "エラーの間の n の扱いが2か所に分かれている。823行のガードで n を特別に通し、853行の三項演算子で sid を落としている。",
+   "quote_ok": true
+  }
+ ]
+}

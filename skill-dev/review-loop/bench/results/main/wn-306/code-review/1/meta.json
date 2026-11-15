@@ -1,0 +1,27 @@
+{
+ "case": "wn-306",
+ "kind": "ts",
+ "config": "code-review",
+ "trial": 1,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 954840,
+  "cache_read": 890223,
+  "output": 14735
+ },
+ "cost_usd": 0.7957955999999999,
+ "started_at": "2026-11-15T07:29:06",
+ "duration_s": 180,
+ "num_turns": 0,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [
+  "Bash git log -3 --format='%h %ad %s' --date=short; gh issue view 305 --json title,body,createdAt 2>/dev/null | head -50"
+ ],
+ "tree_changed": [],
+ "head_changed": false
+}

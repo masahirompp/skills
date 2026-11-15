@@ -1,0 +1,98 @@
+{
+ "cost_usd": 0.0970616,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "最初の選べる行を選ぶと、塊の始まりが 0 になります。その上のトップレベルの `(sub)` の行が窓の高さ以上あると、`blockLen >= avail` で窓は 0 から始まり、選んだ行が画面に出ません。",
+   "reason": "render の塊の始まりが 0 になり、頭の (sub) が窓より多いと start = b0 で選んだ行が外れるという原因と条件を、正解と同じ場所で示しているため。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "detected",
+   "quote": "`trailing` は区切りが変わってもリセットされません。そのため、区切りの最後の行を選んでいて、次の区切りがトップレベルの `(sub)` の行で始まると、窓の範囲が空行と見出しをまたいで伸びます。",
+   "reason": "trailing が区切りの境目で戻らず、次の区切りの (sub) まで塊に入るという原因を正しく指摘しているため。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "選べる行がないときに通し番号が 0/0 になる点には触れていないため。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "このときも `Ctrl+X ignored: <名前> left the list…` と出ますが、行は一覧から消えていません。",
+   "reason": "行が (sub) に変わってカーソルが移ったときも guard が立ち、文言が事実と違うことを指摘しているため。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモ入力中に対象行が (sub) に変わっても入力が閉じない点には触れていないため。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "isSpawned の判定を消したことはむしろ妥当と評価しており、attachKey 経由の経路には触れていないため。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の『Both can be selected』の食い違いには触れておらず、指摘は PRODUCT.md の別の箇所だけのため。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md:652",
+   "summary": "サイクル9の完了条件に並べた書き換えたシナリオ番号に 24・69・70・71 が抜けていて、経緯の節と食い違っている。",
+   "quote": "今回書き換えた 24・69・70・71 がここにありません。経緯の節(`:972`)には「24、69、70、71 を書き換えた」とあり、2か所の記録が食い違っています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "",
+   "summary": "カーソル位置と窓のスクロール範囲が変わったのに、実際の描画から取った画面の例も『こうはならない』の例もない。",
+   "quote": "カーソルの位置と窓のスクロールの範囲が変わったのに、実際の描画から取った画面の例も、「こうはならない」の例もありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "CONTEXT.md",
+   "summary": "『起動された行』の定義に『カーソルで選べない』が入っていない。",
+   "quote": "CONTEXT.md の「起動された行」の定義に「カーソルで選べない」が入っていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/model/cursor.ts / src/screen/screen.ts:201",
+   "summary": "選べる行かどうかを cursor.ts は n.spawned、screen.ts は表示の印の文字列という別の材料で判定しており、片方だけ変えるとずれる。",
+   "quote": "一方だけを変えると、通し番号とカーソルの並びがずれます。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "src/screen/screen.ts",
+   "summary": "『最初の選べる行』を rowIndex.length === 1 で表した条件が読みにくく、名前の付いた真偽値にするべき。",
+   "quote": "`cursorBlock = [rowIndex.length === 1 ? 0 : start, body.length]` は、「最初の選べる行」を `length === 1` で表していて読みにくいです。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "docs/PRODUCT.md:296",
+   "summary": "起動された行に Enter と v が効くように読める記述が残っているが、実際は選べないのでどちらも届かない。",
+   "quote": "`docs/PRODUCT.md:296` の「効くのは `cwd` と `pid` を示す `Enter` と `v` だけだが」は、今も効くように読めます。実際は選べないので、どちらも届きません。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,36 @@
+{
+ "case": "sk-12",
+ "kind": "python",
+ "config": "prove",
+ "trial": 3,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 480224,
+  "cache_read": 433462,
+  "output": 8391
+ },
+ "cost_usd": 0.6285284,
+ "started_at": "2026-11-15T15:02:43",
+ "duration_s": 227,
+ "num_turns": 11,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [
+  "?? scratch/bin/claude",
+  "?? scratch/judge_repro.py",
+  "?? scratch/tmp06399t5b/judge-input.md",
+  "?? scratch/tmp06399t5b/judge.result.md",
+  "?? scratch/tmp06399t5b/judge.stderr.txt",
+  "?? scratch/tmp06399t5b/judge.stdout.jsonl",
+  "?? scratch/tmpism3wjma/judge-input.md",
+  "?? scratch/tmpism3wjma/judge.result.md",
+  "?? scratch/tmpism3wjma/judge.stderr.txt",
+  "?? scratch/tmpism3wjma/judge.stdout.jsonl"
+ ],
+ "head_changed": false
+}

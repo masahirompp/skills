@@ -1,0 +1,126 @@
+{
+ "cost_usd": 0.12255360000000001,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは source が config 以外なら止まる点を安全側として妥当としただけで、source: config の分類器による拒否まで止めずに通ることや、reason_type を見ていないことには触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "detected",
+   "quote": "config の拒否に `tool_use_id` がないと、`seen` に `None` が入ります。そうなると、result の `permission_denials` にある、`tool_use_id` のない別の拒否が読み飛ばされます。",
+   "reason": "config_denied が tool_use_id をキーにしているため None が seen に入り、id のない別の拒否が除外される、と正解の原因どおりに指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "detected",
+   "quote": "`run_judge` が判定にするのは、つないだテキストの最初の見出しから末尾までです。見出しより前の前置きは落ちますが、後ろの行はそのまま残ります。",
+   "reason": "判定役でも result の行を全てつなぐため、後ろの短い文や下書きと修正版の重なりが verdict.md に入る、と run_judge の使い方を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "partial",
+   "quote": "仕様どおりですが、途中の行の `is_error: true` は無視されます。途中のターンが失敗しても、最後の行が成功なら成功になります。",
+   "reason": "途中の is_error の行が無視されて成功になる点は述べているが、エラーの文がレビュー本文につながって混ざる、という肝心の原因には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "run_reviews で別の観点の失敗によりループを抜けたとき、動いている子の止めない拒否が記録されない点への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "child_error の詳細が最後の行のエラーの文ではなく、つないだ本文の先頭500字を載せる点への言及がない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "review_loop.py watch_denials",
+   "summary": "watch_denials という名前が、ログ出力・denials.txt への追記・例外送出という中身に合っていない。",
+   "quote": "**Mysterious Name の可能性(1): `watch_denials`。** main の `watched` / `watch_main` は、見張りのプロセスを指す名前です。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "review_loop.py StreamTail.summary",
+   "summary": "denial_summary から summary に改名され、何の要約なのかが名前から分からなくなった。",
+   "quote": "**Mysterious Name の可能性(2): `StreamTail.summary(d)`。** 旧名の `denial_summary` から改名され、何の要約なのかが名前から分からなくなりました。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "review_loop.py check_result",
+   "summary": "check_result で拒否の要約を組み立てる部分が、summary() の中身と重複している。",
+   "quote": "**Duplicated Code の可能性(1): 拒否の要約。** `check_result` の中で `{\"tool_name\": ..., \"tool_input\": tail.tool_inputs.get(...)}` を組み立てる部分が、`summary()` の中身とほぼ同じ形です。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "review_loop.py run_reviews / run_judge",
+   "summary": "ポーリングの手順が run_reviews と run_judge に同じ形で重複している。",
+   "quote": "**Duplicated Code の可能性(2): ポーリングの手順。** 次の手順が `run_reviews` と `run_judge` に同じ形で書かれています。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "review_loop.py check_result",
+   "summary": "check_result が StreamTail の内部状態を直接たどっており、処理を StreamTail 側へ移すべき(Feature Envy)。",
+   "quote": "**Feature Envy の可能性: `check_result` の拒否の統合部分。** `tail.config_denied`、`tail.denial`、`tail.tool_inputs`、`tail.results` を直接たどっています。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "test.py",
+   "summary": "denials.txt を読む行が with なしの open(...).read() で、既存コードの書き方と揃っていない。",
+   "quote": "**暗黙の慣習からのずれ: `open(...).read()` を `with` なしで使っている。** `denials.txt` を読む行です。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "test.py",
+   "summary": "wd = err.rstrip().splitlines()[-1] が2回重複している。",
+   "quote": "**Duplicated Code(軽微): `wd = err.rstrip().splitlines()[-1]` が2回出てくる。**",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "SKILL.md 「失敗したとき」",
+   "summary": "permission_denied の項目が1つの箇条書きに多くの話題を詰めており、読みにくい。",
+   "quote": "「失敗したとき」の `permission_denied` の項目が、1つの箇条書きに6つ以上の話題を詰めています。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "SKILL.md / review_loop.py source 判定",
+   "summary": "実装は config 以外の source をすべて止めるが、SKILL.md は「source がなければ」と書いていて記述がずれている。",
+   "quote": "ただ、SKILL.md は「`source` がなければ」と書いています。「config 以外は止める」と書くほうが正確です。",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "test.py source 判定",
+   "summary": "source が config 以外の値(例: hook)の場合のテストがない。",
+   "quote": "この値のテストもありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 11,
+   "location": "test.py FAKE_JUDGE=multi",
+   "summary": "判定役の multi テストは最後の行が空なので、判定の後ろに文が残る問題を検出できない。",
+   "quote": "テストの `multi` は最後の行が空なので、どの場合も検出できません。",
+   "quote_ok": true
+  }
+ ]
+}

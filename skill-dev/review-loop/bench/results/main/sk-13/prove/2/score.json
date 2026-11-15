@@ -1,0 +1,62 @@
+{
+ "cost_usd": 0.0721376,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "detected",
+   "quote": "ところが実際のプロンプトは `\"/\" + expand(spec, pr)` で作られるので、空白が残って `/ code-review high 7` になります。",
+   "reason": "skill_name の split による照合・事前確認と、未整形の spec に `/` を前置した実際のプロンプトが食い違う、という正解と同じ原因と場所を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "JUDGE_PROMPT が指示ブロックの扱いを定めていない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "既定の観点との比較をスキル名だけで行っている点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が自分の中で矛盾している点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "valid_state が perspectives の型を検査していない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "指示がサブエージェントに届かない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "指示ブロックとレビュー出力が同じ区切りで混ざる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "`/` 付きの観点名が終了コード2で止まることは確かめているが、レビューは自分で「指摘にはしていません」と結論しており、不具合としては挙げていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

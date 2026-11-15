@@ -1,0 +1,505 @@
+{
+ "case": "wn-306",
+ "cost_usd": 0.08581340000000001,
+ "clusters": [
+  {
+   "title": "selectableOrder が行ごとに isSpawned で全ノードを走査するため O(n²) になり、キー入力や更新のたびに計算し直している。",
+   "location": "src/model/cursor.ts:6",
+   "members": [
+    "e1",
+    "e19",
+    "e31",
+    "e34"
+   ],
+   "id": "wn-306/c1",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/model/cursor.ts:3,6 を読んだ。isSpawned は全区切りの全ノードを走査するので、selectableOrder の計算量は O(n²) で、指摘の内容は事実。ただし n は一覧の行数(数十程度)で、呼ばれるのは app.ts:262 の更新とキー入力(app.ts:784)だけ。結果は変わらず、利用者が感じる遅れにもならない。効率の好みの問題。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "isSpawned が Layout の全区切りの nodes を見て回っており、Feature Envy の疑いがある。",
+   "location": "src/model/cursor.ts:3",
+   "members": [
+    "e5"
+   ],
+   "id": "wn-306/c2",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "cursor.ts:3 の isSpawned が Layout.groups[].nodes を直接見ているのは事実。ただ同じ model 層の中の構造の好みで、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "カーソル位置や窓のスクロールの新しい見え方を、実際の描画から取った画面の例で合意したかどうかが確かめられない。",
+   "location": "docs/PRODUCT.md:297",
+   "members": [
+    "e2",
+    "e25",
+    "e27"
+   ],
+   "id": "wn-306/c3",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "CLAUDE.md の『見た目の決定』の手続きを守ったかという、作業の進め方への指摘。差分(docs/PRODUCT.md、screen.ts)は描画の仕様と実装で食い違っておらず、合意の手続きを踏んだかは差分からは確かめられない。挙動の問題ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "CONTEXT.md の『起動された行』の定義に『カーソルで選べない』が入っていない。",
+   "location": "CONTEXT.md",
+   "members": [
+    "e3"
+   ],
+   "id": "wn-306/c4",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "CONTEXT.md:54 の『起動された行』に、カーソルで選べないことは書かれていない(差分でも CONTEXT.md は変わっていない)。ただ、そこにある『待ち先もメモも付けられない』は今も正しく、記述と食い違う文は無い。カーソルの規則は PRODUCT.md と DESIGN.md に書かれている。用語集に書き足りないだけで、利用者を誤らせる食い違いではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "シナリオ71がキー入力の直後に待たずに否定の判定をしているので、『何もしない』ことを検証できていない。",
+   "location": "test/e2e/deps.test.ts:465",
+   "members": [
+    "e4",
+    "e9",
+    "e22"
+   ],
+   "id": "wn-306/c5",
+   "class": "wrong",
+   "scope": "na",
+   "ran": true,
+   "evidence": "harness.ts:262-267 の keys は、キーを1つ送るたびに 150ms 待つので、『待たずに判定』ではない。app.ts で、カーソルが無いときに e で知らせを出すようにわざと壊すと、シナリオ71は失敗した(AssertionError: expected ... not to match /waits for:|can't/)。150ms で描画を捉えられており、指摘の言う原因は起きない。また変更前のコードでは、手前の not.toMatch(/^> /m) で先に失敗する。指摘とは別の弱点として、f を同じように壊しても通った。app.ts:673 で、次のキー e が f の知らせを消すため。ただしこれもテストの弱さで、挙動の問題ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "シナリオ71は e でメモの入力欄が開いても検出できず、openNote の断りを外したことへの歯止めにならない。",
+   "location": "test/e2e/deps.test.ts:465",
+   "members": [
+    "e13"
+   ],
+   "id": "wn-306/c6",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "シナリオ71の正規表現は /waits for:|can't/ なので、メモの入力欄が開いても捉えられない。この点は事実。ただ、このテストではカーソルが無く(実行で、画面に '> ' の行が無いことを確かめた)、listKey は row が無ければ return する(app.ts:813)。e で入力欄が開く経路は無い。歯止めのテストが足りないという指摘で、挙動の問題ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "選べる行の判定が、画面側は表示の印 marker !== 'sub'、モデル側は node.spawned と2か所に分かれており、ずれるおそれがある。",
+   "location": "src/screen/screen.ts:201",
+   "members": [
+    "e6",
+    "e10",
+    "e14",
+    "e20",
+    "e23",
+    "e26",
+    "e29",
+    "e37",
+    "e38"
+   ],
+   "id": "wn-306/c7",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "app.ts:447 で marker を n.spawned ? 'sub' : ... と、node.spawned だけから決めている。screen.ts:201 の判定 r.marker !== 'sub' は、!spawned と常に一致し、今は食い違わない。判定が2か所にあるのは事実だが、ずれるのは将来の変更があってからで、構造の問題。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "トップレベルの行が別の区切りの起動元の下に入るとカーソルが行を追わないので、仕様として望ましいか利用者に確かめるべきだ。",
+   "location": "src/model/cursor.ts:41-57",
+   "members": [
+    "e7"
+   ],
+   "id": "wn-306/c8",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "app.ts:262-266 は、選んでいた行が選べなくなると followCursor を呼ぶ。followCursor(cursor.ts:41-57)は、前の並びの区切りの中で次の行、前の行、隣の区切りの行の順に探すので、カーソルは元の区切りに残る。ここまでは指摘のとおり。ただ DESIGN.md の差分には『選んでいた行が更新で起動された行に変わったときも、消えたときと同じに隣の行へ移る』とあり、文書どおりの挙動である。仕様を確かめたほうがよいという提案で、不具合ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "追加した単体テストは (sub) の行が窓に収まる数しかなく、窓からはみ出す境界の場合を確かめていない。",
+   "location": "test/unit/screen.test.ts:136",
+   "members": [
+    "e8",
+    "e17",
+    "e39"
+   ],
+   "id": "wn-306/c9",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "テストが無いという指摘なので trivial。ただし、指摘が触れている境界の不具合そのものは実際に起きる。一時ファイルの単体テストで render を呼んで確かめた。(A) 先頭に (sub) 12行、s0・s1、height 10、cursor s0 の場合、窓には見出しと w0〜w5 (sub) と '1/2' だけが出て、選んだ s0 は見えない。cursorBlock=[0,…] の塊が avail 以上なので start=b0=0 になるため。(C) p の下に (sub) 12行、inline あり、cursor p の場合、b1 が (sub) の末尾まで伸び、『入力欄は最後の行まで』の補正で start=b1-avail になる。そのため p 本人も入力欄も窓から外れ、w5〜w11 だけが見える。不具合は別の指摘として扱う。この項目はテストの不足だけを言っている。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "Down/Up を5回押すループに待ちがなく、途中で (sub) の行に止まったかを検出できない可能性がある。",
+   "location": "test/e2e/deps.test.ts:446-450",
+   "members": [
+    "e11"
+   ],
+   "id": "wn-306/c10",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "test/e2e/harness.ts:262-268 の keys は、1キーごとに150ms待つ。画面を見るのは 5 回押したあとの最後の1回だけなので、途中で止まった行は確かめていない(指摘のとおり)。ただし、↓1回で other に直に移ることは、直前の waitFor(/^> other/m) が確かめている。挙動ではなくテストの検出力の話なので trivial。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "!selectableOrder(this.lay).includes(this.cursor) の判定が followCursor の中と重複している。",
+   "location": "src/ops/app.ts:262",
+   "members": [
+    "e12"
+   ],
+   "id": "wn-306/c11",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/ops/app.ts:262 の判定と、src/model/cursor.ts の followCursor の中の ok(sid) は同じ条件で、重複は事実。ただし、結果は同じで挙動に関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "PRODUCT.md に (sub) の行で Enter と v が効くと読める記述が残っており、選べないという記述と食い違っている。",
+   "location": "docs/PRODUCT.md:296",
+   "members": [
+    "e15",
+    "e16"
+   ],
+   "id": "wn-306/c12",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/PRODUCT.md:296 は、同じ箇条の冒頭で『起動された行はカーソルで選べない』と言い切っている。続く『効くのは Enter と v だけだが、場所は WHERE の列と起動元の行で分かる』は、選べなくする理由(選べたとしても効くのはこれだけ)の説明として書かれている。書き方に紛らわしさはあるが、挙動の記述そのものは『選べない』で一意で、利用者が挙動を誤る食い違いとまでは言えない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "シナリオ70が並び順を実行時に判定してキーの向きを切り替えるので、↓ で (sub) を飛ばす動きを確実に検証していない。",
+   "location": "test/e2e/deps.test.ts:442",
+   "members": [
+    "e18",
+    "e28"
+   ],
+   "id": "wn-306/c13",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "test/e2e/deps.test.ts:442 は、並び順で押すキーを切り替えている(below ? 'Down' : 'Up')。シナリオ 70 の『P で ↓』の向きに固定されていないのは事実。ただし、テストの作りの話で、プロダクトの挙動には関わらない。npx vitest run test/e2e/deps.test.ts -t '70:' は通った(1 passed)。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "(sub) に変わったときにカーソルが隣へ移る振る舞いが PRODUCT.md に書かれておらず、エスカレーションの記録もない。",
+   "location": "docs/DESIGN.md:132",
+   "members": [
+    "e21"
+   ],
+   "id": "wn-306/c14",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/PRODUCT.md:296 に『起動された行はカーソルで選べない……カーソルが自動で移るときも選ばない』とあり、選んでいた行が (sub) に変われば、そこにカーソルを置けないことはこの規則から導ける。DESIGN.md:132 の記述は、その実現方法を書いたものにあたる。食い違いはなく、利用者が誤る記述でもない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "サイクル9の完了条件のシナリオ番号に 24・69・70・71 が抜けていて、経緯の節と食い違っている。",
+   "location": "docs/PRODUCT.md:652",
+   "members": [
+    "e24"
+   ],
+   "id": "wn-306/c15",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/PRODUCT.md:652 の『サイクル9の途中で、2、16、18、33、34、41、68、73 を書き換え』には 24・69・70・71 が無い。:972 の経緯の節は『24、69、70、71 を書き換えた』としており、記録の食い違いは事実。ただし、完了条件そのものは『すべての受け入れシナリオを満たす』で、この並びは経緯の記録にあたる。挙動にも判定にも影響しない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "選べる行がないときや塊が窓より長いとき、窓の外の (sub) の行をスクロールして見る手段がない。",
+   "location": "src/screen/screen.ts:223",
+   "members": [
+    "e30",
+    "e32",
+    "e33"
+   ],
+   "id": "wn-306/c16",
+   "class": "real",
+   "scope": "in",
+   "ran": true,
+   "evidence": "一時ファイルの単体テストで、src/screen/screen.ts の render を呼んで確かめた。(B) トップレベルの (sub) 15行だけ、cursor undefined、height 10 の場合、窓は見出しと w0〜w5 (sub)、'0/0' で固定される(cursorBlock=[0,0] のまま)。(A) 先頭に (sub) が 12 行並び、そのあとに選べる行が続く場合も、窓は先頭に固定される。どちらも w6 以降は表示されない。src/ops/app.ts と src/screen に、ホイールや PageUp など窓だけを動かす操作は無い(grep で確認)。そのため、↑↓ が (sub) を飛ばす今の差分では、これらの行をどの操作でも見られない。main では (sub) の行を ↑↓ で選べ、窓がその行に追従したので、この差分が原因で起きる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "`trailing` や `rowIndex.length === 1 ? 0 : start` は意図が読み取りにくく、名前の付いた真偽値にするべき。",
+   "location": "src/screen/screen.ts:213",
+   "members": [
+    "e35",
+    "e36"
+   ],
+   "id": "wn-306/c17",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/screen/screen.ts:187-214 を読んだ。`rowIndex` は選べる行だけを積む配列で、選んだ行(選べる行に限られる)を処理する時点で `rowIndex.length === 1` になるのは、その行が最初の選べる行のときだけ。直前の行に「最初の選べる行なら、その上の見出しと起動された行も見せる」というコメントがあり、`trailing` にも宣言の上に意図のコメントがある(190行)。名前と書き方が読みにくいという主張自体は当たっているが、挙動には関わらない。命名と可読性の指摘なので、実行はしていない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "判断を decision-log の issue に記録したかを確かめられない。",
+   "location": "CLAUDE.md「学びの捕捉」",
+   "members": [
+    "e40"
+   ],
+   "id": "wn-306/c18",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "`gh issue list -R masahirompp/whatnext --search ...` は認証済みの状態で動き、記録を確かめられた。この差分のコミット(459a5fc、2026-10-26 14:30)に対応する issue として、#305「起動された行をカーソルで選べなくした」が spec-change ラベル付きで 2026-10-26T06:19:41Z に起票されている。cycle 9 の層1の判断をまとめた decision-log の #286 と #274 もある。指摘は「確かめられない」という手続きの懸念で、コードの挙動の問題ではない。そのうえ記録も実在するので、class は trivial とした。",
+   "classified_by": "llm"
+  }
+ ],
+ "members": {
+  "e1": {
+   "dir": "wn-306/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 4
+  },
+  "e2": {
+   "dir": "wn-306/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 2
+  },
+  "e3": {
+   "dir": "wn-306/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 3
+  },
+  "e4": {
+   "dir": "wn-306/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 4
+  },
+  "e5": {
+   "dir": "wn-306/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 4
+  },
+  "e6": {
+   "dir": "wn-306/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 2
+  },
+  "e7": {
+   "dir": "wn-306/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 2
+  },
+  "e8": {
+   "dir": "wn-306/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 5
+  },
+  "e9": {
+   "dir": "wn-306/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 3
+  },
+  "e10": {
+   "dir": "wn-306/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 2
+  },
+  "e11": {
+   "dir": "wn-306/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 5
+  },
+  "e12": {
+   "dir": "wn-306/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 3
+  },
+  "e13": {
+   "dir": "wn-306/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 5
+  },
+  "e14": {
+   "dir": "wn-306/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 1
+  },
+  "e15": {
+   "dir": "wn-306/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 4
+  },
+  "e16": {
+   "dir": "wn-306/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 6
+  },
+  "e17": {
+   "dir": "wn-306/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 3
+  },
+  "e18": {
+   "dir": "wn-306/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 4
+  },
+  "e19": {
+   "dir": "wn-306/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 4
+  },
+  "e20": {
+   "dir": "wn-306/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 1
+  },
+  "e21": {
+   "dir": "wn-306/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 2
+  },
+  "e22": {
+   "dir": "wn-306/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 4
+  },
+  "e23": {
+   "dir": "wn-306/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 3
+  },
+  "e24": {
+   "dir": "wn-306/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 1
+  },
+  "e25": {
+   "dir": "wn-306/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 1
+  },
+  "e26": {
+   "dir": "wn-306/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 2
+  },
+  "e27": {
+   "dir": "wn-306/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 5
+  },
+  "e28": {
+   "dir": "wn-306/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 5
+  },
+  "e29": {
+   "dir": "wn-306/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 3
+  },
+  "e30": {
+   "dir": "wn-306/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 1
+  },
+  "e31": {
+   "dir": "wn-306/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 3
+  },
+  "e32": {
+   "dir": "wn-306/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 1
+  },
+  "e33": {
+   "dir": "wn-306/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e34": {
+   "dir": "wn-306/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 2
+  },
+  "e35": {
+   "dir": "wn-306/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 5
+  },
+  "e36": {
+   "dir": "wn-306/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 3
+  },
+  "e37": {
+   "dir": "wn-306/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 4
+  },
+  "e38": {
+   "dir": "wn-306/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 1
+  },
+  "e39": {
+   "dir": "wn-306/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 2
+  },
+  "e40": {
+   "dir": "wn-306/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 6
+  }
+ },
+ "classify_cost_usd": 1.722794
+}

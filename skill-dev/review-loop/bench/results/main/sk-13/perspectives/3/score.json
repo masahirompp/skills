@@ -1,0 +1,112 @@
+{
+ "cost_usd": 0.1101896,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--perspective の値を正規化しないために照合と起動プロンプトが食い違う点は、どこにも指摘されていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "しかし判定役のプロンプトには、指示のブロックの説明も、それを考慮せよという規則もありません。",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いが無く、判定役が偽の「観点の欠落」を出しうると、正解と同じ原因と場所で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "既定と比べているのはスキル名の並びだけで、引数は比べていません。",
+   "reason": "引数違いの観点が記録されないことと、並べ替えが差とみなされることの両方を、963行の比較について指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が、外した security-review に --instruct を渡していて終了コード2になる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "detected",
+   "quote": "`all(isinstance(n, str) for n in a.get(\"perspectives\") or [])` は、文字列や dict でも通ります。",
+   "reason": "valid_state がリストかを確かめないため文字列や dict が通り、表示が崩れると正確に指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt の指示がサブエージェントに届かない点は指摘されていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "区切りの類似には触れているが、判定役が指示ブロックを観点の出力と読み違える話(S13-2)にとどまり、レビュー出力から指示を偽装・混同されうる原因は述べていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭の `/` を取り除かないために照合や事前確認で失敗する点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "review_loop.py:409",
+   "summary": "--instruct の値では {pr} が展開されず、--perspective と扱いが違う。",
+   "quote": "`--instruct` の値では `{pr}` が展開されません。`--perspective` では展開されるので、利用者が `PR #{pr}` と書くと文字どおりに渡ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "review_loop.py:743-749",
+   "summary": "追加の指示と REVIEW_CONSTRAINT(書き込み禁止)が食い違ったときにどちらが優先されるかが書かれておらず、指示が書き込み禁止を上書きする余地がある。",
+   "quote": "一方、REVIEW_CONSTRAINT(書き込み禁止の制約)と食い違ったときにどちらが勝つかは書かれていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "review_loop.py:958",
+   "summary": "観点の構成を途中で変えても反復回数・連続失敗の数を同じシリーズで数え続け、観点を外して失敗を避けた試行も連続失敗のリセットに数えている。",
+   "quote": "観点の構成を途中で変えても、反復回数・連続失敗の数(958行)は同じシリーズで数え続けます。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skill-dev/review-loop/test.py:572-574",
+   "summary": "指示の本文が状態コメントに載らないことを守るテストが無い。",
+   "quote": "その性質を守るテストがありません。今後誰かが「指示も表に出そう」と変えても検出できません。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "",
+   "summary": "指示が argv に載るため ps で見え、judge-input.md も一時ディレクトリに残る。",
+   "quote": "指示は argv に載るので、同じマシンの他ユーザーから `ps` で見えます。`judge-input.md` も一時ディレクトリに残ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "review_loop.py:935 / SKILL.md:57",
+   "summary": "オプションの再指定を親の記憶に頼っているため、付け忘れると黙って既定に戻り、あとから気づく手段が無い。",
+   "quote": "オプションの再指定を親の記憶に頼っています(スクリプトは反復をまたいで覚えない)。付け忘れると黙って既定に戻り、指示は状態にも残らないので、あとから気づく手段がありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "SKILL.md:116",
+   "summary": "権限の拒否への対処として --instruct を提案させているが、指示が守られる保証は無く、再び permission_denied で止まりうる。",
+   "quote": "権限の拒否への対処として `--instruct` を提案させています。ただ、指示は守られる保証がありません(SKILL.md:54 自身がそう書いている)。",
+   "quote_ok": true
+  }
+ ]
+}

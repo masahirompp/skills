@@ -1,0 +1,49 @@
+{
+ "cost_usd": 0.0952216,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "detected",
+   "quote": "ヒアドキュメントが失敗すると `while read` が1行も読まずに終わり、`return 1`(保護対象ではない)が返ります。",
+   "reason": "lib.sh の hk_is_protected と hk_path_in_use がヒアドキュメントに依存しており、一時ファイルを作れないと「保護しない」「使っていない」側に倒れることを正確に指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "detected",
+   "quote": "SKILL.md:98 は「作れなければ何もせずに止まる」と書いていますが、実際には fetch(リモート追跡ブランチの prune を含む)を済ませてから止まります。",
+   "reason": "一時ディレクトリの作成が git fetch --prune より後にあり、止まる前に副作用が出て文書と食い違うことを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い、またはプロセスを見られないときに空の一覧を「使用中でない」と扱う問題には触れておらず、ヒアドキュメントの失敗という別の原因しか述べていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/scripts/scan.sh:31",
+   "summary": "一時ディレクトリの場所の決め方が scan.sh と lib.sh:18 に二重に書かれており、片方だけ直されてずれるおそれがある。",
+   "quote": "`skills/housekeeping/scripts/scan.sh:31`: 一時ディレクトリの場所の決め方が `lib.sh:18` と二重に書かれている",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skill-dev/housekeeping/test.sh:172-175",
+   "summary": "テストが HOUSEKEEPING_TMPDIR の下にディレクトリが作られたことを直接確かめておらず、設定が無視されても通る。",
+   "quote": "確かめているのは、終了後に `hk-tmp` が空であることだけです。`HOUSEKEEPING_TMPDIR` が無視されて別の場所が使われても通ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skill-dev/housekeeping/test.sh:185-186",
+   "summary": "書き込めない TMPDIR を指してもbashが /tmp に逃げるため、環境を偽装するテストとして弱く、fail-open の不具合を検出できない。",
+   "quote": "書き込めない場所を `TMPDIR` で指しても、bash が `/tmp` に逃げるので検証になりません。",
+   "quote_ok": true
+  }
+ ]
+}

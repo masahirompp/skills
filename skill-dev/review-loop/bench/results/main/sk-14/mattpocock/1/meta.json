@@ -1,0 +1,27 @@
+{
+ "case": "sk-14",
+ "kind": "shell",
+ "config": "mattpocock",
+ "trial": 1,
+ "model": "claude-opus-5-5",
+ "status": "denied",
+ "tokens": {
+  "input": 602749,
+  "cache_read": 493900,
+  "output": 16305
+ },
+ "cost_usd": 1.065863,
+ "started_at": "2026-11-15T07:13:52",
+ "duration_s": 142,
+ "num_turns": 2,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [
+  "Bash {\"command\": \"d=$(mktemp -d /tmp/chk.XXXX); TMPDIR=$d mktemp -d; rmdir $d/* 2>/dev/null; rm -rf $d; head -15 /private/var/folders/5t/j2015ppn7pj1lf0h39j3c5jm0000gn/T/rb-v3u49r_y/w/e034553268/skills/ski"
+ ],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [],
+ "head_changed": false
+}

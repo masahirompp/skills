@@ -1,0 +1,98 @@
+{
+ "cost_usd": 0.10290959999999999,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "detected",
+   "quote": "ところがプロンプトは `\"/\" + expand(spec, pr)`(`review_loop.py:759`)なので `/ code-review high 7` になり、スラッシュコマンドとして読まれません。",
+   "reason": "skill_name の split()[0] での照合は通るのに、未整形の spec に / を前置して起動するため食い違う、と原因と場所の両方を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "しかし、判定役への指示文 `JUDGE_PROMPT` は変わっていません。そのため「観点の欠落」や「指摘を捨てない」という規則と、利用者の指示との関係が判定役任せです。",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いが無く、観点の欠落の規則との関係が定まらないと指摘しており、基準を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "既定との比較はスキル名の並びだけです(`review_loop.py:962-964`)。",
+   "reason": "比較がスキル名だけで引数違いが表に載らないこと、並べ替えだけで差とみなされることの両方を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が外した観点に --instruct を渡して終了コード2になる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "valid_state が perspectives をリストか確かめない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "指示が --append-system-prompt だけで渡され、サブエージェントに届かない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "指示ブロックとレビュー出力が同じ区切りで混ざり、偽装されうる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭の / を取り除かずに照合が失敗する点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/review-loop/test.py",
+   "summary": "エラー系の新しいテストが終了コードしか確かめておらず、別の理由で2を返しても通ってしまう。",
+   "quote": "**エラー系の新しいテストが終了コードしか見ていない。** 既存のテストは `rc == 2 and \"重複\" in err` のように、メッセージの言葉まで確かめています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "test.py:554",
+   "summary": "テスト用の関数 system_prompt が、ほかのテスト用の関数と違ってファイルの途中に置かれている。",
+   "quote": "**テスト用の関数 `system_prompt` がファイルの途中(`test.py:554`)にある。** ほかのテスト用の関数は冒頭(38〜123行)にまとまっています。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "review_loop.py:962",
+   "summary": "`[skill_name(s) for s in perspectives]` を review_config で2回、iterate でもう1回作っている。",
+   "quote": "`[skill_name(s) for s in perspectives]` を、`review_config` の中で2回、`iterate` でもう1回作っています(`review_loop.py:962`)。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "iterate",
+   "summary": "iterate の specs=None, instructs=None の既定値は使われていない。",
+   "quote": "`iterate(..., specs=None, instructs=None)` の既定値は使われていません。呼び出すのは `main` だけで、常に値を渡しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "review_loop.py:398-408",
+   "summary": "空の指示と観点の重複で終了コード2になる振る舞いに、テストがない。",
+   "quote": "空の指示(`code-review=`)と観点の重複は、実装では止まります(`review_loop.py:398-408`)が、テストがありません。",
+   "quote_ok": true
+  }
+ ]
+}

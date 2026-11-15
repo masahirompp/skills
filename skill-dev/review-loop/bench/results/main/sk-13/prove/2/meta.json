@@ -1,0 +1,27 @@
+{
+ "case": "sk-13",
+ "kind": "python",
+ "config": "prove",
+ "trial": 2,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 443828,
+  "cache_read": 400650,
+  "output": 6350
+ },
+ "cost_usd": 0.5524739999999999,
+ "started_at": "2026-11-15T07:52:47",
+ "duration_s": 210,
+ "num_turns": 10,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [
+  "?? scratch/leading_space.py"
+ ],
+ "head_changed": false
+}

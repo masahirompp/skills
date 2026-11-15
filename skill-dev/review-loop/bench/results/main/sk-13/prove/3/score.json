@@ -1,0 +1,62 @@
+{
+ "cost_usd": 0.0854136,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "detected",
+   "quote": "`skill_name()` は `spec.split()[0]` なので、名前は `code-review` と読めます。そのため事前確認も `--instruct code-review=...` の照合も通ります。",
+   "reason": "spec を整えないまま `/` を前置するので、照合・事前確認は通るのに起動プロンプトが食い違う、と原因まで正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いが書かれていない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "既定との比較がスキル名のリストだけ(`names != [skill_name(s) for s in PERSPECTIVES]`)なので、引数の違いを見ません。",
+   "reason": "比較がスキル名だけで行われ、引数違いの観点が表に記録されないことを、実行して確かめたうえで指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が終了コード2になる矛盾には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "detected",
+   "quote": "`all(isinstance(n, str) for n in a.get(\"perspectives\") or [])` は、文字列を1文字ずつ回して真になります。",
+   "reason": "valid_state がリストかどうかを確かめないため、文字列が検査を通ると指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt の指示がサブエージェントに届かない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "判定役の入力で指示とレビュー出力を同じ区切りで混ぜる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "`/` を付けたスキル名は終了コード2で止まることを確かめて「指摘なし」としており、不具合として扱っていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

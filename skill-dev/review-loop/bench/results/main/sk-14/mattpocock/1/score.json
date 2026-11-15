@@ -1,0 +1,84 @@
+{
+ "cost_usd": 0.09774959999999999,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "detected",
+   "quote": "`hk_is_protected` と `hk_path_in_use` はヒアドキュメントを使っています。macOS 標準の bash 3.2 は、ヒアドキュメントの中身を一時ファイルに書きます。サンドボックスで `/tmp` にも書けない場合は失敗する可能性があります。",
+   "reason": "apply.sh から mktemp を外しても lib.sh の判定関数がヒアドキュメント経由で一時ファイルに依存したままだと指摘しており、detect_criteria の「で可」の条件を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "detected",
+   "quote": "**`SKILL.md` の「作れなければ何もせずに止まる」は、実際の順序と合いません。** 一時ディレクトリを作る前に `git fetch --prune` が実行されます。",
+   "reason": "scan.sh で一時ディレクトリの作成が git fetch --prune より後にあり、SKILL.md の記述と合わないことを正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い・プロセスを見られないときに空の一覧を使用中でないと扱う問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib.sh 冒頭の環境変数一覧 / scan.sh",
+   "summary": "HOUSEKEEPING_TMPDIR を使うのは scan.sh だけになったのに、説明が lib.sh に残っているので scan.sh へ移すべきだと指摘している。",
+   "quote": "`apply.sh` が一時ファイルを使わなくなったので、`HOUSEKEEPING_TMPDIR` を使うのは `scan.sh` だけになりました。それでも説明は `lib.sh` 側に書かれています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "lib.sh:18, scan.sh:30-33",
+   "summary": "一時ディレクトリの既定値の式が2か所に重複していると指摘している。",
+   "quote": "`${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}}` が `lib.sh:18` の関数内と、`scan.sh:30-33` のエラーメッセージ内の2か所にあります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "apply.sh の input",
+   "summary": "変数 input が一時ファイルのパスから承認済みの行に変わったので、名前が意図に合わなくなったと指摘している。",
+   "quote": "以前は一時ファイルのパスでしたが、今は承認済みの行そのものが入っています。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test.sh",
+   "summary": "TMPDIR の確認を既存の apply テストに混ぜているため、失敗したときに原因が分かりにくいと指摘している。",
+   "quote": "そのため、TMPDIR が原因で失敗しても、関係のない確認の FAIL として出てしまい、原因が分かりにくくなります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test.sh(apply.sh の TMPDIR 非依存テスト)",
+   "summary": "macOS の mktemp は TMPDIR を見ないので、apply.sh が TMPDIR に依存しないことを確かめるテストが修正の前と後を区別できないと指摘している。",
+   "quote": "「apply.sh が TMPDIR に依存しないことを検証」が、検証になっていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "test.sh(HOUSEKEEPING_TMPDIR の片付けテスト)",
+   "summary": "片付けのテストは ls -A が空であることしか見ておらず、指定した場所の下に作られたことを確かめていないと指摘している。",
+   "quote": "「HOUSEKEEPING_TMPDIR の下に作り、終了時に消す」のテストは、`ls -A` が空であることしか見ていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "SKILL.md 手順1・手順4",
+   "summary": "例が \"$TMPDIR/housekeeping-scan.tsv\" のままなので、TMPDIR が未設定だとルート直下に書きに行くと指摘している。",
+   "quote": "`SKILL.md` の手順1と手順4の例は `\"$TMPDIR/housekeeping-scan.tsv\"` のままです。TMPDIR が未設定だと `/housekeeping-scan.tsv` に書きに行きます。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "SKILL.md の新しい案内",
+   "summary": "絶対パスで書くよう求める案内が scan.sh にしかなく、手順4のパイプで $TMPDIR を使う apply.sh にも同じ注意が要ると指摘している。",
+   "quote": "新しい案内は、`scan.sh` についてだけ絶対パスで書くよう求めています。`apply.sh` を `!` で実行してもらう場合も、手順4のパイプに `$TMPDIR` が入っているので、同じ注意が必要です。",
+   "quote_ok": true
+  }
+ ]
+}

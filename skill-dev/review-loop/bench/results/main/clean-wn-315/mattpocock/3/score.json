@@ -1,0 +1,62 @@
+{
+ "cost_usd": 0.06760160000000001,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md:591",
+   "summary": "エラーの間の先頭の規則を、続く2つの文で2回述べていて冗長だ。",
+   "quote": "「エラーの間は、whatnext を起動したディレクトリが先頭になる」の直後に「見えない行のリポジトリを先頭にしない」と続き、同じ規則を2回言っています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/ops/app.ts:852-853",
+   "summary": "openNew が省略できる位置引数を2つ取るため、先頭に undefined を渡す呼び出しが増え、意図が読みにくい。",
+   "quote": "`openNew(waitFor?, preferredFrom?)` は、省略できる位置引数を2つ取ります。先頭に `undefined` を渡す呼び出しが2か所に増えました。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/e2e/ops.test.ts:103",
+   "summary": "1つの it に2つの場合が入っていて、テスト名が後者を表していないため、落ちたときにどちらが壊れたのか分かりにくい。",
+   "quote": "1つの `it` に、普通の場合と「`--json` を読めない間」の場合が入っています。テストの名前は後者を表していないので、落ちたときにどちらが壊れたのか分かりにくいです。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "",
+   "summary": "spec-change の issue が起票済みかを確かめられていない。",
+   "quote": "`spec-change` の issue があるかは確かめていません(`gh` の認証がありませんでした)。CLAUDE.md の「学びの捕捉」に当たるので、起票済みかを見てください。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test/e2e/ops.test.ts",
+   "summary": "worktree の行、git でない cwd、(tty) の行、行がないときを確かめるテストがない。",
+   "quote": "一方、テストが確かめているのは「別のリポジトリの行」と「`--json` を読めない間」の2つだけです。次の4つは確かめていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "test/e2e/ops.test.ts",
+   "summary": "e2e がすべてタイムアウトしたため、この差分でテストが通るかを確かめられていない。",
+   "quote": "この差分でテストが通るかは、まだ確かめられていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "src/ops/app.ts:952",
+   "summary": "エラーの間も見えない行の cwd が3番目以降の候補に入り、「行が画面に出ていない」という理由と筋が通らない。",
+   "quote": "エラーの間も、見えない行の `cwd` が3番目以降の候補に入ります(`app.ts:952`)。仕様の文面には反しません。ただ、「行が画面に出ていない」という理由で揃えるなら、筋が通っていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "コミットメッセージ",
+   "summary": "コミットメッセージが、エラーの間の分岐や ctrl+q ctrl+n との違い、変更の一覧を正しく書いていない。",
+   "quote": "「`openNew(undefined, sid)` を呼ぶ」とありますが、実際のコードは、エラーの間に `sid` を渡さない分岐を挟んでいます。",
+   "quote_ok": true
+  }
+ ]
+}

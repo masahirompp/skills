@@ -1,0 +1,84 @@
+{
+ "cost_usd": 0.10146960000000001,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "partial",
+   "quote": "Treating every source=config denial as continue-the-attempt also lets through denials of reads a review cannot do without, so a review that saw nothing can pass as completed with no findings",
+   "reason": "source=config をすべて止めない扱いにしている点が広すぎるという場所と方向性は合っていますが、reason_type を見ていないことや分類器による拒否には触れていないため partial としました。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "detected",
+   "quote": "A config denial event with no tool_use_id puts None into `seen`, so every permission_denials entry in result that also lacks tool_use_id is silently treated as an allowed config denial (fails open).",
+   "reason": "tool_use_id のないイベントで seen に None が入り、id のない permission_denials がすべて除外されるという原因と結果を正確に指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "detected",
+   "quote": "Applying the join-all-result-lines policy to the judge as well means an intermediate draft verdict and the final verdict both end up in the verdict when each carries the headings.",
+   "reason": "判定役でも result の行をすべてつなぐため、下書きと最終版の判定が混ざると指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "partial",
+   "quote": "Success is judged only from the last result line, so an error in an earlier result line (is_error or a non-success subtype) is ignored.",
+   "reason": "途中の is_error の行が無視されて成功扱いになる点は指摘していますが、つなぐときにエラーの行を除いていないためエラーの文が本文に混ざる、という原因には触れていません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "別の観点の失敗でループを抜けるときに、動いている子の止めない拒否が記録から漏れるという指摘はありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "child_error の詳細に最後の行ではなく、つないだテキストの先頭500字が載るという指摘はありません。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/scripts/review_loop.py:309",
+   "summary": "config_denied を tool_use_id をキーにした dict にしているため、id が欠けたり重複したりすると上書きされ、2件目以降の拒否が warn にも denials.txt にも出ない。",
+   "quote": "config_denied is a dict keyed by tool_use_id, so config denials with a missing or repeated id overwrite each other. new_config_denials slices by count, so the second and later denials never reach warn or denials.txt.",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/scripts/review_loop.py:786",
+   "summary": "判定役を stream-json に変えたため、末尾に改行のない最後の result の行が読まれず、child_error になる。",
+   "quote": "Switching the judge to stream-json makes StreamTail.poll read only up to the last newline, so a final result line written without a trailing newline is now treated as 'no result line'.",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/review-loop/scripts/review_loop.py:786",
+   "summary": "判定役の見回りのループが run_reviews のループとほぼ重複しており、片方だけ直される恐れがある。",
+   "quote": "The judge's polling loop (poll, then watch_denials, then timeout check, then sleep, then a final poll and watch after exit) re-implements almost exactly the loop in run_reviews.",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/review-loop/scripts/review_loop.py:252",
+   "summary": "check_result が拒否の要約の dict を手で組み立てており、StreamTail.summary の処理と重複している。",
+   "quote": "check_result rebuilds the summary dict for tail.denial by hand, duplicating the input lookup that StreamTail.summary already does.",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/review-loop/scripts/review_loop.py:716",
+   "summary": "レビューが終わったとき、watch_denials を running=False で2回続けて呼んでおり、1回目が無駄になっている。",
+   "quote": "When a review finishes, watch_denials is called twice in a row with running=False. The first call is redundant.",
+   "quote_ok": true
+  }
+ ]
+}

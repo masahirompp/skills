@@ -1,0 +1,27 @@
+{
+ "case": "wn-306",
+ "kind": "ts",
+ "config": "perspectives",
+ "trial": 1,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 618310,
+  "cache_read": 561348,
+  "output": 10465
+ },
+ "cost_usd": 0.7771616,
+ "started_at": "2026-11-15T07:30:11",
+ "duration_s": 136,
+ "num_turns": 13,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [
+  "Bash cat /Users/masahirompp/.claude/projects/-private-var-folders-5t-j2015ppn7pj1lf0h39j3c5jm0000gn-T-rb-v3u49r-y-w-e0e56fc323-whatnext/567ec2df-da55-4e76-83ac-784c104dcdaa/tool-results/bogmfyjaw.txt"
+ ],
+ "tree_changed": [],
+ "head_changed": false
+}

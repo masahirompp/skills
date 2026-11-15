@@ -299,7 +299,7 @@ def run_trial(case, config, n, template, root, out, keep, model):
         children.kill_all()
         if not keep:
             shutil.rmtree(trial, ignore_errors=True)
-    if meta["status"] != "ok" and LIMIT_RE.search(str(meta.get("detail") or "")):
+    if meta["status"] not in ("ok", "denied") and (LIMIT_RE.search(str(meta.get("detail") or "")) or stop.is_set()):
         # 利用枠の上限などで動けなかった試行は、結果として残さない(次に同じコマンドで回したときにやり直す)
         stop.set()
         shutil.rmtree(dest, ignore_errors=True)

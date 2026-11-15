@@ -1,0 +1,34 @@
+{
+ "cost_usd": 0.0512856,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/ops/app.ts:853 / docs/PRODUCT.md:591",
+   "summary": "initialCursor が前回 attach したセッションを初期カーソルにするため、起動直後に n を押すと先頭が起動ディレクトリではなく前回のリポジトリになり、従来の癖で Enter を2回押すと別リポジトリで起動してしまう。",
+   "quote": "従来の癖のまま `Enter` を2回押すと、別のリポジトリで起動します。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "docs/PRODUCT.md:592",
+   "summary": "候補の先頭はカーソルのリポジトリなのに、空の Other... は起動ディレクトリで起動するという、2つの既定の非対称が残っており、意図を明記すべき。",
+   "quote": "候補の先頭はカーソルのリポジトリなのに、空の `Other...` は起動したディレクトリ、という2つの既定が並びます。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "docs/PRODUCT.md:513",
+   "summary": "「同じ」と「違い」が近接していて文が読みにくく、言い回しを整えるべき。",
+   "quote": "「同じ」と「違い」が近くにあって読みにくいです。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test/e2e/ops.test.ts",
+   "summary": "worktree の行にカーソルを置いたときに元のリポジトリへ寄るかを確認するテストが不足している可能性がある。",
+   "quote": "足りないのは、worktree の行にカーソルを置いたとき元のリポジトリに寄るか、の確認です（コミットメッセージと PRODUCT.md が明示している振る舞い）。",
+   "quote_ok": true
+  }
+ ]
+}

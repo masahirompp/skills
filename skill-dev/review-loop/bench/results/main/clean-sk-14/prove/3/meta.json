@@ -1,0 +1,52 @@
+{
+ "case": "clean-sk-14",
+ "kind": "shell",
+ "config": "prove",
+ "trial": 3,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 613586,
+  "cache_read": 568891,
+  "output": 8557
+ },
+ "cost_usd": 0.6423742000000001,
+ "started_at": "2026-11-15T15:22:29",
+ "duration_s": 152,
+ "num_turns": 14,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [
+  "?? scratch/lsof-repo/origin.git/HEAD",
+  "?? scratch/lsof-repo/origin.git/config",
+  "?? scratch/lsof-repo/origin.git/description",
+  "?? scratch/lsof-repo/origin.git/hooks/applypatch-msg.sample",
+  "?? scratch/lsof-repo/origin.git/hooks/commit-msg.sample",
+  "?? scratch/lsof-repo/origin.git/hooks/fsmonitor-watchman.sample",
+  "?? scratch/lsof-repo/origin.git/hooks/post-update.sample",
+  "?? scratch/lsof-repo/origin.git/hooks/pre-applypatch.sample",
+  "?? scratch/lsof-repo/origin.git/hooks/pre-commit.sample",
+  "?? scratch/lsof-repo/origin.git/hooks/pre-merge-commit.sample",
+  "?? scratch/lsof-repo/origin.git/hooks/pre-push.sample",
+  "?? scratch/lsof-repo/origin.git/hooks/pre-rebase.sample",
+  "?? scratch/lsof-repo/origin.git/hooks/pre-receive.sample",
+  "?? scratch/lsof-repo/origin.git/hooks/prepare-commit-msg.sample",
+  "?? scratch/lsof-repo/origin.git/hooks/push-to-checkout.sample",
+  "?? scratch/lsof-repo/origin.git/hooks/sendemail-validate.sample",
+  "?? scratch/lsof-repo/origin.git/hooks/update.sample",
+  "?? scratch/lsof-repo/origin.git/info/exclude",
+  "?? scratch/lsof-repo/origin.git/objects/4b/825dc642cb6eb9a060e54bf8d69288fbee4904",
+  "?? scratch/lsof-repo/origin.git/objects/79/84afede006069c02e5870a11e8653b11e66290",
+  "?? scratch/lsof-repo/origin.git/objects/8b/f6ff7122e834afbca98099d3e4b5939386cd52",
+  "?? scratch/lsof-repo/origin.git/refs/heads/main",
+  "?? scratch/lsof-repo/prs.json",
+  "?? scratch/lsof-repo/scan.tsv",
+  "?? scratch/lsof-repo/work/",
+  "?? scratch/repro-lsof.sh"
+ ],
+ "head_changed": false
+}

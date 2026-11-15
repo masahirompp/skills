@@ -1,0 +1,104 @@
+{
+ "cost_usd": 0.10772000000000001,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib.sh hk_mktemp_dir",
+   "summary": "lib.sh の関数の中で hk_mktemp_dir だけが error: を出していて、既存の関数と書き方が揃っていない。",
+   "quote": "この関数だけが lib の中で `error:` を出しており、書き方が揃っていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "lib.sh 冒頭のコメント",
+   "summary": "配布されるコードのコメントが、配布されない skill-dev/housekeeping/test.sh を参照しており、インストールした環境ではたどれない。",
+   "quote": "プラグインとして配布されるコードが、配布されない `skill-dev/housekeeping/test.sh` を参照しています。インストールした環境ではたどれません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "lib.sh hk_protect_patterns",
+   "summary": "hk_protect_patterns の中の set -f が lib.sh 先頭の set -f と重複し、同じ方針を2か所で持っている。",
+   "quote": "lib.sh 先頭の `set -f` と重複しています。方針を2か所で持つことになります。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "scan.sh:85",
+   "summary": "git rev-list の $fp_refs を引用符で囲まず単語分割に頼っており、hk_is_protected の方針と揃っていない。",
+   "quote": "引用符で囲まず、単語分割に頼っています。同じ差分の `hk_is_protected` では「単語分割を使わない」と書いているので、方針が揃っていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "lib.sh hk_path_in_use, hk_process_cwds",
+   "summary": "「使用中のプロセスがある」と「確かめられない」という別々の状態を同じ文字列の戻り値で返しており、空文字が「不明」を表す特別な値になっている。",
+   "quote": "「使用中のプロセスがある」と「確かめられない」という別々の状態を、同じ文字列の戻り値で返しています。空文字は「不明」を表す特別な値になっています。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "parse_pr_info, hk_parse_action",
+   "summary": "st num oid と action reason の値の組が、いつもグローバル変数を経由して受け渡されている。",
+   "quote": "`st num oid` と `action reason` が、いつも組でグローバル変数を経由しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "SKILL.md 手順1と手順4",
+   "summary": "! で実行すると終了コードが見えないという案内が、ほぼ同じ形で2回書かれている。",
+   "quote": "「`!` で実行すると終了コードが見えないので、結果を確かめてから進む」という案内が、ほぼ同じ形で2回書かれています。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "コミット 6ff80b7",
+   "summary": "件名は mktemp と TMPDIR の修正だが、それ以外の複数の変更が1つのコミットに入っている。",
+   "quote": "件名は mktemp と TMPDIR の修正ですが、jq の確認、PR 一覧の JSON の検証、first-parent の修正、保護パターンの強化、lsof の扱いも同じコミットに入っています。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "test.sh temp_usage を使う if",
+   "summary": "5つの条件が || でつながっていて、それぞれ何を確かめているのか読み取りにくい。",
+   "quote": "`||` で5つの条件がつながっていて、それぞれ何を確かめているのか読み取りにくいです。",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "lib.sh:96",
+   "summary": "lsof の出力に $$ があれば十分に見えているとみなすため、自分のプロセスだけが見えるサンドボックスでは、使用中の worktree を使用中でないと判定して削除してしまう可能性がある。",
+   "quote": "サンドボックスが自分のプロセス(と子プロセス)だけを見せる場合、この確認は通ってしまいます。すると、ユーザーのターミナルがカレントにしている worktree を「使用中でない」と判定し、`git worktree remove` まで進みます。",
+   "quote_ok": true
+  },
+  {
+   "n": 11,
+   "location": "test.sh(apply.sh の lsof の扱い)",
+   "summary": "偽の lsof を使うテストが scan.sh にしか無く、apply.sh と「出力はあるが自分自身が載っていない」場合の処理がテストされていない。",
+   "quote": "偽の lsof を使うテストは scan.sh だけです。",
+   "quote_ok": true
+  },
+  {
+   "n": 12,
+   "location": "test.sh",
+   "summary": "「PR の状態が分からなければ keep」を確かめるテストが無い。",
+   "quote": "「PR の状態が分からなければ keep」を確かめるテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 13,
+   "location": "lib.sh hk_mktemp_dir(TMPDIR)",
+   "summary": "相対パスの TMPDIR を渡すと、カレントの worktree の中に一時ディレクトリができる。",
+   "quote": "`TMPDIR=tmp` のように渡すと、カレントの worktree の中に一時ディレクトリができます。",
+   "quote_ok": true
+  },
+  {
+   "n": 14,
+   "location": "scan.sh, lib.sh hk_path_in_use",
+   "summary": "出力の文言の変更がコミットメッセージに書かれていない。",
+   "quote": "どちらも妥当な修正ですが、コミットメッセージに書かれていません。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,42 @@
+{
+ "cost_usd": 0.0629216,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "detected",
+   "quote": "whatnext が異常終了すると、何かが動いている作業台は消されずに残ります(`src/ops/app.ts:1539-1542`)。その状態で新しい版を起動すると、残った作業台のステータス行は古い形のまま、キーが出ません。",
+   "reason": "workbenchOptions が作成時と案内セッションでしか呼ばれず、異常終了後に引き継いだ作業台(app.ts の引き継ぎ処理)へ入れ直されないため古い書式が残る、と原因と条件を正解どおりに指摘している。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "キーの説明文字列がキー設定から生成されず直書きなので、将来 prefix の表に c などを割り当てると表示と挙動がずれる。",
+   "quote": "将来、prefix の表に `c` を割り当てる whatnext のキーを足すと(`bare: true` のもの、`tmux.ts:133`)、tmux の既定の `^Qc` が上書きされます。それでもステータス行には `^Qc window` と出続けます。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "test/e2e/workbench.test.ts:117",
+   "summary": "狭い画面でも ^Q% が残ることをテストで確かめておらず、右寄せに戻してもテストが落ちない。",
+   "quote": "「狭くても `^Q%` が残る」ことを確かめていない",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "docs/PRODUCT.md:557-562",
+   "summary": "「採らなかった形」の例が実際の描画から取ったものか不明で、CLAUDE.md の求める作り方に沿っているか分からない。",
+   "quote": "「採らなかった形」が実際の描画から取ったものか、差分からは分からない",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "",
+   "summary": "claude の画面の ^Q^L と作業台の ^Qc で2打目の ctrl の有無が違い、^Q^C と読み違える余地がある。",
+   "quote": "claude の画面と作業台の画面を並べて見ると、`^Q^C` と読み違える余地はあります。",
+   "quote_ok": true
+  }
+ ]
+}

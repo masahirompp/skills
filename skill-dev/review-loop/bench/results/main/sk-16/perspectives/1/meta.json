@@ -1,0 +1,27 @@
+{
+ "case": "sk-16",
+ "kind": "doc",
+ "config": "perspectives",
+ "trial": 1,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 301384,
+  "cache_read": 259475,
+  "output": 7112
+ },
+ "cost_usd": 0.529351,
+ "started_at": "2026-11-15T07:22:10",
+ "duration_s": 94,
+ "num_turns": 7,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [
+  "Bash cd /private/var/folders/5t/j2015ppn7pj1lf0h39j3c5jm0000gn/T/rb-v3u49r_y/w/0bd36a0933/skills; grep -n \"直す前に再現する\\|起きなかった: 採らない\\|PR のベースのコードで\\|継続の理由にしない\\|回さずに終えてよい\\|gh issue create\\|実行では示せない(\" skills/review-loop/SKILL.md"
+ ],
+ "tree_changed": [],
+ "head_changed": false
+}

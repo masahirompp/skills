@@ -1,0 +1,147 @@
+{
+ "cost_usd": 0.1363096,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "作業台の画面がつながったまま wbguide が消えたときに誰も作り直さない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "実際の上限は「ペインが生きている間に通算5回」です。長く動いては時々落ちる場合も、6回目で畳まれます。",
+   "reason": "@wn_respawned が通算で数えられ、数え直されないため、いずれ上限に達して畳まれる、と正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "partial",
+   "quote": "「0 以外で終わり、かつ一覧が残っている」で失敗と見なしています。tmux の終了コードを実測した記録は docs にありません。",
+   "reason": "attach の結果の判定条件が、つながったあとの終了を失敗と取り違えうる点には触れているが、例が案内を畳んだ場合で、シグナルで止められて status が null になる原因は述べていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が、利用者が分割したペインまで起動し直す点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなった点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定する問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/lib/tmux.md",
+   "summary": "「名前の約束」に、ペインのオプション @wn_respawned と頼みごとの形 guide が載っていない。",
+   "quote": "載っていないのは、ペインのオプション `@wn_respawned` と、新しい頼みごとの形 `guide` の2つです。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "docs/PRODUCT.md",
+   "summary": "利用者から見える挙動の変更(新しいエラーの文言、Ghostty の分割で失敗するとキーを待つこと)が PRODUCT.md に書かれておらず、PRODUCT 478 と食い違う。",
+   "quote": "**PRODUCT.md は差分がない(確度: 高)**。次の挙動は DESIGN.md と lib の契約にしか書かれていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/cli/workbench.ts:14",
+   "summary": "not running の経路も fail() を通るので、分割の中ではキーを押すまで終わらず、PRODUCT 490 とシナリオ 59 の「示して終了する」と食い違う。",
+   "quote": "この経路も `fail()` を通ります(`workbench.ts:14`)。そのため、PRODUCT 490 とシナリオ 59 の「示して終了する」が、分割の中ではキーを押すまで終わらなくなりました。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "docs/PRODUCT.md",
+   "summary": "起動し直しが上限を超えると案内のセッションを畳み、作業台の画面が離れる挙動が PRODUCT に書かれていない。",
+   "quote": "起動し直しが5回を超えると案内のセッションを畳み、作業台の画面が離れます。これも PRODUCT に書かれていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "lib のテスト",
+   "summary": "起動し直しの上限のテストが、sh の本文に文字列があるかを見ているだけで、動かして確かめていない。",
+   "quote": "sh の本文に `respawn-pane` などの文字列があるかを見ているだけです。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "workbench.ts askListToRefreshGuide / guide.ts 74〜80行目",
+   "summary": "頼みごとを書いて SIGUSR2 を送る処理が2か所に重複している。",
+   "quote": "`workbench.ts` の `askListToRefreshGuide` が、`guide.ts` の74〜80行目と同じ形です",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "list.ts",
+   "summary": "ensureGuide のすぐあとに workbenchOptions(GUIDE, '') を呼ぶので、案内を作ったときは同じ処理が2回走る。",
+   "quote": "`list.ts` は `ensureGuide` のすぐあとで `workbenchOptions(GUIDE, '')` を呼びます。案内を作ったときは同じ処理が2回走ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "src/cli/guide.ts",
+   "summary": "案内のプログラムである guide.ts が、セッションを作る役(ensureGuide)まで持つようになった。",
+   "quote": "`guide.ts` は案内のプログラムそのものですが、セッションを作る役(`ensureGuide`)も持つようになりました。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "GUIDE_REFRESH",
+   "summary": "GUIDE_REFRESH = 'guide' という名前が、セッション名の GUIDE と紛らわしい。",
+   "quote": "`GUIDE_REFRESH = 'guide'` は、`GUIDE`(セッション名の `wbguide`)と紛らわしいです。",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "",
+   "summary": "頼みごとを文字列で組み立てている(Primitive Obsession)。",
+   "quote": "**Primitive Obsession(軽微)**: 頼みごとを文字列で組み立てています。",
+   "quote_ok": true
+  },
+  {
+   "n": 11,
+   "location": "whatnext workbench 側の ensureGuide",
+   "summary": "作り直した案内が、一覧ではなく workbench 側の env と process.env で起動するので、版や PATH が一覧と食い違いうる。",
+   "quote": "DESIGN 203「スクリプトは、動いている一覧と同じ版のものにする」に反し、更新の直後は版が混ざりえます。",
+   "quote_ok": true
+  },
+  {
+   "n": 12,
+   "location": "ensureGuide",
+   "summary": "2つの whatnext workbench が同時に作り直すと、'exists' が返って askListToRefreshGuide が呼ばれず、@wn_name が入らないままになる。",
+   "quote": "2つの `whatnext workbench` が同時に作り直すと、`@wn_name`(名前)が入らないままの窓が残ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 13,
+   "location": "e2e / DESIGN「確かめ方」",
+   "summary": "新しい e2e 2つにシナリオ番号がなく、DESIGN の対応表にも行がない。",
+   "quote": "新しい e2e 2つ(作り直し、起動し直し)にシナリオ番号がなく、DESIGN「確かめ方」の対応表にも行がありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 14,
+   "location": "",
+   "summary": "5回を超えたら畳むこと、attach の失敗時の扱い、キーを待つことに、動かして確かめるテストがない。",
+   "quote": "次の3つは、どれも動かして確かめるテストがありません。",
+   "quote_ok": true
+  }
+ ]
+}

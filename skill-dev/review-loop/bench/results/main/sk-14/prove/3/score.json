@@ -1,0 +1,42 @@
+{
+ "cost_usd": 0.07290160000000001,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ヒアドキュメントが一時ファイルに依存していて、保護判定や使用中判定が fail-open になる点には、どこにも触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "detected",
+   "quote": "scan.sh では fetch(27行目より前)が `hk_mktemp_dir` より先に走ります。そのため、一時ディレクトリを作れずに止まる場合でも、リモート追跡ブランチの刈り込みは済んでいます。",
+   "reason": "scan.sh で一時ディレクトリの作成が git fetch --prune より後にあり、SKILL.md の『何もせずに止まる』と食い違うことを、実行して示している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い、またはほかのプロセスを見られないときに、使用中でないと判定されてしまう点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh(scan の一時ディレクトリのテスト)",
+   "summary": "テストは走査後に $root/hk-tmp が空かどうかしか見ていないため、scan.sh が HOUSEKEEPING_TMPDIR を無視して別の場所に作っても検出できない。",
+   "quote": "実際のテストは、走査の後で `$root/hk-tmp` が空かどうかしか見ていません。そのため、そもそも `$root/hk-tmp` の下に作られなかった場合と見分けがつきません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skill-dev/housekeeping/test.sh(apply の TMPDIR 非依存テスト)",
+   "summary": "macOS の mktemp は TMPDIR を見ないため、apply の TMPDIR 非依存テストは変更前の apply.sh でも成功し、一時ファイルを使うコードが戻っても検出できない。",
+   "quote": "今のままだと、apply.sh に一時ファイルを使うコードが戻っても、macOS では検出できません。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,27 @@
+{
+ "cost_usd": 0.0504896,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは lib.sh の判定がヒアドキュメントに頼っていることにも、一時ファイルを作れないときに保護判定が fail-open になることにも触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは scan.sh で一時ディレクトリの作成が git fetch --prune より後にあることも、SKILL.md の記述と食い違うことも指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは使用中プロセスの確認が残っていることを確かめただけで、lsof が無い・プロセスを見られないときに空の一覧を『使用中でない』と扱う問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

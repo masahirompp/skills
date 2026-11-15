@@ -1,0 +1,62 @@
+{
+ "cost_usd": 0.0652536,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/ops/app.ts:853",
+   "summary": "n で起動したセッションから離脱した直後は、その行がまだ一覧に無いためカーソルが前の行に残ります。そのため、次の n で候補の先頭が直前のセッションではなく前の行のリポジトリになります。",
+   "quote": "n で起動したセッションから離脱した直後は、その行がまだ一覧の行にないため、カーソルは前の行に残ります。このまま一覧の n を押すと、直前にいたセッションではなく前の行のリポジトリが候補の先頭になります。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/ops/app.ts:1260",
+   "summary": "ctrl+q ctrl+n で、attach していたセッションがまだ一覧に無いと rootOfSid が undefined を返し、launchDir が先頭になります。これはシナリオ54と追加した文言に反します。",
+   "quote": "ctrl+q ctrl+n では、attach していたセッションがまだ一覧の行にないと rootOfSid が undefined を返し、起動したディレクトリが先頭になります。シナリオ 54 と、今回足した「エラーの間も同じにする」の文言に反します。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/ops/app.ts:853",
+   "summary": "n を押す直前の更新で行が一覧から外れてカーソルが移ると、利用者が気づかないまま別のリポジトリが先頭になります。Ctrl+X のような guard が n にはありません。",
+   "quote": "n を押す直前の更新で行が一覧から外れてカーソルが移ると、気づかないうちに別のリポジトリが候補の先頭になります。Ctrl+X には guard がありますが、n には知らせがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test/e2e/ops.test.ts:103",
+   "summary": "エラー中の ctrl+q ctrl+n の挙動を確かめるテストがありません。worktree の行を元のリポジトリに寄せる処理も、一覧の n ではテストされていません。",
+   "quote": "PRODUCT.md に足した「ctrl+q ctrl+n は --json を読めずにエラーを出している間も、いたセッションのリポジトリを先頭にする」を確かめるテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "src/ops/app.ts:950",
+   "summary": "エラー中は見えない行のリポジトリを先頭にしない一方で、openNew は古い this.rows の cwd を候補に足し続けます。見えない行の扱いが揃っていません。",
+   "quote": "エラーの間は「見えない行のリポジトリを先頭にしない」としながら、同じ openNew が古い this.rows の cwd を候補に足し続けます。見えない行の扱いが揃っていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "src/ops/app.ts:950",
+   "summary": "openNew は全行の cwd を候補に足しますが、locations.refresh は tier !== null の行しか解決しません。そのため、idle の行の worktree のパスが元のリポジトリに寄せられないまま候補に入ります。",
+   "quote": "openNew は this.rows の全行の cwd を候補に足しますが、locations.refresh は tier !== null の行しか解決しません。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "src/ops/app.ts:853",
+   "summary": "起動直後はカーソルが initialCursor の行にあるため、n から Enter の流れで起動したディレクトリではなく一覧の先頭の行のリポジトリで起動します。従来の操作との互換性が後退しています。",
+   "quote": "起動した直後もカーソルは initialCursor の行にあります。whatnext を起動したディレクトリで、すぐに n を押して Enter を押す流れでは、先頭が一覧の先頭の行のリポジトリに変わります。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "docs/PRODUCT.md:591",
+   "summary": "決定の日付が 2026-11-02 になっていますが、コミットは 2026-11-15 です。日付が誤っている可能性があります。",
+   "quote": "決定の日付が「2026-11-02、利用者の判断」になっていますが、この変更のコミットは 2026-11-15 です。日付が誤っている可能性があります。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,55 @@
+{
+ "cost_usd": 0.0749856,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "render の cursorBlock に (sub) を含めたため選んだ行や入力欄が窓から外れる問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "trailing が区切りの境目で切れない問題への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "選べる行がないときに通し番号が 0/0 になる問題への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "guard の『left the list』の文言が事実と違う問題への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に行が (sub) に変わっても入力欄が閉じない問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "detected",
+   "quote": "`src/ops/app.ts` の `openNote` と `openWait` で、起動された行を断る判定(`isSpawned`)が外されました。ところが、カーソルを置く道のうち3つが `selectableOrder` を通っていません。",
+   "reason": "openNote の判定を消したことと、attachKey などカーソル以外の経路から起動された行のメモ欄が開くことを指摘しており、detect_criteria を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の記述が実装と食い違う問題への言及がない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

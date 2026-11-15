@@ -1,0 +1,70 @@
+{
+ "cost_usd": 0.0905656,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは、lib.sh/scan.sh の判定がヒアドキュメントの一時ファイルに依存しており、作れないと保護対象でない・使用中でない側に倒れる(fail-open)点に触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "一時ディレクトリの作成が git fetch --prune より後にあり、作れなくても fetch の副作用が起きて SKILL.md の記述と合わない点を、レビューは指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い・プロセスを見られないとき、空の一覧を使用中のプロセスなしと扱ってしまう点について、レビューに言及がない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/scripts/lib.sh、scan.sh、SKILL.md",
+   "summary": "既定値の連鎖 ${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}} が複数箇所に重複しており、どこかを直し忘れるとエラーに出る場所と実際に作る場所が食い違う。",
+   "quote": "既定値の連鎖 `${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}}` が、`hk_mktemp_dir` と scan.sh のエラーメッセージに別々に書かれています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "lib.sh",
+   "summary": "hk_mktemp_dir を使うのは scan.sh だけなのに、共通部分である lib.sh に置かれている。",
+   "quote": "lib.sh は「scan.sh と apply.sh の共通部分」と名乗っていますが、`hk_mktemp_dir` を使うのは scan.sh だけになりました。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "lib.sh",
+   "summary": "hk_mktemp_dir の関数コメントだけが、名前と引数から書き始める既存の書式に従っていない。",
+   "quote": "既存の関数コメントは `# hk_path_in_use <path> <process-cwds>: ...` のように名前と引数から書き始めています。`hk_mktemp_dir` だけがこの形になっていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skill-dev/housekeeping/test.sh",
+   "summary": "片付けのテストは hk-tmp が空であることしか見ておらず、作る場所や TMPDIR・/tmp へのフォールバックを検証できていない。",
+   "quote": "片付けのテストは `hk-tmp` が空であることしか見ないので、scan.sh が別の場所に作っても通ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skill-dev/housekeeping/test.sh",
+   "summary": "macOS の mktemp は TMPDIR を見ないため、apply.sh の TMPDIR 非依存テストは変更前のコードでも通ってしまい、回帰を検出できない。",
+   "quote": "そのため、`TMPDIR=\"$root/no-such-dir\"` を渡す今のテストは、変更前の apply.sh でも通るはずです。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "SKILL.md",
+   "summary": "apply.sh の実行方法の案内が曖昧で、承認済みの行を標準入力に流す具体的なコマンドが書かれていない。",
+   "quote": "apply.sh は「同じように `!` で」とあるだけです。承認済みの行を標準入力に流す具体的なコマンド(`… | <skill-dir>/scripts/apply.sh`)を書いておくと、ユーザーがそのまま実行できます。",
+   "quote_ok": true
+  }
+ ]
+}

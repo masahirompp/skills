@@ -1,0 +1,27 @@
+{
+ "case": "clean-sk-14",
+ "kind": "shell",
+ "config": "mattpocock",
+ "trial": 3,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 648941,
+  "cache_read": 538886,
+  "output": 15732
+ },
+ "cost_usd": 1.0784272,
+ "started_at": "2026-11-15T15:22:06",
+ "duration_s": 144,
+ "num_turns": 2,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [
+  "Bash cat /Users/masahirompp/.claude/projects/-private-var-folders-5t-j2015ppn7pj1lf0h39j3c5jm0000gn-T-rb-1t-d3kns-w-be873f2f57-skills/6cdb034c-cf26-4254-ba3c-25fe983a89f0/tool-results/bjx34opfi.txt | sed -n 40,700p"
+ ],
+ "tree_changed": [],
+ "head_changed": false
+}

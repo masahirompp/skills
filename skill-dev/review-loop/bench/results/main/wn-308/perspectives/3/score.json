@@ -1,0 +1,49 @@
+{
+ "cost_usd": 0.06994159999999999,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "detected",
+   "quote": "そのため、たとえば `docker compose up` が動いたまま whatnext がシグナルで落ち、版を上げて起動し直すと、残った `sh-<id>` の作業台は古い書式のままです。",
+   "reason": "status-format[0] を入れるのが createWorkbench 経由の workbenchOptions と GUIDE だけで、異常終了後に引き継いだ sh-<id> の作業台には入れ直されず古い書式のままになる、と原因と起きる条件を正解どおりに述べ、起動時に既存の sh-* へ当て直す直し方も示しているため。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md:555-556",
+   "summary": "@wn_name に長さの上限がないため、名前が長いと ^Q% も含めてキーがすべて消える。docs はウィンドウの数にしか触れておらず不正確だ。",
+   "quote": "ただし `@wn_name` には長さの上限がなく(`tmux.ts:330`)、名前が長いかウィンドウが多いと、`^Q%` も含めてキーがすべて消えます。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "docs/PRODUCT.md:442、:559-562",
+   "summary": "442行目の画面の例は、実際の描画から取ったものではなく手で描いた合成の図に見える。CLAUDE.md の「見た目の決定」の決まりに反するおそれがある。",
+   "quote": "一方、442行目の図は手で描いた合成の図を手で書き換えたものに見えます(`· ^│` の位置)。桁は合っていますが、tmux の capture から作ったのかを確かめておくべきです。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/e2e/workbench.test.ts:117",
+   "summary": "e2e テストはウィンドウが1つの場合だけを扱っている。ウィンドウが2つ以上のときの docs の主張(キーが右へ押し出される)を裏付けるテストがない。",
+   "quote": "回帰の心配は小さいですが、docs の主張を裏付けるテストはありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test/e2e/workbench.test.ts:117",
+   "summary": "幅が狭いときに ^Q% が最後まで残ることを確かめるテストがない。",
+   "quote": "狭い幅で `^Q%` が残ることも、テストしていません。これは docs の中心の主張なので、幅を指定して1本足す価値はあります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "lib/tmux/tmux.ts:324 と :340",
+   "summary": "prefix の C-q と表示の ^Q を別々に固定の文字列で書いているため、prefix を変えるときに2か所を直す必要がある。",
+   "quote": "ただ、whatnext のキーの説明(`@wn_keys`)は `keys.ts` から組み立てているのに、ここだけ固定の文字列です。prefix を変えるときに2か所を直す必要があります。",
+   "quote_ok": true
+  }
+ ]
+}

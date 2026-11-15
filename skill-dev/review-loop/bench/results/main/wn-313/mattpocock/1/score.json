@@ -1,0 +1,147 @@
+{
+ "cost_usd": 0.1335096,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "作業台の画面がつながったまま wbguide が消えたときに作り直す者がいない、という指摘は無く、doFollow についての指摘も別の原因(一覧が作業台の画面を知るまで効かない)です。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "`@wn_respawned` は増えるだけで戻らず、経過時間も見ていません。何時間もかけて5回落ちた場合でも畳みます。",
+   "reason": "pane-died の案内の分岐で、回数が通算で数えられて数え直されないため、いずれ上限に達して畳まれると指摘しており、基準を満たします。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "partial",
+   "quote": "attach の失敗判定(`status !== 0 && hasSession(LIST)`)が実測されていない**:`detach-client` で譲るときや、`kill-server` との順序の競合で、tmux がどの終了コードを返すかは確かめられていません。",
+   "reason": "場所(attach の結果の判定)は合っていますが、シグナルで終わり status が null になって失敗扱いになる、という原因は示さず、疑いを述べるにとどまっています。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が、利用者の分割したペインまで起動し直すという指摘はありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなった、という指摘はありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定し、案内のペインが無い場合を見落とす、という指摘はありません。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/cli/env.ts の workbenchCommand、src/ops/ports.ts",
+   "summary": "src が、契約(docs/lib/tmux.md)に書かれていない splitWorkbench の exec 付与に頼っているので、契約に書き足すべきだ。",
+   "quote": "今回の修正は「`exec` は `splitWorkbench` が付ける」ことを前提に、src の側から `exec` を外しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "test/unit/cli.test.ts",
+   "summary": "exec が1つだけ付くことを守る lib のテストが、cycle-end で消える test/unit/ に置かれている。",
+   "quote": "このままでは cycle-end で、lib の側の保証もテストと一緒に消えます。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "docs/lib/tmux.md",
+   "summary": "契約の名前の約束に、新しい頼みごとの形 guide とペインのオプション @wn_respawned が書かれていない。",
+   "quote": "`:10` は頼みごとの形を `key`・`focus`・`agentview` と列挙していますが、新しく足した `guide` がありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "DESIGN.md / CLAUDE.md「学びの捕捉」",
+   "summary": "案内が終わる原因が分かっていないことと、exec の重複を、bug か learning の issue にしていない。",
+   "quote": "DESIGN.md に「案内のプログラムがなぜ終わったかは、まだ分かっていない」と書かれています。これは `bug` か `learning` の issue にする観察です。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "src/cli/list.ts",
+   "summary": "ensureGuide のすぐあとに workbenchOptions(GUIDE, '') を呼んでおり、セッションを作った場合は2回呼ぶことになる。",
+   "quote": "`ensureGuide` のすぐあとに `tmux.workbenchOptions(GUIDE, '')` を呼んでいます。サブエージェントによると、セッションを作った場合は `ensureGuide` の中でも呼ぶので2回になります。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "src/cli/workbench.ts の askListToRefreshGuide",
+   "summary": "頼みごとの送り方を src の側で組み直しているので、送る側も Tmux にまとめるほうが自然だ(Feature Envy)。",
+   "quote": "頼みごとの送り方(`@wn_req_<秒>_<pid>` に書いてから SIGUSR2 を送る)を src の側で組み直しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "src/cli/workbench.ts",
+   "summary": "'@wn_pid' や 'agentview' を素の文字列で書いており、GUIDE_REFRESH が定数なのとそろっていない。",
+   "quote": "`'@wn_pid'` や `'agentview'` を素の文字列で書いています。同じ場所で `GUIDE_REFRESH` は定数を使っており、そろっていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "GUIDE_REFRESH",
+   "summary": "GUIDE_REFRESH の値が 'guide' だけで、入れ直すという意味が値から読めない。",
+   "quote": "`GUIDE_REFRESH` の値が `'guide'` だけで、「入れ直す」という意味が値から読めません。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "src/cli/workbench.ts の fail()",
+   "summary": "fail() が環境変数を直接読んでおり、readEnv/Env を通すほかの環境変数とそろっていない。",
+   "quote": "`fail()` は `process.env.WHATNEXT_WORKBENCH_SPLIT` を直接読んでいます。ほかの環境変数は `readEnv`/`Env` を通しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "lib/tmux/tmux.test.ts",
+   "summary": "sh の本文を部分文字列で切り出して比べるテストで、壊れやすい。",
+   "quote": "`lib/tmux/tmux.test.ts` は、sh の本文を `indexOf`/`lastIndexOf` で切り出して、部分文字列を比べています。",
+   "quote_ok": true
+  },
+  {
+   "n": 11,
+   "location": "docs/PRODUCT.md",
+   "summary": "新しい英語の文言3つとキー待ちの挙動が、利用者の判断を得ないまま入っており、PRODUCT.md に書かれていない。",
+   "quote": "「失敗した分割はすぐ閉じる/キーを押すまで残る」は二択で聞けるので、層1として扱う理由がありません。利用者の判断を得てから、PRODUCT.md に足す必要があります。",
+   "quote_ok": true
+  },
+  {
+   "n": 12,
+   "location": "decision-log",
+   "summary": "起動し直しと作り直しの判断について、decision-log の issue が無い。",
+   "quote": "ただし `decision-log` の issue が見当たりませんでした。",
+   "quote_ok": true
+  },
+  {
+   "n": 13,
+   "location": "doFollow",
+   "summary": "頼みごと guide は、一覧が作業台の画面を知るまで if (!wb) return で抜けるため、作り直した直後に名前が空で出うる。",
+   "quote": "`doFollow` の `if (!wb) return` で抜けるため、作り直した直後は名前が空で出る可能性があります。",
+   "quote_ok": true
+  },
+  {
+   "n": 14,
+   "location": "テスト",
+   "summary": "attach の失敗の経路、fail() のキー待ち、5回を超えたら畳む挙動にテストが無い。",
+   "quote": "attach の失敗の経路\n   - `fail()` のキー待ち\n   - 5回を超えたら畳む挙動(今は文字列が含まれるかを見ているだけ)",
+   "quote_ok": true
+  }
+ ]
+}

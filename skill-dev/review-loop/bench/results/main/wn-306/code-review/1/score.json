@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.10410960000000001,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "選んだ行のすぐ下に続く (sub) の行まで cursorBlock を伸ばしたので、b1 が入力欄の終わりではなく最後の (sub) の行の位置になった。そのため『入力欄は最後の行まで窓に入れる』の補正が窓を下へずらしすぎ、選んだ行もメモの入力欄も窓の外に出る。",
+   "reason": "render で cursorBlock に続く (sub) を含めたことと start=b1-avail の補正が原因で選んだ行と入力欄が窓から外れることを指摘しており、2件目では頭の (sub) で start=b0 になる場合も示している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "detected",
+   "quote": "trailing は区切りをまたいでも戻らないので、区切り A の最後の行を選ぶと、空行、次の区切り B の見出し、B の先頭にあるトップレベルの (sub) の行まで、選んだ行の塊に入る。",
+   "reason": "trailing が区切りの境目で戻らず、次の区切りの (sub) まで塊に入ることを指摘しており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "detected",
+   "quote": "選べる行がなくカーソルが undefined のとき、cursorBlock は [0,0] のままなので窓は先頭に固定され、高さを超えた (sub) の行はどの操作でも見られない。通し番号も '0/0' になる。",
+   "reason": "選べる行がなくカーソルが undefined のときに通し番号が 0/0 になることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "選んでいた行が消えずに起動された行へ変わったときも、prevLayout.order に入っているので goneName が付き、Ctrl+X の保護が『left the list』の文言で出る。実際には行は一覧に残っている。",
+   "reason": "(sub) に変わった行で guard が立ち、文言『left the list』が事実と違うことを正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に行が (sub) に変わっても入力欄が閉じないという指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "attachKey や作業台の案内の経路から (sub) の行にメモが開くという指摘はなく、9件目は openNote の判定を外したことをテストの不足として述べているだけである。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の『Both can be selected』の記述が実装と食い違うという指摘はない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/screen/screen.ts:223",
+   "summary": "選べる行がないと窓が先頭に固定され、高さを超えた (sub) の行がどの操作でもスクロールして見られない。",
+   "quote": "cursorBlock は [0,0] のままなので窓は先頭に固定され、高さを超えた (sub) の行はどの操作でも見られない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "docs/DESIGN.md:132",
+   "summary": "(sub) に変わったときにカーソルが隣へ移るという観測できる振る舞いが PRODUCT.md に書かれておらず、エスカレーションの記録もない。",
+   "quote": "『選んでいた行が更新で起動された行に変わったときも、消えたときと同じに隣の行へ移る』は観測できる振る舞いなのに、DESIGN.md にしか書かれていない。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/screen/screen.ts:201",
+   "summary": "選べるかどうかの判定が、画面側は marker、モデル側は node.spawned で行われ、真実の出どころが2つある。",
+   "quote": "画面側は『選べるか』を表示用の印 r.marker !== 'sub' で判定し、モデル側（selectableOrder）は layout の node.spawned で判定している。真実の出どころが2つある。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/model/cursor.ts:6",
+   "summary": "selectableOrder が O(n²) の走査を、キー入力や更新のたびに繰り返している。",
+   "quote": "selectableOrder は order の各 sid について isSpawned で全区切りの全 node を走査する（O(n²)）。それを ↑↓ のキー入力のたびと更新のたびに組み直している。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test/e2e/deps.test.ts:465",
+   "summary": "シナリオ 71 のテストは e でメモの入力欄が開いても検出できず、openNote の断りを外したことへの歯止めにならない。",
+   "quote": "シナリオ 71 の『f も e も何もしない』の確かめが、/waits for:|can't/ が出ないことしか見ていない。e でメモの入力欄が開いても検出できない。",
+   "quote_ok": true
+  }
+ ]
+}

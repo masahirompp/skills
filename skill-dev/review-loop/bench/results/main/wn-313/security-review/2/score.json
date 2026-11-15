@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.06677759999999999,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "作業台の画面がつながったまま wbguide が消えたときに作り直されない、という指摘はレビューに無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "@wn_respawned を通算で数えていて数え直さない、という指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "attach の結果の判定で status が null の場合を誤って失敗と扱う、という指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "pane-died の wbguide の分岐が、利用者が分割したペインと案内のペインを区別しない、という指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなった、という指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide は ensureGuide の注入の有無しか確認しておらず、セッションの有無だけで判定する問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

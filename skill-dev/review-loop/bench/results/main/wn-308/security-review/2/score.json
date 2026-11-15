@@ -1,0 +1,13 @@
+{
+ "cost_usd": 0.032909600000000004,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは書式文字列のセキュリティしか確認しておらず、cleanupLeftovers で引き継いだ作業台に workbenchOptions を入れ直していない点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

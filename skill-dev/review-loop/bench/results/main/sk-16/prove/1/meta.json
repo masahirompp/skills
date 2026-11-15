@@ -1,0 +1,25 @@
+{
+ "case": "sk-16",
+ "kind": "doc",
+ "config": "prove",
+ "trial": 1,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 178734,
+  "cache_read": 150178,
+  "output": 1808
+ },
+ "cost_usd": 0.29460359999999997,
+ "started_at": "2026-11-15T07:23:44",
+ "duration_s": 190,
+ "num_turns": 5,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [],
+ "head_changed": false
+}

@@ -1,0 +1,27 @@
+{
+ "cost_usd": 0.0593096,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lib.sh の hk_is_protected / hk_path_in_use がヒアドキュメントで一時ファイルに頼っていて fail-open になる点には触れておらず、一時ファイルが無くなったことをむしろ安全側の変更と評価している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "一時ディレクトリを作れないと止まることは確認しているが、その前に git fetch --prune が走って『何もせずに止まる』と食い違う点は指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い、またはプロセスを見られないときに使用中の worktree を『使用中でない』と判定する問題には一切触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

@@ -1,0 +1,105 @@
+{
+ "cost_usd": 0.11052160000000001,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "作業台の画面がつながったまま wbguide が消えたときに、一覧の追従や作業台を畳む処理、pane-died の切り替えで案内が作り直されないという指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "`@wn_respawned` はペインのオプションで、`respawn-pane` してもペインの ID は変わりません。回数は減らず、元に戻すところもありません。",
+   "reason": "回数が通算で数えられて数え直されないため、たまに落ちるだけでも6回目に畳まれる、と正確に指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "detected",
+   "quote": "`res.status` はシグナルで終わると `null` になり、`!== 0` が真になります。一覧が残っていれば、エラーを出してキーを待ちます。",
+   "reason": "attach の判定で、シグナルで終わり status が null になった場合も失敗と扱う点を、場所と原因の両方で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が、利用者の分割したペインと案内のペインを区別していないという指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなった点に触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定しているため、案内のペインがない場合に作り直されない、という指摘がない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/cli/workbench.ts:58-60",
+   "summary": "端末が切れたあとに fail() が setRawMode(true) を呼ぶと EIO で投げ、例外が捕まらずに落ちうる。",
+   "quote": "端末が切れたあとに `setRawMode(true)` を呼ぶと、EIO で投げることがあります。そうなると例外が捕まらずに落ちます。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/cli/guide.ts:18-22",
+   "summary": "同時に作られたとき、'exists' を返した側が、オプションの入る前のセッションにつながりうる。",
+   "quote": "相手が `new-session` を終えて `workbenchOptions` を入れる前に、こちらが attach する並びがありえます。その間は `mouse` や `set-titles` が既定のままです。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/cli/list.ts:66-67",
+   "summary": "案内を作ったときに workbenchOptions(GUIDE, '') が2回走り、意図が読みにくい。",
+   "quote": "`ensureGuide` が `'created'` を返したときにも入れ直しています。害はありませんが、`'exists'` のときだけ入れ直すようにすれば意図が読みやすくなります",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/cli/guide.ts:19",
+   "summary": "whatnext workbench が作り直す案内が、一覧とは違う版・違う環境変数で作られうる。",
+   "quote": "利用者が手で `whatnext workbench` を打つと、別に入れた whatnext の版の案内が作られえます。`PATH`、`CLAUDE_CONFIG_DIR`、`WHATNEXT_DEBUG_LOG` も、一覧ではなく作業台の画面のシェルのものになります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "src/cli/workbench.ts:43-51",
+   "summary": "頼みごとを書いてから一覧に知らせる処理が3か所に重複しており、1つにまとめるべき。",
+   "quote": "頼みごとを書いてから一覧に知らせる処理が 3 か所目になる",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "src/ops/names.ts:12",
+   "summary": "頼みごとの名前 'guide' が一般的すぎて、将来ほかの頼みごととぶつかりうる。",
+   "quote": "`app.ts:1156` は先頭の語だけで分けているので、`guide-refresh` のように目的の分かる名前のほうが、将来ぶつかりにくくなります。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "test/e2e/workbench.test.ts:242-256",
+   "summary": "起動し直しの回数を使い切ったあとの経路を、通しで確かめるテストがない。",
+   "quote": "確かめているのは、1 回落ちて起動し直すところまでです。6 回目に畳む経路は、`lib/tmux/tmux.test.ts:75-81` が文字列に含まれることを見ているだけです。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "src/cli/workbench.ts fail()",
+   "summary": "fail() の、メッセージを出してキーを待つ経路にテストがない。",
+   "quote": "`fail()` の、キーを待つ経路にテストがない",
+   "quote_ok": true
+  }
+ ]
+}

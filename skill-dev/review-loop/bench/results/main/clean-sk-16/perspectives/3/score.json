@@ -1,0 +1,69 @@
+{
+ "cost_usd": 0.0690896,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/SKILL.md:106, :128",
+   "summary": "再現を1回試して起きなければ影響が高い指摘でも捨てられ、再現手順の誤りへの手当てがない。",
+   "quote": "再現を1回試して起きなければ、影響が高い指摘でも捨てられる",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/SKILL.md:130",
+   "summary": "再レビューを省く条件の「修正箇所を通る既存のテスト」の有無を、親が読むだけで判断しており甘くなりやすい。",
+   "quote": "「修正した箇所を通る既存のテスト」があるかを、親が読むだけで判断している",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/review-loop/SKILL.md:107, :130",
+   "summary": "成果物が主に文書なので、多くの指摘が実行で示せず、反復の短縮がほとんど効かない見込み。",
+   "quote": "このリポジトリでは反復の短縮がほとんど効かない見込み",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/review-loop/SKILL.md:130",
+   "summary": "「実行で確かめていない修正が1つでもあれば回す」の対象が曖昧で、影響の低い修正も含むと読めばほぼ毎回回すことになる。",
+   "quote": "「実行で確かめていない修正が1つでもあれば回す」がどの修正を指すのか曖昧",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/review-loop/SKILL.md:99, :103 / skills/review-loop/scripts/review_loop.py:863",
+   "summary": "比べる基準の「PR のベース」が、ベースブランチの今の先頭か merge-base か曖昧で、main が進むと範囲の判定が逆になりうる。",
+   "quote": "ベースブランチの今の先頭なのか、分岐した時点(merge-base)なのかが書かれていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/review-loop/SKILL.md:103",
+   "summary": "一時ディレクトリへの取り出し手段が書かれておらず、git worktree add を使うと共有 .git に worktree と ref が増える。",
+   "quote": "「一時ディレクトリへの取り出し」の手段を書いていない",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skills/review-loop/SKILL.md:83-89",
+   "summary": "新しい規則が分類(defect かどうか)に頼るのに、手順4の一覧に分類がない。",
+   "quote": "新しい規則の前提になる「分類」が一覧にない",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "skills/review-loop/SKILL.md:136",
+   "summary": "issue を作る先のリポジトリを決めておらず、fork からの PR だと上流に作られることがある。",
+   "quote": "issue を作る先のリポジトリを決めていない",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "skills/review-loop/SKILL.md:99, :136",
+   "summary": "範囲の外のセキュリティの指摘はループ内で直さないので、反復ごとに再指摘されやすく、判定役が見分けられない。",
+   "quote": "範囲の外のセキュリティの指摘が、直されずに残りやすくなる",
+   "quote_ok": true
+  }
+ ]
+}

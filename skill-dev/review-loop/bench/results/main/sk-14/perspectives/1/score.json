@@ -1,0 +1,70 @@
+{
+ "cost_usd": 0.0913776,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "detected",
+   "quote": "一時ファイルを作れなかった場合が危険です。`hk_is_protected` の `while … done <<EOF` はリダイレクトに失敗して実行されず、関数は `return 1`(保護対象ではない)を返します。",
+   "reason": "lib.sh の hk_is_protected と hk_path_in_use がヒアドキュメントに依存しており、一時ファイルを作れないと保護判定が削除側に倒れる(fail-open)と指摘していて、detect_criteria を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "detected",
+   "quote": "一時ディレクトリを作る前に、`git fetch --prune` がすでに走っています(scan.sh:22)。そのため、止まる時点でリモート追跡ブランチはもう刈り込まれています。",
+   "reason": "scan.sh で一時ディレクトリの作成が fetch --prune より後にあるため、SKILL.md の「何もせずに止まる」と食い違うと指摘しており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い、またはプロセスを見られないときに hk_process_cwds が空の一覧を返し、使用中でないと判定される問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh:186",
+   "summary": "TMPDIR=no-such-dir のテストは、bash が /tmp などに切り替えるから通るだけで、TMPDIR に依存しないことの証明になっていない。",
+   "quote": "test.sh:186 は `TMPDIR=no-such-dir` で通ります。しかしこれは、bash が書き込めない TMPDIR を飛ばして `/tmp` や `/var/tmp` に切り替えるからです。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "apply.sh を `!` で実行してもらう案内に、標準入力へパイプで渡す形が示されていない。",
+   "quote": "そのため `! awk -F'\\t' '$1==\"delete\"||$1==\"prune\"' <scan.tsv> | <skill-dir>/scripts/apply.sh` のような、パイプを含む形を示すべきです。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "apply.sh はサンドボックスで失敗しても skipped 行と終了コード1を出すだけなので、サンドボックスの制限だと判断する手がかりを文書に書くべきだ。",
+   "quote": "この出力を見てサンドボックスの制限だと判断する手がかりを明記した方が、エージェントが見落としにくくなります。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "出力ファイルを共有の $TMPDIR に予測できる名前で置くと、他のユーザーに読まれたり、シンボリックリンクで上書きされたりするおそれがある。",
+   "quote": "そこに予測できる名前で出力すると、他のユーザーが読めたり、シンボリックリンクで別のファイルを上書きされたりする余地があります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skill-dev/housekeeping/test.sh:172–175",
+   "summary": "後片付けのテストはディレクトリが空かどうかしか見ておらず、単独では scan.sh が HOUSEKEEPING_TMPDIR を使ったことを確かめていない。",
+   "quote": "このテストは「ディレクトリが空」であることしか見ていません。単独では、scan.sh が `HOUSEKEEPING_TMPDIR` を使ったことの検証になっていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skill-dev/housekeeping/test.sh:174",
+   "summary": "174行目が set +e で囲まれていないので、scan.sh が失敗すると FAIL を表示せずにテスト全体が止まる。",
+   "quote": "174行目は `set +e` で囲まれていません。scan.sh が失敗すると `set -e` でテスト全体が FAIL 表示なしに止まり、原因が分かりにくくなります。",
+   "quote_ok": true
+  }
+ ]
+}

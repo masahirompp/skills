@@ -1,0 +1,27 @@
+{
+ "case": "clean-wn-315",
+ "kind": "ts",
+ "config": "mattpocock",
+ "trial": 3,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 727171,
+  "cache_read": 620312,
+  "output": 12430
+ },
+ "cost_usd": 1.0176584,
+ "started_at": "2026-11-15T15:27:33",
+ "duration_s": 200,
+ "num_turns": 5,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [
+  "Bash gh issue list -R masahirompp/whatnext --state all --search \"n 候補 先頭\" --limit 5 2>&1 | head; grep -n \"select(\\|^export function panel\\|function panel\" test/e2e/*.ts | head -3"
+ ],
+ "tree_changed": [],
+ "head_changed": false
+}

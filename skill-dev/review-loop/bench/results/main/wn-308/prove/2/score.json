@@ -1,0 +1,13 @@
+{
+ "cost_usd": 0.0416416,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは workbenchOptions が作るときにしか呼ばれないことに気づいたが、作業台は終了時に消えるため起きないと結論して指摘から外し、異常終了後に cleanupLeftovers で Y を選んで引き継ぐ経路には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

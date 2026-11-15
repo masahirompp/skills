@@ -1,0 +1,105 @@
+{
+ "cost_usd": 0.1115536,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "作業台の画面がつながったまま wbguide が消えたときに一覧の側で作り直されない、という指摘はなく、指摘1は版と環境の食い違いという別の原因を述べている。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "コメントの意図は「起動してすぐ終わるときに回り続けないため」ですが、実際はペインごとに生涯5回の上限です。長く動かしていると、まばらに5回落ちただけで6回目に `kill-pane` され、セッションが消えます。",
+   "reason": "@wn_respawned が数え直されず通算で上限に達し、案内が畳まれるという原因と場所が正解と一致している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "detected",
+   "quote": "`null !== 0` は真なので、tmux のクライアントだけがシグナルで終わり一覧が残っている場合に、一度つながっていても「could not open the workbench screen」と出ます。",
+   "reason": "シグナルで終わると status が null になり、つなげなかった扱いになるという原因を正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が利用者の分割したペインと案内のペインを区別しない、という指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定し、案内のペインがない状態を見逃す点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/cli/guide.ts:19",
+   "summary": "whatnext workbench が作った案内は、版や環境(PATH など)が動いている一覧と食い違うことがある。",
+   "quote": "**`whatnext workbench` が作った案内は、版と環境が一覧と違うことがある**(`src/cli/guide.ts:19`)",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "lib/tmux/tmux.ts:51",
+   "summary": "@wn_guide_died が上書きされるので最後の1回しか残らず、原因を調べる手がかりとして足りない。",
+   "quote": "**`@wn_guide_died` は上書きなので、手がかりとして弱い**(`lib/tmux/tmux.ts:51`)",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/cli/list.ts:67、src/cli/guide.ts:22",
+   "summary": "一覧の起動時に workbenchOptions が二重に呼ばれ、意図が読み取りにくい。",
+   "quote": "**一覧の起動時に `workbenchOptions` を二重に呼ぶ**(`src/cli/list.ts:67`、`src/cli/guide.ts:22`)",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/cli/workbench.ts:43-51",
+   "summary": "頼みごとを送る処理が複製されていて、キー名の書式を変えると3か所直す必要がある。",
+   "quote": "**頼みごとを送る処理が3か所目の複製になった**(`src/cli/workbench.ts:43-51`)",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "lib/tmux/tmux.ts:51",
+   "summary": "@wn_guide_died に画面の末尾5行が入り、セッション名やパスがサーバ全体のオプションに残る。",
+   "quote": "**`@wn_guide_died` に画面の末尾5行が入る**(`lib/tmux/tmux.ts:51`)",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "test/unit/cli.test.ts:26",
+   "summary": "単体テストが zsh がある前提なので、zsh のない環境では ENOENT で失敗する。",
+   "quote": "**単体テストが zsh があることを前提にしている**(`test/unit/cli.test.ts:26`)",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "lib/tmux/tmux.test.ts:75-80",
+   "summary": "スクリプトの文字列の断片で確かめるテストは、意味の変わらない変更で壊れる一方、壊れた分岐を見逃すこともある。",
+   "quote": "`body.slice(indexOf('wbguide)'), lastIndexOf('*)'))` に対する `toContain` は、`case` の並べ替えやコメントの追加で、意味が変わらなくても壊れます。逆に、壊れた分岐を見逃すこともあります。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "test/e2e/workbench.test.ts",
+   "summary": "起動し直しが5回を超えて案内が畳まれる場合の e2e テストがない。",
+   "quote": "e2e の側には、2で挙げた「5回を超えたら畳む」場合のテストがありません。",
+   "quote_ok": true
+  }
+ ]
+}

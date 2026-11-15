@@ -1,0 +1,133 @@
+{
+ "cost_usd": 0.11545760000000001,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--perspective の空白を正規化しないまま起動プロンプトを作る点への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "指示は judge-input.md に見出し付きで添えられます(`review_loop.py:845`)。しかし JUDGE_PROMPT には、その指示をどう扱うかの一文がありません。",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いが無く、範囲を絞ったレビューが観点の欠落と判定されうると、場所と原因の両方を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "引数だけを既定から変えても、表には何も載りません。逆に、同じ観点を並べ替えただけでも表に載ります。",
+   "reason": "既定との比較がスキル名だけで、引数違いが記録されないことと、並べ替えが差になることを iterate の比較箇所で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が、外した観点に --instruct を渡していて終了コード2になる点への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "valid_state が perspectives をリストか確かめない点への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt に足した指示がサブエージェントに届かない点への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "指示とレビュー出力を同じ区切りで混ぜるため偽装・混同されうる点への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭の / を取り除かずに照合して失敗する点への言及がない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "review_loop.py review_config / iterate / run_reviews",
+   "summary": "観点の名前の一覧 [skill_name(s) for s in perspectives] を何度も作っており重複している。",
+   "quote": "**Duplicated Code の可能性**: 観点の名前の一覧 `[skill_name(s) for s in perspectives]` を何度も作っています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "review_loop.py review_config / iterate / run_reviews",
+   "summary": "perspectives と instructions の組がいつも一緒に渡される Data Clumps である。",
+   "quote": "**Data Clumps の可能性**: `perspectives, instructions` の組が、`review_config` から `iterate`、`run_reviews` へいつも一緒に渡されます。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "review_loop.py",
+   "summary": "instructs と instructions は1字違いで取り違えやすい名前である。",
+   "quote": "**Mysterious Name の可能性**: `instructs`(生の値)と `instructions`(解析後の値)は1字違いで取り違えやすい名前です。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "review_loop.py skill_name",
+   "summary": "観点を文字列のまま持ち、skill_name() で毎回解析している Primitive Obsession がある。",
+   "quote": "**Primitive Obsession の可能性**: 観点を「スキル名と引数」の文字列のまま持ち、`skill_name()` で毎回解析しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test.py 551行目付近",
+   "summary": "新しい節の冒頭の run(wt, \"--new-run\") が直前の節の末尾と続けて二重に呼ばれている。",
+   "quote": "新しい節の冒頭の `run(wt, \"--new-run\")` が、直前の節の末尾(551行目付近)と続けて二重に呼ばれています。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "review_loop.py:749",
+   "summary": "レビュー役のシステムプロンプトに、仕様に無い「スキルの手順より指示を優先」が加わっている。",
+   "quote": "レビュー役のシステムプロンプトに「スキルの手順と食い違うときは、この指示を優先」とあります(`review_loop.py:749`)。仕様は指示を「足す」とだけ言っています。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "",
+   "summary": "終了時の報告に、仕様に無い「レビューされなかった観点と範囲」が加わっている。",
+   "quote": "終了時の報告に、レビューされなかった観点と範囲が加わっています。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "test.py",
+   "summary": "判定役への指示のテストが、見出しがあるかどうかしか確かめていない。",
+   "quote": "テストも見出しがあるかどうかしか確かめていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "test.py",
+   "summary": "= を含む指示、観点の重複、既定と同じ観点の明示指定、失敗した試行の表示がテストされていない。",
+   "quote": "`=` を含む指示、観点の重複、既定と同じ観点の明示指定、失敗した試行の表示は検証されていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "review_loop.py iterate",
+   "summary": "--instruct だけを付けた試行は状態コメントに何も残らず、範囲を絞った試行だと後から分からない。",
+   "quote": "`--instruct` だけを付けた試行は状態コメントに何も残らないので、後から範囲を絞った試行だと分かりません。",
+   "quote_ok": true
+  }
+ ]
+}

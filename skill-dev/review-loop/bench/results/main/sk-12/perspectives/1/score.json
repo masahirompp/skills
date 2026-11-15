@@ -1,0 +1,84 @@
+{
+ "cost_usd": 0.1139176,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "detected",
+   "quote": "止めない条件を「deny ルールに当たったもの」に限るのが安全です(例: `reason_type` が rule 系のときだけにする、`message` で区別する)。",
+   "reason": "source == \"config\" だけで止めない拒否とみなし reason_type を見ないため、deny ルールに当たった以外の拒否まで試行を止めずに通る、と同じ箇所と原因を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "detected",
+   "quote": "`seen = set(tail.config_denied)` では、tool_use_id のない設定の拒否のキーが `None` になります。すると、`permission_denials` のうち tool_use_id のないものは、出どころと関係なく 258 行目で読み飛ばされます。",
+   "reason": "None キーが seen に入り、id のない permission_denials が除外されるという仕組みを正確に指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "detected",
+   "quote": "(b) 下書きの判定のあとに本番の判定を出すと、見出しが2組つながり、最初の見出しから両方とも verdict になる。",
+   "reason": "判定役でも result の行を全てつなぐため、出し直しや後の短い行が判定に混ざると run_judge/check_result の使い方を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "is_error の行を除かずにつなぐ問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "別の観点の失敗でループを抜けたとき、ほかの子の止めない拒否が記録から漏れる問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "child_error の詳細が、つないだテキストの先頭500字になる問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "review_loop.py:300-320、:869",
+   "summary": "設定のルールでの拒否は denials.txt と stderr にしか残らず、判定役の入力にも状態コメントにも載らない。そのため入力が欠けたレビューでも成功に数えられ、ループが見かけ上収束するおそれがある。",
+   "quote": "拒否の記録は `denials.txt` と stderr にしか残りません。判定役への入力(`judge-input.md`)にも状態コメントにも載りません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "test.py(FAKE_JUDGE=multi)",
+   "summary": "判定役が複数の行を出すケースのテストは、最後の行が空の場合しか確かめていない。",
+   "quote": "テスト(`test.py` の `FAKE_JUDGE=multi`)は最後の行が空のときしか確かめていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "review_loop.py:237",
+   "summary": "modelUsage について「セッションの累計」と「どの行も同じ値」というコメントの説明が互いに矛盾している。",
+   "quote": "コメントは「modelUsage はセッションの累計で、どの行も同じ値になる」と書いていますが、累計なら行ごとに値は増えるはずで、2つの説明が矛盾しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test.py / fakes/claude",
+   "summary": "偽の claude がすべての行に同じ modelUsage を出すため、トークンのテストでは最初の行を使う実装と最後の行を使う実装を区別できない。",
+   "quote": "`output == 4 * 300` のテストでは「最後の行を使う」と「最初の行を使う」を区別できません。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "review_loop.py:337-339",
+   "summary": "拒否されたコマンドの入力を最大200文字まで denials.txt と stderr に残すため、成功した試行でもコマンド内のトークンなどが親のセッションのログに出うる。",
+   "quote": "コマンドの中にトークンを直接書く呼び出し(`curl -H \"Authorization: ...\"` など)が deny ルールに当たると、その値が stderr、つまり親のセッションのログに出ます。",
+   "quote_ok": true
+  }
+ ]
+}

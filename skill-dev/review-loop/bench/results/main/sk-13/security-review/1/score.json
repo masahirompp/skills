@@ -1,0 +1,62 @@
+{
+ "cost_usd": 0.0751216,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--perspective の値を整えずに起動プロンプトを作るため、照合した名前と実際のプロンプトが食い違う点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "JUDGE_PROMPT に追加の指示ブロックの扱いが書かれていない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "既定の観点との比較がスキル名の並びだけで行われる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が --perspective で外した観点に --instruct を渡している点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "partial",
+   "quote": "追加された検査は `a.get(\"perspectives\")` が list かどうかを確かめていません。それでも、この値は表示にしか使われず、セキュリティ上の影響はありません。",
+   "reason": "valid_state が list かを確かめていないという原因は正しく指摘しているが、文字列や辞書が検査を通って表示が崩れることは述べず、影響なしとして除外している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "指示が --append-system-prompt だけで渡るため、サブエージェントに届かない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "judge-input.md で指示とレビューの出力を同じ区切りで並べるため、偽装や混同が起きうる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭の `/` を取り除かないため、事前確認や照合で失敗する点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

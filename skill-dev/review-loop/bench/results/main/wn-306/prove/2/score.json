@@ -1,0 +1,55 @@
+{
+ "cost_usd": 0.0886416,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "選んだ行のすぐ下に続く `(sub)` の行の分まで、`cursorBlock[1]` が伸びます。そのため、「入力欄は最後の行まで窓に入れる」の `start = b1 - avail` が `(sub)` の最後の行を基準にしてしまい、選んだ行と入力欄が上に押し出されます。",
+   "reason": "先頭の (sub) で start=0 に固定される件と、伸びた b1 を基準にした start = b1 - avail で入力欄が外れる件の両方を、原因まで正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "trailing が区切りの境目で切れず、次の区切りの (sub) まで塊に含まれる件には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "選べる行がないときに通し番号が 0/0 になる件には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "今回の変更で、行が残っていても起動された行に変われば followCursor に入るようになりました。その結果、消えていない行に対しても Ctrl+X の取り消しが「一覧から消えた」という文言で出ます。",
+   "reason": "行が (sub) に変わってカーソルが移った場合にも guard が立ち、文言が「left the list」で事実と違うことを正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に行が (sub) に変わっても入力欄が閉じない件には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "openNote の判定を消したことと、attachKey 経由で (sub) の行にカーソルが乗る件には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の記述と実装の食い違いには触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

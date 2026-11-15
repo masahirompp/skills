@@ -1,0 +1,25 @@
+{
+ "case": "wn-308",
+ "kind": "ts",
+ "config": "security-review",
+ "trial": 2,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 197858,
+  "cache_read": 143009,
+  "output": 2863
+ },
+ "cost_usd": 0.45940380000000003,
+ "started_at": "2026-11-15T08:10:12",
+ "duration_s": 42,
+ "num_turns": 2,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [],
+ "head_changed": false
+}

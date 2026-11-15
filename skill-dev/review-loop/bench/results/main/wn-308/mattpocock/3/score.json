@@ -1,0 +1,77 @@
+{
+ "cost_usd": 0.0877376,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは cleanupLeftovers で Y を選んで引き継いだ作業台に workbenchOptions や status-format[0] を入れ直していない点に一切触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md, docs/lib/tmux.md",
+   "summary": "「窓」の語が、一覧のスクロールの窓という既存の意味とぶつかっており、「ウィンドウの一覧」に揃えるべきだという指摘。",
+   "quote": "**推奨:「窓」の語が別の意味とぶつかっています。** 同じ箇条の中で「作業台のウィンドウの一覧」と「窓の一覧」が混ざっています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "docs/PRODUCT.md",
+   "summary": "見た目の決定の規約が画面を並べて比べることを求めているのに、採った形の幅60の画面が無く、切れ方の値も版によって食い違うので 3.7c で取り直すべきだという指摘。",
+   "quote": "**軽微:採った形の幅60の画面がありません。** 「見た目の決定」の規約は、画面を並べて比べることを求めています。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "lib/tmux/tmux.test.ts",
+   "summary": "昇格済みモジュールの lib 側に status-format[0] の文字列を確かめるテストが無く、cycle-end で確かめが消えるという指摘。",
+   "quote": "**推奨:lib 側にテストがありません。** CLAUDE.md は、昇格済みモジュールがテストを持ち越すと定めています。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "lib/tmux/tmux.ts",
+   "summary": "作業台のキーの文言を lib に直接書いているので、仕様が変わるたびに永続層を開くことになるというスメル。",
+   "quote": "Divergent Change / Primitive Obsession の可能性: claude の画面のキーの説明は `@wn_keys` として src から渡していますが、作業台のキーの文言は lib に直接書かれています。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "lib/tmux/tmux.ts",
+   "summary": "prefix の 'C-q' と、文字列の中の ^Q を二重に持っているというスメル。",
+   "quote": "Duplicated Code の可能性: prefix の `'C-q'` と、文字列の中の `^Q` を二重に持っています。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "SKILL.md",
+   "summary": "`%%` の件の learning の issue が起票されているかを確かめるべきだという指摘。",
+   "quote": "学びは発見の都度起票する規約なので、`%%` の件の `learning` の issue があるかは確かめておくとよいです。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "test/e2e/workbench.test.ts:25",
+   "summary": "作業台が無いときにキーが出ないことをテストが確かめておらず、案内の側にキーが混ざる退行を見逃すという指摘。",
+   "quote": "**作業台がないときにキーが出ないことを、テストが確かめていません。** `test/e2e/workbench.test.ts:25` は `/workbench: alpha/` に合うかだけを見ています。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "test/e2e/workbench.test.ts",
+   "summary": "狭い幅で右から欠ける挙動にテストが無いという指摘。",
+   "quote": "**狭い幅で右から欠ける挙動にはテストがありません。** 今回は実機で確かめただけです。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "docs(作業台の画面図)",
+   "summary": "作業台の画面図の行は ^Q% 自体が見えず主張の例として弱く、手で書いた図なので実際の描画から作るという規約にも照らして気になるという指摘。",
+   "quote": "**作業台の画面図の行は、主張の例として弱いです。** `workbench: fix-login  0:zsh*  · ^` は文字数としては正しい切れ方ですが、この幅では `^Q%` 自体が見えません。",
+   "quote_ok": true
+  }
+ ]
+}

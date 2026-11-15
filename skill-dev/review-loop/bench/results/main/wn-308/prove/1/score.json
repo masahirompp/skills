@@ -1,0 +1,13 @@
+{
+ "cost_usd": 0.0395136,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは新しく作った作業台の描画とキーの動きしか確かめておらず、cleanupLeftovers で Y を選んで引き継いだ作業台に status-format を入れ直していない点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

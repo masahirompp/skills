@@ -1,0 +1,49 @@
+{
+ "cost_usd": 0.0725336,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "partial",
+   "quote": "abnormalExit は、動いているものがある作業台を残してサーバを生かす(app.ts の shutdown 以外の経路)。そのあと 0.20.x の一覧を起動し直すと、既存の作業台 sh-<id> を映しても `workbench: fix-login  0:zsh*` だけが出て、`^Q% split │ ...` が出ない。",
+   "reason": "異常終了後に残った前の版の作業台へ workbenchOptions が入れ直されないという原因は合っているが、場所を tmux.ts:340 と list.ts の起動時としており、cleanupLeftovers の Y の分岐（引き継ぎの処理）を特定していない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "^Qc でウィンドウを作るよう案内しているのに、ウィンドウを移るキーを出しておらず、status-format に range=window の印もないため、クリックしても元のウィンドウに戻れない。",
+   "quote": "`^Qc window` で新しいウィンドウを作るよう案内しているのに、ウィンドウを移るキー(^Qn/^Qp/^Q<数字>)を出していない。自前の status-format には `#[range=window|#{window_index}]` もないので、mouse on でもステータス行の窓の一覧をクリックして移れない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "docs/lib/tmux.md:31",
+   "summary": "docs で tmux のウィンドウを「窓」と呼んでおり、一覧のスクロールの範囲を指すプロジェクトの用語「窓」と紛らわしい。",
+   "quote": "永続層の docs で、tmux のウィンドウを「窓」と呼んでいる(「窓の一覧のあとに分割とウィンドウのキー」)。このプロジェクトで「窓」は一覧のスクロールの範囲を指す語なので",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "docs/PRODUCT.md:442",
+   "summary": "作業台の画面の図の最下行を、実際の描画から取らずに手で書き換えており、プロジェクトの決まりに反している。",
+   "quote": "作業台の画面の図の最下行を、実際の描画から取らずに手で書き換えている(`0:zsh*  · ^│`)。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "East Asian Width が Ambiguous の │ と ─ をステータス行に足したため、曖昧な幅の文字を全角で描く端末では幅の計算がずれる。",
+   "quote": "ステータス行に、East Asian Width が Ambiguous の `│`(U+2502)と `─`(U+2500)を足した。tmux はこれを幅1と数えるが、曖昧な幅を全角にする端末では幅2で描かれ、ステータス行の幅の計算がずれる。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "キーの説明の ^Q を文字列に直に書いており、prefix の C-q から作っていないので、prefix を変えると案内と実際のキーが食い違う。",
+   "quote": "キーの説明の `^Q` を文字列に直に書いていて、同じ関数で設定している prefix `C-q` から作っていない。",
+   "quote_ok": true
+  }
+ ]
+}

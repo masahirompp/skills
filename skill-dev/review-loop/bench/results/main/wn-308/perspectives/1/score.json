@@ -1,0 +1,42 @@
+{
+ "cost_usd": 0.06780159999999999,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "partial",
+   "quote": "この書式は `createWorkbench` のときにしか設定されません。GUIDE 以外の既存の作業台には、あとから設定し直されません(呼び出しは `lib/tmux/tmux.ts:317` と `src/cli/list.ts:68` の2か所だけ)。",
+   "reason": "既存の作業台に workbenchOptions を入れ直していないという原因は合っていますが、指摘している場所は tmux.ts と一覧の起動で、異常終了のあとに Y で引き継ぐ cleanupLeftovers の分岐には触れていないため partial としました。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "既定の split-window と new-window は worktree の根でシェルを開き、今いるディレクトリでは開かないのに、案内からそれが読み取れないため、どちらが欲しいかを利用者に確かめるべきだという指摘。",
+   "quote": "既定の `split-window` と `new-window` は、新しいシェルをセッションを作ったときのディレクトリ(worktree の根)で開きます。シェルで今いるディレクトリでは開きません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "ステータス行に出すキーの文字と実際のキーの割り当てが別々の場所に書かれているため、prefix を変えると表示がずれるという指摘。",
+   "quote": "`prefix C-q`(`:324`)と表示の `^Q`、tmux の既定の `% \" c` と表示の文字が、どちらも別々に書かれています。prefix を変えると表示がずれますが",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "`│` と `─` は East Asian Width が Ambiguous なので、曖昧な幅の文字を全角で描く端末では幅の計算がずれて、表示が崩れうるという指摘。",
+   "quote": "この2文字は East Asian Width が Ambiguous です。曖昧な幅の文字を全角として描く端末だと、tmux が計算する幅と実際の表示がずれます。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test/e2e/workbench.test.ts:117",
+   "summary": "e2e テストは窓が1つのときしか確かめておらず、窓が複数あるときにキーが窓の一覧のあとに続くことを検証していないという指摘。",
+   "quote": "窓が2つ以上あるときに、キーが窓の一覧の「あと」に続くこと(右寄せにしないという決定の中心)は検証していません。",
+   "quote_ok": true
+  }
+ ]
+}

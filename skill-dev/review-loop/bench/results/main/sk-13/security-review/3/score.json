@@ -1,0 +1,62 @@
+{
+ "cost_usd": 0.0784936,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "プロンプトが \"/\" + expand(spec, pr) になる点は安全の根拠として述べるだけで、spec の空白を整えないことによる照合との食い違いには触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いがないことを指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "既定の観点との比較がスキル名だけで行われる点や、並び順まで比べる点に言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例のオプションの組み合わせが終了コード2になることを指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "valid_state で要素が文字列か確かめていることを問題なしの根拠に挙げるだけで、perspectives がリストか確かめていない点は指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt の指示がサブエージェントに届かない点を述べていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "judge-input.md で指示とレビュー出力が同じ区切りで混ざり、偽装されうる点を指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭に / を付けた観点名やスキル名を取り除かずに照合する問題に触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}
