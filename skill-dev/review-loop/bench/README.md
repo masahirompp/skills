@@ -27,6 +27,7 @@ python3 skill-dev/review-loop/bench/score.py report   skill-dev/review-loop/benc
 | `bench.py` | 題材の組み立てと実行。構成ごとのプロンプトは `CONFIGS` |
 | `score.py` | 採点、余計な指摘のまとめと分類、集計。採点の基準は `SCORE_PROMPT` と `CLASSIFY_PROMPT` |
 | `combos.py` | 構成の組み合わせごとの集計(1反復で見つかる不具合、余計な指摘、時間、費用)と、構成どうしの差の揺れ |
+| `repeat.py` | 同じ構成を繰り返して合わせた場合と、ほかの構成を足した場合の比較。既存の結果から集計し、子を起動しない |
 | `publish.py` | 題材を、GitHub の検証用の非公開リポジトリ(`rlbench-<題材>`)と PR にする。`bench.py run --pr` で、本番と同じ引数でレビューさせるため。`publish.py delete` で消す |
 | `verify.py` | レビューの指摘を実行で確かめる検証役の試し。本物の指摘を誤って落とす率を測る |
 | `cases/<題材>/` | 題材の定義(`case.json`)。skills の題材は `base.patch`(ベースへの加工)、`change.patch`(レビュー対象の差分)、`message.txt`(差分の意図) |
@@ -47,9 +48,13 @@ Opus 5.5 で測った。数字の出どころは `results/` の各 `report.md` �
 
 - code-review high が単独で最も多く見つけた(54%)。観点明示型 44%、観点を書かない形 38%。後の2つの差は誤差の範囲
 - security-review と mattpocock-skills:code-review は、それだけが見つけた不具合が0〜1件だった。ただし、題材にセキュリティの不具合がほとんど無い
+- code-review high を2回流して合わせると、28〜32件(68〜78%)。前の既定(code-review、security-review、mattpocock-skills:code-review を1回ずつ)は 21〜27件(51〜66%)で、本物でない余計な指摘は題材あたり 7.0〜7.7件に対し 11.1〜11.5件、費用は $1.22 に対し $2.09 だった(`results/pr/repeat.md`)。`results/pr` では、code-review の3回を全て合わせても見つからず、この2つのスキル(各1回)が見つけた不具合は無い。これをもとに、既定を code-review high 2つと security-review にした
+- 上の差は、PR なしの形(`results/main`)では小さい。2回分が 21〜26件、前の既定が 20〜24件で、幅が重なる。そこでは、code-review の3回が見つけず、mattpocock-skills:code-review だけが見つけた不具合が1件(W306-7)、security-review だけが1件(W306-6)ある
+- mattpocock-skills:code-review を外したのは、費用(題材あたり $1.08)と余計な指摘(単独で 7.9件)のため。失うものが無いとは言えない。設計・方針の水準の問題は、この表では測っていない。別に、`trials/2026-11-16-policy-overview/policy-review/criteria/` の基準(sk-13、sk-14、sk-16 の18項目)で `results/pr` の出力(1回分)を採点すると、○ は2件で、どちらも code-review high が3回のうち2回以上で挙げていた(3題材、1回分、採点は LLM の判断で、どの出力かを知っている)
+- security-review を残したのは、同じく外す影響を測れておらず、こちらは安い(題材あたり $0.40、余計な指摘0件)ため
 - 検証役は、本物の指摘を誤って落とさなかった(「起きなかった」3件は、どれも指摘の書いた経路が誤っていた)。正解に無い指摘は、半分強を落とした
 
-言えないこと: 正解は全て、過去のレビューが見つけた不具合である。採点と分類は LLM の判断で、抜き取りでしか確かめていない。モデルは Opus 5.5 だけ。
+言えないこと: 正解は全て、過去のレビューが見つけた不具合である(行単位の不具合で、設計の誤りは測っていない)。余計な指摘の分類は、重複や構造の好みの指摘を「些末」に数えるので、設計の指摘の価値は「余計な指摘」の数に表れない。security-review と mattpocock-skills:code-review は、`results/pr` では1回しか流していない。2回分の比較は、3回の試行から2つを選ぶ3通りだけで、ほかの構成を足す比較には、その構成の試行1だけを使っている(perspectives と plain の試行2と3は使っていない)。採点と分類は LLM の判断で、抜き取りでしか確かめていない。モデルは Opus 5.5 だけ。
 
 ## 題材の作り方
 
