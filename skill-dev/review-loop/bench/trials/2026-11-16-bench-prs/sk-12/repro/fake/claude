@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+# 再現用の偽 claude。REPRO_CASE/<名前>.json の手順(emit / sleep / touch / wait / exit)を実行する。
+# 判定役(標準入力が通常のファイル)は judge、レビュー役は観点の名前の英数字以外を _ にしたもの
+import json, os, re, stat, sys, time
+args = sys.argv[1:]
+if stat.S_ISREG(os.fstat(0).st_mode):
+    sys.stdin.read(); name = "judge"
+else:
+    name = re.sub(r"[^A-Za-z0-9]", "_", args[-1].split()[0].lstrip("/"))
+path = os.path.join(os.environ["REPRO_CASE"], name + ".json")
+default = "## 指摘\n\nなし\n\n## 競合\n\nなし" if name == "judge" else name + ": 指摘なし"
+steps = json.load(open(path)) if os.path.exists(path) else [
+    {"emit": {"type": "result", "subtype": "success", "is_error": False, "result": default}}]
+for s in steps:
+    if "emit" in s: print(json.dumps(s["emit"], ensure_ascii=False), flush=True)
+    elif "sleep" in s: time.sleep(s["sleep"])
+    elif "touch" in s: open(s["touch"], "w").close()
+    elif "wait" in s:
+        while not os.path.exists(s["wait"]): time.sleep(0.02)
+    elif "exit" in s: sys.exit(s["exit"])
