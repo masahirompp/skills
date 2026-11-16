@@ -39,13 +39,15 @@ import uuid
 # PR 番号を自動では足さない。
 # - 組み込みの code-review は、レベルを指定しないと利用者が最後に使ったレベルを引き継ぎ、反復ごとに
 #   深さが変わりうるので固定する
-# - mattpocock-skills:code-review は、引数を比較の起点(commit や branch)として読む。数字だけを渡すと
-#   起点として解決できず推測に頼るので、「PR #番号」と書く。スキルが PR からベースを起点に決め(ローカルの
-#   main か origin/main になる)、PR 本文を仕様として使う
+# - code-review を2つ並べるのは、同じ差分でも回ごとに見つける不具合が変わるため。2回分を合わせると、
+#   ほかのスキルを足すより多く見つかり、余計な指摘は少なかった(skill-dev/review-loop/bench/README.md)
+# - mattpocock-skills:code-review を --perspective で使うときは、引数を比較の起点(commit や branch)として
+#   読むので、数字だけでなく「PR #{pr}」と書く。スキルが PR からベースを起点に決め(ローカルの main か
+#   origin/main になる)、PR 本文を仕様として使う
 PERSPECTIVES = [
     "code-review high {pr}",
+    "code-review high {pr}",
     "security-review",
-    "mattpocock-skills:code-review PR #{pr}",
 ]
 
 # --focus で足す、スキルを使わないレビュー役のプロンプト
@@ -427,6 +429,17 @@ def focus_name(i):
     return f"focus-{i}"
 
 
+def role_names(perspectives):
+    """観点ごとの、レビュー役の名前(出力ファイル、判定役への入力の区切り、ログに使う)。スキル名をそのまま
+    使い、同じスキルを重ねたときは2つ目から `-2`、`-3` を付ける。"""
+    seen, names = {}, []
+    for spec in perspectives:
+        name = skill_name(spec)
+        seen[name] = seen.get(name, 0) + 1
+        names.append(name if seen[name] == 1 else f"{name}-{seen[name]}")
+    return names
+
+
 def review_config(perspective_args, instruct_args):
     """(観点の一覧, {スキル名: 追加の指示}) を返す。perspective_args は --perspective の値(なければ既定の
     PERSPECTIVES)、instruct_args は --instruct の値(`スキル名=指示`)。同じスキルへの指示が複数あれば、改行でつなぐ。"""
@@ -434,10 +447,11 @@ def review_config(perspective_args, instruct_args):
     if not all(perspectives):
         raise Precondition("観点に空のものがある")
     names = [skill_name(s) for s in perspectives]
-    files = [safe_name(n) for n in names]  # 出力ファイルと結果を観点の名前で分けているため
-    clashed = sorted({n for n, f in zip(names, files) if files.count(f) > 1})
+    roles = role_names(perspectives)
+    files = [safe_name(r) for r in roles]  # 出力ファイルと結果をレビュー役の名前で分けているため
+    clashed = sorted({r for r, f in zip(roles, files) if files.count(f) > 1})
     if clashed:
-        raise Precondition(f"観点に同じスキルが重複している(出力ファイルの名前が同じになるものを含む): {', '.join(clashed)}")
+        raise Precondition(f"レビュー役の出力ファイルの名前が同じになる観点がある: {', '.join(clashed)}")
     texts = {}
     for item in instruct_args or []:
         name, sep, text = item.partition("=")
@@ -555,7 +569,7 @@ def preflight(wt, env, perspectives):
         raise Precondition(f"事前確認: 子の cwd が worktree と一致しない: {init.get('cwd')}")
     # 組み込みのコマンド(security-review など)は skills には載らず、slash_commands にだけ載る
     available = set(init.get("skills") or []) | set(init.get("slash_commands") or [])
-    missing = [skill_name(s) for s in perspectives if skill_name(s) not in available]
+    missing = list(dict.fromkeys(skill_name(s) for s in perspectives if skill_name(s) not in available))
     if missing:
         raise Precondition(f"事前確認: 観点スキルが見つからない: {', '.join(missing)}"
                            "(名前の誤りか未導入。プラグインのスキルは plugin:name の形式で書く)")
@@ -814,7 +828,8 @@ def run_reviews(wt, env, pr, workdir, children, attempt, perspectives, instructi
     """観点別レビューを並列に実行し、{観点: 結果のテキスト} を返す。1つでも失敗したら残りを止める。
 
     出力は stream-json で受け、試行を止める権限の拒否が出たらその時点で止める(watch_denials)。"""
-    jobs = [(skill_name(spec), "/" + expand(spec, pr), instructions.get(skill_name(spec))) for spec in perspectives]
+    jobs = [(role, "/" + expand(spec, pr), instructions.get(skill_name(spec)))
+            for role, spec in zip(role_names(perspectives), perspectives)]
     jobs += [(focus_name(i), FOCUS_PROMPT.format(pr=pr["number"], focus=text), None) for i, text in enumerate(focuses, 1)]
     running = {}
     for name, prompt, instruction in jobs:
@@ -1050,7 +1065,11 @@ def iterate(worktree, new_run, ctx, perspective_args, instruct_args, focus_args=
         ctx["workdir"] = make_workdir(start, state["run_id"], len(state["attempts"]) + 1)
         log(f"作業ディレクトリ: {ctx['workdir']}")
         reviews = run_reviews(wt, env, start, ctx["workdir"], children, attempt, perspectives, instructions, focuses)
-        verdict = run_judge(wt, env, start["number"], reviews, ctx["workdir"], children, attempt, instructions)
+        # 判定役には、指示を、入力の区切りと同じレビュー役の名前で伝える(同じスキルを重ねたときは、その全て)
+        roles = role_names(perspectives)
+        judged = {"、".join(r for r, s in zip(roles, perspectives) if skill_name(s) == name): text
+                  for name, text in instructions.items()}
+        verdict = run_judge(wt, env, start["number"], reviews, ctx["workdir"], children, attempt, judged)
         children.kill_all()
         found = find_contamination(wt, start)
         if found:

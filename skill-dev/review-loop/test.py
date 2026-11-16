@@ -172,9 +172,12 @@ check(all("--append-system-prompt" in c["args"] for c in reviews + judge), "運�
 check(judge and "stream-json" in judge[0]["args"] and "--verbose" in judge[0]["args"], "判定役も stream-json で受ける")
 check(os.path.isfile(os.path.join(workdir, "judge.result.md")) and not os.path.exists(os.path.join(workdir, "denials.txt")),
       "判定役の result のテキストも judge.result.md に残し、拒否がなければ denials.txt は作らない")
-prompts = {c["args"][-1] for c in reviews}
-check(prompts == {"/code-review high 7", "/security-review", "/mattpocock-skills:code-review PR #7"},
+prompts = sorted(c["args"][-1] for c in reviews)
+check(prompts == ["/code-review high 7", "/code-review high 7", "/security-review"],
       f"レビュー役のプロンプトは /<観点と引数>({{pr}} を展開)。{prompts}")
+check(os.path.isfile(os.path.join(workdir, "review-code-review-2.result.md"))
+      and judge and "===== 観点: code-review =====" in judge[0]["stdin"] and "===== 観点: code-review-2 =====" in judge[0]["stdin"],
+      "同じスキルを重ねた観点は、2つ目から名前に番号を付け、出力を分けて残す")
 
 # 2回目: 同じコメントを編集で更新する
 rc, out, err = run(wt)
@@ -198,8 +201,8 @@ sh("git", "push", "-q", "origin", "feature", cwd=wt)
 
 rc, _, err = run(wt, FAKE_NO_PR="1")
 check(rc == 2 and "PR を取得できない" in err, "PR がなければ終了コード2")
-rc, _, err = run(wt, FAKE_SKILLS="code-review")
-check(rc == 2 and "mattpocock-skills:code-review" in err, "事前確認で観点スキルの欠落を検出する")
+rc, _, err = run(wt, FAKE_SKILLS="mattpocock-skills:code-review")
+check(rc == 2 and "見つからない: code-review" in err, f"事前確認で観点スキルの欠落を検出する {err[-200:]}")
 rc, _, err = run(wt, REVIEW_LOOP_ACTIVE="1")
 check(rc == 2 and "再帰" in err, "再帰ガード")
 rc, _, err = run("relative/path")
@@ -255,8 +258,8 @@ check(rc == 1 and "no_output" in err and "空でない result の行がない" i
 rc, _, err = run(wt, FAKE_REVIEW_code_review="fail")
 check(rc == 1 and "boom" in err, "子が異常終了したら stderr を添えて失敗")
 
-rc, _, err = run(wt, "--new-run", FAKE_REVIEW_mattpocock_skills_code_review="hang", overrides={"REVIEW_TIMEOUT": 1})
-hung = [c for c in calls() if c["kind"] == "review" and c["name"] == "mattpocock-skills:code-review"][-1]
+rc, _, err = run(wt, "--new-run", FAKE_REVIEW_security_review="hang", overrides={"REVIEW_TIMEOUT": 1})
+hung = [c for c in calls() if c["kind"] == "review" and c["name"] == "security-review"][-1]
 check(rc == 1 and "timeout" in err and not alive(hung["pid"]), "タイムアウトした子はグループごと止める")
 
 # SIGTERM で止められてもロックを解除し、子を止める
@@ -377,8 +380,10 @@ p.wait()
 time.sleep(3)
 check(not alive(pre["pid"]), "事前確認の子も見張り役が止める")
 
-rc, _, err = run(wt, overrides={"PERSPECTIVES": ["code-review high", "code-review max"]})
-check(rc == 2 and "重複" in err, "同じスキルを重複して並べると拒否する")
+rc, _, err = run(wt, overrides={"PERSPECTIVES": ["a:b x", "a_b y"]})
+check(rc == 2 and "名前が同じになる" in err, "出力ファイルの名前が同じになる観点は拒否する")
+rc, _, err = run(wt, overrides={"PERSPECTIVES": ["code-review high", "code-review max", "code-review-2 x"]})
+check(rc == 2 and "名前が同じになる" in err, "重ねたスキルに付けた番号が、ほかのスキル名と同じになる観点は拒否する")
 
 # 試行の作業ディレクトリが既にあれば、前の出力と混ざらないよう失敗にする(failed: <種類> の行を出す)
 s = state()
@@ -501,12 +506,12 @@ check(not any(alive(c["pid"]) for c in last), "拒否で止めたとき、どの
 # result の行が複数あれば、最上位の空でないものを全てつなぐ(最後の行だけを使うと本文が捨てられる)
 run(wt, "--new-run")
 for mode, final in (("multiempty", ""), ("multishort", "前のメッセージの内容から変わりません")):
-    rc, out, err = run(wt, FAKE_REVIEW_mattpocock_skills_code_review=mode)
+    rc, out, err = run(wt, FAKE_REVIEW_security_review=mode)
     wd = err.rstrip().splitlines()[-1]
     stdin = [c for c in calls() if c["kind"] == "judge"][-1]["stdin"]
-    with open(os.path.join(wd, "review-mattpocock-skills_code-review.result.md"), encoding="utf-8") as f:
+    with open(os.path.join(wd, "review-security-review.result.md"), encoding="utf-8") as f:
         saved = f.read()
-    check(rc == 0 and "mattpocock-skills:code-review: 本文" in stdin and "バックグラウンドで実行しています" in stdin
+    check(rc == 0 and "security-review: 本文" in stdin and "バックグラウンドで実行しています" in stdin
           and saved.index("バックグラウンド") < saved.index("本文") and (not final or final in saved)
           and "サブエージェントの結果" not in saved,
           f"result の行が複数あれば、最上位の空でないものを出た順につなぐ(最後の行が{'空' if not final else '短い文'})")
@@ -596,7 +601,17 @@ check(rc == 0 and "観点 code-review low {pr}, security-review" in last_row(),
       "スキル名が既定と同じでも、引数が違えば表に観点を出す")
 check("直前の試行と指示を渡した観点が違う" in err and "直前の試行と観点が違う" in err,
       "直前の試行と観点や指示が違えば警告する")
-rc, _, err = run(wt, "--perspective", "security-review", "--perspective", "mattpocock-skills:code-review PR #{pr}",
+n = len(calls())
+rc, _, err = run(wt, "--perspective", "code-review high {pr}", "--perspective", "code-review low {pr}",
+                 "--instruct", "code-review=テストは見ない")
+new = calls()[n:]
+judge = [c for c in new if c["kind"] == "judge"]
+check(rc == 0 and sorted(c["args"][-1] for c in new if c["kind"] == "review") == ["/code-review high 7", "/code-review low 7"]
+      and all("テストは見ない" in system_prompt(c) for c in new if c["kind"] == "review"),
+      f"同じスキルを重ねた --perspective は、それぞれを起動し、そのスキルへの --instruct をどちらにも渡す {err[-300:] if rc else ''}")
+check(judge and "観点 code-review、code-review-2 のレビュー役に与えた追加の指示" in system_prompt(judge[0]),
+      "重ねたスキルへの指示は、判定役に、レビュー役の名前を全て添えて伝える")
+rc, _, err = run(wt, "--perspective", "security-review", "--perspective", "code-review high {pr}",
                  "--perspective", "code-review high {pr}")
 last = state()["attempts"][-1]
 check(rc == 0 and "instructed" not in last and "、観点" not in last_row(),
@@ -634,9 +649,7 @@ for flags, label in ((("--instruct", "security-review"), "`=` のない --instru
                      (("--instruct", "nosuch=x"), "観点にないスキルへの --instruct"),
                      (("--perspective", "code-review high {pr}", "--instruct", "security-review=x"),
                       "--perspective で外した観点への --instruct"),
-                     (("--perspective", " "), "空の --perspective"),
-                     (("--perspective", "code-review high {pr}", "--perspective", "code-review low {pr}"),
-                      "同じスキルを重ねた --perspective")):
+                     (("--perspective", " "), "空の --perspective")):
     rc, _, err = run(wt, *flags)
     check(rc == 2, f"{label}: 終了コード2({rc}) {err.strip().splitlines()[-2:] if rc != 2 else ''}")
 check(json.dumps(state()) == before, "観点の指定の誤りは状態に記録しない")
