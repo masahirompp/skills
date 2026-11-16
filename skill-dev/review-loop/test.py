@@ -203,6 +203,7 @@ rc, _, err = run(wt, FAKE_NO_PR="1")
 check(rc == 2 and "PR を取得できない" in err, "PR がなければ終了コード2")
 rc, _, err = run(wt, FAKE_SKILLS="mattpocock-skills:code-review")
 check(rc == 2 and "見つからない: code-review" in err, f"事前確認で観点スキルの欠落を検出する {err[-200:]}")
+check("見つからない: code-review(" in err, f"重ねた観点のスキルが欠けていても、スキル名は1回だけ出す {err[-200:]}")
 rc, _, err = run(wt, REVIEW_LOOP_ACTIVE="1")
 check(rc == 2 and "再帰" in err, "再帰ガード")
 rc, _, err = run("relative/path")
@@ -306,8 +307,7 @@ time.sleep(0.5)
 check(rc == 0 and not alive(g), "正常終了した子がグループに残した孫も止める")
 
 t = time.time()
-rc, _, err = run(wt, FAKE_REVIEW_code_review="slow", FAKE_REVIEW_security_review="slow",
-                 FAKE_REVIEW_mattpocock_skills_code_review="slow")
+rc, _, err = run(wt, FAKE_REVIEW_code_review="slow", FAKE_REVIEW_security_review="slow")  # 既定の3つの役の全て
 check(rc == 0 and time.time() - t < 8, f"レビュー役は並列に動く({time.time() - t:.1f} 秒)")
 
 # スクリプトが SIGKILL されても、見張り役が子を止める
@@ -384,6 +384,12 @@ rc, _, err = run(wt, overrides={"PERSPECTIVES": ["a:b x", "a_b y"]})
 check(rc == 2 and "名前が同じになる" in err, "出力ファイルの名前が同じになる観点は拒否する")
 rc, _, err = run(wt, overrides={"PERSPECTIVES": ["code-review high", "code-review max", "code-review-2 x"]})
 check(rc == 2 and "名前が同じになる" in err, "重ねたスキルに付けた番号が、ほかのスキル名と同じになる観点は拒否する")
+n = len(calls())
+rc, _, err = run(wt, "--perspective", "focus", "--perspective", "focus", "--focus", "a", "--focus", "b", FAKE_SKILLS="focus")
+check(rc == 2 and "名前が同じになる観点がある: focus-2" in err and not [c for c in calls()[n:] if c["kind"] == "review"],
+      f"重ねたスキルに付けた番号が、--focus の役の名前と同じになる観点は拒否する {err[-200:]}")
+rc, _, err = run(wt, "--perspective", "focus-1", "--focus", "a", FAKE_SKILLS="focus-1")
+check(rc == 2 and "名前が同じになる観点がある: focus-1" in err, f"スキル名が --focus の役の名前と同じになる観点は拒否する {err[-200:]}")
 
 # 試行の作業ディレクトリが既にあれば、前の出力と混ざらないよう失敗にする(failed: <種類> の行を出す)
 s = state()
@@ -595,9 +601,9 @@ check(last.get("perspectives") == ["code-review high {pr}", "mattpocock-skills:c
       and "観点 code-review high {pr}, mattpocock-skills:code-review PR #{pr}、指示あり code-review, mattpocock-skills:code-review" in body
       and "削除したファイル" not in body,
       "既定と違う観点と、指示を渡した観点を状態コメントに残す(指示の本文は残さない)")
-rc, _, err = run(wt, "--perspective", "code-review low {pr}", "--perspective", "security-review",
-                 "--perspective", "mattpocock-skills:code-review PR #{pr}")
-check(rc == 0 and "観点 code-review low {pr}, security-review" in last_row(),
+rc, _, err = run(wt, "--perspective", "code-review high {pr}", "--perspective", "code-review low {pr}",
+                 "--perspective", "security-review")
+check(rc == 0 and "観点 code-review high {pr}, code-review low {pr}, security-review" in last_row(),
       "スキル名が既定と同じでも、引数が違えば表に観点を出す")
 check("直前の試行と指示を渡した観点が違う" in err and "直前の試行と観点が違う" in err,
       "直前の試行と観点や指示が違えば警告する")

@@ -40,7 +40,9 @@ import uuid
 # - 組み込みの code-review は、レベルを指定しないと利用者が最後に使ったレベルを引き継ぎ、反復ごとに
 #   深さが変わりうるので固定する
 # - code-review を2つ並べるのは、同じ差分でも回ごとに見つける不具合が変わるため。2回分を合わせると、
-#   ほかのスキルを足すより多く見つかり、余計な指摘は少なかった(skill-dev/review-loop/bench/README.md)
+#   1回にほかのスキル(security-review、mattpocock-skills:code-review)を1つ足すより多く見つかった。
+#   余計な指摘は、security-review を足す場合より多く、mattpocock-skills:code-review を足す場合より少なかった
+#   (skill-dev/review-loop/bench/results/pr/repeat.md)
 # - mattpocock-skills:code-review を --perspective で使うときは、引数を比較の起点(commit や branch)として
 #   読むので、数字だけでなく「PR #{pr}」と書く。スキルが PR からベースを起点に決め(ローカルの main か
 #   origin/main になる)、PR 本文を仕様として使う
@@ -424,34 +426,35 @@ def focus_config(focus_args):
     return focuses
 
 
-def focus_name(i):
-    """--focus で足したレビュー役の名前(出力ファイルと、判定役への入力の区切りに使う)。"""
-    return f"focus-{i}"
+def role_names(perspectives, focuses=()):
+    """レビュー役の名前(出力ファイル、判定役への入力の区切り、ログに使う)を、観点の分、--focus の分の順に
+    並べて返す。観点の役はスキル名をそのまま使い、同じスキルを重ねたときは2つ目から `-2`、`-3` を付ける。
+    --focus の役は `focus-1`、`focus-2`…。
 
-
-def role_names(perspectives):
-    """観点ごとの、レビュー役の名前(出力ファイル、判定役への入力の区切り、ログに使う)。スキル名をそのまま
-    使い、同じスキルを重ねたときは2つ目から `-2`、`-3` を付ける。"""
+    出力ファイルと結果を名前で分けているので、名前を作るここで、役の全体(観点と --focus)で出力ファイルの
+    名前が重ならないことを確かめる(スキル `focus` を2つ重ねた `focus-2` と、2つ目の --focus など)。"""
     seen, names = {}, []
     for spec in perspectives:
         name = skill_name(spec)
         seen[name] = seen.get(name, 0) + 1
         names.append(name if seen[name] == 1 else f"{name}-{seen[name]}")
+    names += [f"focus-{i}" for i in range(1, len(focuses) + 1)]
+    files = [safe_name(n) for n in names]
+    clashed = sorted({n for n, f in zip(names, files) if files.count(f) > 1})
+    if clashed:
+        raise Precondition(f"レビュー役の出力ファイルの名前が同じになる観点がある: {', '.join(clashed)}")
     return names
 
 
-def review_config(perspective_args, instruct_args):
+def review_config(perspective_args, instruct_args, focuses=()):
     """(観点の一覧, {スキル名: 追加の指示}) を返す。perspective_args は --perspective の値(なければ既定の
-    PERSPECTIVES)、instruct_args は --instruct の値(`スキル名=指示`)。同じスキルへの指示が複数あれば、改行でつなぐ。"""
+    PERSPECTIVES)、instruct_args は --instruct の値(`スキル名=指示`)。同じスキルへの指示が複数あれば、改行でつなぐ。
+    focuses は focus_config の結果で、レビュー役の名前の重なりを確かめるのに使う。"""
     perspectives = [normalize_spec(s) for s in perspective_args] if perspective_args else default_perspectives()
     if not all(perspectives):
         raise Precondition("観点に空のものがある")
     names = [skill_name(s) for s in perspectives]
-    roles = role_names(perspectives)
-    files = [safe_name(r) for r in roles]  # 出力ファイルと結果をレビュー役の名前で分けているため
-    clashed = sorted({r for r, f in zip(roles, files) if files.count(f) > 1})
-    if clashed:
-        raise Precondition(f"レビュー役の出力ファイルの名前が同じになる観点がある: {', '.join(clashed)}")
+    role_names(perspectives, focuses)  # 名前の重なりを、子を起動する前に断る
     texts = {}
     for item in instruct_args or []:
         name, sep, text = item.partition("=")
@@ -828,9 +831,10 @@ def run_reviews(wt, env, pr, workdir, children, attempt, perspectives, instructi
     """観点別レビューを並列に実行し、{観点: 結果のテキスト} を返す。1つでも失敗したら残りを止める。
 
     出力は stream-json で受け、試行を止める権限の拒否が出たらその時点で止める(watch_denials)。"""
-    jobs = [(role, "/" + expand(spec, pr), instructions.get(skill_name(spec)))
-            for role, spec in zip(role_names(perspectives), perspectives)]
-    jobs += [(focus_name(i), FOCUS_PROMPT.format(pr=pr["number"], focus=text), None) for i, text in enumerate(focuses, 1)]
+    roles = role_names(perspectives, focuses)
+    jobs = [(role, "/" + expand(spec, pr), instructions.get(skill_name(spec))) for role, spec in zip(roles, perspectives)]
+    jobs += [(role, FOCUS_PROMPT.format(pr=pr["number"], focus=text), None)
+             for role, text in zip(roles[len(perspectives):], focuses)]
     running = {}
     for name, prompt, instruction in jobs:
         base = os.path.join(workdir, f"review-{safe_name(name)}")
@@ -1025,8 +1029,8 @@ def iterate(worktree, new_run, ctx, perspective_args, instruct_args, focus_args=
         raise Precondition(f"{GUARD_ENV} が設定済み。レビューループの中から再帰的に起動された")
     os.environ[GUARD_ENV] = "1"
     check_tools()
-    perspectives, instructions = review_config(perspective_args, instruct_args)
     focuses = focus_config(focus_args)
+    perspectives, instructions = review_config(perspective_args, instruct_args, focuses)
     env = child_env()
     wt = normalize_worktree(worktree)
     if git_status(wt).strip():
@@ -1066,7 +1070,7 @@ def iterate(worktree, new_run, ctx, perspective_args, instruct_args, focus_args=
         log(f"作業ディレクトリ: {ctx['workdir']}")
         reviews = run_reviews(wt, env, start, ctx["workdir"], children, attempt, perspectives, instructions, focuses)
         # 判定役には、指示を、入力の区切りと同じレビュー役の名前で伝える(同じスキルを重ねたときは、その全て)
-        roles = role_names(perspectives)
+        roles = role_names(perspectives, focuses)
         judged = {"、".join(r for r, s in zip(roles, perspectives) if skill_name(s) == name): text
                   for name, text in instructions.items()}
         verdict = run_judge(wt, env, start["number"], reviews, ctx["workdir"], children, attempt, judged)

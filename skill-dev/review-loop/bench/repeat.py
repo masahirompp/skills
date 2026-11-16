@@ -24,6 +24,8 @@ rows = score.trials(out)
 configs = [c for c in score.bench.CONFIGS if any(m["config"] == c for _, m in rows)]
 cases = sorted({m["case"] for _, m in rows})
 bugs = [(c, b["id"]) for c in cases for b in score.answers(c)["bugs"] if b.get("scope", "in") == "in"]
+if not bugs:
+    sys.exit("正解の不具合が0件なので、検出率を出せない(不具合のない題材だけの結果)")
 trials = sorted({m["trial"] for _, m in rows if m["config"] == target})
 if len(trials) < 2:
     sys.exit(f"{target} の試行が2つ以上要る")
