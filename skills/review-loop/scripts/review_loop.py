@@ -63,7 +63,7 @@ FOCUS_PROMPT = "PR #{pr} の差分を、次の観点でレビューし、具体�
 SAFETY_MAX_ITER = 10          # シリーズあたりの反復の上限
 MAX_CONSECUTIVE_FAILURES = 3  # 連続失敗の上限
 
-PREFLIGHT_TIMEOUT = 2 * 60    # 事前確認(init を受け取るまで)
+PREFLIGHT_TIMEOUT = 2 * 60    # 事前確認(最初の result を受け取るまで)
 REVIEW_TIMEOUT = 40 * 60      # レビュー役1つあたり
 MARGIN = 5 * 60               # Bash の制限時間に対する余裕(事前確認の後の gh の呼び出しなど)
 LOCK_MARGIN = 15 * 60         # ロックを持ったまま行う git・gh の呼び出し(各 COMMAND_TIMEOUT まで)の余裕
@@ -534,7 +534,10 @@ def snapshot(wt):
 
 
 def preflight(wt, env, perspectives, model):
-    """子を1回だけ起動し、init を受け取ったらすぐ止める。API を呼ぶ前に止まるので費用はほぼかからない。"""
+    """子を1回だけ起動し、init で cwd と観点スキルを、最初の result でモデルを使えるかを確かめる。
+
+    init はモデルの名前を確かめない(誤った名前でも、渡した文字列のまま載る)。使えないモデルは、API を呼んだ
+    あとの result が is_error になって初めて分かるので、result まで待つ。短い応答を1回呼ぶ分の費用がかかる。"""
     err_file = tempfile.TemporaryFile(mode="w+")
     try:
         p = subprocess.Popen(watched(["claude", "-p", "--model", model, "--output-format", "stream-json", "--verbose", "ok"],
@@ -552,9 +555,9 @@ def preflight(wt, env, perspectives, model):
 
     threading.Thread(target=reader, daemon=True).start()
     deadline = time.monotonic() + PREFLIGHT_TIMEOUT
-    init = None
+    init = result = None
     try:
-        while init is None:
+        while result is None:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 break
@@ -570,11 +573,17 @@ def preflight(wt, env, perspectives, model):
                 continue
             if msg.get("type") == "system" and msg.get("subtype") == "init":
                 init = msg
+            elif msg.get("type") == "result" and not msg.get("parent_tool_use_id") and init is not None:
+                result = msg
     finally:
         kill_group(p)
-    if init is None:
+
+    def stderr_text():
         err_file.seek(0)
-        err = err_file.read().strip()[-1000:]
+        return err_file.read().strip()[-1000:]
+
+    if init is None:
+        err = stderr_text()
         raise Precondition("事前確認: claude が起動しなかった(init が来ない)。認証・sandbox・ネットワークを確かめてほしい。"
                            f"stderr: {err}{sandbox_hint(err)}")
     if os.path.realpath(init.get("cwd") or "") != wt:
@@ -585,6 +594,11 @@ def preflight(wt, env, perspectives, model):
     if missing:
         raise Precondition(f"事前確認: 観点スキルが見つからない: {', '.join(missing)}"
                            "(名前の誤りか未導入。プラグインのスキルは plugin:name の形式で書く)")
+    if result is None:
+        raise Precondition(f"事前確認: claude が result を返さなかった(モデル {model})。stderr: {stderr_text()}")
+    if result.get("is_error") or result.get("subtype") != "success":
+        raise Precondition(f"事前確認: モデル {model} で応答を得られなかった(名前の誤りか、使えないモデル): "
+                           f"{str(result.get('result') or '')[:500]} stderr: {stderr_text()}")
 
 
 # --- PR の状態コメント -------------------------------------------------------
@@ -932,7 +946,7 @@ def iterate(worktree, new_run, ctx, perspective_args, instruct_args, focus_args=
     os.environ[GUARD_ENV] = "1"
     check_tools()
     focuses = focus_config(focus_args)
-    model = " ".join((model or MODEL).split())
+    model = MODEL if model is None else " ".join(model.split())
     if not model:
         raise Precondition("--model が空")
     perspectives, instructions = review_config(perspective_args, instruct_args, focuses)

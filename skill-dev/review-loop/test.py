@@ -166,7 +166,7 @@ reviews = [c for c in cs if c["kind"] == "review"]
 check(len(reviews) == 3, "観点ごとに1プロセス起動する")
 check(all(not c["env_job_dir"] and not c["env_session_id"] for c in cs), "子の環境から CLAUDE_JOB_DIR などを外す")
 check(all(c["guard"] == "1" for c in cs), "子には REVIEW_LOOP_ACTIVE が渡る")
-check(not any(c["kind"] == "preflight-not-killed" for c in cs), "事前確認の子は init の直後に止める")
+check(not any(c["kind"] == "preflight-not-killed" for c in cs), "事前確認の子は result の直後に止める")
 check("===== 観点: security-review =====\nsecurity-review: 指摘1件\n===== ここまで: security-review =====" in joined,
       "reviews.md は各レビューを役の名前で区切る")
 check(all("--append-system-prompt" in c["args"] for c in reviews), "運用上の制約を渡す")
@@ -620,6 +620,14 @@ rc, _, err = run(wt)
 check(rc == 0 and "、モデル" not in last_row() and "直前の試行とモデルが違う" in err, "既定のモデルなら表に出さない")
 rc, _, err = run(wt, "--model", " ")
 check(rc == 2 and "--model" in err, "空の --model は終了コード2")
+before = json.dumps(state())
+rc, _, err = run(wt, "--model", "")
+check(rc == 2 and "--model" in err and json.dumps(state()) == before, "空文字の --model も既定に戻さず終了コード2")
+n = len(calls())
+rc, _, err = run(wt, "--model", "opsu-nonexistent", FAKE_BAD_MODELS="opsu-nonexistent")
+check(rc == 2 and "事前確認" in err and "opsu-nonexistent" in err and json.dumps(state()) == before
+      and not [c for c in calls()[n:] if c["kind"] == "review"],
+      f"使えないモデルは事前確認で止め、試行を始めない {err.strip().splitlines()[-2:]}")
 rc, _, _ = run(wt, "--instruct", "security-review=x", FAKE_REVIEW_security_review="fail")
 check(rc == 1 and state()["attempts"][-1].get("instructed") == ["security-review"], "失敗した試行にも、指示を渡した観点を残す")
 rc, _, err = run(wt, "--new-run", "--instruct", "security-review=x")
