@@ -1089,13 +1089,15 @@ def make_verify_copy(wt, workdir, head, deadline):
     (無いとテストを動かせないことが多い)。push 先を残さないよう、リモートは外す。外す前に、元のブランチ(clone の
     直後はリモート追跡の参照)をローカルのブランチにして、検証役がベースと比べられるようにする。"""
     copy = os.path.join(workdir, "verify-repo")
-    run(["git", "clone", "-q", "--no-checkout", wt, copy], cwd=workdir)
+    # リモートの名前は、利用者の clone.defaultRemoteName に左右されないよう、明示する
+    run(["git", "clone", "-q", "--no-checkout", "-o", "origin", wt, copy], cwd=workdir)
     run(["git", "checkout", "-q", "--detach", head], cwd=copy)
     run(["git", "remote", "set-head", "origin", "-d"], cwd=copy, check=False)
     run(["git", "fetch", "-q", ".", "refs/remotes/origin/*:refs/heads/*"], cwd=copy, check=False)
     run(["git", "remote", "remove", "origin"], cwd=copy)
     # 元のリモート追跡の参照(origin/main など)も、同じ名前で持たせる。リモートの設定は無いので、push 先にはならない
-    run(["git", "fetch", "-q", wt, "refs/remotes/*:refs/remotes/*"], cwd=copy, check=False)
+    if run(["git", "fetch", "-q", wt, "refs/remotes/*:refs/remotes/*"], cwd=copy, check=False).returncode:
+        log("warn: 検証用の複製に、リモート追跡の参照(origin/main など)を写せなかった")
     # 利用者の status.showUntrackedFiles に左右されないよう、明示する(no だと ignored が出ず、all だとファイル単位になる)
     ignored = run(["git", "status", "--porcelain", "--ignored", "--untracked-files=normal", "-z"], cwd=wt).stdout
     for entry in ignored.split("\0"):
@@ -1189,8 +1191,9 @@ def verify_in_copy(wt, env, pr_number, verdict, workdir, children, attempt, head
         log(f"warn: 検証役が決めた形の結果を返さなかった(終了コード {rc})。出力は {base}.result.md")
         return verify_failed("異常終了した" if rc != 0 else "決めた形の出力がない")
     text = found[-1]
-    section = text[re.search(rf"^{re.escape(VERIFY_SECTION)}", text, re.M).start():].strip()
-    return re.sub(r"\n```\s*$", "", section).rstrip() if text[:text.index(section[:20])].count("```") % 2 else section
+    start = re.search(rf"^{re.escape(VERIFY_SECTION)}", text, re.M).start()
+    section = text[start:].strip()
+    return re.sub(r"\n```\s*$", "", section).rstrip() if text[:start].count("```") % 2 else section
 
 
 def find_contamination(wt, start):

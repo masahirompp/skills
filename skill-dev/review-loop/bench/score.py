@@ -188,9 +188,11 @@ def trials(out):
         if not os.path.isdir(cdir) or case.startswith("_"):
             continue
         for config in sorted(os.listdir(cdir)):
+            if not os.path.isdir(os.path.join(cdir, config)):  # .DS_Store など
+                continue
             for n in sorted(os.listdir(os.path.join(cdir, config))):
                 d = os.path.join(cdir, config, n)
-                meta = read_json(os.path.join(d, "meta.json"))
+                meta = read_json(os.path.join(d, "meta.json")) if os.path.isdir(d) else None
                 if meta:
                     found.append((d, meta))
     return found

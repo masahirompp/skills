@@ -77,6 +77,8 @@ table = []
 for r in range(1, len(configs) + 1):
     for combo in itertools.combinations(configs, r):
         f, n, re_, t, u = measure(combo)
+        if not f:  # 全ての構成にある試行が無い組み合わせ
+            continue
         table.append((mean(f), combo, f, n, re_, t, u))
 for _, combo, f, n, re_, t, u in sorted(table, key=lambda x: (len(x[1]), -x[0])):
     print(f"| {' + '.join(combo)} | {'、'.join(map(str, sorted(set.intersection(*[ran[c] for c in combo]))))} "

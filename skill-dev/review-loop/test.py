@@ -661,7 +661,9 @@ os.symlink(os.path.join(wt, "a.txt"), os.path.join(wt, "link.log"))
 os.symlink(os.path.join(root, "sibling"), os.path.join(wt, "shared.log"))
 os.symlink("/usr/bin/env", os.path.join(wt, "tool.log"))
 sh("git", "config", "status.showUntrackedFiles", "no", cwd=wt)  # 利用者の設定に左右されない
-rc, out, err = run(wt)
+with open(os.path.join(root, "gitconfig"), "w") as f:
+    f.write("[clone]\n\tdefaultRemoteName = upstream\n")
+rc, out, err = run(wt, GIT_CONFIG_GLOBAL=os.path.join(root, "gitconfig"))
 wd = err.rstrip().splitlines()[-1]
 v = [c for c in calls() if c["kind"] == "verify"][-1]
 copy = os.path.join(wd, "verify-repo")
