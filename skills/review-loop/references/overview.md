@@ -6,16 +6,17 @@ SKILL.md の手順5で、指摘の俯瞰を行うと決めたときに読む。�
 
 ## 材料を用意する
 
-履歴を持たない一時ディレクトリに取り出す。俯瞰の役はこの中だけで動くので、作業ツリーは変わらない。
+履歴を持たない一時ディレクトリに取り出す。俯瞰の役はこの中だけで動くので、作業ツリーは変わらない。worktree の中から、1行ずつ別のコマンドとして実行する(`git -C` や `$(...)` で1つにまとめると、worktree に隔離されたセッションでは、git の対象を確かめられないとして拒否されることがある)。
 
 ```sh
-D=$(mktemp -d); mkdir "$D/src" "$D/base" "$D/work"
-BASE=$(git -C <worktree> merge-base origin/<PR のベースブランチ> HEAD)
-git -C <worktree> archive HEAD | tar -x -C "$D/src"
-git -C <worktree> archive "$BASE" | tar -x -C "$D/base"
-git -C <worktree> diff "$BASE" HEAD > "$D/pr.diff"
-gh pr view <PR 番号> --json body -q .body > "$D/pr-body.md"
-cp <今回の試行の作業ディレクトリ>/verdict.md "$D/findings.md"
+mktemp -d                                   # 出たパスを <D> として、以下に書き写す
+mkdir <D>/src <D>/base <D>/work
+git merge-base origin/<PR のベースブランチ> HEAD   # 出た SHA を <BASE> として書き写す
+git archive HEAD | tar -x -C <D>/src
+git archive <BASE> | tar -x -C <D>/base
+git diff <BASE> HEAD > <D>/pr.diff
+gh pr view <PR 番号> --json body -q .body > <D>/pr-body.md
+cp <今回の試行の作業ディレクトリ>/verdict.md <D>/findings.md
 ```
 
 リポジトリが大きければ、`archive` と `diff` の末尾に `-- <PR が触れたディレクトリ...>` を付けて絞る。
@@ -23,14 +24,14 @@ cp <今回の試行の作業ディレクトリ>/verdict.md "$D/findings.md"
 2反復目以降は、過去の反復も渡す。同じ規則の破れは、反復をまたいで1件ずつ出るので、今回の判定だけでは繰り返しが見えない。
 
 ```sh
-mkdir "$D/history"
-cp <反復 N の作業ディレクトリ>/verdict.md "$D/history/verdict-N.md"   # 過去の反復ごと
-git -C <worktree> diff <最初に判定を受けた SHA> HEAD > "$D/history/fixes.diff"
+mkdir <D>/history
+cp <反復 N の作業ディレクトリ>/verdict.md <D>/history/verdict-N.md   # 過去の反復ごと
+git diff <最初に判定を受けた SHA> HEAD > <D>/history/fixes.diff
 ```
 
 ## 依頼文
 
-`<...>` の3か所だけを埋め、ほかは変えない。「何の PR か」には、対象が何をするもので、この PR が何を足す・変えるかだけを書く。評価、問題点、あなたの修正の方針は書かない。`history/` を作らなかったときは、その行を消す。
+`<...>` の2か所(一時ディレクトリのパスと「何の PR か」)だけを埋め、ほかは変えない。「何の PR か」には、対象が何をするもので、この PR が何を足す・変えるかだけを書く。評価、問題点、あなたの修正の方針は書かない。`history/` を作らなかったときは、その行を消す。
 
 ```text
 ある PR にレビューの指摘が出ました。指摘を1件ずつ直し始める前に、指摘の全体を見て、どう直すかの方針を決める役を頼みます。日本語で答えてください。
