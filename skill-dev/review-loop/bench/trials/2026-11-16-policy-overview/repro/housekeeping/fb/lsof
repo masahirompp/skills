@@ -1,0 +1,3 @@
+#!/bin/sh
+# 他ユーザーのプロセスのように、HIDE_PID だけ見えない lsof
+if [ -n "${HIDE_PID:-}" ]; then /usr/sbin/lsof "$@" | awk -v h="p$HIDE_PID" '/^p/{skip=($0==h)} !skip'; else exec /usr/sbin/lsof "$@"; fi

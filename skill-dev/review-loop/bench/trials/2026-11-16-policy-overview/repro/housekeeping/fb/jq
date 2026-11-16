@@ -1,0 +1,3 @@
+#!/bin/sh
+case "${FAULT:-}" in jq-stacked) case "$*" in *'baseRefName == '*) exit 2;; esac;; esac
+exec /opt/homebrew/bin/jq "$@"

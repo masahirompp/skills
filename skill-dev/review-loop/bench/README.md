@@ -32,6 +32,7 @@ python3 skill-dev/review-loop/bench/score.py report   skill-dev/review-loop/benc
 | `cases/<題材>/` | 題材の定義(`case.json`)。skills の題材は `base.patch`(ベースへの加工)、`change.patch`(レビュー対象の差分)、`message.txt`(差分の意図) |
 | `answers/<題材>.json` | 正解の一覧。子からは見えない |
 | `answers/repro/` | 埋め込んだ不具合を再現するスクリプト |
+| `trials/<日付>-<名前>/` | bench の仕組みを使わずに行った1回きりの試しの記録(依頼文、基準、出力、採点)。それぞれの README に手順と結果 |
 | `results/<名前>/` | 結果。試行ごとに `result.md`(レビューの出力)、`meta.json`、`score.json`。子の stream(`*.jsonl`)は大きいのでコミットしない |
 
 ## これまでの結果
