@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.057918000000000004,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/scripts/lib.sh:96",
+   "summary": "「自分自身が lsof の一覧に出るか」だけを見ているため、同じサンドボックスの中のプロセスしか見えない場合を見逃す。その結果、外のプロセスが使っている worktree も delete 候補になってしまう。",
+   "quote": "「自分自身が一覧に出るか」だけでは、一部のプロセスしか見えない場合を見逃す",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/scripts/lib.sh:108, scan.sh:165, apply.sh:43",
+   "summary": "理由の文が「使用中」と「確かめられない」を区別しておらず、文言が二重に出たり意味が曖昧になったりする。SKILL.md の案内は部分一致に頼っているので、文言が変わると黙って壊れる。",
+   "quote": "理由の文が「使用中」と「確かめられない」を区別していない",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/scripts/scan.sh:208",
+   "summary": "worktree を「確かめられない」という理由で残したときも、そのブランチの行が「worktree … で使用中」と報告され、SKILL.md が求める区別と食い違う。",
+   "quote": "worktree を「確かめられない」で残したとき、そのブランチの行が「worktree … で使用中」になる",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skill-dev/housekeeping/test.sh:163-165",
+   "summary": "lsof が見えないときのテストが、何も出さない偽の lsof しか使っておらず、「自分は見えるが、ほかは見えない」場合を確かめるテストが無い。",
+   "quote": "lsof が見えないときのテストは、何も出さない偽の lsof しか使っていない",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/scripts/lib.sh:46",
+   "summary": "関数の中の set -f が外に漏れないという前提がコメントにしか無く、hk_protect_patterns を直接呼ぶと呼び出し元に漏れる。",
+   "quote": "`set -f` を関数の中で実行する前提を、コメントにしか書いていない",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/housekeeping/SKILL.md:20,61",
+   "summary": "TMPDIR が未設定だと、ほかのユーザーと共有する /tmp の固定のファイル名に結果を書くため、上書きやすり替えが起こり得る。",
+   "quote": "`TMPDIR` が未設定だと、ほかのユーザーと共有する `/tmp` の固定のファイル名に結果を書く",
+   "quote_ok": true
+  }
+ ]
+}

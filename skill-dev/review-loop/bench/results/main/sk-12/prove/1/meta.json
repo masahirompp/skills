@@ -1,0 +1,42 @@
+{
+ "case": "sk-12",
+ "kind": "python",
+ "config": "prove",
+ "trial": 1,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 396166,
+  "cache_read": 353405,
+  "output": 8470
+ },
+ "cost_usd": 0.582097,
+ "started_at": "2026-11-15T07:20:22",
+ "duration_s": 224,
+ "num_turns": 9,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [
+  "?? scratch/bin/claude",
+  "?? scratch/repro_judge.py",
+  "?? scratch/repro_noid.py",
+  "?? scratch/wd/draft+final/judge-input.md",
+  "?? scratch/wd/draft+final/judge.result.md",
+  "?? scratch/wd/draft+final/judge.stderr.txt",
+  "?? scratch/wd/draft+final/judge.stdout.jsonl",
+  "?? scratch/wd/draft+final/stream.jsonl",
+  "?? scratch/wd/fenced+short/judge-input.md",
+  "?? scratch/wd/fenced+short/judge.result.md",
+  "?? scratch/wd/fenced+short/judge.stderr.txt",
+  "?? scratch/wd/fenced+short/judge.stdout.jsonl",
+  "?? scratch/wd/fenced+short/stream.jsonl",
+  "?? scratch/wd/noid/s.jsonl",
+  "?? scratch/wd/noid/x.result.md",
+  "?? scratch/wd/noid/x.stderr.txt"
+ ],
+ "head_changed": false
+}

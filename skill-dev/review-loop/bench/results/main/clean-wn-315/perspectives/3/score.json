@@ -1,0 +1,34 @@
+{
+ "cost_usd": 0.0560976,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "test/e2e/ops.test.ts:294",
+   "summary": "PRODUCT.md に書いた『エラーの間も ctrl+q ctrl+n は同じに動く』という仕様を確かめるテストがなく、あとで attachKey にガードが足されると黙って壊れる。",
+   "quote": "PRODUCT.md(`docs/PRODUCT.md:513`)に新しく「`--json` を読めずにエラーを出している間も `ctrl+q ctrl+n` は同じにする」と書きましたが、これを確かめるテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/ops/app.ts:978、src/ops/app.ts:592、docs/PRODUCT.md:592",
+   "summary": "Other... を空のまま確定すると起動したディレクトリになり、候補の先頭(カーソルのリポジトリ)と既定が2つに分かれて一貫しない。",
+   "quote": "候補の先頭がカーソルのリポジトリに変わったので、「何も選ばないときの既定」が2つに分かれました。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/ops/app.ts:840、src/ops/app.ts:853",
+   "summary": "一覧の更新で followCursor がカーソルを勝手に動かした直後に n を押すと、利用者の意図と違う行のリポジトリが先頭になり、n Enter と続けて打つと意図しないリポジトリで起動しうる。",
+   "quote": "その直後に `n` を押すと、利用者が見ていたのとは別の行のリポジトリが先頭になります。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "docs/PRODUCT.md:513",
+   "summary": "ctrl+q ctrl+n の文から理由と『待ち先の関係は結ばない』が n の節に移ったので、n の節を参照する言葉を足すべきだ。",
+   "quote": "`n` の節を参照する言葉(「`n` の節を参照」など)を足すと、読み手が理由を探しやすくなります。",
+   "quote_ok": true
+  }
+ ]
+}

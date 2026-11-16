@@ -1,0 +1,56 @@
+{
+ "cost_usd": 0.0920576,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "作業台の画面がつながったまま wbguide が消えたときに案内が作り直されない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "しかし `@wn_respawned` の回数は戻されないので、上の出力のように、5秒以上動いてから落ちた場合も数えられます。ペインが生きているかぎり、落ちた回数は通算で積み上がります。",
+   "reason": "pane-died の案内の分岐で回数が通算で数えられ数え直されないため、続けて落ちていなくても上限に達すると指摘しており、detect_criteria を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "attach の判定には触れているが、主張は終了コード 0 の場合を捕まえられないことで、シグナルで status が null になり誤ってエラーになるという原因とは異なる。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が利用者の分割したペインも起動し直す点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定する点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/cli/workbench.ts の attach 結果の判定(res.status !== 0 && 一覧がある)",
+   "summary": "案内の上限で wbguide が畳まれて作業台の画面が閉じても、tmux は終了コード 0 で終わるため、理由が出ず、キーも待たず、0 で終わってしまう。",
+   "quote": "tmux はセッションが消えて離れたときも 0 で終わるので(scratch で確かめました)、今の `res.status !== 0 && 一覧がある` という判定ではこの場合を捕まえられません。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,26 @@
+{
+ "case": "wn-313",
+ "kind": "ts",
+ "config": "code-review",
+ "trial": 3,
+ "model": "claude-opus-5-5",
+ "pr_mode": true,
+ "status": "ok",
+ "tokens": {
+  "input": 788454,
+  "cache_read": 720899,
+  "output": 24209
+ },
+ "cost_usd": 0.9661068000000002,
+ "started_at": "2026-11-15T23:51:29",
+ "duration_s": 267,
+ "num_turns": 0,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [],
+ "head_changed": false
+}

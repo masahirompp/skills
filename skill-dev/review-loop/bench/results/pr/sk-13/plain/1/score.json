@@ -1,0 +1,98 @@
+{
+ "cost_usd": 0.10453799999999999,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--perspective の値に含まれる空白やタブを整えないことで、照合とプロンプトが食い違う点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "判定役のプロンプトが、追加の指示の扱いを説明していない**\n  - 判定役の入力の先頭に「観点 X に利用者が与えた追加の指示」という区切りを足していますが、プロンプトは「観点ごとに区切ってある」と書いたままです。",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いがなく、指示で外した範囲を観点の欠落と扱いうる、と指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "比べているのは `skill_name` の一覧だけで、引数を見ていません。たとえば `--perspective 'code-review low {pr}'` のように、名前は同じでレベルや引数だけを変えると、`perspectives` が記録されず",
+   "reason": "スキル名だけで比べるため引数違いの観点が記録されない点を、並び順の誤検出とあわせて指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が、--perspective で外した security-review に --instruct を渡している矛盾には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "detected",
+   "quote": "`all(isinstance(n, str) for n in a.get(\"perspectives\") or [])` は、値が文字列 `\"abc\"` でも通ります。",
+   "reason": "valid_state がリストかどうかを確かめず、文字列が検査を通ると指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "サブエージェントに指示が届かない点には触れておらず、システムプロンプトに足す設計をむしろ妥当と評価している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "指示ブロックとレビュー出力が同じ区切りで並ぶため偽装されうる、という点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "detected",
+   "quote": "`--perspective '/code-review high {pr}'` は `//code-review` になり、事前確認で「観点スキルが見つからない(名前の誤りか未導入)」として止まります。",
+   "reason": "--perspective の先頭の / を取り除かないため事前確認で失敗する、と指摘している。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/scripts/review_loop.py:962",
+   "summary": "--instruct で検査の範囲を狭めたことが状態コメントに残らず、緩めた試行も普通に completed と表示される。",
+   "quote": "`--perspective` の差は表に載りますが、検査の範囲を狭める `--instruct` は記録されません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/SKILL.md:57, skills/review-loop/scripts/review_loop.py:935",
+   "summary": "反復ごとにオプションを付け忘れると黙って既定に戻り、それに気づく手段がない。",
+   "quote": "文書は「毎回同じものを付ける」と親に求めていますが、守られなかったときに気づく手段がありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/review-loop/scripts/review_loop.py:749",
+   "summary": "指示を優先させる文言と REVIEW_CONSTRAINT のどちらが優先するかが書かれておらず、範囲があいまい。",
+   "quote": "「スキルの手順と食い違うときは、この指示を優先」と足していますが、`REVIEW_CONSTRAINT`(worktree を変えない、push しない)との優先順位は書いていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skill-dev/review-loop/test.py:570",
+   "summary": "get の既定値が \"x\" なので、キーが無くてもテストが通ってしまう。",
+   "quote": "`by_name.get(\"mattpocock-skills:code-review\", \"x\")` は、キーがなければ既定値の `\"x\"` に「削除したファイル」が含まれないので、成功します。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skill-dev/review-loop/test.py:553-584",
+   "summary": "引数だけ違う --perspective、本文に = を含む --instruct、プラグイン名への --instruct を確かめるテストが無い。",
+   "quote": "1つ目の指摘(名前が同じで引数だけ違う `--perspective`)。",
+   "quote_ok": true
+  }
+ ]
+}

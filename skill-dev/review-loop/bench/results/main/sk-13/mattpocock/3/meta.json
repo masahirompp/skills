@@ -1,0 +1,27 @@
+{
+ "case": "sk-13",
+ "kind": "python",
+ "config": "mattpocock",
+ "trial": 3,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 460005,
+  "cache_read": 366189,
+  "output": 12004
+ },
+ "cost_usd": 0.8739387999999999,
+ "started_at": "2026-11-15T14:58:36",
+ "duration_s": 247,
+ "num_turns": 7,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [
+  "Bash cat /Users/masahirompp/.claude/projects/-private-var-folders-5t-j2015ppn7pj1lf0h39j3c5jm0000gn-T-rb-1t-d3kns-w-4a91fdc631-skills/44695631-67f5-46e6-817c-ba8ee92568b5/tool-results/b6s4dhlcg.txt | sed -n '/^diff --git/,$p'"
+ ],
+ "tree_changed": [],
+ "head_changed": false
+}

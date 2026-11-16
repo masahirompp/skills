@@ -1,0 +1,930 @@
+{
+ "sk-12/v19": {
+  "id": "sk-12/v19",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "grep -n \"open(\" skill-dev/review-loop/fakes/claude skill-dev/review-loop/test.py skills/review-loop/scripts/review_loop.py; git show main:skill-dev/review-loop/fakes/claude | grep -n 'open(\"stray'; git diff main...HEAD -- skill-dev/review-loop/test.py | grep '^[+-].*open('",
+  "evidence": "test.py:513 に、with を使わない `denials = open(os.path.join(wd, \"denials.txt\"), encoding=\"utf-8\").read() if os.path.exists(...) else \"\"` が加わっている。同じ差分で加わった 496 行は `with open(...) as f:` を使っており、書き方が揃っていないのは事実。ただし「既存のコードはすべて with」は誤りで、main の時点で fakes/claude:83(今の 122 行)に `open(\"stray.txt\", \"w\").write(\"x\")` がある。この行はテストのコードで、読み取りだけ。CPython では、ファイルは式を評価し終えたときに参照カウントで閉じる。テストの結果は変わらず、書き方の揃え方の話。",
+  "cost_usd": 0.19940009999999997
+ },
+ "sk-12/v20": {
+  "id": "sk-12/v20",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "sed -n 225,345p skills/review-loop/scripts/review_loop.py",
+  "evidence": "check_result(review_loop.py:229)で拒否を集める部分(246-257 行)が参照するのは、tail.config_denied、tail.denial、tail.tool_inputs、tail.results だけ。label、rc、base、attempt は使っていない。StreamTail には、同じ種類の処理として summary() と new_config_denials() がすでにある。メソッドを移す余地があるのは事実だが、どこに置くかという構造の好みで、挙動は変わらない。",
+  "cost_usd": 0.19940009999999997
+ },
+ "sk-12/v13": {
+  "id": "sk-12/v13",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "一時ディレクトリに repro.py を置き、review_loop を import。最後の行が成功の result で末尾に改行がない stream-json ファイルと、改行がある対照のファイルを作る。それぞれ StreamTail(p).poll() → check_result(label, 0, ...) を呼ぶ",
+  "evidence": "改行なしのほうは AttemptFailed kind=child_error、detail『result の行がない(終了コード 0)』になった。改行ありの対照は成功してテキストを返した。poll は rfind(b\"\\n\") の位置までしか読まず、プロセスが終わったあとの tail.poll() は1回だけなので、最後の行は読まれない(review_loop.py:294、run_judge の :792 付近)。同じ扱いは main でもレビュー役に既にあり、この PR で判定役にも広がった。本物の claude が最後の行を改行なしで書くことがあるかは確かめていない",
+  "cost_usd": 0.08951093333333332
+ },
+ "sk-12/v14": {
+  "id": "sk-12/v14",
+  "verdict": "not_runnable",
+  "traced": "unclear",
+  "commands": "",
+  "evidence": "成り立つかどうかは、本物の claude -p が、許可ルールがないために拒否した呼び出し(reason_type subcommandResults など)に source=config を付けるかで決まる。これは外部の製品の挙動で、この環境では確かめていない。コードの側は指摘どおりで、review_loop.py:307-308 は source == \"config\" なら理由を問わず config_denied に入れて試行を止めない。check_result(:249)も config_denied の id を seen に入れて止めない。テストの偽物 fakes/claude:41-49 は source と reason_type を自分で付けており、:124 のコメントは『本物の claude は source を出さない』と書いているだけで、根拠になるデータはない。SKILL.md:24 の前提と食い違うかどうかも、本物のイベントの形が分からない限り決められない",
+  "cost_usd": 0.08951093333333332
+ },
+ "sk-12/v15": {
+  "id": "sk-12/v15",
+  "verdict": "not_runnable",
+  "traced": "unclear",
+  "commands": "",
+  "evidence": "v14 と同じ指摘。本物の claude -p の permission_denied イベントで source がどう付くかは外部の挙動で、実行して示せない。コードは review_loop.py:307-308 と :249 で、source=config の拒否をすべて止めない扱いにしている(ここは指摘どおり)。問題になるのは、許可ルールがないことによる拒否にも config が付く場合だけで、それは確かめられていない",
+  "cost_usd": 0.08951093333333332
+ },
+ "sk-12/v16": {
+  "id": "sk-12/v16",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "repro.py で次を試した。(a) tool_use_id のない source=config の拒否イベント2件(Bash, Read)+成功の result → StreamTail.poll、check_result、new_config_denials。(b) tool_use_id のない config 拒否1件+result の permission_denials に tool_use_id のない Write の拒否 → check_result。対照として config 拒否のない場合も実行",
+  "evidence": "(a) config_denied のキーは [None] だけになり、new_config_denials は『Read {}』の1件しか返さなかった。Bash の拒否は上書きされ、denials.txt にも残らない。(b) check_result は成功を返した(試行が止まらない)。config 拒否のない対照では permission_denied『Write {\"file_path\": \"/x\"}』で止まった。つまり、tool_use_id のない config 拒否が1件でもあると、result にしか載っていない id のない拒否が素通りする。本物の stream で tool_use_id が欠けることがあるかは確かめていない",
+  "cost_usd": 0.08951093333333332
+ },
+ "sk-12/v17": {
+  "id": "sk-12/v17",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "repro.py で、result の行を2つ並べる。1つ目は success で『バックグラウンドで実行中。』を60回並べた文(500字を超える)。2つ目は is_error=true、subtype=error_during_execution、result='ERROR_CAUSE_XYZ'。終了コード 1 で check_result を呼んだ",
+  "evidence": "AttemptFailed は child_error になった。detail は『終了コード 1、subtype error_during_execution、is_error True: バックグラウンドで実行中。…』で、ERROR_CAUSE_XYZ は含まれていなかった(False)。review_loop.py:263 の text[:500] がつないだテキストの先頭を切り出すので、途中の行が長いと最後の行のエラー文が落ちる。main では data['result'](最後の行)を表示していた",
+  "cost_usd": 0.08951093333333332
+ },
+ "sk-12/v18": {
+  "id": "sk-12/v18",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "grep -n \"gh pr diff 7; grep\" skill-dev/review-loop/fakes/claude",
+  "evidence": "文字列は fakes/claude の :45(tool_use の input)と :131(permission_denials の tool_input)の2か所にあり、指摘どおり。ただしテスト用の偽物の中で同じ文字列が重複しているだけで、今の挙動には関わらない",
+  "cost_usd": 0.08951093333333332
+ },
+ "sk-13/v1": {
+  "id": "sk-13/v1",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "test.py の setup/run/state/comments を流用した scratch/v1.py で、偽の claude・gh を使い `iterate <wt> --perspective 'code-review low {pr}' --perspective security-review --perspective 'mattpocock-skills:code-review PR #{pr}'` を実行。レビューのプロンプト、状態の attempt、状態コメントの表の行を出力した",
+  "evidence": "rc=0。プロンプトは ['/code-review low 7', '/mattpocock-skills:code-review PR #7', '/security-review'] で、レベルは low に変わっていた。それでも attempt に 'perspectives' キーはなく、表の行は `| 928c4cb | … | completed(反復 1) | 1.4万(うちキャッシュ読み込み 8000) | 1200 |` で、既定の試行と区別できない。原因は review_loop.py:962-963 の比較で、スキル名のリストしか比べていない。ただし SKILL.md:56 は「表に観点の名前が載る」と書いている。名前は既定と同じなので、仕様違反かどうかは意図の決め方による。この点は指摘のとおり",
+  "cost_usd": 0.08564016666666667
+ },
+ "sk-13/v2": {
+  "id": "sk-13/v2",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "grep -rn \"iterate(\" skills skill-dev",
+  "evidence": "iterate を呼ぶのは review_loop.py:1076 の main だけで、常に args.perspective と args.instruct を渡す(どちらも未指定なら None)。既定値 None は使われないが、渡す値と同じなので挙動は変わらない。書き方の問題に留まる",
+  "cost_usd": 0.08564016666666667
+ },
+ "sk-13/v3": {
+  "id": "sk-13/v3",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "テストの差分(skill-dev/review-loop/test.py:553-586)を読んだ。scratch/v3.py で `--instruct 'security-review=.env は見ない'` を付けて実行し、各レビューの --append-system-prompt に review_loop.REVIEW_CONSTRAINT と指示が含まれるかを確かめた",
+  "evidence": "テストには、引数だけを変えた観点の記録を見るケースも、REVIEW_CONSTRAINT が残るかを見るケースもない(指摘どおり)。実行すると、3観点とも REVIEW_CONSTRAINT は含まれ、指示は security-review だけに入っていた。後者は今は正しく動いている。前者は v1 の挙動を捕まえるテストがないということ。どちらもテストの抜けで、それ自体は挙動に影響しない",
+  "cost_usd": 0.08564016666666667
+ },
+ "sk-13/v4": {
+  "id": "sk-13/v4",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "grep -rn \"review_constraint\\|instructs\" skills skill-dev",
+  "evidence": "review_constraint(instruction)(review_loop.py:743)は、定数 REVIEW_CONSTRAINT に指示を足したシステムプロンプトを返す。instructs は review_config の引数(393)と iterate の引数(929)。名前は事実として紛らわしいが、命名の問題で挙動には関わらない",
+  "cost_usd": 0.08564016666666667
+ },
+ "sk-13/v5": {
+  "id": "sk-13/v5",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "scratch/v5.py: 反復1を `--perspective 'code-review high {pr}' --perspective 'mattpocock-skills:code-review PR #{pr}' --instruct 'code-review=テストは見ない'` で実行した。続けてコミットを push し、反復2をオプションなしで実行。レビューの観点、attempt、stderr の警告、状態 JSON に指示が残っているかを確かめた",
+  "evidence": "反復1の attempt には perspectives=['code-review','mattpocock-skills:code-review'] が残った。反復2はオプションなしで rc=0 になり、security-review を含む3観点が走った。stderr に観点やオプションについての警告は出ず、状態 JSON にも指示『テストは見ない』は残っていなかった。付け忘れると黙って既定に戻り、--instruct の付け忘れは状態からも分からない。ここまでは実行で確かめた。ただし、これは SKILL.md:57 に書いてある設計どおりの挙動。親 LLM が実際に付け忘れるかどうかと、それで連続失敗や判定の振動が起きるかは、実行では示せない",
+  "cost_usd": 0.08564016666666667
+ },
+ "sk-13/v6": {
+  "id": "sk-13/v6",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "scratch/v6.py: `iterate <wt> --perspective ' code-review high {pr}' --perspective security-review` を偽の claude で実行し、レビュー役に渡したプロンプトを出力した",
+  "evidence": "rc=0 で、事前確認と重複検査を通った(skill_name は split()[0] なので 'code-review')。レビュー役に渡したプロンプトは '/ code-review high 7' で、'/' の直後に空白が入っていた。偽の claude はスキル名を '' と解釈した。review_config(review_loop.py:397)は空かどうかしか見ず、strip しないことを確かめた。本物の claude が '/ code-review' をスラッシュコマンドとして扱わないかどうかは、外部の挙動なので実行していない。それでも、スクリプトが壊れたプロンプトを送ることは再現した",
+  "cost_usd": 0.08564016666666667
+ },
+ "sk-12/v7": {
+  "id": "sk-12/v7",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "/tmp/rl.BLsT にスキルと fakes を複製した。fake の claude に denypush モードを足した(`GH_TOKEN=ghp_SECRETTOKEN123 git push origin HEAD` の tool_use と、source=config の permission_denied を出して、正常に終わる)。test.py の補助関数で run(wt, FAKE_REVIEW_security_review=\"denypush\") を実行し、stderr と作業ディレクトリの denials.txt を読んだ",
+  "evidence": "stderr に `warn: review security-review: 設定のルールで拒否された(試行は続ける): Bash {\"command\": \"GH_TOKEN=ghp_SECRETTOKEN123 git push origin HEAD\"}(reason_type rule)` が出た。denials.txt にも同じ行が平文で書かれた。トークンを直書きしたコマンドが拒否されると、一時ディレクトリのファイルと stderr に残ることを確かめた(summarize_denials は 200 字で切るだけで、伏せる処理はない)。PR の状態コメントには載らない",
+  "cost_usd": 0.1266073666666667
+ },
+ "sk-12/v8": {
+  "id": "sk-12/v8",
+  "verdict": "not_reproduced",
+  "traced": "na",
+  "commands": "/tmp/v8.sWnk に git リポジトリを作り、.claude/settings.json に allow Bash(echo:*) と deny [Bash(touch secret.txt), Read(./.env)] を置いた。`claude -p --model haiku --output-format stream-json --verbose --setting-sources project` で、touch secret.txt / touch other.txt / `echo hi; touch other2.txt` / `echo hi; cat .env` を順に実行させ、system/permission_denied のイベントを取り出した(claude 2.1.325)",
+  "evidence": "4件の拒否のどれにも `source` の項目はなかった。deny ルールに当たったもの: touch secret.txt は \"decision_reason_type\":\"rule\"、`echo hi; cat .env` は \"decision_reason_type\":\"subcommandResults\"。許可リストにないためのもの(touch other.txt、echo hi; touch other2.txt): decision_reason_type がなく、message は \"needs approval\"。なお、この workspace は trust されていないので allow は無視されたが、deny は効いた。許可リストにないための拒否が source=config として出ることはなく、StreamTail は source のない拒否を denial として扱うので、停止は働く。指摘の懸念は起きなかった。ただし、deny ルールでの拒否にも source が付かないので、本物の CLI では config として扱う経路が一度も働かない。fake が出す source と reason_type は、本物の出力にない項目名で、本物は decision_reason_type を使う",
+  "cost_usd": 0.1266073666666667
+ },
+ "sk-12/v9": {
+  "id": "sk-12/v9",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "v7 と同じ実行。denypush モード(git push の Bash 呼び出しに source=config の拒否を出したあと、正常に終わる)で run(wt, \"--new-run\", FAKE_REVIEW_security_review=\"denypush\") を実行した",
+  "evidence": "rc 0 で、試行は成功した。stderr に残ったのは warn の1行だけで、failed: permission_denied は出なかった。書き込み系の操作(git push)が設定のルールで拒否されても、試行は止まらず、合図は warn 1行と denials.txt だけになる。main では source を見ずに止めていた",
+  "cost_usd": 0.1266073666666667
+ },
+ "sk-12/v10": {
+  "id": "sk-12/v10",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "fake に2つのモードを足した。denyconfighang は 0.5 秒後に source=config の拒否を出し、120 秒眠る。failslow は 0.5 秒後に rc 1 で終わる。run(wt, \"--new-run\", FAKE_REVIEW_code_review=\"failslow\", FAKE_REVIEW_mattpocock_skills_code_review=\"denyconfighang\", overrides={\"POLL_SECONDS\": 2}) を実行した。POLL_SECONDS を2にしたのは、2周目のポーリングで、順番が先の code-review が失敗するようにするため",
+  "evidence": "rc 1 で、`failed: child_error: review code-review`。mattpocock-skills:code-review の stdout.jsonl には source=config の拒否が書かれていた。それでも stderr に warn の行はなく、denials.txt も作られなかった。例外の経路で、走っている子の tail を読んで記録する処理がないため、その拒否は利用者に伝わらない",
+  "cost_usd": 0.1266073666666667
+ },
+ "sk-12/v11": {
+  "id": "sk-12/v11",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "v12 と同じ(FAKE_JUDGE=multidup)。main の run_judge を git show で読み、比べた",
+  "evidence": "main の判定役は --output-format json で受け、最後の result だけを使っていた。このブランチは stream-json で受け、result の行をすべてつなぐ。判定役が result の行を複数出すと、判定に節が二重に入ることを確かめた(v12)。もう1つの事象は、この指摘の文面からは特定できないので、確かめたのは v12 の事象だけ",
+  "cost_usd": 0.1266073666666667
+ },
+ "sk-12/v12": {
+  "id": "sk-12/v12",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "fake の判定役に multidup モードを足した。result の行を2つ出す: 下書き「## 指摘 / ### F1: 下書き / ## 競合 なし」と、最終版「## 指摘 / ### F1: s ... / ## 競合 なし」。run(wt, FAKE_JUDGE=\"multidup\") の標準出力(verdict)を確かめた",
+  "evidence": "rc 0 で、出力の `## 指摘` は2回、`### F1` も2回。下書きの F1(影響 低)と最終版の F1(影響 中)が両方とも判定に入り、どちらが本物の F1 か区別できない。main では最後の result だけを使っていたので、この事象は起きなかった",
+  "cost_usd": 0.1266073666666667
+ },
+ "sk-12/v1": {
+  "id": "sk-12/v1",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "review_loop を import する単体スクリプトを書いた。tool_use_id がない system/permission_denied(source=config)の行と、permission_denials に tool_use_id がない別の拒否(command 'sandbox nested')を持つ result の行を jsonl に書き、StreamTail.poll() のあと check_result を呼んだ。対照として、config の拒否イベントを除いた stream でも同じことをした。",
+  "evidence": "config_denied のキーは [None] で、denial は None だった。check_result は AttemptFailed を出さず、テキスト '本文' を返した(completed 扱い)。対照(config の拒否イベントなし)では permission_denied で失敗した。seen に None が入り、`None not in {None}` が False になるため、出どころの分からない拒否が見逃される(閉じる側に倒れない)。",
+  "cost_usd": 0.12080669999999998
+ },
+ "sk-12/v2": {
+  "id": "sk-12/v2",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "一時ディレクトリで本物の CLI を実行した: claude -p --model haiku --output-format stream-json --verbose --allowedTools=Bash \"…'sleep 5; echo finished' を run_in_background で実行し、STARTED と返し、完了の通知のあとに出力を返す\"。そのあと、最上位の result の行ごとに modelUsage・usage.output_tokens・total_cost_usd を出した。",
+  "evidence": "最上位の result の行が2つ出た。1行目は modelUsage.outputTokens 221・costUSD 0.00403、2行目は 493・0.00491 だった。2行目の usage.output_tokens は 272 で、221+272=493 になる。modelUsage はセッションの累計で、行ごとに増える。docstring の「どの行も同じ値になる」は事実と違うが、最後の行だけを数える実装は正しく、少なく数えることはない。直すべきはコメントの文面だけ。",
+  "cost_usd": 0.12080669999999998
+ },
+ "sk-12/v3": {
+  "id": "sk-12/v3",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "単体スクリプトで、source=hook・tool_use_id='h' の permission_denied の行と正常な result の行を StreamTail に読ませ、check_result を呼んだ。",
+  "evidence": "tail.denial に入り(config_denied は空)、check_result は permission_denied で失敗した。指摘どおり config 以外の source では止まる。これは安全側の挙動で、指摘自身も妥当としている。テストと SKILL.md の記述が無いという点は、挙動に影響しない。",
+  "cost_usd": 0.12080669999999998
+ },
+ "sk-12/v4": {
+  "id": "sk-12/v4",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "test.py の setup/run の部分を流用した統合スクリプトを書いた。FAKE_REVIEW_code_review=denylive、FAKE_REVIEW_security_review=denyconfig、FAKE_REVIEW_mattpocock_skills_code_review=denyconfig で iterate を実行した。POLL_SECONDS は 2 と既定の 0.1 の2通り。終わったあと、denials.txt と各 stdout.jsonl を調べた。",
+  "evidence": "どちらの条件でも rc=1 で、'failed: permission_denied: review code-review' が出た。security-review と mattpocock の stdout.jsonl には source=config の拒否の行がそれぞれ1つあったが、denials.txt は作られず、warn: の行も出なかった。code-review の watch_denials が例外を出した時点でループを抜け、ほかの観点の tail は記録されない。指摘のとおり、影響は記録が欠けることだけで、試行は同じ種類の失敗になる。",
+  "cost_usd": 0.12080669999999998
+ },
+ "sk-12/v5": {
+  "id": "sk-12/v5",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "単体スクリプトで、result が 'あ'×600 の成功の行と、result が 'API Error: 529 overloaded'(subtype error_during_execution、is_error True)の行を StreamTail に読ませ、rc=1 で check_result を呼び、AttemptFailed の detail を調べた。",
+  "evidence": "kind は child_error だったが、detail は「終了コード 1、subtype error_during_execution、is_error True: ああああ…」で終わり、'529' は含まれなかった(grep -c 529 の結果は 0)。つないだテキストの先頭 500 字だけを出すため、最後の行にあるエラー文が消える。全文は <base>.result.md に残るが、stderr と failure.txt の詳細からは原因が読めない。",
+  "cost_usd": 0.12080669999999998
+ },
+ "sk-12/v6": {
+  "id": "sk-12/v6",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "",
+  "evidence": "命名と読みやすさについての指摘。watch_denials(review_loop.py)は、denials.txt に書くことと、running が真で tail.denial があるときの例外の送出を兼ねており、事実としては合っている。挙動には影響しない。",
+  "cost_usd": 0.12080669999999998
+ },
+ "sk-13/v7": {
+  "id": "sk-13/v7",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "一時ディレクトリに、Agent ツールで general-purpose のサブエージェントを1つ起動するだけのスキル zzdelegate を置いた。サブエージェントへのプロンプトは「自分のシステムプロンプトに SECRET CANARY で始まる行があればその値を、なければ NONE を出す」で固定し、カナリアの値は含めない。これを `claude -p /zzdelegate --output-format stream-json --verbose --append-system-prompt 'SECRET CANARY: PURPLE-9931'` で実行し、stream の tool_use と result を抜き出した。review_loop.py の run_reviews(review_loop.py:759-764)と同じ形の起動。",
+  "evidence": "親の Agent 呼び出しのプロンプトにカナリアは無く、サブエージェントの返答(SubagentHandback)も最終の result も 'NONE' だった。親の --append-system-prompt は、サブエージェントのシステムプロンプトに入らない。review_loop.py の --instruct は review_constraint を通じて親の --append-system-prompt にしか入らない(review_loop.py:733-739, 762)ので、親の LLM がサブエージェントへの依頼文に書き写さない限り、サブエージェントには届かない。指摘の仕組みは実行で確かめた。ただ、Failure scenario の後半(親が書き写さず、サブエージェントが実際に .env を読みに行き、permission_denied で連続失敗の数が進む)は LLM の振る舞いしだいで、狙って起こしてはいない。SKILL.md:54 は「守られる保証はない」と書くが、サブエージェントに届かないことには触れていない。",
+  "cost_usd": 0.08832216666666666
+ },
+ "sk-13/v8": {
+  "id": "sk-13/v8",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "python3 -I で review_loop をインポートし、run_id などは正しい形のまま attempts[0].perspectives だけを文字列 \"code-review\" にした状態を作った。それに valid_state と render を呼んだ。比べるため、リスト ['code-review','security-review'] でも同じことをした。",
+  "evidence": "文字列のとき valid_state は True を返し、render の表の行は「completed(反復 1)、観点 c, o, d, e, -, r, e, v, i, e, w」になった。リストのときは「観点 code-review, security-review」と出る。valid_state(review_loop.py:548)は要素が str かどうかだけを見ていて、perspectives がリストかどうかは見ていない。手で編集されたコメントは「読めない」として扱われず、表が1文字ずつ区切られて出る。影響は表示だけで、ロックや回数の扱いには及ばない。",
+  "cost_usd": 0.08832216666666666
+ },
+ "sk-13/v9": {
+  "id": "sk-13/v9",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "grep -n '^def ' skill-dev/review-loop/test.py",
+  "evidence": "ほかのテスト用の関数(check, sh, setup, env_for, run, comments, state, calls, write_state, alive, commit_and_push)は38〜123行にある。system_prompt だけが554行、つまり「観点の入れ替えと追加の指示」の節の中にある。指摘どおりだが、置き場所の好みの話で、テストの挙動は変わらない。",
+  "cost_usd": 0.08832216666666666
+ },
+ "sk-13/v10": {
+  "id": "sk-13/v10",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "(1) python3 -I で review_config([' code-review high {pr}'], ['code-review=x']) を呼び、続けて '/' + expand(spec, {'number': 7}) と skill_name を確かめた。(2) 一時ディレクトリに「MARKER-OK-4417 とだけ返す」スキル zzmarker を置き、`claude -p '/zzmarker high 7'` と `claude -p '/ zzmarker high 7'` を stream-json で実行して result を比べた。",
+  "evidence": "(1) review_config は例外を出さずに通った。skill_name は 'code-review' を返し、--instruct も 'code-review' に結び付いた。ところがプロンプトは '/ code-review high 7' になった。main は --perspective の値をそのまま review_config に渡す(review_loop.py:935)ので、途中で空白は取り除かれない。(2) '/zzmarker high 7' ではスキルが動き、result は 'MARKER-OK-4417' だった。'/ zzmarker high 7' ではスキルが動かず、モデルが「zzmarker というスキルは無いので実行していない」と答えた。スラッシュの直後に空白があるとスラッシュコマンドとして読まれないことと、事前の確認がこれを止めないことを確かめた。",
+  "cost_usd": 0.08832216666666666
+ },
+ "sk-13/v11": {
+  "id": "sk-13/v11",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "",
+  "evidence": "run_reviews の引数は (wt, env, pr, workdir, children, attempt, perspectives, instructions) の8個で(review_loop.py:742)、perspectives と instructions は review_config(review_loop.py:935)から組で渡っている。指摘どおりだが、構造の好みの話(Data Clumps)で、挙動は変わらない。",
+  "cost_usd": 0.08832216666666666
+ },
+ "sk-13/v12": {
+  "id": "sk-13/v12",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "sk-13/v8 と同じ。attempts[0].perspectives を \"code-review\" にした状態に valid_state と render を呼んだ。",
+  "evidence": "valid_state は True を返し、表に「観点 c, o, d, e, -, r, e, v, i, e, w」と出た。原因は review_loop.py:548 の `all(isinstance(n, str) for n in a.get(\"perspectives\") or [])` で、文字列を1文字ずつ回すと全て str になり、検査を通る。指摘の Failure scenario どおりで、sk-13/v8 と同じ問題。",
+  "cost_usd": 0.08832216666666666
+ },
+ "sk-13/v19": {
+  "id": "sk-13/v19",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "test.py の補助関数(setup/run/state/comments、偽の claude と gh)を流用した再現スクリプトを作って実行。(a) `--perspective 'code-review low {pr}' --perspective security-review --perspective 'mattpocock-skills:code-review PR #{pr}'` (b) 既定の3観点を security-review, code-review high, mattpocock の順に入れ替えて渡す",
+  "evidence": "(a) rc=0。レビュー役は '/code-review low 7' で起動したのに、attempt は {'result':'completed', ..., 'iter':1} だけで、'perspectives' キーがない。表にも観点が載らず、既定(high)で回した試行と見分けられない。(b) rc=0。中身は既定と同じなのに attempt に 'perspectives': ['security-review','code-review','mattpocock-skills:code-review'] が記録された。review_loop.py:962-964 がスキル名のリストを順番込みで比べているため、指摘の2点とも起きる",
+  "cost_usd": 0.08524446666666667
+ },
+ "sk-13/v20": {
+  "id": "sk-13/v20",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "git diff main -- skill-dev/review-loop/test.py を確認。補足として再現スクリプトで、前後に空白のある --perspective と、同じスキルを2回指定する場合を実行",
+  "evidence": "追加されたテストの入力は、空白だけの観点・`=` のない --instruct・観点にないスキル・外した観点への --instruct の4つだけ。前後の空白、引数だけの変更、重複のケースはテストにない(指摘は事実)。テストが無いという指摘なので挙動には関わらない。参考: 重複(code-review high と low)は rc=2 で『観点に同じスキルが重複している』と出て止まり、実装は正しい。先頭に空白がある ' code-review high {pr}' は rc=0 で通り、プロンプトは '/ code-review high 7' になった(これは別の正確性の指摘の対象)",
+  "cost_usd": 0.08524446666666667
+ },
+ "sk-13/v21": {
+  "id": "sk-13/v21",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "再現スクリプトで SKILL.md:49-52 の例と同じ引数を渡した: `--instruct 'security-review=この PR で削除した .env の中身は確かめない' --perspective 'code-review high {pr}' --perspective 'mattpocock-skills:code-review PR #{pr}'`",
+  "evidence": "rc=2。stderr に『error: --instruct のスキル security-review が観点にない(観点: code-review, mattpocock-skills:code-review)』と出た。SKILL.md の例をそのまま実行すると終了コード2で止まる",
+  "cost_usd": 0.08524446666666667
+ },
+ "sk-13/v22": {
+  "id": "sk-13/v22",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "再現スクリプトで、FAKE_REVIEW_security_review=fail を既定の観点で2回実行したあと、同じ失敗設定のまま --perspective で security-review を外して1回実行",
+  "evidence": "失敗が2回続いて consecutive_failures=2 になったあと、観点を外した試行は rc=0 で iter=1、consecutive_failures=0 にリセットされ、perspectives にも記録された。反復数と連続失敗は観点の構成にかかわらず同じシリーズで数え、観点を外して失敗を避けた試行でもリセットされることを確認した。SKILL.md(43, 68, 109 行あたり)にこの扱いは書かれていない。ただし実装は意図どおりに動いており、指摘は SKILL.md に書き足すべきという設計・文書の提案なので、挙動の不具合ではない",
+  "cost_usd": 0.08524446666666667
+ },
+ "sk-13/v23": {
+  "id": "sk-13/v23",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "再現スクリプトで `--instruct 'security-review=削除した .env は見ない'` を付けて実行し、偽の claude が記録した判定役の stdin・プロンプト・システムプロンプトを確認",
+  "evidence": "判定役の入力の先頭には『===== 観点 security-review に利用者が与えた追加の指示 =====』の節が付く。一方、判定役のプロンプト(JUDGE_PROMPT、review_loop.py:797-839)にもシステムプロンプトにも『指示』という語がなく、この節の扱い(指示で外した範囲を欠落としない、ほかの観点に当てはめない)はどこにも書かれていない。判定役が実際に test_gap を落とすか、欠落と取り違えるかは LLM 次第で、偽の claude では示せない。プロンプトに書かれていないという点は、コードを読んで成り立つと確かめた(review_loop.py:797-839、845-847)",
+  "cost_usd": 0.08524446666666667
+ },
+ "sk-13/v24": {
+  "id": "sk-13/v24",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "v23 と同じ再現スクリプトで、判定役の入力とプロンプトを確認。grep -n '対象を取り違えている' review_loop.py",
+  "evidence": "指示は judge-input.md に見出し付きで添えられる(review_loop.py:845-847)。しかし JUDGE_PROMPT にはその扱いがなく、805 行は『対象を取り違えているなど』の出力を観点の欠落として載せるよう命じている。テスト(test.py の追加分)が確かめているのも、見出しが stdin にあるかどうかだけ。SKILL.md の『判定役の入力にも添えるので…観点の欠落とは扱わない』は、プロンプトの上では保証されていない。判定役が実際に欠落と書くかは LLM の挙動なので、実行では示せない",
+  "cost_usd": 0.08524446666666667
+ },
+ "sk-14/v7": {
+  "id": "sk-14/v7",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "一時ディレクトリに bare の origin とクローンを作る。ブランチ feat を ../wts/feat の worktree にし、chmod 555 ../wts とする。delete worktree と delete branch の2行を skills/housekeeping/scripts/apply.sh に標準入力で渡し、終了コードを見る。grep -n '!' skills/housekeeping/SKILL.md",
+  "evidence": "前提にある挙動は実行で確かめた。出力は `skipped\tworktree .../wts/feat: error: failed to delete '...': Permission denied` で、rc=1。`error:` の行で止まることはない。指摘のとおり、権限で失敗しても skipped 行と終了コード1になるだけだった。一方、SKILL.md:35 は scan.sh について「error で終了したら」の文脈で書いている。apply.sh については「同じように `!` で実行してもらう」とあるだけで、パイプを含むコマンドの形(手順4の awk ... | apply.sh を `!` 付きで)も、skipped 行の `Operation not permitted`/`Permission denied` を見てサンドボックスの制限と判断する手がかりも書かれていない。指摘の本体は文書の書き方なので、実行では示せない。`!` が本当にサンドボックスの外で走るかも、この環境(Claude Code の UI)では確かめられない。追った箇所: SKILL.md:31-35、55-62、apply.sh:23-28、42-47。別件(確かめていない): worktree の削除が失敗したのに、続く branch feat が done で消えた。",
+  "cost_usd": 0.1837395
+ },
+ "sk-14/v8": {
+  "id": "sk-14/v8",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "一時リポジトリで origin/HEAD を main に設定し、HOUSEKEEPING_PR_JSON=../prs.json HOUSEKEEPING_TMPDIR=$R/nope skills/housekeeping/scripts/scan.sh を実行して、stderr と終了コードを見る",
+  "evidence": "stderr は2行だった。1行目は `mktemp: mkdtemp failed on .../nope/housekeeping.gBbY6G: No such file or directory`、2行目は `error: 一時ディレクトリを作れない(.../nope)。HOUSEKEEPING_TMPDIR で書き込める場所を指定する`。rc=1。mktemp の stderr をそのまま流しているため、エラーが2行に分かれる。gh の失敗時の `error: ...: $(cat gh.err)` のように1行に入れる形とは揃っていない。止まる挙動は正しく、違いは表示の形だけなので、実害は小さい。",
+  "cost_usd": 0.1837395
+ },
+ "sk-16/v7": {
+  "id": "sk-16/v7",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "git diff main...HEAD; SKILL.md 81-103 と review_loop.py 863-865 を読み比べた",
+  "evidence": "重複しているという指摘は事実。SKILL.md:103 の「文書やプロンプトの書き方、外部のサービスの挙動、狙って起こせないタイミングなど」は、JUDGE_PROMPT(review_loop.py:865)とほぼ同じ文。範囲の定義も SKILL.md:86 と review_loop.py:863 で重なっている。ただ、SKILL.md:81 は JUDGE_PROMPT を正としていて、今の文面どうしに食い違いはない。ずれるのは将来どちらかを変えたときだけで、今の挙動には関わらない。",
+  "cost_usd": 0.059295433333333335
+ },
+ "sk-16/v8": {
+  "id": "sk-16/v8",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "grep -n '一時\\|隔離\\|fakes' skills/review-loop/SKILL.md; SKILL.md 93-105 と review_loop.py 851-865 を読んだ",
+  "evidence": "実行で示せない理由: 再現をどこで行うかは、親(LLM)が SKILL.md の文をどう読むかで決まる。スクリプトは関わらない。追った文面: SKILL.md:99 は「判定の「再現」を手がかりに…実際に実行して」と求めている。review_loop.py:865 は判定役に、操作の順を含む実行の手順を書かせている。影響が高の定義(review_loop.py:854)には「データの消失、消すべきでないものを消す」がある。SKILL.md の手順5には、一時ディレクトリや一時リポジトリで行うこと、push・gh の書き込み・削除を避けることの歯止めが一つもない(grep で「一時」が出るのは作業ディレクトリの説明 :67 だけ)。そのため、データ消失の指摘を利用者の実際のリポジトリで再現してしまう余地は、文面上確かにある。",
+  "cost_usd": 0.059295433333333335
+ },
+ "sk-16/v9": {
+  "id": "sk-16/v9",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "SKILL.md 99-107, 124-134 と review_loop.py 863 を読んだ",
+  "evidence": "実行で示せない理由: 判定役が範囲を誤って分類するか、親がそれを確かめ直すかは、LLM の判断で決まる。追った文面: 採る側には、SKILL.md:99-102 で再現を必須にしている。一方、差分の外として捨てる側は、SKILL.md:107 で「判定役の範囲の判断が疑わしければ」だけ確かめ直す。SKILL.md:126 は、差分の外を影響の段階に関係なく継続の理由から外している。review_loop.py:863 の「確かめられなければ差分の内」が効くのは、判定役が確かめられなかったと自覚した場合だけ。自信を持って誤った場合には効かない。影響が高の指摘でも、ベースのコードで確かめ直す義務はない。報告と issue の候補には残る(:132, :134)が、PR の修正からは外れる。指摘どおりの非対称は文面上成り立つ。",
+  "cost_usd": 0.059295433333333335
+ },
+ "sk-16/v10": {
+  "id": "sk-16/v10",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "SKILL.md 97-118 を読んだ",
+  "evidence": "実行で示せない理由: 親が複数の指摘を再現する順は、プロンプトの読み方で決まる。追った文面: SKILL.md:99 は「直す前に再現する」「修正前のコードで失敗する」と書くが、複数の指摘を全部再現してから直すのか、どのコミット(判定を受けた SHA など)を「修正前」とするのかは書いていない。:101 は「採用して直す」までを1件の中で続けて書いているので、1件ずつ再現して直す読み方ができる。その読み方だと、先の修正で後の指摘の症状が消え、:102 の規則で「採らない」に落ちる経路が文面上ある。ただ、判定を受けた SHA に戻して再現すれば、この順の問題は避けられる。慎重な親なら防げるので、起きやすさは高くない。",
+  "cost_usd": 0.059295433333333335
+ },
+ "sk-16/v11": {
+  "id": "sk-16/v11",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "SKILL.md 132-134, 152-154 を読んだ; grep -n 'visibility\\|advisory\\|security' SKILL.md",
+  "evidence": "実行で示せない理由: issue は外部のサービス(GitHub)への書き込みで、作るかどうかは親と利用者のやり取りで決まる。追った文面: SKILL.md:154 は、状態コメントに「指摘の内容や判断の理由…は載せない」としている。一方、新しく足した :134 は、場所、影響と起きやすさ、起きる操作の順を `gh issue create` の本文に書くと定めている。利用者が決めるのは「どれを issue にするか」だけで、本文を見せる手順も、リポジトリの公開範囲を確かめる手順もない。grep では visibility や advisory の記述が無い。影響が高にはセキュリティが含まれ(review_loop.py:854)、:134 は影響が高のものを尋ねるときに先頭に置く。公開リポジトリで、未修正の脆弱性を再現の順付きで公開する経路は、文面上成り立つ。",
+  "cost_usd": 0.059295433333333335
+ },
+ "sk-16/v12": {
+  "id": "sk-16/v12",
+  "verdict": "not_runnable",
+  "traced": "does_not_hold",
+  "commands": "SKILL.md 93, 99-105, 128 を読んだ",
+  "evidence": "実行で示せない理由: 親が判定役の「実行では示せない」をそのまま受け入れるかは、LLM がプロンプトをどう読むかで決まる。追った文面: 判定役のラベルを疑えと直接書いた文が無いのは事実。ただ、次の文で実質的に縛られている。(1) SKILL.md:93「指摘は仮説として読む…確かめるのは手順5のあなたの受け持ち」。(2) :99 は判定の「再現」欄を「手がかり」にすぎないと位置づけている。(3) :103「試さずにこの扱いにするのは、手段がないときだけにする(テストを書くのが手間、は理由にならない)」は親に向けた条件で、判定役が何と書いたかではなく、親から見て手段があるかで判断させる。(4) :128 で、実行で確かめていない修正があればもう1回回すので、この扱いを選んでも終了の判断で損になる。判定役の分類をそのまま信じる抜け道は、文面上ほぼ塞がれている。明示の一文を足せば読み違いはさらに減る、という程度の話。",
+  "cost_usd": 0.059295433333333335
+ },
+ "sk-14/v1": {
+  "id": "sk-14/v1",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "scratch/sbx/prof.sb: /private/var/folders・/private/tmp・/private/var/tmp・/usr/tmp への書き込みを拒否し、scratch/sbx/allowed だけを許す。(1) TMPDIR を拒否側にして sandbox-exec ... /usr/bin/env bash(3.2.57)の中で lib.sh を source し、hk_is_protected main main と hk_is_protected entire/checkpoints/v1 main を実行。(2) 拒否側(scratch/sbx/ro/repo)に clone を置き、prof2.sb で ro/repo/.git だけ書き込みを許す。cwd をそこにして apply.sh に、偽装した 'delete branch entire/checkpoints/v1' の行と 'delete remote entire/checkpoints/v1' の行を流した。(3) 比較のため、cwd が書ける repo(allowed/e1/repo)でも同じ入力を流した",
+  "evidence": "(1) 'lib.sh: line 43: cannot create temp file for here document: Operation not permitted' が出て、どちらも rc=1(保護対象ではない)。サンドボックスの外では rc=0。(2) here-document のエラーのあと 'done branch entire/checkpoints/v1' と 'done remote origin/entire/checkpoints/v1' が出て rc=0。ローカルのブランチも、origin のブランチも消えた。保護対象が実際に削除されることを見た。ただし条件が1つ足りない。(3) cwd が書ける場合は、TMPDIR・/tmp・/var/tmp が書けなくても here-document が成功した。3件とも『保護対象』で skipped になり、何も消えなかった。bash 3.2 は最後に cwd へ一時ファイルを作るので、指摘の条件に加えて cwd(リポジトリの作業ツリー)にも書けないことが必要になる",
+  "cost_usd": 0.13414756666666666
+ },
+ "sk-14/v2": {
+  "id": "sk-14/v2",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "bare の origin と clone を作る。origin に gone ブランチを push して fetch し、そのあと origin 側で gone を削除した。clone で HOUSEKEEPING_PR_JSON=/dev/null HOUSEKEEPING_TMPDIR=<存在しないディレクトリ> scan.sh を実行し、前後で git branch -r を比べた",
+  "evidence": "実行前は origin/gone があった。scan.sh は 'error: 一時ディレクトリを作れない(...)' を出して rc=1 で止まったが、実行後には origin/gone が消えていた。一時ディレクトリを作れずに止まった時点で fetch --prune は済んでいる。SKILL.md:98 の『作れなければ何もせずに止まる』は事実と違う(scan.sh:22 で fetch、:30 で hk_mktemp_dir)",
+  "cost_usd": 0.13414756666666666
+ },
+ "sk-14/v3": {
+  "id": "sk-14/v3",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "v2 と同じ実験(origin 側で gone を消したあと、HOUSEKEEPING_TMPDIR=<存在しないディレクトリ> で scan.sh を実行し、git branch -r を前後で比べた)",
+  "evidence": "rc=1 で止まったのに origin/gone の prune は済んでいた。fetch(22行目)が hk_mktemp_dir(30行目)より先に走ることを実行で確かめた。『fetch も失敗して warn と error が両方出て紛らわしい』という部分は確かめていない(この実験では fetch は成功した)",
+  "cost_usd": 0.13414756666666666
+ },
+ "sk-14/v4": {
+  "id": "sk-14/v4",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "scratch/mut に test.sh と scripts を複製し、apply.sh だけを git show main:skills/housekeeping/scripts/apply.sh(input=$(mktemp) の旧版)に差し替えた。TMPDIR=scratch/tt bash scratch/mut/skill-dev/housekeeping/test.sh と、HEAD の test.sh を両方実行した。あわせて TMPDIR=<存在しないディレクトリ> mktemp も実行した",
+  "evidence": "旧版の apply.sh でも HEAD でも『全件成功』で、FAIL は0件。テンプレートなしの mktemp は、TMPDIR が存在しなくても rc=0 で /var/folders/.../T/tmp.XXXX を作った(作ったファイルはすぐ消した)。そのため、TMPDIR=\"$root/no-such-dir\" で apply.sh を確かめるテストは、修正の前後を区別できない",
+  "cost_usd": 0.13414756666666666
+ },
+ "sk-14/v5": {
+  "id": "sk-14/v5",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "一部だけ実行した: クローン scratch/sbx/ro2/repo の .git に書けない sandbox-exec(prof.sb)の中で、'delete branch topic' の行を apply.sh に流した",
+  "evidence": "主な指摘は、SKILL.md の案内が足りないという書き方の問題で、実行では示せない。SKILL.md:35 は scan.sh について '! <skill-dir>/scripts/scan.sh > <ファイル>' の形を示すだけ。apply.sh については『同じように ! で実行してもらう』とあるだけで、パイプを含むコマンド例(手順4、SKILL.md:58-60 の awk ... | apply.sh)を ! 付きでどう書くかは示していない。付随する事実の主張は実行で確かめた: apply.sh は error で止まらず、'skipped\\tbranch topic: error: ... cannot lock ref ... Operation not permitted' を出して rc=1 で終わり、ブランチは残った。SKILL.md:32-35 の『error で終了したら』という判断基準は、この出力に当てはまらない。『! が本当にサンドボックスの外で走るか』は Claude Code の挙動なので、この環境では確かめられない",
+  "cost_usd": 0.13414756666666666
+ },
+ "sk-14/v6": {
+  "id": "sk-14/v6",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "v1 と同じ sandbox-exec のプロファイルで lib.sh を source し、hk_is_protected main main と hk_path_in_use /x $'1\\tcmd\\t/x' を実行した。さらに、cwd を拒否側にして TMPDIR=<書ける allowed> と TMPDIR=<書けない denied> の両方で cat <<E を実行した(TMPDIR が書けることは touch で確かめた)。grep -n '<<' で here-document の箇所を列挙した",
+  "evidence": "サンドボックスの中では 'cannot create temp file for here document: Operation not permitted' が出た。hk_is_protected main main は rc=1、hk_path_in_use は空で、外では rc=0 と '1 cmd' が返る。保護判定と使用中判定が、どちらも安全でない側へ黙って倒れることを見た。scan.sh の here-document は 98, 110, 156, 197, 203, 218, 222 行目で、指摘どおり。補足の推測は誤り: TMPDIR に書けても here-document は失敗した。bash 3.2 の here-document は TMPDIR を見ず、/tmp → /var/tmp → /usr/tmp → cwd の順に試すと見られる(cwd に書けるときは、TMPDIR が書けなくても成功した。v1 の (3) を参照)。影響が出る条件は『TMPDIR に書けない』ではなく『/tmp 系と cwd のどれにも書けない』になる",
+  "cost_usd": 0.13414756666666666
+ },
+ "sk-16/v19": {
+  "id": "sk-16/v19",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "git diff main -- skills/review-loop/SKILL.md; sed -n 90,140p skills/review-loop/SKILL.md",
+  "evidence": "実行で示せない理由: 指摘の対象は、SKILL.md の手順の文面がエージェントにどう判断させるかで、これを実行できるコードはない(review_loop.py の差分は判定の欄を足しただけで、終了の判断にはかかわらない)。文面を追った結果: SKILL.md:128 は「どの修正も、再現が修正前に失敗して修正後に通り、プロジェクトの既存のテストも通っているなら、回さずに終えてよい」としている。この場合、修正のコードと足した回帰テストは、どの判定にもかけられずに終わる。例外の「修正が大きく、再現が確かめた範囲を超えて挙動を変えているなら回す」には客観的な基準がなく、修正した本人が判断する。変更前の文面は「その修正はまだレビューされていないので、終えずにもう1回回す」で、未レビューの修正を残さない作りだった。そこからの後退は意図したもの(コミット cc9c5ef「再現で確かめた修正だけなら、そのための再レビューは回さない」)だが、指摘が挙げる危険はそのまま成り立つ。「どの修正も」の範囲は、同じ文の前半「上の基準に当たる指摘を採って直したとき」の修正を指すとも読める。しかし :127 で直すことにした、基準に当たらない指摘の修正(再現なし)を含むかは書かれておらず、それが未レビューのまま残りうるという指摘も成り立つ。:132 の報告に「最後に判定を受けた SHA と終了時の HEAD の差」があるので、未レビューの修正は利用者に報告される。ただし、レビューを受けないことは変わらない。",
+  "cost_usd": 0.1508891
+ },
+ "sk-16/v20": {
+  "id": "sk-16/v20",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "git log main..HEAD --format='%B'; sed -n 90,140p skills/review-loop/SKILL.md; git log main -40 --name-only --format= | sort | uniq -c | sort -rn",
+  "evidence": "実行で示せない理由: SKILL.md の規則どうしの整合と、それがループの回数にどう効くかを問う指摘で、実行できるコードの挙動ではない。文面を追った結果: (1) コミット cc9c5ef のメッセージにある仕様は「再現しなければ採らない」で、実行で示せない指摘の扱いには触れていない。SKILL.md:103 は、実行で示せない指摘をコードで追って採ってよいとしており、仕様にない例外になっている(事実)。(2) :126 が継続の理由から外すのは「差分の外」と「再現を試みて起きなかった」の2つだけで、:103 の扱いで採った指摘は外れない(事実)。(3) :128 は「実行で確かめていない修正が1つでもあれば…もう1回回す」なので、:103 の扱いで採って直した指摘があれば、毎回もう1回回る。文書やプロンプトの書き方の指摘は、:103 自身が実行で示せない例に挙げている。そのため、文面を直す修正では、動機にあった「修正のたびにもう1回回していた」状態が変更前と同じになる。指摘のこの筋は成り立つ。補足: 「このリポジトリの PR は SKILL.md やプロンプトを変えるものが中心」は言い過ぎ。直近40コミットで変更された回数は、skills/review-loop/SKILL.md が18回で最も多いが、review_loop.py と test.py も16回ずつある。どの程度効くかはまだ分からないが、文書を変える PR で反復が減らないという結論は、この補足の影響を受けない。",
+  "cost_usd": 0.1508891
+ },
+ "sk-13/v13": {
+  "id": "sk-13/v13",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "test.py の準備部分(setup/run/state/comments/calls)を写した一時スクリプト skill-dev/review-loop/_repro.py を作った(実行後に削除)。既定の観点で1回回した後、`--instruct 'code-review=削除したファイルの中身は確かめない'` だけを付けて iterate を実行し、状態の attempts[-1] と状態コメントの本文を調べた",
+  "evidence": "rc=0。attempts[-1] = {sha, at, result:'completed', tokens, iter:2} で、perspectives も instruct も記録されていなかった。コメントの表の行は `| 0ee975a | ... | completed(反復 2) | 1.4万... | 1200 |` で、既定の観点で回した試行と見分けられない。本文に「削除したファイル」は含まれていなかった。一方、code-review のレビュー役のシステムプロンプトには指示が入っていた([True, False, False])。--instruct で範囲を絞った試行が、記録の上では普通の試行と区別できないことを確かめた",
+  "cost_usd": 0.10352100000000002
+ },
+ "sk-13/v14": {
+  "id": "sk-13/v14",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "同じ一時スクリプトで `--perspective ' code-review high {pr}'` を付けて iterate を実行し、偽の claude に渡ったレビュー役のプロンプト(args[-1])と状態を確かめた",
+  "evidence": "rc=0 で、空チェック(:397)も事前確認も通った。レビュー役に渡ったプロンプトは ['/ code-review high 7'] で、attempts[-1].perspectives は ['code-review']、result は completed。前後の空白が検査を通り、`/` とスキル名の間に空白が入ったプロンプトが子に渡ることを確かめた。本物の claude が `/ code-review` をスラッシュコマンドとして解釈しないことは、実行して確かめていない(偽の claude で試したため)",
+  "cost_usd": 0.10352100000000002
+ },
+ "sk-13/v15": {
+  "id": "sk-13/v15",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "grep -n '削除したファイル' skill-dev/review-loop/test.py。あわせて v13 の再現で、本文に指示が含まれないことを確かめた",
+  "evidence": "test.py:568-570 は指示がシステムプロンプトに入ることと、ほかの観点には渡らないことを確かめている。状態コメントの本文(comments()[0]['body'])に指示が含まれないことを確かめる check は無い(:572-574 は観点の名前だけを見ている)。今の実装では本文に指示は出ない(v13 の再現で False)。将来の変更を検出できないというテストの不足の指摘なので、挙動には関わらない",
+  "cost_usd": 0.10352100000000002
+ },
+ "sk-13/v16": {
+  "id": "sk-13/v16",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "",
+  "evidence": "判定役(LLM)が指示で絞った範囲を「観点の欠落」と書くかどうかはモデルの振る舞いで、偽の claude では示せない。文面を追った: review_loop.py:845-847 で指示を judge-input.md に見出し付きで書き、意図はコードのコメントにだけ書かれている。JUDGE_PROMPT(:793-840)には、その指示ブロックの扱い(指示で外した範囲は欠落とみなさない)を述べる文が無い。:805 は「対象を取り違えている」出力を観点の欠落として載せるよう命じている。テスト(test.py:571)は見出しがあるかどうかしか確かめていない。指摘は文面のうえでは成り立つ",
+  "cost_usd": 0.10352100000000002
+ },
+ "sk-13/v17": {
+  "id": "sk-13/v17",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "一時スクリプトで (a) `--perspective '/code-review high {pr}'`、(a') それに `--instruct code-review=x` を足したもの、(b) `--instruct 'code-review=PR #{pr} の本文は仕様として扱わない'` を実行した",
+  "evidence": "(a) rc=2、`error: 事前確認: 観点スキルが見つからない: /code-review(名前の誤りか未導入。…)`。メッセージは先頭の `/` が原因だと示していない。(a') rc=2、`--instruct のスキル code-review が観点にない(観点: /code-review)`。(b) rc=0 で、code-review のシステムプロンプトの最終行は `PR #{pr} の本文は仕様として扱わない` で、`{pr}` が置き換わらないまま子に渡った。どちらも指摘どおりに起きた",
+  "cost_usd": 0.10352100000000002
+ },
+ "sk-13/v18": {
+  "id": "sk-13/v18",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "grep -n '重複\\|a=b\\|perspectives' skill-dev/review-loop/test.py。参考に一時スクリプトで `--instruct 'code-review=a=b のときは見ない'` と `--perspective code-review --perspective 'code-review high'` を実行した",
+  "evidence": "テストが無いという指摘なので、挙動には関わらない。ただし一部は事実と違う。観点の重複は test.py:369-370 が PERSPECTIVES の上書きで確かめており、--perspective と同じ review_config を通る。`=` を含む指示、既定と同じ観点の明示指定、失敗した試行での観点の表示を確かめるテストは無い。参考に実行した結果は、`=` を含む指示が rc=0 で最初の `=` で区切られて `a=b のときは見ない` のまま渡り、重複した --perspective は rc=2 で拒否された。どちらも正しく動いている",
+  "cost_usd": 0.10352100000000002
+ },
+ "wn-306/v1": {
+  "id": "wn-306/v1",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "(1) test/unit に一時テストを置いた: render({width:60,height:10,cursor:undefined,groups:[{title:'app',rows: 20行すべて marker:'sub'}]})。(2) e2e の一時テストを書いた: quiet(tty、idle、pid 100 で一覧に出ない)と、親が 100 の worker0..39(tty、busy)を並べ、npm run build のあと vitest --dir test/e2e で実行し、画面を取った。",
+  "evidence": "unit: 見出しと w0..w5 (sub) の6行の直後に `0/0` が出た。e2e(120x32): 見出し、(sub) の行が並んだあとに `0/0` の行が出た。`^0\\/0$` の assert は通った。選べる行が1つもないと rowIndex は空で、cursor も undefined なので idx=0、総数=0 になる(src/screen/screen.ts:224-225)。一覧には行が並んでいるのに 0/0 と出る、という指摘どおりの画面になる。",
+  "cost_usd": 0.14996980000000001
+ },
+ "wn-306/v2": {
+  "id": "wn-306/v2",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "e2e の一時テストを書いた: orchestrator(bg、pid 100)と worker(tty、pid 300)を並べ、procs [[300,1]] で始めて worker を選ぶ。procs を [[300,100]] に変えて r で更新し、C-x を押す。",
+  "evidence": "更新のあと、画面は `> orchestrator` と `  └ worker (sub)` になった。worker は一覧に残っている。続く C-x では `Ctrl+X ignored: worker left the list and the selection moved.` と出て、stop は呼ばれなかった。app.ts:262 で選べなくなった行も同じ分岐に入り、:263 の goneName は prevLayout.order にあるかしか見ないので、ガードが立つ。そのため :1215 の文言が出て、行が残っているのに「left the list」と言ってしまう。",
+  "cost_usd": 0.14996980000000001
+ },
+ "wn-306/v3": {
+  "id": "wn-306/v3",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "",
+  "evidence": "判定元が2つあるのは事実だ。screen.ts:201 は `r.marker !== 'sub'` で、cursor.ts は `isSpawned`(node.spawned)で判定している。ただ app.ts:447 が `marker: n.spawned ? 'sub' : …` と写しているので、今は2つが常に一致する。v2 と v1 の実行でも、通し番号とカーソルの動きはずれなかった。問題になるのは、印の決め方を将来変えたときだけだ。",
+  "cost_usd": 0.14996980000000001
+ },
+ "wn-306/v4": {
+  "id": "wn-306/v4",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "e2e の一時テストを書いた: シナリオ 71 と同じ構成(カーソルなし)で e と f を押し、画面に /Note for|waits for:|can't/ が出ないことを確かめた。",
+  "evidence": "テストは通った。今は、カーソルがないときに e を押してもメモの入力欄(`Note for <名前>: █`、app.ts:493)は開かない。既存テストの正規表現が `Note for` を見ていないのは事実だが、これはテストの検出力の話で、今の挙動に誤りはない。",
+  "cost_usd": 0.14996980000000001
+ },
+ "wn-306/v5": {
+  "id": "wn-306/v5",
+  "verdict": "not_reproduced",
+  "traced": "does_not_hold",
+  "commands": "e2e の一時テストを書いた: parent(tty、pid 100)と child(bg、pid 300)を並べ、procs [[300,1]] で始めて child に Enter で attach する。attach している間に procs を [[300,100]] に変え、C-q C-l で戻ってから r で更新した。",
+  "evidence": "戻ったあとの画面は `> child  Working` と `  parent (tty)` で、child は (sub) にならず、カーソルは選べる行に乗っていた。attach と、onReturn・pendingCursorId の対象は id を持つ background の行に限られる(app.ts:1029 と :1063 以降)。一方 deriveSpawners は background の行を起動された行にしない(src/input/spawners.ts の `if (r.kind === 'background') continue`)。だから「attach している間に起動元が分かって (sub) になる」という条件は成り立たない。:1197 の案内の画面(guideTarget)を通る経路は、refresh のあとに follow() が走るまでの短い間しか開かないタイミングの問題で、今回は試していない。",
+  "cost_usd": 0.14996980000000001
+ },
+ "wn-306/v6": {
+  "id": "wn-306/v6",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "v2 と同じ e2e の一時テスト(worker を選ぶ → procs を [[300,100]] にして更新 → C-x)。",
+  "evidence": "行は `└ worker (sub)` として一覧に残ったが、カーソルは orchestrator に移った。C-x では `Ctrl+X ignored: worker left the list and the selection moved.` と出て、stop は呼ばれなかった。行が (sub) に変わっただけでガードが立ち、文言が事実と食い違う。原因は app.ts:263 の `prevLayout.order.includes` だ。PRODUCT と DESIGN にこの経路の規則がどう書かれているかは、今回は確かめていない。",
+  "cost_usd": 0.14996980000000001
+ },
+ "wn-306/v7": {
+  "id": "wn-306/v7",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "一時の単体テスト test/unit/zz/repro.test.ts(確認後に削除)を作った。区切り5つに background 行 n 本と、その下の起動された行 n 本を作り、layout を通して selectableOrder を100回呼んで1回あたりの時間を測った。あわせて、指摘の代案 l.groups.flatMap(g => g.nodes.filter(n => !n.spawned).map(n => n.sid)) と結果が同じかを expect で比べた。実行は npx vitest run test/unit/zz/repro.test.ts --silent false --reporter verbose",
+  "evidence": "1回あたりの時間は、60行で 0.016 ms、200行で 0.073 ms、600行で 0.535 ms。代案と結果は同じだった。O(n²) なのは事実で、代案も成り立つ。ただし指摘の「行が数十」の規模では1回 0.02 ms 未満で、キー入力や更新の遅れとして感じられる大きさではない。挙動には関わらない効率の指摘である。",
+  "cost_usd": 0.11039036666666668
+ },
+ "wn-306/v8": {
+  "id": "wn-306/v8",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "同じ一時テストで、前の並びを app 区切り [A, B, T(tty)] と lib 区切り [P] にし、次の並びで spawner {T: P} を足して、followCursor(prev, 'T', next) を呼んだ。",
+  "evidence": "次の並びは app [A, B]、lib [P, T(sub)] になり、followCursor の結果は B(元の app 区切りの隣の行)だった。起動元 P には移らず、カーソルは T を追わない。DESIGN.md の新しい文言「消えたときと同じに隣の行へ移る」のとおりの挙動なので、不具合ではなく、指摘の言う事実が確かめられたということ。「隣の行」と「起動元」のどちらが欲しいかは仕様の判断(層2)で、実行では決まらない。",
+  "cost_usd": 0.11039036666666668
+ },
+ "wn-306/v9": {
+  "id": "wn-306/v9",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "git diff main -- docs/ | grep -c '^+```'",
+  "evidence": "手順や文書の書き方についての指摘なので、実行では示せない。docs の差分に足されたコードブロックは0個だった。PRODUCT.md の「起動された行」の段落とシナリオ 24 の「選んだ行のすぐ下に続く起動された行も一緒に見える」「最初の選べる行なら見出しと起動された行から見せる」(DESIGN.md の対応する項目も)は、窓のスクロールの範囲を文章だけで決めていて、実際の描画から取った画面の例も「こうはならない」の例もない。ただ、CLAUDE.md の「見た目の決定」が挙げているのは「列の並び、字下げ、入れ子、注記の出し方」で、スクロールの範囲がそれに入るかは解釈の問題になる。v10 と v11 のように範囲の解釈が分かれるところが実際に出ているので、例があれば食い違いを早く見つけられた、という意味で指摘は成り立つ。",
+  "cost_usd": 0.11039036666666668
+ },
+ "wn-306/v10": {
+  "id": "wn-306/v10",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "一時テストで render を呼んだ。app 区切り [a0..a4, b]、lib 区切りの先頭にトップレベルの (sub) を15行、その後に y。cursor は b、高さは12。対照として、lib を [y, (sub) 15行] にした画面も描いた。",
+  "evidence": "再現した画面では、窓の先頭が「> b」になり、その下に空行、「── lib ──」の見出し、x0 (sub)〜x5 (sub) が続いた(a0〜a4 は窓の外)。対照の画面では、a1〜a4、> b、見出し、y、x0 と出て、b の前後に上下の行が見える。trailing が区切りの変わり目で false に戻らないので、b と関係のない次の区切りの (sub) まで cursorBlock に入り、選んだ行が窓の上端に押し上げられた。",
+  "cost_usd": 0.11039036666666668
+ },
+ "wn-306/v11": {
+  "id": "wn-306/v11",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "一時テストで render を呼んだ。行は a、b(hasChildren)、b の下に depth 1 の (sub) を15行、c。cursor は b、inline は {sid: 'b', lines: ['note: hello█']}、高さは12。「> b」で始まる行があるかを expect で確かめた。",
+  "evidence": "出た画面は、ヘッダのあとに ├ sub-6 (sub) 〜 └ sub-14 (sub) と 2/3 だけで、「> b」も「note: hello█」もなかった。expect(out.some(l => l.startsWith('> b'))).toBe(true) は失敗した。「入力欄は最後の行まで窓に入れる」の処理が、(sub) の分まで伸びた後の cursorBlock[1] を基準に start を決めるので、選んだ行と入力欄が窓の外に押し出される。指摘の出力と一致する。",
+  "cost_usd": 0.11039036666666668
+ },
+ "wn-306/v12": {
+  "id": "wn-306/v12",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "npm run build のあと、一時の e2e テスト test/e2e/zz-repro.test.ts(確認後に削除)で、シナリオ 70 と同じ行(orchestrator、worker、worker-2、other)と procs を与えて起動した。orchestrator を選び、画面と below の値を出した。実行は npx vitest run --dir test/e2e zz-repro",
+  "evidence": "画面は「> orchestrator / └ worker (sub) / └ worker-2 (sub) / other」の順で、below = true だった。今の並びでは、テストは実際に ↓ で (sub) の2行を飛ばして other に移ることを確かめている。並びを実行時に判定しているので、並びが変われば ↑ の向きでも通ってしまう、というのは事実。ただしこれはテストの書き方の指摘で、製品の挙動には関わらない。",
+  "cost_usd": 0.11039036666666668
+ },
+ "sk-16/v1": {
+  "id": "sk-16/v1",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "",
+  "evidence": "公開リポジトリで issue を作れば内容が公開される、という外部サービス(GitHub)の挙動の話で、実行では示せない。SKILL.md:135 は、差分の外の指摘を利用者に尋ね、言われたものだけを `gh issue create` で作るよう求め、本文に場所・影響・起きる操作の順を書くよう定めている。セキュリティの指摘を別に扱う記述(非公開の窓口、Advisory など)は SKILL.md にない(grep で「セキュリティ」「Advisory」「公開」を探して、出たのは154行の状態コメントの注意だけ)。したがって、承認された脆弱性の詳細が公開 issue に載りうるという指摘は成り立つ。ただし作る前に利用者が決める手順なので、脆弱性ではなく文面を補う提案にあたる。",
+  "cost_usd": 0.06493913333333333
+ },
+ "sk-16/v2": {
+  "id": "sk-16/v2",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "python3 skill-dev/review-loop/test.py をそのまま実行した。次に、リポジトリを mktemp -d に複製し、fakes/claude の偽の判定から追加分の「- 範囲: 差分の内\\n- 再現: 対象外\\n」を sed で消して(grep -c 範囲 → 0)、同じテストを実行した",
+  "evidence": "どちらも「全て成功」で、偽の判定の欄の有無はテストの結果に影響しない。review_loop.py:837-839 と 949-953 でスクリプトが確かめるのは、見出しの「## 指摘」「## 競合」が行頭にあることだけ。test.py:146 も「## 指摘」と「### F1: s」しか見ていない。偽の判定に「分類」がない(main の時点からない)ことと、テストが欄を確かめていないことは事実。ただし挙動に関わらず、問題になるのは将来、欄を解析するようになったときだけ。",
+  "cost_usd": 0.06493913333333333
+ },
+ "sk-16/v3": {
+  "id": "sk-16/v3",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "v2 と同じ。テストを今の偽の判定と、範囲・再現の2行を消した偽の判定で実行した",
+  "evidence": "どちらも「全て成功」。偽の判定に「分類」がないため「再現: 対象外」の意味が読めない、という点は事実。しかし review_loop.py:837 のコメントが揃えると言っているのは見出しだけで、スクリプトもテストも欄を読まない(review_loop.py:949-953、test.py:146)。挙動には関わらない。",
+  "cost_usd": 0.06493913333333333
+ },
+ "sk-16/v4": {
+  "id": "sk-16/v4",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "",
+  "evidence": "親(LLM)が SKILL.md の文面をどう読むかの問題で、実行では示せない。SKILL.md:128 は「上の基準に当たる指摘を採って直したとき」と始まり、「どの修正も」「実行で確かめていない修正が1つでもあれば」と続く。基準に当たらない指摘の修正や、横展開で同じ修正に含めた変更(SKILL.md:109)が「修正」に入るのかは書かれておらず、二通りに読める。この点は成り立つ。一方、堂々巡りだという点は成り立たない。どの指摘を再現するかは主な基準(126行の影響が高、または中で普通の使い方)で決まり、再現の結果は127行で外す条件として後から使われるだけなので、順番に適用できる。",
+  "cost_usd": 0.06493913333333333
+ },
+ "sk-16/v5": {
+  "id": "sk-16/v5",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "",
+  "evidence": "判定役(LLM)と親が文面をどう適用するかの問題で、実行では示せない。review_loop.py:863 は範囲を「PR の変更で起きるようになったか」で決め、「PR の前から同じように起きるなら差分の外」と定めている。PR が直そうとした問題が、触っていない経路 P2 で前から起きていれば、字面どおり差分の外になる。SKILL.md:107 は差分の外を直さないとし、127行は継続の理由にしないとする。107行の「自分で決め直す」も、ベースのコードで同じことが起きるかという同じ基準で決め直す。PR の意図による例外は書かれていないので、指摘は成り立つ。ただし95行の「判定役の裁定や指摘は、PR の意図に照らして覆したり却下したりしてよい」を範囲の判断にも当てはめれば救える余地はある。範囲を名指ししていないので、確実ではない。",
+  "cost_usd": 0.06493913333333333
+ },
+ "sk-16/v6": {
+  "id": "sk-16/v6",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "",
+  "evidence": "親(LLM)が「実際に実行して」をどこで実行するかという文面の問題で、実行では示せない。SKILL.md:99 は「修正前のコードで失敗するテストを書くか、実際に実行して」と書く。SKILL.md の全体を「隔離」「一時」「使い捨て」「dry」で探しても、再現を隔離した環境で行うよう求める記述はない(出てきた「一時」は67行の作業ディレクトリの説明だけ)。影響が高(データの消失、消すべきでないものを消す。review_loop.py:851)の指摘ほど再現の対象になる(SKILL.md:99、126)。そのため、housekeeping のような削除をするスクリプトの指摘を本物のリポジトリで再現してしまう、という筋は文面上ありうる。",
+  "cost_usd": 0.06493913333333333
+ },
+ "wn-308/v1": {
+  "id": "wn-308/v1",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "npm run build のあと、隔離した tmux ソケットで次を実行した。(1) 古い版が作った作業台を再現した。sh-old を作り、main の workbenchOptions と同じ status-format[0](キーなし)を設定し、sleep 600 を動かし続けた。(2) dist の Tmux を使い、新しい版の起動を src/cli/list.ts の順に流した。sourceConfig(serverConfig(...)) を流し、案内のセッションを作り、新しい作業台 sh-new を createWorkbench で作った。(3) 両方の作業台の status-format[0] を show -v で読んだ。(4) 別の外側の tmux サーバの中で各作業台に attach し、capture-pane で最下行を取った。",
+  "evidence": "show -v の結果: sh-old は main の形のまま(`... #{W:...} }` で終わり、キーがない)。sh-new は `... } · ^Q%% split │ · ^Q\" split ─ · ^Qc window` だった。実際の描画: `sh-old: workbench:   0:tmux*`、`sh-new: workbench:   0:tmux*  · ^Q% split │ · ^Q\" split ─ · ^Qc window`。sourceConfig は 1 を返したが、docs/lib/tmux.md が書いている既知の `table wnq doesn't exist` によるもの。コードも追った。異常終了したときは、何かが動いている sh-* を残す(src/ops/app.ts:1534-1543)。次の起動の cleanupLeftovers(src/ops/app.ts:128-148)は、残った作業台を残すか消すかを決めるだけで、workbenchOptions をかけ直さない。workbenchOptions を呼ぶのは createWorkbench(lib/tmux/tmux.ts:317)と、案内のセッションへの呼び出し(src/cli/list.ts:68)だけである。指摘どおり、残った作業台にはキーが出ない。",
+  "cost_usd": 0.27419629999999995
+ },
+ "wn-308/v2": {
+  "id": "wn-308/v2",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "git diff main...HEAD -- docs; grep -n '窓' docs/PRODUCT.md docs/lib/tmux.md",
+  "evidence": "文書の言葉づかいの指摘なので、実行では示せない。文面を追った結果は次のとおり。docs/PRODUCT.md の 161・297・354 行は、「窓」を一覧がスクロールして見える範囲の意味で使っている(例:『選んだ行は窓の中央に置き』『窓は最小でも1行を残し』)。この差分で足した docs/PRODUCT.md:557『キーは窓の一覧のあとに続け』と docs/lib/tmux.md:31『作業台では窓の一覧のあとに』は、tmux のウィンドウの一覧の意味で使っている。同じ節の 555 行(差分で足した行)とシナリオ49は『作業台のウィンドウの一覧』と書いていて、節の中でも揃っていない。コミット 71d31d0 の件名も『窓の一覧のあとに』である。指摘は成り立つ。",
+  "cost_usd": 0.27419629999999995
+ },
+ "wn-306/v13": {
+  "id": "wn-306/v13",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "sed -n 40,50p README.md; git diff main --stat",
+  "evidence": "README の文面の問題なので、実行では示せない。git diff main --stat を見ると、README.md はこの PR で変わっていない。README.md:45 には今も『Rows marked (tty) ... and rows marked (sub) ... Both can be selected but not attached.』とある。一方、PRODUCT.md:296 と src/model/cursor.ts は、起動された行をカーソルで選べなくした。README は (sub) の行も選べると書いたままで、指摘どおり食い違っている。",
+  "cost_usd": 0.13957460000000002
+ },
+ "wn-306/v14": {
+  "id": "wn-306/v14",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "src/ops/app.ts の `if (!row || !sid) return;` を変えて、カーソルがないときの `f` で notify(\"worker can't wait.\") を出すようにした → npm run build → vitest で test/e2e/deps.test.ts の 71 を走らせた。一時テストで `f` のあとと `e` のあとの画面を capture した。そのあと git checkout で戻した。",
+  "evidence": "変えた `f` は、カーソルがないのに『can't』を出す。それでもテスト 71 は 1 passed だった。一時テストで取った画面では、`f` の直後には『worker can't wait.』が出ていた。次に `e` を押すと、それが消えていた。`expect(h.screen()).not.toMatch(/waits for:|can't/)` は `e` のあとに1回評価するだけで、そのときには `f` の通知はもう消えている。つまり `f` が何もしないことは確かめられていない。原因は描画の遅れではなく、次のキーで通知が消えることだが、『確かめきれていない』という指摘は成り立つ。参考に、`e` で note の入力が開く変更も合わせて入れたときは、466 行の確認は通った。落ちたのは 468 行の refresh の待ちで、Refreshed. が出ずに時間切れになった。",
+  "cost_usd": 0.13957460000000002
+ },
+ "wn-306/v15": {
+  "id": "wn-306/v15",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "",
+  "evidence": "文書の書き方の問題なので、実行では示せない。docs/PRODUCT.md:296 は『f も e も Ctrl+X も効かない。効くのは cwd と pid を示す Enter と v だけだが』と続く。これでは、起動された行では Enter と v が今も効くように読める。実際は、src/ops/app.ts:799-817 のとおり cursor が undefined か選べる行のときしか row が引けず、`if (!row || !sid) return;` で終わる。そしてカーソルは起動された行に乗らない(PRODUCT.md の同じ節と cursor.ts)。そのため、起動された行に Enter も v も届かない。",
+  "cost_usd": 0.13957460000000002
+ },
+ "wn-306/v16": {
+  "id": "wn-306/v16",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "一時の単体テスト(test/unit/zz-tmp-wn306.test.ts)を書いた。marker:'sub' の行を20行並べ、cursor: undefined、height: 10 で render した。そのあと削除した。",
+  "evidence": "描いた画面では、一覧の直後の行が『0/0』だった(w0〜w5 の6行だけ見える)。PRODUCT.md のシナリオ 24 と 296-298 行には、選べる行がなく窓に収まらないときの通し番号の出し方は書かれていない(298 行は『カーソルはどの行にもない』とだけ書く)。",
+  "cost_usd": 0.13957460000000002
+ },
+ "wn-306/v17": {
+  "id": "wn-306/v17",
+  "verdict": "reproduced",
+  "traced": "na",
+  "commands": "一時の単体テストで render を呼んだ(width 60、height 10)。(1) sub の行だけ20行、cursor undefined。(2) p、その下に depth 1 の sub 行 w0..w19、続けて s0..s2。cursor を p/s0/s1/s2 の全部に置き、見えた w を集めた。そのあと削除した。",
+  "evidence": "(1) cursor がないので cursorBlock=[0,0] になり、start=0 に固定される。w0〜w5 だけが見え、w6 から下はどう操作しても出ない(↑↓ は sub の行を飛ばすので cursor は動かない)。(2) cursor=p では p と w0〜w4 が見える(blockLen>=avail で start=b0)。s0/s1/s2 のときは w16〜w19 と s0〜s2 が見える。全カーソル位置を通して『UNSEEN w5,w6,...,w15』で、11行は一度も窓に入らない。PRODUCT.md の『選べない行が画面の外に残って見られなくなるのを防ぐ』は満たされていない。",
+  "cost_usd": 0.13957460000000002
+ },
+ "wn-306/v18": {
+  "id": "wn-306/v18",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "grep -n \"変わったとき\\|に変わ\" docs/PRODUCT.md; gh issue list --label decision-log --state all",
+  "evidence": "文書の構成と手順についての指摘なので、実行では示せない。docs/DESIGN.md:132 に『選んでいた行が更新で起動された行に変わったときも、消えたときと同じに隣の行へ移る』とある。PRODUCT.md を grep すると、近いのは 295 行の『注釈を付けたあとで (sub) に変わる経路はない』(注釈についての話)だけだった。ほかに『カーソルが自動で移るときも選ばない』と『消えたとき…起動された行は選ばない』もあるが、選んでいた行が (sub) に変わったときに移る先は書かれていない。decision-log の issue の一覧にも、この判断の記録は見当たらなかった。これは層2(観測できる挙動)にあたるのに、PRODUCT.md にない。指摘は成り立つ。",
+  "cost_usd": 0.13957460000000002
+ },
+ "wn-306/v19": {
+  "id": "wn-306/v19",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "test/unit に一時テストを置いた: render({width:60,height:10,cursor:'s0',groups:[{title:'app',rows:[(sub) の行 w0..w{n-1}, s0, s1]}]})。n=4,7,8,12 で '> s0' が画面にあるかを expect し、npx vitest run で流した",
+  "evidence": "n=4 は通った。n=7,8,12 は失敗した。たとえば n=12 の画面は ['SESSION…','── app ──','w0 (sub)'…'w5 (sub)','1/2','k'] で、'> s0' がどこにもない。原因は指摘のとおり。screen.ts:213 で cursorBlock の始まりが 0 になり、230行で blockLen>=avail なので start=b0=0 になる",
+  "cost_usd": 0.16688170000000002
+ },
+ "wn-306/v20": {
+  "id": "wn-306/v20",
+  "verdict": "not_reproduced",
+  "traced": "does_not_hold",
+  "commands": "src/input/spawners.ts の deriveSpawners を一時テストで呼んだ。background の行 B(pid 300、親は P の pid 100、prev に B→P あり、MCP_CALLER_PID も 100)と、interactive の行 I(親は 100)を渡し、npx vitest run で流した",
+  "evidence": "出力は spawner に B を含まず、I→P だけだった(テストは通った)。指摘の3つの経路は、どれも id で行を引く。onReturn(app.ts:1063)は rows.find(r=>r.id===id)、pendingCursorId(app.ts:270)は x.id===pendingCursorId、attachKey(app.ts:1172)は sidOfSession(app.ts:1165)で id から引く。attach できるのは background で id を持つ行だけ(enter、app.ts:1029)。起動された行は background ではない(spawners.ts の `if (r.kind === 'background') continue`)し、interactive の行には id がない(docs/claude-code-behavior.md:32,138)。なので「attach したあとで、その行が起動された行と分かる」という条件は作れなかった。待ち先は openWait が background を要るので、起動された行では開けない。ただし、開いたあとで行が変わる別の穴がある(v24)",
+  "cost_usd": 0.16688170000000002
+ },
+ "wn-306/v21": {
+  "id": "wn-306/v21",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "v19 と同じ一時テスト(高さ 10、最初の区切りの先頭にトップレベルの (sub) の行が n 行、その下に s0 と s1、カーソルは s0)。n=7 で流した",
+  "evidence": "n=7 で失敗した。画面は見出し、w0〜w5 (sub)、'1/2' だけで、'> s0' が窓の外に出た。指摘の『7行』の場面そのものを再現した",
+  "cost_usd": 0.16688170000000002
+ },
+ "wn-306/v22": {
+  "id": "wn-306/v22",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "",
+  "evidence": "`rowIndex.length === 1` を名前付きの真偽値にしたほうが読みやすい、という書き方の指摘で、挙動は変わらない。この条件が起こす不具合は v19 と v21 で別に再現した",
+  "cost_usd": 0.16688170000000002
+ },
+ "wn-306/v23": {
+  "id": "wn-306/v23",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "一時テストで render を2回呼んだ。高さ 10、カーソルは区切り a の最後の行 a5。区切り b の先頭が (A) 普通の行 b0 のときと、(B) トップレベルの (sub) の行 x0〜x2 のときを比べた",
+  "evidence": "(A) の窓は a2〜a5、空行、b 見出し、b0 で、a5 は真ん中あたりにある。(B) の窓は '> a5'、空行、'── b ──'、x0〜x2 (sub)、b0 で、a5 が窓の最上段に押し上げられた。trailing が区切りの境目で戻らないので、a5 と関係のない次の区切りの (sub) の行まで塊に入り、窓の位置が変わる。指摘は名前の分かりにくさとして書かれているが、指摘の中で述べた挙動は実際に起きた",
+  "cost_usd": 0.16688170000000002
+ },
+ "wn-306/v24": {
+  "id": "wn-306/v24",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "npm run build のあと、test/e2e に一時テストを置いた(--testTimeout 120000)。行は bg('p', pid 100) と tty('x' worker, pid 300)、h.procs([[300,1]]) で起動して worker を選ぶ。e を押して 'hello' を打ち、h.procs([[300,100]]) に替える。自動の更新(60秒)で worker (sub) になるのを待ってから Enter を押し、h.state().notes を読んだ",
+  "evidence": "更新のあとの画面は '> orchestrator' と '└ worker (sub)' で、その下に 'Note for worker: hello█' の入力欄が開いたまま残っていた。Enter のあとは 'Added a note to worker.' と出て、state の notes は {\"x0000000-…\":\"hello\"} になった。起動された行にメモが保存された。commitNote(app.ts:841)は spawner を確かめない。この穴は変更前の main にもある(main でも、断りの判定は開く時点にしかない)。待ち先のほうは、openWait が background を要り、background の行は起動された行にならないので、待ち元の側では同じことは起きない。指摘の前半(キー、作業台、GUIDE の経路は、今のところ起動された行に届かない)は、v20 で確かめた内容と合う",
+  "cost_usd": 0.16688170000000002
+ },
+ "wn-313/v7": {
+  "id": "wn-313/v7",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "一時の e2e テスト test/e2e/zz-verify.test.ts(実行後に消した)。Harness で一覧を起動し、whatnext workbench を開いて 'No workbench for alpha yet' を待つ。`list-clients -F '#{client_pid} #{session_name}'` で wbguide のクライアントの pid を取り、SIGKILL と SIGTERM を送って 2 秒後に capture-pane で wb の画面を取った。別に `node -e \"spawnSync('sh',['-c','kill -9 $$'])\"` で status と signal を出した。",
+  "evidence": "SIGKILL: 一度つながって案内が出ていたのに、画面に 'whatnext: could not open the workbench screen (tmux session \"wbguide\").' と '[exit 1]' が出た。sessions は list と wbguide が残っていた。spawnSync は 'null SIGKILL' を返す(status が null)。src/cli/workbench.ts:33 の `res.status !== 0` が null で真になり、一覧も残っているので失敗の扱いになる。指摘どおり。ほかに分かったこと: SIGTERM では tmux が '[terminated]' を出して 0 以外の終了コードで終わり、同じメッセージが出た。シグナルを別に扱うだけでは、SIGTERM の場合は直らない。WHATNEXT_WORKBENCH_SPLIT=1 のときにキーを待つ件は、この条件分岐の先にある fail() の作り(workbench.ts:56-64)から追った。分割の環境は作っていない。",
+  "cost_usd": 0.13144073333333336
+ },
+ "wn-313/v8": {
+  "id": "wn-313/v8",
+  "verdict": "no_behavior_impact",
+  "traced": "holds",
+  "commands": "`ls lib/tmux`、`grep -n exec lib/tmux/*.test.ts`、docs/lib/README.md:7 と docs/adr/0021 を grep した",
+  "evidence": "lib/tmux には ghostty.ts の横にテストがない(tmux.test.ts だけで、splitWorkbench には触れない)。splitWorkbench が ` exec ` を付けることを確かめているのは test/unit/cli.test.ts だけ。docs/lib/README.md:7 には「テストは各部品の横(lib/<部品>/*.test.ts)に置き…src/ とテストを消しても残る」とある。指摘の事実は正しい。ただ、これはテストの置き場所の話で、いまの挙動は変わらない。保証が失われるのは cycle-end で消したあと。",
+  "cost_usd": 0.13144073333333336
+ },
+ "wn-313/v9": {
+  "id": "wn-313/v9",
+  "verdict": "no_behavior_impact",
+  "traced": "unclear",
+  "commands": "`gh issue list --label decision-log --state all`、`gh issue view 314`、`git log -1 --format=%cI HEAD`",
+  "evidence": "decision-log の #314「案内のペインの起動し直しの上限を『60秒以内に続けて5回』にした」があり、本文に「#311(PR #313)での層1の判断」とある。作られたのは 2026-11-02T09:16Z で、HEAD のコミット(2026-11-02T17:41+09:00 = 08:41Z)のあと。ただ、#314 に書かれているのは後の作り(@wn_guide_pane、60秒の窓、畳まない)で、HEAD の作り(ペインごとに5回、超えたら kill-pane)とは違う。「issue が見当たらない」は今は当たらないが、HEAD の判断をそのまま記録した issue はない。どちらにせよ記録の手順の話なので、挙動には関わらない。",
+  "cost_usd": 0.13144073333333336
+ },
+ "wn-313/v10": {
+  "id": "wn-313/v10",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "`git diff main --stat`、`grep -n 'whatnext workbench|Press any key|could not|...' docs/PRODUCT.md`",
+  "evidence": "文書の書き方への指摘で、実行では示せない。差分は docs/DESIGN.md と docs/lib/tmux.md だけで、docs/PRODUCT.md は変わっていない。PRODUCT.md の 490 行目と 771 行目(シナリオ 59)は、whatnext が動いていないときの標準エラーと終了コード 1 を要件として書いている。それなのに、新しく足した「could not open the workbench screen」「could not create the workbench guide」、分割での 'Press any key to close.'、案内のプログラムが落ちたときの起動し直しは、DESIGN.md:227-230 にしか書かれていない。CLAUDE.md の2ファイルの境界(観測できる振る舞いは PRODUCT.md)から見て、指摘は成り立つ。層2のエスカレーションを経たかは、差分からも issue #311 の本文からも追えない。",
+  "cost_usd": 0.13144073333333336
+ },
+ "wn-313/v11": {
+  "id": "wn-313/v11",
+  "verdict": "no_behavior_impact",
+  "traced": "holds",
+  "commands": "`sed -n 68,85p src/cli/guide.ts`、`sed -n 60,70p src/cli/list.ts`、git diff の workbench.ts",
+  "evidence": "guide.ts:74-80 は `@wn_req_<秒>_<pid>` を setOption してから、`@wn_pid` に SIGUSR2 を送る。workbench.ts の askListToRefreshGuide も同じ形。list.ts:66-67 は ensureGuide(作ったときは中で workbenchOptions(GUIDE,'') を呼ぶ)のすぐあとに workbenchOptions(GUIDE,'') を呼ぶので、作った場合は同じ設定が2回入る。どちらも事実だが、同じ値を入れ直すだけで、何度入れても結果は変わらない。重複と余分な呼び出しの話で、挙動には関わらない。",
+  "cost_usd": 0.13144073333333336
+ },
+ "wn-313/v12": {
+  "id": "wn-313/v12",
+  "verdict": "not_reproduced",
+  "traced": "does_not_hold",
+  "commands": "一時の e2e テストで、一覧の起動後、作業台の画面を一度も開かずに `kill-session -t =wbguide` してから whatnext workbench を起動する。この場合、一覧はまだ作業台の画面を知らない。'No workbench for alpha yet' と 'workbench: alpha' が出るか、クライアントが wbguide にいるかを、3回続けて確かめた。",
+  "evidence": "3回とも通り、名前 'workbench: alpha' が出た。コードを追うと、workbench.ts は setOption(WB_TTY) を ensureGuide と頼みごとより先に入れる。一覧の onSignal(app.ts:1110-1143)は、同じ回で WB_TTY を読んで this.wbTty に入れてから request を処理し、follow は 60ms あとに doFollow を走らせる。このため、doFollow(app.ts:1468)の `if (!wb) return` には当たらない。myTty() が空で WB_TTY が入らない場合は残るが、指摘が言う「一覧が作業台の画面を知るまで」の順序の問題は起きなかった。",
+  "cost_usd": 0.13144073333333336
+ },
+ "wn-313/v13": {
+  "id": "wn-313/v13",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "一時の e2e テスト(test/e2e/zz-verify.test.ts。実行後に消した。Harness を使う): 一覧を起動 → whatnext workbench → Enter で sh-a0000000 に移る → inner tmux で kill-session -t =wbguide → 作業台の画面で `exit` Enter → 2.5秒待ってから sessions と clients、外側のペインを取る",
+  "evidence": "exit のあと、sessions は ['list'] だけ、clients は list のクライアントだけになった。作業台の画面のクライアントは消え、外側のペインには `[exit 0]` だけが出た。`Workbench closed.` も案内も出ず、作業台の画面ごと離れた。案内のセッションがない状態で最後のシェルが終わると、switch-client が当たらず、kill-session でクライアントが離れる。@wn_paned_sh の sh-* の枝(lib/tmux/tmux.ts:43 付近)には作り直す処理がない",
+  "cost_usd": 0.11324656666666667
+ },
+ "wn-313/v14": {
+  "id": "wn-313/v14",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "一時の e2e テスト: 一覧を元の dist/src/cli.js で起動 → dist と package.json を $dir/alt にコピーし、node_modules はシンボリックリンクにする → kill-session =wbguide → `node $dir/alt/dist/src/cli.js workbench` で開く → wbguide と list の #{pane_start_command} を比べる",
+  "evidence": "作り直す前の wbguide は '.../whatnext/dist/src/cli.js' で動いていた。作り直したあとは '/private/tmp/wne-.../alt/dist/src/cli.js' に変わった。list は元の '.../whatnext/dist/src/cli.js' のままだった。ensureGuide は workbench を打ったプロセスの env.node と env.cli で案内を作るので、別の場所に入れた whatnext で打つと、一覧と違う cli の案内が動く(今回は同じ版のコピーなので、版の違いによる挙動の差までは見ていない)",
+  "cost_usd": 0.11324656666666667
+ },
+ "wn-313/v15": {
+  "id": "wn-313/v15",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "一時の e2e テスト: 一覧を起動 → whatnext workbench で attach → list-clients で wbguide のクライアントの pid を取って SIGTERM を送る → 外側のペインの中身と #{pane_title} を取る。対照として ctrl+q d で正常に detach した場合も取った",
+  "evidence": "SIGTERM の場合、外側のペインには `[terminated]`、`whatnext: could not open the workbench screen (tmux session \"wbguide\").`、`[exit 1]` が出た。タイトルは attach 中の \"whatnext workbench\" のまま残った。対照の正常な detach では、タイトルは \"\" に消えた。attach がいったん成功したあとに 0 以外で終わると、OSC 2 が出ずにタイトルが残ることを確かめた",
+  "cost_usd": 0.11324656666666667
+ },
+ "wn-313/v16": {
+  "id": "wn-313/v16",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "一時の e2e テスト: 一覧を起動 → workbench → Enter で sh-a0000000 に移る → 3秒ずつ間をおいて、wbguide のペインの pid に SIGKILL を6回送る。毎回 @wn_respawned と sessions を取る → そのあと作業台の画面で `exit` Enter",
+  "evidence": "@wn_respawned は 1,2,3,4,5 と増えるだけで、間をおいても戻らなかった。6回目で wbguide が消え、sessions は ['list','sh-a0000000'] になった。続く exit で sessions は ['list'] になり、作業台の画面のクライアントは消え、外側のペインには `[exit 0]` だけが出た。`Workbench closed.` と案内は出なかった。上限は「すぐ終わるのが続いたとき」ではなく、ペインの一生で5回として効いている",
+  "cost_usd": 0.11324656666666667
+ },
+ "wn-313/v17": {
+  "id": "wn-313/v17",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "v15 と同じテスト(attach 中の tmux クライアントに SIGTERM を送る)",
+  "evidence": "tmux は `[terminated]` を出して 1 で終わった。一覧は残っていた(sessions ['list','wbguide'])ので、workbench は `could not open the workbench screen` という誤った文言を出して exit 1 で終わった。端末のタイトルは \"whatnext workbench\" のまま残った。focusWorkbench がこの古い端末へ移ることまでは、Ghostty が要るので確かめていない",
+  "cost_usd": 0.11324656666666667
+ },
+ "wn-313/v18": {
+  "id": "wn-313/v18",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "",
+  "evidence": "テストが無いという指摘で、挙動には関わらない。test/e2e/workbench.test.ts で通しているのは1回落ちて起動し直すところまで。lib/tmux/tmux.test.ts は文字列に含まれるかを見ているだけだった。なお、この経路の不具合そのものは v16 の再現で確かめた",
+  "cost_usd": 0.11324656666666667
+ },
+ "wn-313/v1": {
+  "id": "wn-313/v1",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "npm run build。dist の serverConfig/sourceConfig で隔離した tmux サーバ(-L wnrv3)を作り、list と wbguide(sleep 100000)を置いた。python の pty の中で WHATNEXT_TMUX_SOCKET=wnrv3 として `node dist/src/cli.js workbench` を起動した(WHATNEXT_ROLE と TMUX は外した)。3秒後に `list-clients -F '#{client_pid}'` で取った tmux のクライアントに SIGTERM を送った。別に、tmux attach だけを SIGTERM/SIGHUP で終わらせて、終了コードを見た",
+  "evidence": "tmux attach の単体は、SIGTERM で `[terminated]`、SIGHUP で `[lost tty]` を出し、どちらも exit 1 で終わった。そのあとも list と wbguide は残っていた。workbench の通しでは、`[terminated]` のあとに `whatnext: could not open the workbench screen (tmux session \"wbguide\").` が出て exit 1。出力の中に `\\x1b]2;\\x07` はなかった(title-clear sent: False)。attach できたあとに 0 以外で終わると、一覧が残っているので「つなげなかった」と扱われ、誤った文言が出てタイトルも消されない。指摘どおり。focusWorkbench が古い端末へ移るところまでは、Ghostty が要るので試していない",
+  "cost_usd": 0.13522676666666664
+ },
+ "wn-313/v2": {
+  "id": "wn-313/v2",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "",
+  "evidence": "コードを読んで事実を確かめた。askListToRefreshGuide(src/cli/workbench.ts)と @wn_req_sh(lib/tmux/tmux.ts:26-31)は、どちらも `@wn_req_<秒>_<pid>` を書いて @wn_pid に SIGUSR2 を送る同じ形になっている。src/cli/list.ts:66-67 は ensureGuide のすぐあとで workbenchOptions(GUIDE, '') を呼ぶ。ensureGuide が 'created' を返したときは、同じ set が2回走る。ただし set は冪等なので結果は同じで、挙動は変わらない。重複と書き方の問題にとどまる",
+  "cost_usd": 0.13522676666666664
+ },
+ "wn-313/v3": {
+  "id": "wn-313/v3",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "",
+  "evidence": "lib/tmux/tmux.test.ts は、本文を `body.slice(body.indexOf('wbguide)'), body.lastIndexOf('*)'))` で切り出し、toContain で比べている。指摘の事実はそのとおり。ただしこれはテストの書き方の壊れやすさの話で、製品の挙動には関わらない",
+  "cost_usd": 0.13522676666666664
+ },
+ "wn-313/v4": {
+  "id": "wn-313/v4",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "隔離サーバ(-L wnrv1)で、案内のコマンドを `sh -c \"sleep 3; exit 1\"` にした(すぐ終わるのではなく、3秒動いてから落ちる)。4.5秒おきに、wbguide のペインの @wn_respawned と pane_id を見た。続けて別のサーバ(-L wnrv2、sleep 2; exit 1)で、pty の中から tmux attach -t =wbguide したまま、6回目に落ちるのを待った",
+  "evidence": "ペイン ID は %1 のまま変わらず、@wn_respawned は 1,2,3,4,5 と落ちるたびに増えた。間隔の条件もなく、0 にも戻らない。6回目でペインもセッションも消えた。attach していたクライアントは `[exited]` を出して exit 0 で終わった。一覧(list)は残っていた。workbench.ts は status 0 なら return 0 で終わるので、exec で動く分割は何も示さずに閉じる。上限は「すぐ落ちたとき」ではなく、ペインごとの通算の回数として効いている。指摘どおり",
+  "cost_usd": 0.13522676666666664
+ },
+ "wn-313/v5": {
+  "id": "wn-313/v5",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "v4 と同じ実験(wnrv1: 3秒ごとに落ちる案内で回数とペイン ID を見た。wnrv2: attach したクライアントの終了コードを見た)",
+  "evidence": "respawn-pane してもペイン ID は %1 のままで、@wn_respawned は減らずに 5 まで増えた。6回目で kill-pane になり、wbguide は消えた。指摘で「未検証」とされていた tmux の終了コードは 0 だった(`[exited]`、exit 0)。そのため whatnext workbench はエラーを出さずに 0 で終わる。ペインごとの生涯5回という指摘は成り立つ",
+  "cost_usd": 0.13522676666666664
+ },
+ "wn-313/v6": {
+  "id": "wn-313/v6",
+  "verdict": "reproduced",
+  "traced": "holds",
+  "commands": "wnrv3 で `show -t wbguide: prefix` と `list-keys -T prefix` を見た。`split-window -t wbguide: 'sh -c \"sleep 1; exit 0\"'` で案内のセッションを分割した(prefix C-q のあとの % / \" と同じ split-window)。2.5秒おきに list-panes で pane_dead と @wn_respawned を見た",
+  "evidence": "wbguide の prefix は C-q で、prefix の表には `%` → split-window -h と `\"` → split-window が残っていた。分割したペイン %2 は終わっても閉じず、@wn_respawned が 1,2,4,5 と増えながら起動し直された。回数は %2 だけのもので、元の %1 の n は空のままだった。5回を超えたところで %2 は kill され、%1 だけが残った。案内のセッションのどのペインも起動し直しの対象になる。pane-died のたびに @wn_guide_died も上書きされる。指摘どおり",
+  "cost_usd": 0.13522676666666664
+ },
+ "sk-16/v13": {
+  "id": "sk-16/v13",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "python3 -c で JUDGE_PROMPT.format(pr=14) と judge_system_prompt({}) を作り、'ベース' 'base' 'main' 'SHA' 'gh pr' が含まれるかを調べた",
+  "evidence": "どの語も、プロンプトにもシステムプロンプトにも含まれなかった(全て False)。review_loop.py:925 で判定役に渡すのは JUDGE_PROMPT.format(pr=pr_number) だけで、ベースの ref も SHA も渡していない。範囲を決める文(PR の前のコードでも同じ操作の順で起きるか)は、判定役が自分でベースを見つけることを前提にしている。判定役が gh pr view でベースを引くか、ローカルの main と比べるかは LLM の振る舞いなので、実行では示せない。ただし、親が確かめずに外すという部分は一部しか成り立たない。SKILL.md:107 に「判定役の範囲の判断が疑わしければ、PR のベースのコードで同じことが起きるかを確かめて、自分で決め直す」とある。とはいえ、疑わしくなければ確かめる決まりはないので、誤った範囲がそのまま通る経路は残る。",
+  "cost_usd": 0.08696736666666666
+ },
+ "sk-16/v14": {
+  "id": "sk-16/v14",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "",
+  "evidence": "文書の書き方の指摘なので、実行では示せない。SKILL.md:109 は「横展開の候補は、差分の内にあるものを…同じ修正に含める」とだけ書いている。JUDGE_PROMPT の出力の形(review_loop.py 内の『- 横展開:』の行)には、候補ごとの範囲の欄がない。終了時の報告(SKILL.md:132)と issue にするかの質問(SKILL.md:134)が対象にするのは「範囲が『差分の外』で直さなかった指摘」だけで、横展開の候補は入らない。このため、差分の外の候補を扱う手順はどこにもない。",
+  "cost_usd": 0.08696736666666666
+ },
+ "sk-16/v15": {
+  "id": "sk-16/v15",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "",
+  "evidence": "プロンプトの文面と、親(LLM)がどう判断するかについての指摘なので、実行では示せない。SKILL.md:102 は「再現を試みたが、起きなかった: 採らない」とし、試す条件が指摘の言う条件(OS、ツールの版など)と合っているかを確かめる決まりがない。実行では示せない種類として挙げているのは「文書やプロンプトの書き方、外部のサービスの挙動、狙って起こせないタイミングなど」で、この環境では作れない条件(別の OS など)は明記されていない。そのうえで SKILL.md:126 は、再現しなかった指摘を「影響の段階に関係なく継続の理由にしない」としている。そのため、macOS で GNU sed 依存の欠陥を試して起きなかったものを not_reproduced として捨てる経路は、文面上は成り立つ。「など」や、判定の手順が合わなければ組み直す、という文(SKILL.md:99)で救われるかは、解釈しだい。",
+  "cost_usd": 0.08696736666666666
+ },
+ "sk-16/v16": {
+  "id": "sk-16/v16",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "",
+  "evidence": "文書が決めている方針についての指摘なので、実行では示せない。SKILL.md:126 で、差分の外の指摘は影響が高でも継続の理由にならない。SKILL.md:134 で、利用者に尋ねるのはループを終えた後に issue にするかだけで、この PR で直すかは尋ねない。中心の主張は成り立つ。ただし、失敗の筋書きの一部は成り立たない。PR がその関数を新しい呼び出し元から使えるようにして起きるようになった場合は、JUDGE_PROMPT の範囲の決まり(「場所が PR の変えていない行でも、PR の変更が原因で起きるなら『差分の内』」、「確かめられなければ『差分の内』」)によって差分の内になる。また、影響が高のものは尋ねるときに先頭に置く(SKILL.md:134)。",
+  "cost_usd": 0.08696736666666666
+ },
+ "sk-16/v17": {
+  "id": "sk-16/v17",
+  "verdict": "no_behavior_impact",
+  "traced": "na",
+  "commands": "python3 skill-dev/review-loop/test.py を実行した。変更前と変更後の偽の判定の文字列それぞれに、VERDICT_SECTIONS の見出しの検出(run_judge と同じ正規表現 ^## 指摘 / ^## 競合)をかけた。fakes/claude を grep した",
+  "evidence": "テストは「全て成功」。見出しの検出は、変更前も変更後も [True, True] で同じだった。grep の結果、偽の判定には 分類・起きやすさ・根拠・横展開 などがもともと無く、今回足されたのは 範囲 と 再現 だけ。review_loop.py:837-839 と :949-955 から、スクリプトが見るのは2つの見出しだけと分かる。このため、どちらの形でも挙動は変わらない。指摘の言うとおり、揃え方の好みの問題にとどまる。",
+  "cost_usd": 0.08696736666666666
+ },
+ "sk-16/v18": {
+  "id": "sk-16/v18",
+  "verdict": "not_runnable",
+  "traced": "holds",
+  "commands": "",
+  "evidence": "文書の手順の指摘なので、実行では示せない。git diff main で見ると、SKILL.md:109 は「横展開の候補は、確かめたうえで同じ修正に含める」から「差分の内にあるものを、確かめたうえで…」に変わった。前は全ての候補を直していたが、今は差分の外の候補が直す対象から外れる。それなのに、外れた候補の行き先は書かれていない。終了時の報告の項目(SKILL.md:132)は「範囲が『差分の外』で直さなかった指摘」で、issue にするかの質問(SKILL.md:134)も同じ対象に限られる。指摘そのものではない横展開の候補は、どちらにも入らない。v14 と同じ問題を指している。",
+  "cost_usd": 0.08696736666666666
+ }
+}

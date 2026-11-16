@@ -1,0 +1,62 @@
+{
+ "cost_usd": 0.095708,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/scripts/lib.sh:96",
+   "summary": "hk_process_cwds は自分の PID が lsof に出るかだけでプロセスを見られると判定しており、自分のプロセスしか見えないサンドボックスでは使用中の worktree を未使用とみなして削除しうる。",
+   "quote": "hk_process_cwds は、lsof の一覧に自分自身($$)が出るかどうかだけで「プロセスを見られる」と判定している。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/scripts/lib.sh:52",
+   "summary": "git config の読み取りに失敗すると hk_is_protected が黙って全ブランチを保護対象にし、原因が利用者に伝わらない。",
+   "quote": "git config の読み取りに失敗すると、hk_is_protected は黙ってすべてのブランチを保護対象にする。stderr に何も出さないので、原因がユーザーに伝わらない。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/scripts/scan.sh:85",
+   "summary": "既定ブランチの first-parent 履歴を読めないと scan.sh 全体が error 終了し、止める範囲が広すぎるうえ on_fp>1 の分岐は通らない。",
+   "quote": "既定ブランチの first-parent 履歴を読めないと、scan.sh 全体が error で止まる。この履歴を使うのは「PR なし」のブランチの判定だけなので、止める範囲が広すぎる。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/scripts/lib.sh:104",
+   "summary": "hk_path_in_use が「確かめられない」と pid を同じ形式の戻り値で表すため、理由の文言が曖昧になり、確実に使用中でも不確かに読める。",
+   "quote": "hk_path_in_use は「確かめられない」を、pid を返すのと同じ文字列の戻り値で表している。そのため呼び出し側の理由が「使用中か、確かめられない」という曖昧な文言にまとめられている。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skill-dev/housekeeping/test.sh:202",
+   "summary": "temp_usage の静的チェックは行全体がコメントの行しか除外しないため、算術式や行末コメントの '<<' や 'mktemp' で誤って失敗し、source 先のファイルも検出できない。",
+   "quote": "temp_usage は、行全体がコメントの行しか除外しない。行末のコメントや文字列、算術式の中にある '<<' や 'mktemp' でも誤って fail する、壊れやすい静的チェックになっている。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/housekeeping/scripts/scan.sh:49",
+   "summary": "parse_pr_info などで空白・行の分割を手作業で別々に実装しており、プロセス置換と read を使えば簡潔になり保守しやすくなる。",
+   "quote": "parse_pr_info はパラメータ展開で空白区切りを手作業で分けている。lib.sh 冒頭のコメントで許しているプロセス置換を使えば `read -r st num oid < <(pr_info \"$name\")` の1行で済み",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skills/housekeeping/SKILL.md:72",
+   "summary": "「何も渡さないと何も消さずに終わる」という説明は標準入力が端末のときには成り立たず、apply.sh が grep で入力待ちのまま止まる。",
+   "quote": "「何も渡さないと、何も消さずに終わる」という説明は、標準入力が端末のときには当てはまらない。apply.sh の `input=$(grep -v '^action\\t')` は端末からの入力を待って止まる。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "skills/housekeeping/scripts/lib.sh:46",
+   "summary": "hk_protect_patterns 内の set -f は $(...) 内で呼ばれる前提でしか閉じておらず直接呼ぶと漏れる。また「単語分割を使わない」というコメントが実装と食い違っている。",
+   "quote": "hk_protect_patterns 内の `set -f` は、$(...) の中で呼ばれる前提でしか外に漏れない。また hk_is_protected のコメント「単語分割を使わない」は、hk_protect_patterns が HOUSEKEEPING_PROTECT を単語分割していることと食い違っている。",
+   "quote_ok": true
+  }
+ ]
+}

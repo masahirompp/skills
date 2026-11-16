@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.10663360000000001,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--perspective の値の前後の空白やタブを整えないため、照合と起動プロンプトが食い違う、という指摘はありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "判定役の入力に追加の指示の区画を足したのに、JUDGE_PROMPT にはその扱い方(指示で外した範囲を「観点の欠落」にしない、指示の区画は観点の出力ではない)が書かれていない。",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いが無く、外した範囲を観点の欠落と扱いうる、と正確に指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "既定と違う観点かどうかをスキル名の並びだけで比べているため、引数だけを変えた --perspective の試行が状態コメントに記録されない。",
+   "reason": "スキル名だけで比べるので、引数違いの観点が記録されないという原因と結果が正解と一致します。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が、外した security-review に --instruct を渡していて終了コード2になる、という指摘はありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "valid_state が perspectives をリストか確かめない、という指摘はありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt で渡した指示がサブエージェントに届かない、という指摘はありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "partial",
+   "quote": "利用者が与えた指示の本文を、区切り行の中にエスケープせず書いているため、本文に区切りの形が含まれると判定役の入力の構造が崩れる。",
+   "reason": "同じ区切りで混ぜることによる偽装という場所と原因は近いものの、偽装の向きが正解(レビュー出力が指示を偽装する)と逆です。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "detected",
+   "quote": "先頭の `/` を取り除かず",
+   "reason": "--perspective の先頭の `/` を取り除かないため、事前確認で失敗すると指摘しています。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/scripts/review_loop.py:962",
+   "summary": "--instruct で範囲を絞った試行が状態に残らず、範囲を絞らずに完了した試行と表で区別できない。",
+   "quote": "--instruct で観点の範囲を絞った試行が状態に一切残らないため、表では範囲を絞らずに完了した試行と区別できない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/SKILL.md:57",
+   "summary": "オプションを毎反復付け直すことを親の規律に任せており、付け忘れると黙って既定に戻る。",
+   "quote": "同じオプションを毎反復付け直すことを親の規律に任せていて、付け忘れても黙って既定に戻る(症状への手当てで、仕組みでは防いでいない)。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/review-loop/scripts/review_loop.py:380",
+   "summary": "--instruct の本文では {pr} が置き換わらないまま子に渡る。",
+   "quote": "また `--instruct 'code-review=PR #{pr} の本文は仕様として扱わない'` と書くと、`{pr}` が置き換わらないまま子に渡る。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/review-loop/scripts/review_loop.py:409",
+   "summary": "観点のスキル名の一覧を作る処理が4か所で重複しており、正規化を足すときに直し漏れが起きやすい。",
+   "quote": "review_config で、観点のスキル名の一覧を --instruct 1件ごとに作り直しており、エラーの文言用にも、iterate(962-963行)でももう一度作っている。",
+   "quote_ok": true
+  }
+ ]
+}

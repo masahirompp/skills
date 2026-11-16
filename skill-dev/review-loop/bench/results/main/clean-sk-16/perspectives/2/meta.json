@@ -1,0 +1,28 @@
+{
+ "case": "clean-sk-16",
+ "kind": "doc",
+ "config": "perspectives",
+ "trial": 2,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 346217,
+  "cache_read": 303746,
+  "output": 7208
+ },
+ "cost_usd": 0.5446131999999999,
+ "started_at": "2026-11-15T14:48:14",
+ "duration_s": 251,
+ "num_turns": 8,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [
+  "Bash F=/Users/masahirompp/.claude/projects/-private-var-folders-5t-j2015ppn7pj1lf0h39j3c5jm0000gn-T-rb-1t-d3kns-w-ac388a4f27-skills/2aa508b1-27b5-4dac-a143-2dfc9f64463b/tool-results/bg5kt64j3.txt; sed -n 40,80p skills/review-loop/SKILL.md; echo ----; sed -n 820,900p skills/review-loop/scripts/review_loop",
+  "Bash cd /private/var/folders/5t/j2015ppn7pj1lf0h39j3c5jm0000gn/T/rb-1t_d3kns/w/ac388a4f27/skills; grep -n \"差分の外\\|再現を試みたが\\|実行で確かめていない修正\\|悪用の手順\\|gh issue create\\|一時ディレクトリへの取り出し\\|再現もしない\" skills/review-loop/SKILL.md; grep -n \"範囲は、その問題\\|再現は、分類\" skills/review-loop/scripts/review_loop.py; grep -n \"verdict = \" s"
+ ],
+ "tree_changed": [],
+ "head_changed": false
+}

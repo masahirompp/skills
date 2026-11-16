@@ -1,0 +1,16 @@
+{
+  "id": "sk-16",
+  "kind": "doc",
+  "repo_name": "skills",
+  "branch": "review-loop-verify-findings",
+  "source": {
+    "type": "repo",
+    "path": ".",
+    "base": "86d7cb6",
+    "head": "a1bccb6"
+  },
+  "pr": {
+    "repo": "masahirompp/skills",
+    "number": 16
+  }
+}

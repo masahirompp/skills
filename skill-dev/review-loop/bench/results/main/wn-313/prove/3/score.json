@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.07299359999999999,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "作業台の画面がつながったまま wbguide が消えたときに案内が作り直されない点には触れておらず、T4 では逆に作り直されると報告している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "回数が戻らず、間隔をあけて落ちても使い切ることには気づいているが、「仕様どおり」として指摘から外しており、問題として挙げていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "attach の終了コードは確かめているが、シグナルで終わり status が null になる場合を誤って失敗と扱う点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が利用者の分割したペインまで起動し直す点への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなる点への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定し、案内のペインがない場合を見逃す点への言及がない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

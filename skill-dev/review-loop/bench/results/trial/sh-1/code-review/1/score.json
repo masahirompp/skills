@@ -1,0 +1,28 @@
+{
+ "cost_usd": 0.1631724,
+ "bugs": [
+  {
+   "id": "B1",
+   "verdict": "detected",
+   "quote": "存在する ref だけを rev-list に渡す処理と、失敗・空のときに error で止まるガードを削ったため、既定ブランチのローカルかリモートの片方が無いと first-parent 一覧が空のまま判定が進む。",
+   "reason": "rev-list に無い ref を渡すと失敗して first-parent が空になることと、その結果 PR なしブランチが全て delete になることの両方を、同じ箇所について述べている。",
+   "quote_ok": true
+  },
+  {
+   "id": "B2",
+   "verdict": "detected",
+   "quote": "verify_pr_merged の祖先判定で引数の向きが逆になり(旧: sha が oid の祖先 → 新: is_ancestor \"$oid\" \"$sha\")、マージ後に追加コミットがあるブランチが delete 候補になる。",
+   "reason": "verify_pr_merged の is_ancestor で引数の向きが元と逆になったことと、追加コミットのあるブランチが delete になることを指摘している。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh:62",
+   "summary": "削除可否の判定を書き換えたのに、祖先判定の向きの逆転と既定ブランチの ref の欠落を検出できるテストケースが無い。",
+   "quote": "削除可否を決める判定を書き換えたのに、向きの逆転と ref の欠落を区別できるテストケースが無い。",
+   "quote_ok": true
+  }
+ ]
+}

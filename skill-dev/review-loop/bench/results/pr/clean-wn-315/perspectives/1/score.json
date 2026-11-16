@@ -1,0 +1,62 @@
+{
+ "cost_usd": 0.0665456,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/ops/app.ts:953",
+   "summary": "エラーの間も、this.rows に残った古い行の cwd が候補に並ぶ。「見えない行だから先頭にしない」という根拠と食い違うので、扱いを文書に書いておくべきだという指摘。",
+   "quote": "エラーの間でも、候補には `this.rows` に残った古い行の `cwd` が並びます。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/ops/app.ts:1260",
+   "summary": "ctrl+q ctrl+n がエラーの間に渡す sid は古い this.rows から引いた値なので、直前に起動したセッションが行に無いと、黙って起動したディレクトリが先頭になる。「同じにする」と言い切る文書と合わない。",
+   "quote": "エラーの直前に起動したセッションは行に無いことがあり、そのときは黙って起動したディレクトリが先頭になります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/e2e/ops.test.ts:103-121",
+   "summary": "PRODUCT.md:591 に書いた worktree・(tty)/git でない場所・行が無いときの振る舞いを確かめるテストが無い。",
+   "quote": "PRODUCT.md:591 に書いた次の振る舞いには、テストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test/e2e/ops.test.ts",
+   "summary": "PRODUCT.md:513 で新しく決めた ctrl+q ctrl+n のエラー時の振る舞いを確かめるテストが無い。",
+   "quote": "PRODUCT.md:513 で `ctrl+q ctrl+n` のエラー時の振る舞いを新しく決めたのに、それを確かめるテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test/e2e/ops.test.ts:120",
+   "summary": "エラー時のテストは [1] しか見ておらず、古い行の lib が何番目に出るかを固めていない。",
+   "quote": "後半の `:120` は `[1]` しか見ていません。古い行の `lib` がエラーの間に何番目に出るかは固めていないので",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "docs/PRODUCT.md:591",
+   "summary": "「2026-11-02、利用者の判断」に裏付けが無く、規約で求められる spec-change / decision-log の issue も見当たらない。",
+   "quote": "**`docs/PRODUCT.md:591`「2026-11-02、利用者の判断」**: 裏付けが見つかりません。issue を検索しても該当が無く、その日付の前後のコミットも作業台の修正だけです。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "docs/PRODUCT.md:787",
+   "summary": "シナリオ 8 には、エラーの間は起動したディレクトリが先頭になる場合が書かれておらず、テストと対応が付かない。",
+   "quote": "エラーの間に起動したディレクトリが先頭になることは、:591 にしか書かれていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "",
+   "summary": "(tty) の行などリポジトリでない場所で n を押すと ~ が先頭になる。「同じリポジトリで別の作業を始めることが多い」という根拠は当てはまりにくいので、設計を見直す余地がある。",
+   "quote": "`(tty)` の行は `~` などリポジトリでない場所で動いていることが多いはずです。その行で `n` を押すと `~` が先頭になります。",
+   "quote_ok": true
+  }
+ ]
+}

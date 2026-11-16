@@ -1,0 +1,35 @@
+{
+ "cost_usd": 0.0574696,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "partial",
+   "quote": "起動時に `workbenchOptions` をかけ直しているのは `GUIDE` だけで(`list.ts:68`)、既存の `sh-*` には何もしていません。",
+   "reason": "既存の sh-* 作業台に workbenchOptions を入れ直さないため新しいキーが出ない、という原因は合っているが、場所として cleanupLeftovers の Y 分岐(異常終了のあとの引き継ぎ)は挙げておらず、launch.ts でサーバが残る経路の話として書いている。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib/tmux/tmux.ts:340 と :123-134",
+   "summary": "表示している ^Q% ・ ^Q\" ・ ^Qc は tmux の prefix の表の既定に頼っており、今後キーを足したり unbind したりすると、表示だけ残って押しても動かなくなる。それを検知するテストも無い。",
+   "quote": "ただし、今後 `ATTACH_KEYS` に `bare: true` の `c` を足したり、prefix の表を `unbind` したりすると、表示だけが残って押しても動かない状態になります。それを検知するテストもありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "docs/PRODUCT.md:557",
+   "summary": "@wn_name を切り詰めていないので、名前が長いと ^Q% も含めてキーがまるごと消える。docs の「^Q% が最後まで残る」は言い過ぎ。",
+   "quote": "前に置いた `@wn_name` は切り詰めていないので、セッション名が長いか窓が多ければ、`^Q%` も含めてキーがまるごと消えます。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/e2e/workbench.test.ts:117",
+   "summary": "狭い幅で右から欠けて ^Q% が残る、という今回の決定の要を確かめるテストが無い。",
+   "quote": "右寄せにしない理由(狭いと右から欠けて `^Q%` が残る)は今回の決定の要ですが、テストがありません。",
+   "quote_ok": true
+  }
+ ]
+}

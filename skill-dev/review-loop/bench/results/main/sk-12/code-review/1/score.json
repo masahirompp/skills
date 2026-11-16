@@ -1,0 +1,84 @@
+{
+ "cost_usd": 0.0982536,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "detected",
+   "quote": "Any denial with source == \"config\" is now non-fatal. If real claude in -p mode also tags the ordinary case (a call with no allow rule is turned into a deny, e.g. reason_type subcommandResults) as source config",
+   "reason": "source == \"config\" だけで止めない拒否とみなすため、reason_type が違う意図外の拒否まで通ってしまうと StreamTail の振り分けを指摘しており、原因が正解と一致する(例に挙げた拒否は分類器ではないが)。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "detected",
+   "quote": "config_denied is a dict keyed by tool_use_id, so if a config-denial event has no tool_use_id, None goes into seen and fatal denials in the result's permission_denials that also lack tool_use_id are dropped as already seen.",
+   "reason": "tool_use_id のないイベントで None が seen に入り、id のない permission_denials が除外されると、正解と同じ原因と結果を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "detected",
+   "quote": "For the judge itself, a draft verdict plus a final verdict both go into verdict.md, giving two '## 指摘' sections.",
+   "reason": "判定役の result の行を全てつなぐため、下書きと最終版の判定が verdict.md に混ざると指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "result の行をつなぐときに is_error の行を除いていない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "別の観点の失敗で抜けたとき、他の子の止めない拒否が記録されず漏れる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "detected",
+   "quote": "The child_error message now shows the first 500 characters of the joined text instead of the last result, so the actual error text is cut off.",
+   "reason": "child_error の詳細が最後の行ではなく、つないだテキストの先頭500字を載せるため、エラーの文が切れると正確に指摘している。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/scripts/review_loop.py:307",
+   "summary": "テストは偽物の source の値しか使っておらず、実際の拒否イベントの形を確かめていない。",
+   "quote": "The tests only use the fake's source values and never check the real event schema.",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/scripts/review_loop.py:242",
+   "summary": "レビュー役の result の行を全てつなぐため、取り下げた指摘や重複した指摘が result.md と judge-input.md に残り、判定役がそれを採用してしまう。",
+   "quote": "result.md and judge-input.md contain both the retracted B and the duplicate A, and the judge adopts the retracted finding.",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/review-loop/scripts/review_loop.py:245",
+   "summary": "トークン数を最後の result の行からしか取っておらず、modelUsage がターンごとの値なら少なく数えられる。docstring の説明も食い違っている。",
+   "quote": "Tokens are taken only from the last result line, but the docstring says both 'modelUsage is a session total' and 'every line has the same value', which contradict each other.",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/review-loop/scripts/review_loop.py:252",
+   "summary": "check_result が拒否の要約の dict を手で組み立てており、StreamTail.summary と処理が重複している。",
+   "quote": "check_result builds `{tool_name, tool_input: tail.tool_inputs.get(...)}` by hand, duplicating the logic of the new StreamTail.summary.",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/review-loop/scripts/review_loop.py:708",
+   "summary": "終了時の経路で watch_denials が同じ引数で2回呼ばれており、1回目は不要。",
+   "quote": "When rc is not None, watch_denials(running=False) runs, and after finish/poll it runs again with the same arguments at line 716, so the first call is redundant.",
+   "quote_ok": true
+  }
+ ]
+}

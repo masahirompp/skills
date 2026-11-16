@@ -1,0 +1,84 @@
+{
+ "cost_usd": 0.105738,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "detected",
+   "quote": "拒否を続行扱いにするかどうかを `source == \"config\"` の1点で決めていますが、本物のイベントでは確かめていません",
+   "reason": "`source == \"config\"` だけで止めない拒否とみなし、`reason_type` で絞っていないため、ルールの一部に当たっただけではない拒否まで素通りする、と指摘しているため。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "detected",
+   "quote": "`source: config` のイベントに `tool_use_id` がないと、`config_denied` のキーが `None` になります。その場合、`result.permission_denials` のうち `tool_use_id` を持たない拒否が全て `seen` に当たって落とされます。",
+   "reason": "`tool_use_id` が無いとキーが `None` で入り、id の無い `permission_denials` が `seen` で全て除かれる、という原因と結果を正確に指摘しているため。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "detected",
+   "quote": "判定役でも全ての `result` 行をつなぐため、判定役が途中の行で判定を出し、後の行で直した判定や補足を出すと問題が起きます。",
+   "reason": "`run_judge` が `result` の行を全てつないだものを判定に使うため、判定が重複したり余計な文が混ざったりする、と指摘しているため。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "partial",
+   "quote": "成否を最後の `result` 行の `subtype` と `is_error` だけで判定しています。途中の行が `is_error: true`(API エラーなど)で、本文がその行に依存していても成功扱いになります。",
+   "reason": "途中の is_error の行があっても成功扱いになる点は述べているが、つなぐときに is_error の行を除いていないためエラーの文が本文に混ざる、という原因には触れていないため。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "`run_reviews` が別の観点の失敗で抜けたとき、まだ動いている子の止めない拒否が記録されないことへの言及がないため。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "`child_error` の詳細が、最後のエラーの行ではなく、つないだ本文の先頭500字を載せる点への言及がないため。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/review-loop/test.py:506",
+   "summary": "`FAKE_JUDGE=multi` が前置き→判定→空という順なので、判定役が判定を出し直す経路をテストで確かめていない。",
+   "quote": "今の `FAKE_JUDGE=multi`(`skill-dev/review-loop/test.py:506`)は前置き → 判定 → 空という順なので、この経路を確かめていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "review_loop.py:242",
+   "summary": "トークン数を最後の行だけで数えるのは「modelUsage はセッションの累計」という前提に頼っており、その前提は1件の実測でしか確かめていないため、累計でなければ少なく数える。",
+   "quote": "トークン数を最後の行だけで数えるのは、「modelUsage はセッションの累計」という前提の上に成り立っています。この前提は whatnext #308 の1件で確かめただけです。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skill-dev/review-loop/test.py:511",
+   "summary": "`source: config` の拒否と `source` の無い拒否が同じ stream に出るケースのテストが無い。",
+   "quote": "`source: config` の拒否と、`source` のない拒否が同じ stream に出るケースがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skill-dev/review-loop/fakes/claude(deny())",
+   "summary": "fake の `tool_use_id` が `\"x\"` で決め打ちのため、イベントの id と `permission_denials` の id が一致しないケースや id が `None` のケースをテストできない。",
+   "quote": "`tool_use_id` が `\"x\"` で決め打ちのため、イベントの id と `result.permission_denials` の id が一致しないケースは試せません",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/review-loop/SKILL.md:103",
+   "summary": "1項目に、設定のルールでの拒否の例外と、sandbox の入れ子での失敗が混ざっていて読み取りにくい。",
+   "quote": "1項目が長すぎて、設定のルールでの拒否の例外と、sandbox の入れ子で失敗する話が同じ段落に混ざっています。",
+   "quote_ok": true
+  }
+ ]
+}

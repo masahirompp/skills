@@ -1,0 +1,62 @@
+{
+ "cost_usd": 0.088872,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/scripts/lib.sh:96",
+   "summary": "lsof でほかのプロセスを見られるかを、自分自身($$)が一覧に出るかで判定しているため、同じサンドボックス内しか見えない環境では判定を通ってしまい、使用中の worktree を delete と判定して消す。",
+   "quote": "lsof でほかのプロセスを見られるかどうかを「自分自身($$)が一覧に出るか」で判定しているが、同じサンドボックスの中のプロセスだけが見える環境では、この判定を通ってしまう。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/scripts/scan.sh:208",
+   "summary": "lsof で確かめられないために worktree を残したときも、ブランチ行の理由が「worktree X で使用中」になり、確認できなかっただけだと伝わらない。",
+   "quote": "worktree を「lsof でプロセスを確かめられない」理由で残したときも、そのブランチの行の理由は「worktree X で使用中」になり、確かめられなかっただけだと伝わらない。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/scripts/scan.sh:86",
+   "summary": "既定ブランチの first-parent 履歴を読めないと走査全体を error で止めるため、履歴を使わない worktree・PR 済みブランチ・リモートの判定まで失われる。",
+   "quote": "既定ブランチの first-parent 履歴を読めないと走査全体を error で止める。履歴を使うのは PR なし(NONE)のブランチの判定だけなのに、worktree・PR 済みブランチ・リモートの判定までまとめて失われる。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/scripts/scan.sh:212",
+   "summary": "worktree で使っているブランチについて classify_branch を2回呼ぶため、jq やネットワーク fetch が二重に走る。",
+   "quote": "worktree で使っているブランチでは、handle_wt で一度 classify_branch を呼んだあと、ローカルブランチの段で同じ sha について classify_branch をもう一度呼ぶ。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/scripts/scan.sh:119",
+   "summary": "on_fp を得る grep を無条件で実行するため、未取り込みのブランチでは結果を使わない grep が毎回走る。",
+   "quote": "on_fp を得る grep を merged_into_default より前に無条件で実行しているので、未取り込みのブランチでは結果を使わない grep が毎回走る。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/housekeeping/scripts/lib.sh:63",
+   "summary": "hk_is_protected が手書きの文字列切り出しループで書かれていて保守しにくく、プロセス置換を使えばもっと単純に書ける。",
+   "quote": "hk_is_protected が、パターンの一覧を ${rest%%$'\\n'*} と case で1行ずつ切り出す手書きのループになっている。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skills/housekeeping/scripts/apply.sh:37",
+   "summary": "承認された行に worktree が無くても hk_process_cwds を呼ぶため、全プロセスを対象にした lsof が毎回走って遅くなる。",
+   "quote": "承認された行に worktree が無くても hk_process_cwds を呼ぶので、全プロセスを対象にした lsof が毎回走る。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "skill-dev/housekeeping/test.sh:62",
+   "summary": "ヒアドキュメントを使っていないことを文字列の grep で確かめる検査が脆く、誤った FAIL も見逃しも起こり得る。",
+   "quote": "ヒアドキュメントを使っていないことを、`<<` と `mktemp` を文字列で grep して確かめている。行頭のコメントしか除外しないので、検査として脆い。",
+   "quote_ok": true
+  }
+ ]
+}

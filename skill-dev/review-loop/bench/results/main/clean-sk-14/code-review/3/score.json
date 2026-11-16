@@ -1,0 +1,62 @@
+{
+ "cost_usd": 0.084792,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/scripts/lib.sh:96",
+   "summary": "プロセスを見られるかどうかを自分自身($$)が一覧に出るかだけで判定しているため、他のプロセスだけが見えない部分的な見え方を検出できず、使用中の worktree が削除されうる。",
+   "quote": "「プロセスを見られない」の判定が、自分自身($$)が一覧に出るかどうかだけで決まる。自分は見えるが他のプロセスは見えない、という部分的な見え方を検出できない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/scripts/lib.sh:91",
+   "summary": "lsof が無い環境では全 worktree が keep/skipped になり、マージ済み worktree を片付けられない後退が起き、これを外す設定も無い。",
+   "quote": "lsof が無い環境では、どの worktree も keep になり、apply.sh でも必ず skipped になる。この挙動を外す設定は無い。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/scripts/scan.sh:165",
+   "summary": "使用中と確定した場合と確かめられなかった場合が同じ理由文にまとめられ、利用者が案内を誤って当てはめうる。",
+   "quote": "使用中と確定した場合と、確かめられなかった場合が、同じ「使用中か、確かめられない」という理由文にまとめられている。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/SKILL.md:72",
+   "summary": "「何も渡さないと何も消さずに終わる」という記述に反し、標準入力が端末だと apply.sh の grep が入力待ちで止まる。",
+   "quote": "「何も渡さないと、何も消さずに終わる」とあるが、apply.sh の `input=$(grep -v '^action\t')` は標準入力が端末だと入力を待って止まる。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skill-dev/housekeeping/test.sh:204",
+   "summary": "ヒアドキュメント禁止を grep で検査しているのは根本対策ではなく、算術シフトでの誤検知や別の書き方の見逃しが起きる。",
+   "quote": "ヒアドキュメントの禁止を、grep による書き方の検査で強制している。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/housekeeping/scripts/lib.sh:62",
+   "summary": "hk_is_protected が手書きの文字列操作でパターンを1行ずつ切り出しており読みにくく、順序を誤ると無限ループになる。read ループで簡潔に書ける。",
+   "quote": "hk_is_protected が、パターン一覧を手書きの文字列操作で1行ずつ切り出している。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skills/housekeeping/scripts/apply.sh:37",
+   "summary": "worktree の行が無くても全プロセスを走査する lsof を必ず実行し、無駄な待ち時間が発生する。",
+   "quote": "worktree の行が一つも無くても、hk_process_cwds(全プロセスを走査する lsof)を必ず実行している。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "skills/housekeeping/scripts/scan.sh:119",
+   "summary": "NONE の経路で、未取り込みブランチでは結果を使わない first-parent への grep を毎回実行している。",
+   "quote": "NONE の経路で、first-parent への grep を merged_into_default より前に毎回実行しているが、未取り込みのブランチではその結果を使わない。",
+   "quote_ok": true
+  }
+ ]
+}

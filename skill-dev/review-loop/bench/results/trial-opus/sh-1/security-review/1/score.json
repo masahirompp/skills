@@ -1,0 +1,28 @@
+{
+ "cost_usd": 0.08516000000000001,
+ "bugs": [
+  {
+   "id": "B1",
+   "verdict": "detected",
+   "quote": "`refs/heads/$default` と `refs/remotes/$hk_remote/$default` のどちらかが無いと、`git rev-list` 全体が失敗して出力が空になります。",
+   "reason": "存在しない ref で rev-list が失敗して first-parent が空になることと、その結果 PR の無いブランチが delete と判定されることの両方を述べている。",
+   "quote_ok": true
+  },
+  {
+   "id": "B2",
+   "verdict": "detected",
+   "quote": "**変更後**: `is_ancestor \"$oid\" \"$sha\"`。PR の head が手元の祖先であれば delete になります。",
+   "reason": "verify_pr_merged の祖先判定の引数の向きが逆になったことを指摘し、追加コミットのあるブランチが delete になることにも触れている。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh",
+   "summary": "MERGED のテスト例がすべて headRefOid と手元の sha が同じなので、祖先判定の向きの逆転をテストで検出できない。",
+   "quote": "`skill-dev/housekeeping/test.sh` の MERGED の例は、すべて `headRefOid` が手元の sha と同じです。同じコミットはどちら向きでも祖先と判定されるので、向きの逆転を検出できません。",
+   "quote_ok": true
+  }
+ ]
+}

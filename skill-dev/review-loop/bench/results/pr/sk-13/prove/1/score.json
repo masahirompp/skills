@@ -1,0 +1,62 @@
+{
+ "cost_usd": 0.0830776,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "detected",
+   "quote": "`review_config` は `s.strip()` を使うのは空かどうかの判定だけで、値そのものは空白付きのまま使い続けます。",
+   "reason": "spec を整えずに返すため、skill_name による照合・事前確認は通るのに、起動プロンプトが `/ code-review high 7` になる食い違いを原因まで含めて指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いが書かれていない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "`names != [skill_name(s) for s in PERSPECTIVES]` がリストを順序込みで比べているためです。",
+   "reason": "並び順まで比べるため、並べ替えただけで既定と違うと記録される点を、該当の比較式を挙げて指摘しており、detect_criteria の「並び順の指摘だけでも可」を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が外した観点に --instruct を渡している矛盾には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "valid_state が perspectives の型を確かめていない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt の指示がサブエージェントに届かない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "指示ブロックとレビュー出力が同じ区切りで混ざり、偽装されうる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭に `/` を付けると終了コード2で止まることは確かめたが、明示的に止まるので問題ではないと結論し、指摘にしていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

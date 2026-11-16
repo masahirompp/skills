@@ -1,0 +1,55 @@
+{
+ "cost_usd": 0.0682456,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "cursorBlock は範囲が変わったと説明しているだけで、(sub) の行を含めた塊が窓より長いと選んだ行や入力欄が窓から外れることには触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "trailing が区切りの境目で切れない問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "rowIndex が空のときに通し番号が 0/0 になる問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "guard の『left the list』という文言が事実と違う問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に対象の行が (sub) に変わっても入力欄が閉じない問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "detected",
+   "quote": "起動された行に attach できる経路がまだあれば、その行にメモや待ち先を付けられます。",
+   "reason": "openNote から起動された行を断る判定が消えたため、attachKey というカーソル以外の経路から (sub) の行にメモが付くことを、DESIGN.md との食い違いとして指摘しており、detect_criteria を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の記述と実装の食い違いには触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

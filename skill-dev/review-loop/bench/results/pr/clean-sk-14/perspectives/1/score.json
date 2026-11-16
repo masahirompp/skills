@@ -1,0 +1,76 @@
+{
+ "cost_usd": 0.105296,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/SKILL.md:20, :61",
+   "summary": "TMPDIR が無いときの退避先が共有の /tmp の固定ファイル名になる。そのため、ほかのユーザーが先にファイルを作れば delete 行を差し込め、sha の照合も通ってしまう。",
+   "quote": "別のユーザーがこのファイルを先に 0666 で作っておけます。すると scan と apply の間に、`delete` 行を差し込めます。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/SKILL.md:20, :61",
+   "summary": "umask 022 だと /tmp の TSV が 0644 で作られ、リポジトリのパス、ブランチ名、ignored のファイル名、プロセス名がほかのユーザーから読める。",
+   "quote": "umask 022 だと TSV は 0644 で作られます。中身はリポジトリのパス、ブランチ名、ignored のファイル名で、この PR からはプロセスのコマンド名も加わります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/SKILL.md:20, :61",
+   "summary": "ファイル名が固定なので、同時に走る2つの housekeeping が互いの結果を上書きし、もう一方の結果の行が apply.sh の照合を通ってしまう。",
+   "quote": "同じ箇所(並行性): 名前が固定なので、同時に走る2つの housekeeping が互いの結果を上書きする。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/scripts/lib.sh:96",
+   "summary": "lsof に自分自身が見えるかだけを確かめているので、一部のプロセスしか見えない状態を見分けられず、使用中の worktree が delete になりうる(fail-open)。",
+   "quote": "「自分自身が一覧に出るか」だけでは、一部のプロセスしか見えない状態を見分けられない。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/scripts/scan.sh:208",
+   "summary": "worktree が「確かめられない」ために keep になった場合でも、ブランチの理由が「worktree … で使用中」と誤って表示される。",
+   "quote": "worktree が「確かめられない」で keep になっても、そのブランチの理由は `worktree … で使用中` と出る。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/housekeeping/scripts/lib.sh:24",
+   "summary": "TMPDIR が相対パスでもそのまま使うので、カレントの worktree の中にディレクトリができ、暗黙の前提に頼った作りになっている。",
+   "quote": "`TMPDIR` が相対パスでも、そのまま使われる。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skills/housekeeping/scripts/lib.sh:51",
+   "summary": "git config --get-all の終了コード 1 にはキー名が不正な場合も含まれるのに、コメントは「キーが無いだけ」と言い切りすぎている。",
+   "quote": "コメントの「1 はキーが無いだけ」は、厳密には言い切りすぎです。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "skill-dev/housekeeping/test.sh:164",
+   "summary": "lsof のテストは何も見えないケースしか試しておらず、一部だけ見えるケースを再現するテストが無い。",
+   "quote": "lsof のテストは、何も見えないケース(exit 1、出力なし)しか試していない。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "skills/housekeeping/scripts/lib.sh 冒頭のコメントと test.sh の静的チェック",
+   "summary": "ヒアドキュメントの書き方を禁じる grep のチェックは3つのファイルしか見ていないので、ほかのスクリプトや今後足す関数は守られない。",
+   "quote": "ただし、grep で見ているのは scan.sh、apply.sh、lib.sh の3つだけです。lib.sh を source する別のスクリプトや、今後足す関数は守られません。",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "",
+   "summary": "サンドボックスの中では worktree をすべて残して外で実行してもらう方針は、運用で毎回手間がかかり、ユーザーが耐えられるか確かめる必要がある。",
+   "quote": "この方式で、ユーザーが毎回 `!` で実行することに耐えられるかは確かめておく価値があります。",
+   "quote_ok": true
+  }
+ ]
+}

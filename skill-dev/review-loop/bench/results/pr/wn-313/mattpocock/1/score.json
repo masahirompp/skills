@@ -1,0 +1,154 @@
+{
+ "cost_usd": 0.1286656,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "案内のセッション wbguide が消えたあと、つながったままの作業台の画面で作り直されないことには触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "`@wn_respawned` はペインのオプションで、`respawn-pane` の後も残ります。そのため「5回まで」は寿命全体の通算になり、長く動かすうちに散発的な異常終了が5回たまると畳まれます。",
+   "reason": "回数が通算で数えられ、数え直されないため、散発的に落ちるだけでも上限に達して畳まれると、正解どおりに指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "detected",
+   "quote": "分割を閉じた SIGHUP で `res.status` が null になると、一覧があればエラーを出してキー待ちに入ります。",
+   "reason": "つながったあとシグナルで終わると status が null になり、失敗と誤って判定されてエラーになる、という原因と場所が正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が、利用者の分割したペインまで起動し直すことには触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなったことには触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定していることには触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/lib/tmux.md",
+   "summary": "lib の契約 docs の「名前の約束」に、新しい頼みごと guide と、オプション @wn_guide_died / @wn_respawned が反映されていない。",
+   "quote": "頼みごとの形の一覧(`key` / `focus` / `agentview`)に、新しい `guide` が入っていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "PRODUCT.md",
+   "summary": "新しいエラー文言とキー待ちが PRODUCT.md に書かれておらず、終了コード 1 の記述とも合わず、利用者に確かめた記録もない。",
+   "quote": "PRODUCT.md の490行とシナリオ59は「示して終了コード 1」のままです。Ghostty の分割から起動したときにキーを待つようになった今の挙動と合いません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "DESIGN.md / issue #1",
+   "summary": "未解明の点を書いた DESIGN.md の記述が issue を参照しておらず、issue #1 にはラベルもマイルストーンも付いていない。",
+   "quote": "DESIGN.md に「なぜ終わったかは、まだ分かっていない」とありますが、issue を参照していません。対応する issue #1 には、ラベルもマイルストーンも付いていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "working-with-tmux スキル",
+   "summary": "実測で分かった tmux の罠2つが、スキルに足されていない。",
+   "quote": "実測で分かった罠が2つ、working-with-tmux スキルに足されていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "src/cli/workbench.ts askListToRefreshGuide",
+   "summary": "askListToRefreshGuide が guide.ts の手順や lib の @wn_req_sh と重複し、@wn_pid も文字列のまま3か所に散らばっている。",
+   "quote": "`src/cli/workbench.ts` の `askListToRefreshGuide` は、`src/cli/guide.ts` 74〜80行と同じ手順です",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "list.ts",
+   "summary": "ensureGuide の直後に workbenchOptions を呼んでいるため、作った場合は2回走り、どちらの受け持ちかが分からない。",
+   "quote": "`list.ts` は `ensureGuide` の直後に `workbenchOptions(GUIDE, '')` を呼びます。`ensureGuide` も作ったときに同じものを呼ぶので、作った場合は2回走ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "app.ts",
+   "summary": "頼みごとの種類が文字列で直接書かれ、if がつながっているので、足し忘れがまた起きうる。",
+   "quote": "ほかの頼みごとの種類は app.ts に文字列で直接書かれ、`parts[0] ===` の if がつながっています。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "fail()",
+   "summary": "fail() が環境変数を readEnv を通さずに直接読んでいる。",
+   "quote": "`fail()` は `process.env.WHATNEXT_WORKBENCH_SPLIT` を直接読んでいます。ほかの `WHATNEXT_*` は `env.ts` の `readEnv` を通ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "lib/tmux/tmux.test.ts",
+   "summary": "sh の本文を indexOf で切り出し、文字列の断片で確かめているので、テストが脆い。",
+   "quote": "`lib/tmux/tmux.test.ts` は sh の本文を `indexOf` / `lastIndexOf('*)')` で切り出し、文字列の断片で確かめています。",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "test/unit/cli.test.ts",
+   "summary": "テストのファイル名が、実際に確かめている中身より広い。",
+   "quote": "`test/unit/cli.test.ts` が確かめているのは `workbenchCommand` と `splitWorkbench` の組み合わせだけで、ファイル名のほうが中身より広いです。",
+   "quote_ok": true
+  },
+  {
+   "n": 11,
+   "location": "e2e",
+   "summary": "Ghostty の分割から起動したときのキー待ちを確かめるテストがない。",
+   "quote": "Ghostty の分割から起動したときのキー待ちを確かめるテストがありません。e2e は `WHATNEXT_WORKBENCH_SPLIT` を渡していません。",
+   "quote_ok": true
+  },
+  {
+   "n": 12,
+   "location": "src/cli/workbench.ts fail()",
+   "summary": "whatnext is not running の経路まで fail() を通るようになり、求められていないキー待ちが増えた。",
+   "quote": "`whatnext is not running` の経路も `fail()` を通るようになり、分割から起動したときはキーを待ちます。",
+   "quote_ok": true
+  },
+  {
+   "n": 13,
+   "location": "src/cli/workbench.ts",
+   "summary": "attach が0以外で終わり一覧も消えていた場合の終了コードが、仕様に書かれないまま res.status から 0 に変わった。",
+   "quote": "attach が0以外で終わり、一覧も消えていた場合(サーバごと閉じた場合)の終了コードが、`res.status` から 0 に変わりました。",
+   "quote_ok": true
+  },
+  {
+   "n": 14,
+   "location": "src/cli/guide.ts ensureGuide",
+   "summary": "ensureGuide が呼び出し側の環境(PATH や CLAUDE_CONFIG_DIR)で案内を作るので、一覧と別物の案内になりうる。",
+   "quote": "**`ensureGuide` は `whatnext workbench` を呼んだ側の環境で案内を作ります。** PATH、`CLAUDE_CONFIG_DIR`、`env.cli` などがそのまま入ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 15,
+   "location": "src/cli/workbench.ts",
+   "summary": "案内が6回目に kill-pane されてクライアントが離れると、tmux の終了コードによっては誤って「could not open」と出る。",
+   "quote": "案内が6回目に `kill-pane` され、つないでいたクライアントが離れると、tmux の終了コードによっては「could not open」と出ます。",
+   "quote_ok": true
+  }
+ ]
+}

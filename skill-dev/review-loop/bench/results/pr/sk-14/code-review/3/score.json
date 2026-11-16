@@ -1,0 +1,63 @@
+{
+ "cost_usd": 0.08873,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "detected",
+   "quote": "hk_is_protected と hk_path_in_use はヒアドキュメントを使い、bash 3.2 ではヒアドキュメントが一時ファイルを作る(bash 5.1 以降でもパイプの容量を超える lsof の出力なら一時ファイルになる)。このため一時ディレクトリに書けない環境では、保護判定と使用中判定がどちらも危険側に倒れる。",
+   "reason": "lib.sh の hk_is_protected と hk_path_in_use がヒアドキュメントの一時ファイルに依存しているため、一時ファイルを作れないと fail-open になることを、正解と同じ場所・原因で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "一時ディレクトリの作成が git fetch --prune より後にあり、副作用が先に起きるという指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い、またはプロセスを見られないときに空の一覧を「使用中でない」と扱う問題に触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh:186",
+   "summary": "書き込めない TMPDIR のテストは、bash が存在しない TMPDIR を無視して /tmp を使うから通っているだけで、本当のサンドボックスでの退行を検出できない。",
+   "quote": "『一時ファイルを使わないので、書き込めない TMPDIR でも動く』テストは、bash が存在しない TMPDIR を無視して /tmp に戻るから通っているだけで、主張していることを検証できていない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "apply.sh は承認済みの行を標準入力で受け取るため、scan.sh と同じ形で ! 実行を案内しても動かず、パイプの形やパスの展開方法が書かれていない。",
+   "quote": "apply.sh は承認済みの行を標準入力で受け取るので、scan.sh と同じ形(`! <path>/apply.sh`)では動かない。awk でフィルタしてパイプで流す形と、絶対パスへの展開をどうするかが書かれていない。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skill-dev/housekeeping/test.sh:175",
+   "summary": "HOUSEKEEPING_TMPDIR のテストは終了後に hk-tmp が空であることしか見ておらず、HOUSEKEEPING_TMPDIR が無視されても通る。",
+   "quote": "終了後に hk-tmp が空であることしか見ていない。HOUSEKEEPING_TMPDIR が無視されて別の場所に作られても通る。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/scripts/scan.sh:31",
+   "summary": "一時ディレクトリの既定値を決める式が lib.sh と scan.sh のエラーメッセージに重複しており、片方だけ直すと表示と実際の場所がずれる。",
+   "quote": "一時ディレクトリの既定値を決める式 `${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}}` が、lib.sh の hk_mktemp_dir と scan.sh のエラーメッセージの2か所にそのまま重複している。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/scripts/lib.sh:20",
+   "summary": "mktemp -d が成功した後の `[ -n \"$d\" ] && [ -d \"$d\" ]` の検査は常に真で、意味がない。",
+   "quote": "`[ -n \"$d\" ] && [ -d \"$d\" ] || return 1` は、直前の mktemp -d が成功している以上は常に真で、実質的に意味のない検査になっている。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,56 @@
+{
+ "cost_usd": 0.0818216,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "detected",
+   "quote": "lib.sh の hk_is_protected は here-document で保護パターンを読むが、bash 3.2 ではこれが一時ファイルになり、作れないと保護判定が『保護対象ではない』側に倒れる。",
+   "reason": "hk_is_protected と hk_path_in_use がヒアドキュメントに頼っており、一時ファイルを作れないと fail-open になる、と正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "detected",
+   "quote": "『作れなければ何もせずに止まる』は事実と違う。scan.sh は一時ディレクトリを作る前に git fetch --prune を実行し、hk_default_branch 経由で gh repo view を呼ぶこともある。",
+   "reason": "一時ディレクトリの作成が fetch --prune より後にあるため、SKILL.md の記述と食い違う、と正確に指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い、またはプロセスを見られないときに空の一覧を『使用中でない』と扱う問題には触れていない。hk_path_in_use への指摘はヒアドキュメントの失敗が原因の話だけで、原因が違う。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh:186",
+   "summary": "書き込めない TMPDIR のテストは、bash が存在しない TMPDIR を無視して /tmp を使うため、一時ファイルを作れない状況を再現できていない。",
+   "quote": "『書き込めない TMPDIR でも apply.sh が動く』テストは、bash が存在しない TMPDIR を無視して /tmp に切り替えるため、一時ファイルを作れない状況を再現できていない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skill-dev/housekeeping/test.sh:175",
+   "summary": "HOUSEKEEPING_TMPDIR のテストは hk-tmp が空かどうかしか見ていないので、HOUSEKEEPING_TMPDIR が無視される退行を検出できない。",
+   "quote": "『一時ディレクトリは HOUSEKEEPING_TMPDIR の下に作る』テストは、終了後に hk-tmp が空かどうかしか見ていない。HOUSEKEEPING_TMPDIR が無視されても通る。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/scripts/scan.sh:31",
+   "summary": "エラーメッセージで一時ディレクトリの場所を組み直しており、hk_mktemp_dir の場所の決め方と重複している。",
+   "quote": "エラーメッセージで `${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}}` を組み直しており、hk_mktemp_dir 内の base の決め方と重複している。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "apply.sh を ! で実行する案内に、承認済みの行を標準入力に流す形と絶対パスの書き方が無く、入力が空のまま終わるおそれがある。",
+   "quote": "apply.sh を `!` で実行してもらう案内には、承認済みの行を標準入力に流す形(awk ... scan.tsv | apply.sh)と絶対パスの書き方が示されていない。",
+   "quote_ok": true
+  }
+ ]
+}

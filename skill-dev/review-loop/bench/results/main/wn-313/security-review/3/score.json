@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.0634376,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは wbguide が消えたあとに作り直されない問題に触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "@wn_respawned を通算で数えている問題への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "attach の結果判定で status が null になる場合への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が利用者の分割ペインも起動し直す問題への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出ない問題への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide についてはセキュリティ面で問題なしとしただけで、セッションの有無だけで判定する問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

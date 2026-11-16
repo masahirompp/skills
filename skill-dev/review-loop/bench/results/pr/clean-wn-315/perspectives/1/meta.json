@@ -1,0 +1,26 @@
+{
+ "case": "clean-wn-315",
+ "kind": "ts",
+ "config": "perspectives",
+ "trial": 1,
+ "model": "claude-opus-5-5",
+ "pr_mode": true,
+ "status": "ok",
+ "tokens": {
+  "input": 281016,
+  "cache_read": 244499,
+  "output": 5572
+ },
+ "cost_usd": 0.4524198,
+ "started_at": "2026-11-15T21:12:19",
+ "duration_s": 76,
+ "num_turns": 7,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [],
+ "head_changed": false
+}

@@ -1,0 +1,84 @@
+{
+ "cost_usd": 0.1147936,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "その上に並ぶ見出しとトップレベルの `(sub)` の行が窓の高さ以上あると、`blockLen >= avail` なので `start = b0 = 0` になり、窓は先頭の行で埋まります。選んだ行は窓の下に外れます。",
+   "reason": "render の cursorBlock が (sub) を含めて窓より長いとき start = b0 になること、さらに b1 - avail の補正が伸びた b1 に合わせて働くことを、原因として両方指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "detected",
+   "quote": "次の区切りの先頭の `(sub)` の行も、空行と見出しごと塊に入ります。",
+   "reason": "trailing が区切りの境目で切れず、次の区切りの (sub) の行まで選んだ行の塊に入ることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "detected",
+   "quote": "`(sub)` の行だけが並ぶときはカーソルが `undefined` になり、`cursorBlock = [0,0]` のままです。端末の高さを超えた分は見られず、位置の表示も `0/0` になります。",
+   "reason": "選べる行がなくカーソルが undefined のとき、通し番号が 0/0 になることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "選んでいた行が更新で起動された行に変わったとき、行は前の並びにも新しい並びにも残っていますが、`goneName` が入って `guard` が立ちます。",
+   "reason": "(sub) に変わってカーソルが移った場合にも guard が立ち、『left the list』という事実と違う文言が出ることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に対象の行が (sub) に変わっても入力欄が閉じない、という mode の扱いの不具合には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "detected",
+   "quote": "今回 `openNote` と `openWait` の `isSpawned` による断り(`:835`、`:856`)を外したので、その間に `e` を押すと起動された行にメモを書けます。",
+   "reason": "openNote から断りの判定を消したため、カーソル以外の経路 (attach 中の直接代入) から (sub) の行にカーソルが乗り、メモを書けることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の『Both can be selected』という記述と実装の食い違いには触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/screen/screen.ts:223、src/model/cursor.ts:30,48",
+   "summary": "選べる行がないとき、窓の外の行を見る手段がなく、Enter で cwd や pid を見る経路もなくなる。",
+   "quote": "以前は `(sub)` の行で `Enter` を押すと `cwd` と `pid` を見られましたが、その経路もなくなります。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "test/unit/screen.test.ts",
+   "summary": "追加したテストは (sub) の行が窓に収まる数しかなく、窓からはみ出す場合を確かめていない。",
+   "quote": "追加したテスト(`test/unit/screen.test.ts`)は `(sub)` の行が4行で窓に収まるので、この場合を確かめていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/screen/screen.ts:201、src/model/cursor.ts:3",
+   "summary": "選べるかの判定が marker と node.spawned の2か所に分かれていて、将来ずれるおそれがある。",
+   "quote": "選べるかの判定元が2つある:`src/screen/screen.ts:201` は `r.marker !== 'sub'`、`src/model/cursor.ts:3` は `node.spawned` で決めている。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/model/cursor.ts:3",
+   "summary": "isSpawned を selectableOrder の filter の中で呼ぶため、計算量が O(n²) になる。",
+   "quote": "`selectableOrder` は `order.filter` の中でこれを呼ぶので、計算量は O(n²) です。",
+   "quote_ok": true
+  }
+ ]
+}

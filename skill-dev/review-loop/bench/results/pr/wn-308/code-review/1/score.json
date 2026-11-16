@@ -1,0 +1,63 @@
+{
+ "cost_usd": 0.0792896,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "detected",
+   "quote": "abnormalExit は動いているものがある作業台を残す。そのあとこの版で whatnext を起動し直すと、新しく作った作業台にはキーが出るが、残った作業台には出ない。",
+   "reason": "workbenchOptions が新規作成と GUIDE でしか呼ばれないため、異常終了後に引き継いだ既存の sh-<id> には新しい書式が入らずキーが出ない、という原因と起きる条件が正解と一致している(cleanupLeftovers という名前は出していないが、起動時の引き継ぎ処理を指している)。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "利用者に見せるキーの説明の文言を lib/tmux に直に書いており、@wn_keys のように使う側から渡す形とそろっておらず、lib の方針に反している。",
+   "quote": "利用者に見せるキーの説明の文言を、昇格済みモジュール lib/tmux の中に直に書いている。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "lib/tmux/tmux.test.ts:20",
+   "summary": "status-format の %% エスケープや GUIDE で出さないことを lib のテストで確かめておらず、使い捨ての e2e にしかテストがない。",
+   "quote": "昇格済みモジュールの見た目の変更(%% のエスケープを含む status-format)を、lib のテストではなく、使い捨て層の e2e(test/e2e/workbench.test.ts)だけで確かめている。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "docs/PRODUCT.md:442",
+   "summary": "典型の配置(34桁)ではステータス行が切れて、足したキーが1つも見えず、目的が果たせない。",
+   "quote": "docs が典型として示す配置(作業台の画面が34桁)では、ステータス行は『0:zsh*  · ^』で切れ、足したキーは1つも見えない。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "docs/PRODUCT.md:442",
+   "summary": "画面の例の書き換えが実際の描画から取ったものでなく手書きの疑いがあり、行頭の空白で1桁ずれうる。",
+   "quote": "画面の例(34桁の枠の最下行)の書き換えが、実際の描画から取ったものかどうか分からない。手で書き換えた疑いがある。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "docs/DESIGN.md:230",
+   "summary": "ステータス行に tmux の既定のキーを出す設計を DESIGN.md に反映しておらず、『tmux は利用者から隠す』とも食い違っている。",
+   "quote": "作業台の画面のステータス行に tmux の既定のキーを出すことにしたのに、DESIGN.md は更新していない。『tmux は利用者から隠す』(206行)とも食い違ったままになっている。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "docs/lib/tmux.md:31",
+   "summary": "契約がキーを出す振る舞いを createWorkbench に書いているが、実際は workbenchOptions が置き GUIDE で出し分けており、契約に書かれていない。",
+   "quote": "契約では、キーを続ける振る舞いを createWorkbench の説明に書いている。実際に status-format を置くのは workbenchOptions で、GUIDE にも呼ばれる(GUIDE には出さない)。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "test/e2e/workbench.test.ts:117",
+   "summary": "e2e がウィンドウ1つの場合しか確かめず、ウィンドウ2つのときと案内のセッションにキーを出さないことを確かめていない。",
+   "quote": "e2e が確かめるのは、ウィンドウが1つのときにキーが続くことだけで、仕様の残り2点を確かめていない。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,62 @@
+{
+ "cost_usd": 0.0776096,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--perspective の値を整えずにプロンプトを作るため、照合する名前と起動するプロンプトが食い違う点への言及が無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いが書かれていない点を指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "既定の観点との比較をスキル名の並びだけで行う問題への言及が無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が外した観点に --instruct を渡しており、終了コード2で止まる点を指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "detected",
+   "quote": "文字列や dict も検査を通ってしまう。ただし `render` の `join` は例外なく動くので、悪用にはつながらない。",
+   "reason": "valid_state で perspectives の文字列や dict が検査を通ると、場所と原因を正しく指摘している(脆弱性としては却下しているが、不具合そのものは指摘している)。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt で渡した指示がサブエージェントに届かない点への言及が無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "judge-input.md への混入には触れているが、信頼された入力だとして除外しており、同じ区切りによる偽装や混同は指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭の `/` を取り除かないため照合に失敗する点への言及が無い。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

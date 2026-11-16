@@ -1,0 +1,26 @@
+{
+ "case": "sk-13",
+ "kind": "python",
+ "config": "perspectives",
+ "trial": 2,
+ "model": "claude-opus-5-5",
+ "pr_mode": true,
+ "status": "ok",
+ "tokens": {
+  "input": 235873,
+  "cache_read": 198607,
+  "output": 5667
+ },
+ "cost_usd": 0.4511414,
+ "started_at": "2026-11-15T21:52:33",
+ "duration_s": 76,
+ "num_turns": 7,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [],
+ "head_changed": false
+}

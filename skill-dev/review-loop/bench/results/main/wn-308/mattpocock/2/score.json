@@ -1,0 +1,56 @@
+{
+ "cost_usd": 0.0708776,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは cleanupLeftovers での引き継ぎ(Y の分岐)でステータス行の書式を入れ直していない点に一切触れず、実装の誤りは無いと結論している。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md 558行付近",
+   "summary": "CLAUDE.md の「見た目の決定」の規約に反し、採らなかった形は幅60の画面があるのに、採った形の幅60の画面が並んでいない。",
+   "quote": "今回の「採らなかった形」(558行付近)は幅60で取った画面で、幅も合っています。ところが、採った形の幅60の画面が並んでいません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "docs/PRODUCT.md 557行",
+   "summary": "tmux のウィンドウを「窓」と呼んでおり、別の意味で使われている「窓」や「ウィンドウ」と用語が揺れている。",
+   "quote": "557行で「**窓**の一覧」と書いています。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "docs/lib/tmux.md",
+   "summary": "説明を createWorkbench の括弧の中に置いているが、文字列を組み立てているのは workbenchOptions であり、また区別の対象が分かりにくい書き方になっている。",
+   "quote": "説明を `createWorkbench` の括弧の中に置いていますが、文字列を組み立てているのは `workbenchOptions` です。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "lib/tmux/tmux.ts",
+   "summary": "作業台のキーの文言が lib/ に直接書かれており、画面の文言を変えるだけで昇格済みの lib/ を変えることになる(Divergent Change)。",
+   "quote": "一方、作業台のキーの文言は `lib/` に直接書かれました。このままだと、画面の文言を変えるだけで、昇格済みの `lib/` を変えることになります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test/e2e/workbench.test.ts",
+   "summary": "e2e テストは窓が1つのときの書式しか確かめておらず、案内の画面でキーが出ないこと・窓が複数のときの間隔・狭い幅で右から欠けることを確かめていない。",
+   "quote": "e2e テストが確かめているのは、窓が1つのときの書式だけです。次の3つは確かめていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "docs/PRODUCT.md 442行の図",
+   "summary": "図の右の欄の行頭の空白が実際の描画には無いため1桁ずれており、図は実際の描画から作られていない可能性がある。",
+   "quote": "図の右の欄は行頭に空白を1桁置いていますが、実際の描画にはこの空白がありません。そのため、実際には `…0:zsh*  · ^Q` まで見え、図の `· ^│` と1桁ずれます。",
+   "quote_ok": true
+  }
+ ]
+}

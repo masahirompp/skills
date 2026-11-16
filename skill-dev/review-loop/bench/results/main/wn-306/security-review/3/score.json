@@ -1,0 +1,55 @@
+{
+ "cost_usd": 0.0682576,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "screen.ts については cursorBlock の範囲を変えているだけと説明しただけで、(sub) を含めた塊が窓より長いと選んだ行や入力欄が窓から外れることには触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "trailing が区切りの境目で切れず、次の区切りの (sub) まで塊に入ることへの言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "通し番号の数え方を変えたと説明しただけで、選べる行がないときに 0/0 と出ることは指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "guard の文言『left the list』が、一覧に残って (sub) に変わった行には事実と違うことに触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に対象の行が (sub) に変わっても入力が閉じないことへの言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "openNote から isSpawned の判定を外したことには触れているが、抜け道は仮定として述べただけで権限の問題ではないと結論しており、attachKey などの具体的な経路も示していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の記述と実装の食い違いには触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

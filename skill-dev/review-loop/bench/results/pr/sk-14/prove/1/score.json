@@ -1,0 +1,27 @@
+{
+ "cost_usd": 0.0579536,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューはヒアドキュメントが一時ファイルに依存する点を試したものの、『正しく拒否されました』『壊れません』と結論しており、fail-open を指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "detected",
+   "quote": "scan.sh は `git fetch --prune` を実行してから一時ディレクトリを作るので、error で止まった時点で追跡ブランチはもう消えています。",
+   "reason": "一時ディレクトリの作成が fetch --prune より後にあり、SKILL.md の『何もせずに止まる』と食い違うことを、場所も原因も正解どおりに指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無いときや他のプロセスを見られないときに、使用中の worktree を『使用中でない』と判定する問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

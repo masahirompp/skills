@@ -1,0 +1,62 @@
+{
+ "cost_usd": 0.0757496,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "detected",
+   "quote": "その結果、事前確認は通るのに、実際の子には `/` の後ろに空白が入った文字列が渡ります。",
+   "reason": "spec を整えずに `/` を前置するため、skill_name による照合・事前確認と実際のプロンプトが食い違うと、正解と同じ原因と場所を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "JUDGE_PROMPT が追加の指示ブロックを扱っていない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "既定と違うかどうかの判定(`review_loop.py` の `if names != [skill_name(s) for s in PERSPECTIVES]`)が、スキル名だけを比べています。",
+   "reason": "既定との比較がスキル名だけで行われ、引数違いの観点が記録されないことを、該当の比較箇所を挙げて指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例で --instruct と --perspective が矛盾する点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "valid_state が perspectives をリストか確かめない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt の指示がサブエージェントに届かない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "判定役の入力で指示ブロックとレビューの出力が混同されうる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭に `/` を付けた観点名やスキル名の扱いには触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

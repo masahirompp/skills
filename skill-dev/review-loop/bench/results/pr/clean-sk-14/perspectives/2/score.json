@@ -1,0 +1,41 @@
+{
+ "cost_usd": 0.082104,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/SKILL.md:20, :61",
+   "summary": "走査結果を決まった名前で /tmp に書くため、他のユーザーに改ざんや読み取りをされたり、同時に走らせたときに上書きされたりする恐れがある。",
+   "quote": "走査結果を `${TMPDIR:-/tmp}/housekeeping-scan.tsv` という決まった名前で書いています。`TMPDIR` が未設定の Linux では、全ユーザーが書ける `/tmp` に置かれます。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/scripts/lib.sh:96",
+   "summary": "自分自身($$)が見えればプロセスを見られるとみなす判定では、一部のプロセスだけが見えない状態を見分けられず、使用中の worktree が削除候補になる恐れがある(fail-open)。",
+   "quote": "「自分自身(`$$`)が一覧に出れば、プロセスを見られる」とみなす判定は、全く見えない場合しか見分けられません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/SKILL.md:72, skills/housekeeping/scripts/apply.sh:21",
+   "summary": "標準入力が端末につながったまま apply.sh を実行すると、grep が入力を待って止まるため、文書の「何も渡さないと何も消さずに終わる」が成り立たない。",
+   "quote": "標準入力が端末につながっていれば、`grep` が入力を待ったまま止まります。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/scripts/lib.sh:46",
+   "summary": "hk_protect_patterns の中の set -f は $(...) の中で呼んだときしか閉じ込められず、直接呼ばれると呼び出し元のシェル設定を書き換える。",
+   "quote": "`hk_protect_patterns` の中の `set -f` が外に漏れないのは、`$(...)` の中で呼んだときだけです(コメントもそれを前提にしています)。将来、直接呼ばれると呼び出し元の設定を書き換えます。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skill-dev/housekeeping/test.sh の temp_usage",
+   "summary": "ヒアドキュメントが無いことを '<<' の grep で確かめるテストは、誤検出と見逃しの両方が起き、確かめているのも動きではなく書き方の規約にすぎない。",
+   "quote": "ヒアドキュメントが無いことを `'<<'` の grep で確かめています。これでは、行の途中のコメントや文字列に含まれる `<<` も失敗になり、逆に `eval` などで間接的に使われると見逃します。",
+   "quote_ok": true
+  }
+ ]
+}

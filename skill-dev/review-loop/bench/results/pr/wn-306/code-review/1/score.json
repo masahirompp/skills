@@ -1,0 +1,77 @@
+{
+ "cost_usd": 0.0977896,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "選んだ行のすぐ下の起動された行まで cursorBlock を伸ばしたため、b1 が選んだ行の入力欄の終わりではなく、続く (sub) 行の終わりを指すようになった。そのため「入力欄は最後の行まで窓に入れる」の補正で窓が下へずれ、入力欄と選んだ行が窓の外に押し出される。",
+   "reason": "render の cursorBlock に続く (sub) を含めたことと start=b1-avail の補正が原因で、選んだ行と入力欄が窓から外れると指摘しており、指摘2では頭の (sub) で start=b0 になる場合も述べている。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "detected",
+   "quote": "trailing が区切りの境目で戻らないので、ある区切りの最後の選べる行を選ぶと、空行、次の区切りの見出し、その先頭のトップレベル (sub) 行まで cursorBlock に入る。",
+   "reason": "trailing が区切りの境目で切れず、次の区切りの (sub) まで塊に入ることを正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "選べる行がないときに rowIndex が空のまま通し番号 0/0 を出す問題には触れていない(指摘5の 0/N はカーソルが (sub) に乗る別の原因による)。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "選んでいた行が消えずに起動された行へ変わったときも goneName を作って guard を張るため、Ctrl+X を押すと、一覧に残っている行について「left the list」と事実と違う文言が出る。",
+   "reason": "(sub) に変わった行にも guard が張られ、文言『left the list』が事実と違うことを場所・原因ともに一致して指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に対象の行が (sub) に変わっても mode が閉じず、メモが付いてしまう問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "detected",
+   "quote": "openNote と openWait から起動された行を断る守りを消したが、attachKey の `this.cursor = sid` の経路(GUIDE のときの guideTarget)は、選べるかを確かめずに sid をそのまま使う。",
+   "reason": "openNote の判定を消したことで、attachKey の古い guideTarget の経路から (sub) の行にメモが付くと指摘しており、基準を満たしている。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の『Both can be selected』という記述と実装が食い違うことには触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/screen/screen.ts:201",
+   "summary": "選べるかどうかの判断が、画面側の marker !== 'sub' とモデル側の spawned の2か所に分かれていて、将来ずれるおそれがある。",
+   "quote": "選べるかの判断を、画面側では表示用の `r.marker !== 'sub'` で、モデル側では Layout の `spawned` で、別々に行っている。選べる行の定義が2か所にある。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/model/cursor.ts:6",
+   "summary": "selectableOrder が要素ごとに isSpawned で全体を走査するため O(n²) になり、キーを押すたびや更新のたびに呼ばれる。",
+   "quote": "selectableOrder は order の各要素について isSpawned(全区切り・全ノードの走査)を呼ぶので O(n²) になる。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/e2e/deps.test.ts:441",
+   "summary": "シナリオ70のテストが並び順に応じて押すキーを切り替えるため、前提が崩れても通ってしまい、(sub) を飛ばす向きも片方しか確かめていない。",
+   "quote": "シナリオ70のテストは、other が orchestrator の上と下のどちらにあるかで押すキーを `below ? 'Down' : 'Up'` と切り替えるため、並びの前提が崩れても通ってしまう。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,602 @@
+{
+ "case": "sk-13",
+ "cost_usd": 0.1008892,
+ "clusters": [
+  {
+   "title": "by_name.get の既定値が \"x\" なので、該当する呼び出しが無くてもテストが通ってしまう",
+   "location": "skill-dev/review-loop/test.py:570",
+   "members": [
+    "e1",
+    "e17",
+    "e28"
+   ],
+   "id": "sk-13/c1",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "指摘の主張自体は事実。`--perspective 'mattpocock-skills:code-review PR #{pr}'` を外すようテストの写しを書き換えて test.py を実行した。『--instruct はほかの観点には渡さない』は既定値 \"x\" のおかげで ok のまま、直前の『--perspective を渡すと、既定の代わりにそれだけを使う』(両方のレビュー呼び出しが揃っていることを確かめるチェック)は FAIL になった。呼び出しが無い場合はスイート全体として検出されるので、テストの書き方の問題にとどまり、挙動の問題ではない。元の test.py は『全て成功』。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "perspectives と instructions を常に組で渡すため、run_reviews の引数が8個に増えている",
+   "location": "review_loop.py(run_reviews)",
+   "members": [
+    "e2"
+   ],
+   "id": "sk-13/c2",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "review_loop.py の run_reviews(wt, env, pr, workdir, children, attempt, perspectives, instructions) は確かに8引数。構造の好みの話で挙動は変わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "追加の指示を「優先」と書いているが NO_MUTATION/REVIEW_CONSTRAINT との優先関係を明示しておらず、作業ツリーを変えない制約が破られうる",
+   "location": "skills/review-loop/scripts/review_loop.py:749",
+   "members": [
+    "e3",
+    "e5",
+    "e13",
+    "e16",
+    "e27",
+    "e43",
+    "e47"
+   ],
+   "id": "sk-13/c3",
+   "class": "undetermined",
+   "scope": "na",
+   "ran": false,
+   "evidence": "review_constraint()(review_loop.py:743付近)は REVIEW_CONSTRAINT の後ろに『スキルの手順と食い違うときは、この指示を優先してください』と足している。優先する範囲を『スキルの手順』に限る書き方で、REVIEW_CONSTRAINT を上書きするとは書いていない。編集を許すように読める指示を LLM がどう解釈するかは、実際の claude で狙って起こせないため確かめていない。仮に作業ツリーを変えても find_contamination で contamination として検出され、試行は失敗になる。指示を渡すのは利用者自身なので、データが黙って変わる経路はない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "既定の観点のまま --instruct だけを付けた場合のシステムプロンプトと状態を確かめるテストがない",
+   "location": "skill-dev/review-loop/test.py:576 付近",
+   "members": [
+    "e4"
+   ],
+   "id": "sk-13/c4",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "テストが無いという指摘。既定の観点のまま `--instruct code-review=テストは見ない` だけを付けて実行し、rc=0 で completed になった(状態の結果は sk-13/c7 に書いた)。挙動の不具合ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "観点のスキル名一覧を複数箇所で重複して計算しており、直し漏れや食い違いの原因になる",
+   "location": "skills/review-loop/scripts/review_loop.py:409",
+   "members": [
+    "e6",
+    "e7",
+    "e35"
+   ],
+   "id": "sk-13/c5",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "review_config の重複確認(safe_name(skill_name(s)))、--instruct のループの中の [skill_name(s) for s in perspectives]、iterate の names で同じ一覧を作っている。どれも同じ skill_name を呼ぶので、今の値は食い違わない。将来の変更があって初めて問題になる、重複の指摘。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "観点を文字列のまま持ち回り、各関数で skill_name(s) によるスキル名の取り出しが重複している",
+   "location": "review_loop.py(review_config, iterate, preflight, run_reviews)",
+   "members": [
+    "e14"
+   ],
+   "id": "sk-13/c6",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "観点を文字列のまま持ち回り、preflight、run_reviews、iterate、review_config がそれぞれ skill_name(s) を呼んでいるのは事実。構造の好みで挙動は変わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "--instruct の有無や内容が状態コメント・表に記録されず、範囲を絞った試行を見分けられない",
+   "location": "skills/review-loop/scripts/review_loop.py:962",
+   "members": [
+    "e8",
+    "e11",
+    "e12",
+    "e26",
+    "e29",
+    "e30",
+    "e38",
+    "e41"
+   ],
+   "id": "sk-13/c7",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "既定の観点のまま `--instruct code-review=テストは見ない` で実行すると、状態の attempt は {sha, at, result: completed, tokens, iter} だけだった。perspectives キーは無く、コメント本文に『指示』も指示の文言も無かった(出力: INSTRUCT_ONLY 0 {...} False False)。つまり、記録されないという主張は事実。ただし SKILL.md は、表に載るのは既定と違う観点の名前だけだと書いており、指示を記録するとは書いていない。また、範囲を絞ったことは親が最後に報告する決まりになっている(SKILL.md の終了時の報告)。文書とコードは食い違っておらず、誤った結果も出ない。機能が足りないという指摘にあたる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "オプションを反復をまたいで保持しないため、付け忘れると警告なく既定の観点に戻り、条件の違う反復が混ざる",
+   "location": "skills/review-loop/SKILL.md:57",
+   "members": [
+    "e24",
+    "e25",
+    "e33",
+    "e40",
+    "e45"
+   ],
+   "id": "sk-13/c8",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "SKILL.md:57 は『スクリプトは反復をまたいでオプションを覚えないので、付け忘れると既定に戻る』と明記しており、コード(iterate が毎回 args だけから review_config を作る)と一致する。観点を付け忘れた場合は、表の観点の名前の有無で区別できる(test の『既定の観点で回したら、観点の名前は残さない』の挙動)。指示の付け忘れが表に残らない点は c7 と同じで、文書どおりの設計上の制約。挙動の不具合ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "--perspective の重複、= を含む --instruct、前後に空白があるスキル名の誤りケースのテストがない",
+   "location": "skill-dev/review-loop/test.py:577-584",
+   "members": [
+    "e9"
+   ],
+   "id": "sk-13/c9",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "skill-dev/review-loop/test.py:577-586 の誤りケースは「= のない --instruct」「観点にないスキル」「外した観点への --instruct」「空の --perspective」の4つだけで、指摘の3ケースは確かに無い(370行目の重複テストは PERSPECTIVES の上書きで、--perspective ではない)。ただしテストが無いという指摘なので、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "--instruct の指示が NO_MUTATION の後ろに入り制約が残ることを確かめるテストがない",
+   "location": "skill-dev/review-loop/test.py:553-586",
+   "members": [
+    "e10"
+   ],
+   "id": "sk-13/c10",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "test.py:568-569 は指示文がシステムプロンプトに含まれることだけを確かめていて、NO_MUTATION が残っているかは見ていない。実装 review_loop.py:743-749 では REVIEW_CONSTRAINT(NO_MUTATION を含む)の後ろに指示を足しているので制約は残る。テストが無いという指摘で、挙動の問題ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "名前が同じで引数だけ違う --perspective が記録されるかを確かめるテストがない",
+   "location": "skill-dev/review-loop/test.py:576 付近",
+   "members": [
+    "e15",
+    "e36"
+   ],
+   "id": "sk-13/c11",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "test.py:562-576 の --perspective は既定とスキル名も違う組み合わせで、名前が同じで引数だけ違うケースは無い。事実だが、テストが無いという指摘なので trivial。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "引数だけ違う観点、前後に空白がある spec、文字列の perspectives を試すテストがない",
+   "location": "skill-dev/review-loop/test.py:553-586",
+   "members": [
+    "e19"
+   ],
+   "id": "sk-13/c12",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "test.py:553-586 に、引数だけ違う観点、前後に空白がある spec、文字列の perspectives を試すケースは無い。テストの欠落の指摘であり、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "先頭に空白がある --perspective を確かめるテストがない",
+   "location": "skill-dev/review-loop/test.py:553-586",
+   "members": [
+    "e21"
+   ],
+   "id": "sk-13/c13",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "test.py の観点のテストで、先頭に空白がある --perspective を渡すケースは無い(空の ' ' だけ)。テストの欠落の指摘なので trivial。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "引数だけ違う --perspective、観点の順番の入れ替え、文字列の perspectives の拒否のテストがない",
+   "location": "skill-dev/review-loop/test.py:562-576",
+   "members": [
+    "e31"
+   ],
+   "id": "sk-13/c14",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "test.py:562-576 に、引数だけ違う --perspective、順番の入れ替え、文字列の perspectives を拒むケースは無い。テストの欠落の指摘なので trivial。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "引数だけ違う --perspective、= を含む --instruct、プラグイン名への --instruct のテストがない",
+   "location": "skill-dev/review-loop/test.py:553-584",
+   "members": [
+    "e34"
+   ],
+   "id": "sk-13/c15",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "test.py:553-584 の --instruct はどれも本文に = を含まず、プラグイン名(mattpocock-skills:code-review)への --instruct も無い。実装 review_loop.py:404 は partition('=') で最初の = だけで分けるので、本文の = は保たれる。テストの欠落の指摘なので trivial。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "例の指示文(.env の中身は確かめない)が正当なセキュリティ指摘まで抑えてしまう恐れがある",
+   "location": "SKILL.md:50",
+   "members": [
+    "e18"
+   ],
+   "id": "sk-13/c16",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "skills/review-loop/SKILL.md:50 は、利用者が何を渡すかの書き方の例。指示は利用者が選び(SKILL.md:58 に、利用者に指示されたときだけ付け、指示は観点の検査を緩めると書いてある)、例の文は「中身を確かめない」だけで、削除や履歴への言及は禁じていない。LLM がどう解釈するかの推測で、コードの挙動の問題でもなく、文書とコードが食い違っているわけでもない。例の文面をどうするかの好みの話。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "--perspective では {pr} を置き換えるのに --instruct では置き換えず、規則が食い違う",
+   "location": "skills/review-loop/scripts/review_loop.py:412",
+   "members": [
+    "e20"
+   ],
+   "id": "sk-13/c17",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "実行して確かめた: review_config([\"code-review high {pr}\"],[\"code-review=PR #{pr} だけ見る\"]) のあと、expand は 'code-review high 7' を返し、review_constraint の末尾は 'PR #{pr} だけ見る' のまま残った。置き換えの有無が違うのは事実。ただ SKILL.md は、{pr} を置き換えるのを観点の『引数』に限っており(--perspective の書き方は PERSPECTIVES の要素と同じ、と書いてある)、--instruct の説明で {pr} の置き換えをうたっていない。文書とコードは食い違っていない。指示は自由に書く文で、PR 番号は同じ子へのプロンプト(/code-review high 7)にすでに入っている。挙動の不具合ではなく、規則をそろえるかという設計の好みにあたる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "テストが run(wt, \"--new-run\") を続けて2回呼び、反復が1回余分になっている",
+   "location": "skill-dev/review-loop/test.py:558",
+   "members": [
+    "e22",
+    "e23"
+   ],
+   "id": "sk-13/c18",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "skill-dev/review-loop/test.py:551 と 558 で、run(wt, \"--new-run\") が続けて呼ばれているのを確かめた。2回目は新しいシリーズをもう1つ始めるだけで、続く検査は calls()[n:] と state()[\"attempts\"][-1] を見ているため、結果は変わらない。偽の claude の1反復ぶん時間が余計にかかるだけで、テストの重複であり挙動には関わらない。コードを読めば足りるので、テストは実行しなかった。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "指示の本文が --append-system-prompt のコマンドライン引数に載り、同じマシンの他ユーザーから ps で見える",
+   "location": "review_loop.py:762",
+   "members": [
+    "e32",
+    "e39",
+    "e42"
+   ],
+   "id": "sk-13/c19",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "review_loop.py:762 付近で、review_constraint(instruction) の戻り値が --append-system-prompt の値として子の argv に入るのは事実。ただ同じ指示の本文は、親の起動行 `review_loop.py iterate <wt> --instruct 'skill=…'`(main の argparse、1065 行付近)で、すでに python プロセスの argv に載っている。子に渡しても、ps から見える範囲は増えない。指示は利用者が書くレビューの範囲の指定で、秘密を入れる前提の入力でもない。新しく漏れる経路はなく、挙動の問題にはあたらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "iterate の specs=None と instructs=None の既定値が使われていない",
+   "location": "review_loop.py(iterate)",
+   "members": [
+    "e37"
+   ],
+   "id": "sk-13/c20",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "iterate を呼ぶのは review_loop.py:1076 の1か所だけ(grep で確かめた)。そこで args.perspective と args.instruct を必ず渡すので、既定値 None は使われない。ただ review_config は None も空の値と同じに扱う(specs or PERSPECTIVES、instructs or [])ので、挙動は変わらない。書き方の指摘。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "review_constraint() はシステムプロンプト全体を返すため、関数名が中身に合っていない",
+   "location": "review_loop.py(review_constraint)",
+   "members": [
+    "e44"
+   ],
+   "id": "sk-13/c21",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "review_loop.py:743 の review_constraint は、REVIEW_CONSTRAINT に指示を足したシステムプロンプト全体を返す。名前が中身に合っていないのは事実だが、命名の指摘で挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "specs/perspectives と instructs/instructions が語尾だけで生の値と解釈済みの値を区別しており分かりにくい",
+   "location": "review_loop.py",
+   "members": [
+    "e46"
+   ],
+   "id": "sk-13/c22",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "review_config(specs, instructs) が (perspectives, instructions) を返し、語尾の違いで生の値と解釈した値を分けている(review_loop.py:393-413)。命名の好みで、挙動には関わらない。",
+   "classified_by": "llm"
+  }
+ ],
+ "members": {
+  "e1": {
+   "dir": "sk-13/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 4
+  },
+  "e2": {
+   "dir": "sk-13/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 2
+  },
+  "e3": {
+   "dir": "sk-13/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 3
+  },
+  "e4": {
+   "dir": "sk-13/plain/3",
+   "config": "plain",
+   "trial": 3,
+   "n": 4
+  },
+  "e5": {
+   "dir": "sk-13/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 3
+  },
+  "e6": {
+   "dir": "sk-13/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 4
+  },
+  "e7": {
+   "dir": "sk-13/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 4
+  },
+  "e8": {
+   "dir": "sk-13/plain/3",
+   "config": "plain",
+   "trial": 3,
+   "n": 1
+  },
+  "e9": {
+   "dir": "sk-13/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 3
+  },
+  "e10": {
+   "dir": "sk-13/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 7
+  },
+  "e11": {
+   "dir": "sk-13/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e12": {
+   "dir": "sk-13/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 1
+  },
+  "e13": {
+   "dir": "sk-13/plain/3",
+   "config": "plain",
+   "trial": 3,
+   "n": 2
+  },
+  "e14": {
+   "dir": "sk-13/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 1
+  },
+  "e15": {
+   "dir": "sk-13/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 6
+  },
+  "e16": {
+   "dir": "sk-13/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 2
+  },
+  "e17": {
+   "dir": "sk-13/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 3
+  },
+  "e18": {
+   "dir": "sk-13/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 3
+  },
+  "e19": {
+   "dir": "sk-13/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 5
+  },
+  "e20": {
+   "dir": "sk-13/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 3
+  },
+  "e21": {
+   "dir": "sk-13/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 5
+  },
+  "e22": {
+   "dir": "sk-13/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 2
+  },
+  "e23": {
+   "dir": "sk-13/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 6
+  },
+  "e24": {
+   "dir": "sk-13/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 2
+  },
+  "e25": {
+   "dir": "sk-13/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 2
+  },
+  "e26": {
+   "dir": "sk-13/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 1
+  },
+  "e27": {
+   "dir": "sk-13/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 2
+  },
+  "e28": {
+   "dir": "sk-13/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 3
+  },
+  "e29": {
+   "dir": "sk-13/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 1
+  },
+  "e30": {
+   "dir": "sk-13/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 1
+  },
+  "e31": {
+   "dir": "sk-13/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 5
+  },
+  "e32": {
+   "dir": "sk-13/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 4
+  },
+  "e33": {
+   "dir": "sk-13/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 4
+  },
+  "e34": {
+   "dir": "sk-13/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 5
+  },
+  "e35": {
+   "dir": "sk-13/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 4
+  },
+  "e36": {
+   "dir": "sk-13/plain/3",
+   "config": "plain",
+   "trial": 3,
+   "n": 3
+  },
+  "e37": {
+   "dir": "sk-13/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 5
+  },
+  "e38": {
+   "dir": "sk-13/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 1
+  },
+  "e39": {
+   "dir": "sk-13/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 4
+  },
+  "e40": {
+   "dir": "sk-13/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 1
+  },
+  "e41": {
+   "dir": "sk-13/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 1
+  },
+  "e42": {
+   "dir": "sk-13/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 3
+  },
+  "e43": {
+   "dir": "sk-13/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 2
+  },
+  "e44": {
+   "dir": "sk-13/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 4
+  },
+  "e45": {
+   "dir": "sk-13/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 2
+  },
+  "e46": {
+   "dir": "sk-13/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 3
+  },
+  "e47": {
+   "dir": "sk-13/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 2
+  }
+ },
+ "classify_cost_usd": 1.0407424
+}

@@ -1,0 +1,28 @@
+{
+ "case": "wn-306",
+ "kind": "ts",
+ "config": "prove",
+ "trial": 2,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 980751,
+  "cache_read": 930474,
+  "output": 8529
+ },
+ "cost_usd": 0.7587387999999998,
+ "started_at": "2026-11-15T08:07:53",
+ "duration_s": 140,
+ "num_turns": 19,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [
+  "?? scratch/becomes-sub.test.ts",
+  "?? scratch/break.test.ts"
+ ],
+ "head_changed": false
+}

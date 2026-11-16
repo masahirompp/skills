@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.0751,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/scripts/lib.sh:96",
+   "summary": "hk_process_cwds は自プロセス($$)が lsof の結果に出るかだけで可視性を判定しているため、他プロセスが見えないサンドボックスでも判定を通り、使用中の worktree を削除してしまう恐れがある。",
+   "quote": "hk_process_cwds only checks that its own process ($$) shows up in the lsof list to decide that lsof can see processes. That does not prove it can see other processes",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/scripts/lib.sh:91",
+   "summary": "lsof が無い環境では常に空リストを返すので、すべての worktree が keep になり、worktree の掃除がまったく機能しない。",
+   "quote": "When lsof is missing (common in minimal Linux and Docker images), the code always returns an empty list. Every worktree is then treated as 'cannot verify' and kept",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/SKILL.md:20",
+   "summary": "${TMPDIR:-/tmp} にフォールバックすると、共有 /tmp 上の予測可能な固定ファイル名を使うことになり、並行セッション同士の上書きや symlink 攻撃を受ける恐れがある。",
+   "quote": "With the new ${TMPDIR:-/tmp} fallback, the scan result goes to a fixed, predictable file name, /tmp/housekeeping-scan.tsv, in the shared /tmp.",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/scripts/scan.sh:49",
+   "summary": "parse_pr_info が文字列分割を自前で実装しており、プロセス置換と read で代替できるため、分割ロジックが重複している。",
+   "quote": "parse_pr_info re-implements string splitting by hand, even though lib.sh's comment allows process substitution, so a plain read would do the same job.",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/scripts/scan.sh:119",
+   "summary": "on_fp を grep で求める処理が、結果を使わない未マージのブランチでも毎回走っており、さらに `on_fp -gt 1` の分岐は事実上到達しないデッドコードになっている。",
+   "quote": "on_fp is computed with grep before merged_into_default, even for unmerged branches where it is never used.",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/housekeeping/scripts/apply.sh:37",
+   "summary": "削除対象の worktree 行が無い場合でも hk_process_cwds(全プロセスへの lsof)を実行しており、余計な待ち時間が発生する。",
+   "quote": "hk_process_cwds (lsof across every process) runs even when the approved input contains no worktree rows to delete.",
+   "quote_ok": true
+  }
+ ]
+}

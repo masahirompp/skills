@@ -1,0 +1,28 @@
+{
+ "cost_usd": 0.1604284,
+ "bugs": [
+  {
+   "id": "B1",
+   "verdict": "detected",
+   "quote": "ローカルに既定ブランチが無いなど片方の ref が欠けると、`rev-list` は失敗して空のファイルが残ります。",
+   "reason": "脆弱性としては挙げていないが、欠けた ref で rev-list が失敗して first-parent が空になり、終了コードの検査も無くなったため PR なしのブランチが全て delete になる、と原因と結果の両方を正解どおりに述べている。",
+   "quote_ok": true
+  },
+  {
+   "id": "B2",
+   "verdict": "detected",
+   "quote": "変更後は `is_ancestor \"$oid\" \"$sha\"` で、PR の head が手元の先端に含まれるときに `delete` になります。",
+   "reason": "verify_pr_merged の祖先判定の引数の向きが元と逆になったことを指摘し、マージ後に追加コミットを積んだブランチが delete になることにも触れている。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "test.sh",
+   "summary": "verify_pr_merged の追加コミットの分岐を確かめるテストが無く、引数の反転を既存のテストでは検出できない。",
+   "quote": "`test.sh` に「追加コミット」の分岐を確かめるテストはありません。",
+   "quote_ok": true
+  }
+ ]
+}

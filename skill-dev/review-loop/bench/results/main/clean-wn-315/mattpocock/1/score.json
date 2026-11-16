@@ -1,0 +1,55 @@
+{
+ "cost_usd": 0.0641536,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md",
+   "summary": "エラー中の扱い(一覧の n と ctrl+q ctrl+n)について、利用者に判断を仰いだ層2エスカレーションの記録がない。",
+   "quote": "**ハードな違反としての指摘: 層2のエスカレーションの記録がない。** エラー中の扱いは観測できる挙動で、ドメイン語の二択で表せます。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/ops/app.ts openNew",
+   "summary": "openNew の2つの位置引数(waitFor, preferredFrom)が中でまとめられ、undefined を渡す呼び出しが2箇所あるので、Data Clumps や名前の分かりにくさが疑われる。",
+   "quote": "**Data Clumps / Mysterious Name の疑い(判断の余地あり)**: `openNew(waitFor?, preferredFrom?)` の2つの引数は、中で `waitFor ?? preferredFrom` にまとめられます。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/e2e/ops.test.ts",
+   "summary": "docs に新しく書いた「ctrl+q ctrl+n はエラー中も、いたセッションのリポジトリを先頭にする」を確かめるテストがない。",
+   "quote": "docs に新しく書いた「`ctrl+q ctrl+n` はエラー中も、いたセッションのリポジトリを先頭にする」を確かめるテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test/e2e/ops.test.ts",
+   "summary": "テスト名は「8:」なのに、後半で確かめているエラー中の扱いはシナリオ8の文に入っていない。",
+   "quote": "テスト名は「8:」ですが、後半で確かめているエラー中の扱いはシナリオ 8 の文に入っていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test/e2e/ops.test.ts",
+   "summary": "1つの it で通常時とエラー時の2つを確かめているので、前半が落ちると後半が実行されない。",
+   "quote": "1つの `it` で通常時とエラー時の2つを確かめているので、前半が落ちると後半が流れません(判断の余地あり)。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "コミットメッセージ",
+   "summary": "コミット本文は openNew(undefined, sid) を呼ぶと書いているが、実際のコードは this.error ? undefined : sid で、エラー中の分岐が本文にない。",
+   "quote": "本文は「`openNew(undefined, sid)` を呼ぶ」ですが、実際のコードは `this.error ? undefined : sid` です。エラー中の分岐が本文に書かれていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "src/ops/app.ts Other...",
+   "summary": "候補の先頭が lib なのに、Other... を空のまま Enter すると起動ディレクトリで起動するというずれが、この変更で新しく生まれた。",
+   "quote": "候補の先頭が lib なのに、`Other...` を空のまま Enter すると起動ディレクトリで起動します。このずれはこの変更で新しく生まれ、利用者から見えます。",
+   "quote_ok": true
+  }
+ ]
+}

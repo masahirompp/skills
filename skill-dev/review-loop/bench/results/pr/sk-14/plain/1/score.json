@@ -1,0 +1,77 @@
+{
+ "cost_usd": 0.092358,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "detected",
+   "quote": "さらに `hk_is_protected` の heredoc が作れないと、while に何も入らないまま `return 1`、つまり「保護対象でない」と判定される作りになっています。保護の判定が安全側に倒れない点は別途気になります。",
+   "reason": "lib.sh の hk_is_protected と hk_path_in_use が heredoc を使っており、bash 3.2 で一時ファイルを作れないと『保護対象でない』に倒れる(fail-open)と指摘していて、detect_criteria を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "detected",
+   "quote": "「作れなければ何もせずに止まる」は不正確です。scan.sh は mktemp の前に `git fetch --prune` を実行しています(`scan.sh:22`)。",
+   "reason": "scan.sh で mktemp より前に git fetch --prune が走り、SKILL.md の『何もせずに止まる』と食い違うことを、正解と同じ場所と原因で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い、またはプロセスを見られないときに空の一覧を『使用中でない』と扱う問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh:186",
+   "summary": "書き込めない TMPDIR で apply.sh を動かすテストは、macOS の mktemp がテンプレートなしだと TMPDIR を見ないため、変更前のコードでも通ってしまい回帰を検出できない。",
+   "quote": "書き込めない TMPDIR で apply.sh を動かすこのテストは、macOS では変更前のコードでも通ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skill-dev/housekeeping/test.sh:186",
+   "summary": "apply.sh が読まない HOUSEKEEPING_TMPDIR をテストで設定しており、検証として意味がなくノイズになっている。",
+   "quote": "同じ行の `HOUSEKEEPING_TMPDIR=...` は、apply.sh が読まない変数なので検証の意味がなく、ノイズになっています。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skill-dev/housekeeping/test.sh:163-164",
+   "summary": "『止まる』テストが、fetch が mktemp より前に走ることも終了コード 1 であることも確かめず rc != 0 しか見ていないため、別の理由の失敗でも通る。",
+   "quote": "「止まる」テストでは、`git fetch` が mktemp より前に走ることも、終了コードが 1 であることも確かめていません。`rc != 0` しか見ていないので",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "『手順4の apply.sh が同じ理由で失敗したときも』の『同じ理由』が、今回の変更後は何を指すのか曖昧になっている。",
+   "quote": "「手順4の apply.sh が同じ理由で失敗したときも」の「同じ理由」が曖昧です。今回の変更で apply.sh は一時ファイルの理由では失敗しなくなったので、何を想定しているのか",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "apply.sh は標準入力で行を受け取るのに、`!` で実行してもらうときのコマンドの形が示されておらず、エージェントが組み立てを誤りやすい。",
+   "quote": "`!` で実行してもらうときのコマンド形(`! awk ... <ファイル> | <skill-dir>/scripts/apply.sh`)も示さないと、エージェントが組み立てを誤りやすいです。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/housekeeping/scripts/scan.sh:31",
+   "summary": "エラーメッセージ内の一時ディレクトリの既定値の決め方が lib.sh の処理と重複しており、既定値を変えるとずれる。",
+   "quote": "エラーメッセージ内の `${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}}` は、`lib.sh:18` の既定値の決め方を複製しています。既定値を変えるとずれるので",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skills/housekeeping/scripts/lib.sh:18-19",
+   "summary": "HOUSEKEEPING_TMPDIR に相対パスを渡すと tmp も相対パスになり、将来 cd を足すと壊れる。",
+   "quote": "`HOUSEKEEPING_TMPDIR` に相対パスを渡すと、`tmp` も相対パスになります。現状の scan.sh は `cd` をサブシェル内でしか使わないので問題になりませんが、将来 `cd` を足すと壊れます。",
+   "quote_ok": true
+  }
+ ]
+}

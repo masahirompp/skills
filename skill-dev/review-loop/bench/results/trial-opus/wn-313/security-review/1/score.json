@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.0646656,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "セキュリティ観点のレビューで脆弱性なしとしており、作業台の画面がつながったまま wbguide が消えたときに作り直されない問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "@wn_respawned を通算で数えていて数え直さない問題には言及していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "attach の結果判定で、シグナルによって終わった場合(status が null)を失敗扱いする問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が、利用者が分割したペインと案内のペインを区別しない問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗と判定された道で OSC 2 によるタイトル消去が飛ばされる問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide についてはクォートと入力の安全性しか見ておらず、セッションの有無だけで判定している問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

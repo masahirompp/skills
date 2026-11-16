@@ -1,0 +1,140 @@
+{
+ "cost_usd": 0.1205456,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは config 以外の source の拒否が止まる点を安全側として述べただけで、source == config の拒否が reason_type を見ずに分類器の拒否まで素通りさせる点を指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "detected",
+   "quote": "さらに `seen` に `None` が入るので、result にしか載らない `tool_use_id` のない拒否は「既に見た」と扱われます。その結果、止めるべき拒否が素通りします。",
+   "reason": "tool_use_id のない config の拒否が None をキーに入り、seen の None のせいで id なしの permission_denials が除外されると、場所と原因を正確に指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "判定役の出力も result の行を全てつなぐため複数の判定や余計な文が混ざる、という指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "result の行をつなぐときに is_error の行を除いていない、という指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "run_reviews が別の観点の失敗で抜けたとき、他の子の止めない拒否が記録されないという指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "child_error の詳細に、最後の行のエラーの文ではなく、つないだ本文の先頭が載るという指摘は無い。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "review_loop.py check_result",
+   "summary": "check_result の拒否を集めるループが StreamTail のデータしか使っておらず、StreamTail 側へ移すべき(Feature Envy)。",
+   "quote": "**Feature Envy の可能性**: `check_result` で拒否を集めるループは、`StreamTail` のデータしか使っていません。`StreamTail.blocking_denials()` のようにデータの側へ移す余地があります。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "review_loop.py StreamTail.summary",
+   "summary": "tool_name/tool_input の辞書を組み立てる処理が StreamTail.summary と重複している。",
+   "quote": "`{\"tool_name\": ..., \"tool_input\": tail.tool_inputs.get(...)}` を組み立てる形が `StreamTail.summary` にもあります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "review_loop.py run_judge / run_reviews",
+   "summary": "run_judge の見張りのループが run_reviews の子1つを見張る処理とほぼ重複しており、共通の関数にまとめるべき。",
+   "quote": "`run_judge` の新しい見張りのループ(poll → watch_denials → 時間切れの判定 → finish → check_result)は、`run_reviews` で子1つを見張る処理とほぼ同じです。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "review_loop.py StreamTail.summary",
+   "summary": "denial_summary を summary に改名したことで、何の要約かが名前から分からなくなった。",
+   "quote": "`denial_summary` を `summary` に改名したことで、何の要約かが名前から消えました。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "review_loop.py self.reported",
+   "summary": "self.reported という名前からは、報告済みの設定拒否の件数であることが読み取れない。",
+   "quote": "`self.reported` は報告済みの設定拒否の件数ですが、名前から読み取れません(例: `config_reported`)。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "review_loop.py watch_denials",
+   "summary": "watch_denials(running=...) が記録と試行を止める例外の送出を兼ねており、名前と引数から読み取りにくい。",
+   "quote": "`watch_denials(running=...)` は、記録と「試行を止める例外の送出」を兼ねています。名前と引数からはそれが読みにくいです。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "review_loop.py / 偽 claude / SKILL.md",
+   "summary": "文字列 \"config\" が複数の箇所に散らばっており、定数にすべき。",
+   "quote": "**Primitive Obsession(軽微)**: 文字列 `\"config\"` が実装、偽 `claude`、`SKILL.md` に散らばっています。定数が1つあれば十分です。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "コミット全体",
+   "summary": "result の行をつなぐ変更と設定の拒否を許す変更は互いに独立しており、コミットを分けるべき。",
+   "quote": "**Divergent Change の可能性**: result の行をつなぐ変更と、設定のルールでの拒否を許す変更は互いに独立しています。コミットを分けたほうが、レビューと切り戻しがしやすくなります。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "test.py / SKILL.md",
+   "summary": "source が config 以外の拒否についてのテストが無く、SKILL.md にも書かれていない。",
+   "quote": "source が `config` 以外の値(例: `hook`)の拒否にテストがなく、`SKILL.md` にも書かれていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "test.py run_judge",
+   "summary": "判定役が source のない拒否で途中で止まる経路(running=True)のテストが無い。",
+   "quote": "判定役が source のない拒否で途中で止まる経路(`running=True`)にテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 11,
+   "location": "test.py",
+   "summary": "1つの子で、設定のルールでの拒否と、result の permission_denials にだけ載る拒否が混在する場合のテストが無い。",
+   "quote": "1つの子で、設定のルールでの拒否と、イベントの出ない拒否(result の `permission_denials` にだけ載るもの)が混在する場合のテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 12,
+   "location": "review_loop.py check_result",
+   "summary": "子が result の行を出さずに終わると、拒否のイベントが出ていても child_error に分類される。",
+   "quote": "子が result の行を出さずに終わると、拒否のイベントが出ていても `child_error` に分類されます。",
+   "quote_ok": true
+  },
+  {
+   "n": 13,
+   "location": "test.py:248",
+   "summary": "test.py が一度だけ IndexError で失敗しており、タイミングに依存して不安定な可能性がある。",
+   "quote": "「前置きでフェンスを開いていなければ…」のケース以降が FAIL になり、`test.py:248` の `[-1]` で IndexError が出ています。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,13 @@
+{
+ "cost_usd": 0.0387056,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューはセキュリティの観点で status-format の固定文字列を確認しただけで、cleanupLeftovers で Y を選んで引き継いだ作業台に workbenchOptions や status-format を入れ直していない点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

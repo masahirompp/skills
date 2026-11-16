@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.1091096,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "最初の選べる行を選んでいると、塊の始まりを 0(一覧の先頭)にする。その上にある見出しと (sub) の行で窓が埋まると、塊が窓以上の長さになって start = b0 = 0 に固定され、選んだ行(`>`)が窓の外に押し出される。",
+   "reason": "render の cursorBlock の頭を 0 にして start = b0 になるため、頭の (sub) が多いと選んだ行が窓から外れる、という正解の原因と条件を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "trailing が区切りの境目で切れず、次の区切りの (sub) まで塊に入るという指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "detected",
+   "quote": "カーソルがない(選べる行がない)まま一覧があふれると、idx は 0 になり、`0/0` や `0/N` のような意味のない通し番号が出る。",
+   "reason": "選べる行がないときに通し番号が 0/0 になることを、正解と同じ条件で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "選んでいた行が一覧に残ったまま起動された行に変わったときも、goneName を求め(prevLayout.order に含まれるため)守りを立てる。そのため、行が消えていないのに `Ctrl+X ignored: <名前> left the list and the selection moved.` と示される。",
+   "reason": "(sub) に変わってカーソルが移ったときも guard が立ち、『left the list』という誤った文言が出ることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に対象の行が (sub) に変わっても入力欄が閉じないという指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "partial",
+   "quote": "openNote と openWait から、起動された行を断る守りを外した。いまは、カーソルが起動された行に乗らないことだけが守りになっている。attachKey は sidOfSession から得た sid を、選べるかを確かめずに this.cursor に入れ、openNote と openWait を呼ぶ。",
+   "reason": "守りを外したことと attachKey の経路という場所と原因は合っているが、案内が古い行を指しているという起きる条件を捉えておらず、いまは起きないと結論している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の『Both can be selected』の記述が実装と食い違うという指摘はない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/screen/screen.ts:230",
+   "summary": "窓が選んだ行の塊でしか動かないので、選べる行がないときや塊が窓より長いときに、窓の外の (sub) の行を見る手段がない。",
+   "quote": "起動された行はカーソルで選べないのに、窓は選んだ行の塊でしか動かない。そのため、塊が窓より長いときや、選べる行が 1 つもないときは、窓の外に出た (sub) の行をどうやっても見られない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/screen/screen.ts:201",
+   "summary": "選べるかどうかを screen では marker から、App と cursor.ts では node.spawned から決めていて、判定の出どころが 2 つある。",
+   "quote": "画面の組み立ては、選べるかどうかを `r.marker !== 'sub'` という表示の印から決めている。App と cursor.ts は Layout の node.spawned から決めるので、選べるかの出どころが 2 つある。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/model/cursor.ts:6",
+   "summary": "selectableOrder が sid ごとに全ノードをなめるため O(n²) になり、キー入力や更新のたびに計算し直している。",
+   "quote": "selectableOrder は order の各 sid について isSpawned を呼び、そのたびに全区切りの全ノードをなめるので O(n²) になる。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test/e2e/deps.test.ts:465",
+   "summary": "シナリオ 71 はキーを送った直後に、待たずに出ていないことを確かめているので、『何もしない』ことを検証できていない。",
+   "quote": "シナリオ 71 は f と e を送った直後に、知らせやメニューが出ていないことを待たずに確かめている。描画が後から来る場合を捉えられず、『何もしない』を検証できていない。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test/e2e/deps.test.ts:442",
+   "summary": "シナリオ 70 は並び順によって押すキーの向きを切り替えるので、↓ で (sub) を飛ばす動きを確実には検証していない。",
+   "quote": "シナリオ 70 は other が orchestrator より下か上かで押すキーを切り替えるので、並びが変わってもテストは通る。『↓ で起動された行を飛ばして次の行に移る』を確実には検証していない。",
+   "quote_ok": true
+  }
+ ]
+}

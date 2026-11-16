@@ -1,0 +1,42 @@
+{
+ "cost_usd": 0.07471359999999999,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは hk_is_protected や hk_path_in_use がヒアドキュメント経由で一時ファイルに依存し、一時ファイルを作れないと fail-open になる点に触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "一時ディレクトリの作成が git fetch --prune の後にあるため、止まる場合でも副作用が先に起きるという指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無いときやプロセスを見られないときに、使用中の worktree を『使用中でない』と判定する問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh「scan: 一時ディレクトリを片付ける」",
+   "summary": "このテストは hk-tmp が空かどうかしか見ておらず、HOUSEKEEPING_TMPDIR の下に一時ディレクトリが作られたことを確かめていないので、HOUSEKEEPING_TMPDIR を無視する旧来の mktemp -d でも成功してしまう。",
+   "quote": "テストのコメントには「一時ディレクトリは HOUSEKEEPING_TMPDIR の下に作り、終了時に消すこと」とあります。しかし判定は「`hk-tmp` が空か」だけです。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skill-dev/housekeeping/test.sh の apply「書き込めない TMPDIR でも動く」テスト",
+   "summary": "macOS の mktemp はテンプレートが無いと TMPDIR を見ないので、旧版の apply.sh もこのテストに通り、修正の前後を区別できない。",
+   "quote": "macOS の mktemp はテンプレートが無いと TMPDIR を見ないので、旧版もこの条件で普通に動きます。そのため、このテストは修正の前後を区別できません。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,35 @@
+{
+  "case": "wn-308",
+  "bugs": [
+    {
+      "id": "W308-1",
+      "origin": "history:f02e9ea",
+      "found_in_review_round": 3,
+      "file": "src/ops/app.ts",
+      "where": "App.cleanupLeftovers(異常終了のあとの引き継ぎ。Y を選んだ分岐)",
+      "summary": "異常終了した前の whatnext の tmux サーバから作業台を Y で引き継ぐと、その作業台のステータス行は作られたときの書式のままで、この差分が足した分割とウィンドウのキー(^Q% split │ · ^Q\" split ─ · ^Qc window)が出ない。",
+      "mechanism": "作業台のステータス行(status-format[0])は Tmux.workbenchOptions が入れるが、これを呼ぶのは createWorkbench(新しく作るとき)と src/cli/list.ts の案内のセッション(GUIDE、起動のたびに入れ直す)だけである。cleanupLeftovers は残っていた sh-<id> を keep に集めて引き継ぐかを聞くが、Y のときは何もせず(`if (!yes) ... killSafely` のみ)、引き継いだ作業台に workbenchOptions も status-format の入れ直しもしない。そのため、前の版(この差分より前)が作った作業台にはキーのない書式が残り続ける。",
+      "trigger": "前の版の whatnext で作業台を作り、そこでシェル以外のコマンド(例 sleep 1007)を動かす → whatnext のプロセスが異常終了する(SIGKILL など。tmux サーバと作業台は残る) → この版で whatnext を起動し直す → 'Keep them? [Y/n]' に Enter(Y) → 引き継いだ作業台を作業台の画面で映すと、最下行に分割とウィンドウのキーが出ない。",
+      "impact": "低",
+      "kind": "behavior",
+      "scope": "in",
+      "verified": "複製(71d31d0、npm ci && npm run build)に f02e9ea の test/e2e/workbench.test.ts だけを持ち込み、`npx vitest run --dir test/e2e -t '46:' --no-file-parallelism --testTimeout 60000` を実行。シナリオ 46 が `AssertionError: expected 'old\\n' to match /\\^Q%% split/`(test/e2e/workbench.test.ts:321。引き継いだ sh-a0000000 の status-format[0] が前の値 'old' のまま)で失敗した。4976bd7 の workbench.test.ts を持ち込んでファイル全体を流すと、失敗はこの 46 の1件だけ(12 passed)。",
+      "detect_criteria": "cleanupLeftovers(異常終了のあとの引き継ぎ)で Y を選んだ作業台にステータス行の書式(workbenchOptions / status-format[0])を入れ直していないため、前の版から引き継いだ作業台には新しいキーの案内が出ない、と指摘していること。"
+    }
+  ],
+  "non_defects": [
+    "9a76e45: PRODUCT.md の完了条件1の『書き換えたシナリオ』の一覧に 49 を足した — 文書内の記録の付け忘れで、仕様と実装の食い違いではない",
+    "9a76e45: PRODUCT.md の『採らなかった形』を『こうはならない』の見出しに改めた — 文言の修正",
+    "9a76e45: e2e に『案内のセッションにはキーを出さない』『ウィンドウが2つでもキーが続く』の確かめを足した — テストの追加のみ。4976bd7 の版のテストを 71d31d0 で流しても通った",
+    "7a2fdcb: 書式を workbenchStatusFormat に切り出し、lib/tmux/tmux.test.ts に単体テストを足した — 振る舞いを変えないリファクタとテストの追加",
+    "7a2fdcb: docs/lib/tmux.md の説明を createWorkbench から workbenchOptions の項へ移し、PRODUCT.md の『窓』を『ウィンドウ』に揃えた — 契約 docs と文言の修正。71d31d0 の記述も挙動とは食い違っていない",
+    "7a2fdcb, f02e9ea: e2e で ^Qc と ^Q\" をキーで押して効くことを確かめるようにした — テストの追加のみ。71d31d0 で流しても通った",
+    "f02e9ea: serverConfig の doc コメントを元の位置に戻した — 7a2fdcb が workbenchStatusFormat を挟んだことで生じたずれで、71d31d0 にはない",
+    "d461513: 狭い画面でも短い形に切り替えないことを PRODUCT.md に書いた — 利用者の判断の記録(docs の追記)。実装はもともと切り替えない",
+    "958dc73: 引き継いだ作業台へのかけ直しを status-format だけから名前以外の全オプション(refreshWorkbenches)に広げ、PRODUCT.md に引き継ぎの要件を書いた — W308-1 と同じ原因の修正の続きとして W308-1 にまとめた",
+    "958dc73, bed1b47: PRODUCT.md の幅の数字(40→41)と短い形の『こうはならない』の画面 — d461513 以降に書かれた記述の手直しで、71d31d0 にはない",
+    "bed1b47: refreshWorkbenches を1つの tmux 呼び出しにまとめると途中のセッションが消えていたとき後ろが実行されない問題を、1つずつ送るように直した — 958dc73 が持ち込んだもので、71d31d0 にはない",
+    "bed1b47: e2e の案内のセッションの確かめを否定(^Q がない)から肯定(最下行が 'workbench: alpha' で終わる)に変えた — テストの修正のみ",
+    "4976bd7: DESIGN.md に書式の置き場所と引き継ぎを書き、PRODUCT.md に『利用者の判断』を添え、workbenchOptionArgs のコメントを直した — docs とコメントのみ"
+  ]
+}

@@ -1,0 +1,56 @@
+{
+ "cost_usd": 0.088258,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "detected",
+   "quote": "apply.sh は `lib.sh:48`(`hk_is_protected`)と `lib.sh:66-69`(`hk_path_in_use`)のヒアドキュメントを使っています。この環境の bash は `/bin/bash` 3.2.57 です。bash は 5.1 より前だと、ヒアドキュメントを一時ファイルで実装します。",
+   "reason": "apply.sh から mktemp を外しても hk_is_protected と hk_path_in_use がヒアドキュメント経由で一時ファイルに依存したままだと指摘しており、detect_criteria を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "一時ディレクトリの作成が git fetch --prune より後にあり、作れないときも副作用が起きる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い、またはプロセスを見られないときに、空の一覧を「使用中でない」と扱う問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh:172-175",
+   "summary": "テストは hk-tmp が空かどうかしか見ておらず、HOUSEKEEPING_TMPDIR の下に作られることを確かめていない。",
+   "quote": "このテストは、実行後に `$root/hk-tmp` が空かどうかだけを見ています。scan.sh が `HOUSEKEEPING_TMPDIR` を無視して `/var/folders` に作っていても、`hk-tmp` は空のままなので成功します。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/scripts/scan.sh:31",
+   "summary": "一時ディレクトリの既定値を求める式が lib.sh と重複しており、片方だけ変えるとエラーメッセージが実際の場所とずれる。",
+   "quote": "`${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}}` が `lib.sh:18` と同じ形で書かれています。片方だけ変えると、エラーメッセージが実際の場所とずれます。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "apply.sh を ! で実行する案内が「同じように」だけで、標準入力を渡す具体的な形が書かれていない。",
+   "quote": "scan.sh は `! <skill-dir>/scripts/scan.sh > <ファイル>` と形を示しています。一方 apply.sh は「同じように」だけです。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "! で実行するときのカレントディレクトリに触れておらず、別のリポジトリを走査するおそれがある。",
+   "quote": "ユーザーのシェルが別のディレクトリにいると、別のリポジトリを走査してしまいます。",
+   "quote_ok": true
+  }
+ ]
+}

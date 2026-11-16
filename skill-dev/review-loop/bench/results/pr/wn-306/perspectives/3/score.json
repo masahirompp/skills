@@ -1,0 +1,98 @@
+{
+ "cost_usd": 0.124834,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "その上の `(sub)` の行が窓の高さより多いと、`blockLen >= avail` から `start = b0 = 0` になり、**選んだ行が画面から消えます**。",
+   "reason": "render の cursorBlock が (sub) を含んで窓より長いとき、start = b0 で選んだ行が消えることを指摘しています。b1 基準の入力欄の補正で、選んだ行と入力欄が消えることも指摘しており、両方の条件を満たします。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "detected",
+   "quote": "選んだ行が区切りの最後の行で、次の区切りがトップレベルの `(sub)` の行(起動元が一覧に出ていないもの)で始まる場合。区切りの空行と見出しも含めて、同じ塊として窓に入ります。",
+   "reason": "trailing が区切りの境目で切れず、次の区切りの (sub) の行まで塊に入ることを指摘しており、区切りが変わったら false に戻す直し方も示しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューが述べた『0/N』は、カーソルが (sub) の行に乗った場合の症状です。選べる行が無いときに pos が『0/0』になる件には触れていません。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "直後に `Ctrl+X` を押すと `Ctrl+X ignored: worker left the list and the selection moved.` と出ますが、実際には行は一覧から消えていません。文言が事実と合いません。",
+   "reason": "行が (sub) に変わってカーソルが移るときにも guard が立ち、『left the list』という誤った文言が出ることを指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に対象の行が (sub) に変わっても mode が閉じず、カーソルとずれる件は指摘していません。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "detected",
+   "quote": "この経路は `selectableOrder` を通りません。そのうえ、この PR で `openNote` と `openWait`(`:835`、`:856`)から `isSpawned` の確認を外しました。結果として、**起動された `background` の行にメモの入力欄と `f` のメニューが開きます**。",
+   "reason": "openNote から spawned の確認を外したことで、attachKey の経路から起動された行にカーソルが乗り、メモが開くことを指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の『Both can be selected』が実装と食い違う件には触れていません。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/screen/screen.ts:201-215",
+   "summary": "trailing が親子の関係を見ていないので、同じ区切りの中で、選んだ行の直後にある無関係なトップレベルの (sub) の行まで塊に入る。",
+   "quote": "同じ区切りの中で、選んだ行の直後に無関係なトップレベルの `(sub)` の行が並ぶ場合も同じです。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/ops/app.ts:1068 (onReturn), :275 (pendingCursorId)",
+   "summary": "onReturn と pendingCursorId が確かめずに cursor を代入するので、カーソルが (sub) の行に乗り、0/N と表示される。非同期の戻りと更新の間で、カーソルが選べない行に乗る窓もある。",
+   "quote": "どちらも、確かめずに `this.cursor = row.sid` を代入します。起動された行に attach していて戻ると、カーソルが `(sub)` の行に乗ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/e2e/deps.test.ts:464",
+   "summary": "否定の確認を待たずに行っているので、描画が遅れる実装では、壊れていてもテストが通る。",
+   "quote": "`keys('f')` と `keys('e')` の直後に、待たずに `not.toMatch(/waits for:|can't/)` を調べています。通知が少し遅れて描画される実装だと、壊れていても通ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test/unit/screen.test.ts",
+   "summary": "窓の計算の3件(上に (sub) の行が多い場合、入力欄が出ている場合、区切りをまたぐ場合)を確かめるテストが無い。",
+   "quote": "上の窓の計算の3件(上に `(sub)` の行が多い場合、メモの入力欄が出ている場合、区切りをまたぐ場合)は、`test/unit/screen.test.ts` の新しいテストでは確かめていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "attachKey",
+   "summary": "attachKey から e / f を押す経路で、起動された行を断るテストが無い。",
+   "quote": "`attachKey` から `e` / `f` を押す経路で、起動された行を断るテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "src/model/cursor.ts selectableOrder",
+   "summary": "selectableOrder が行ごとに isSpawned を呼ぶので O(n²) になり、キー入力のたびに走る。",
+   "quote": "`cursor.ts` の `selectableOrder` は `l.order` を走査するたびに `isSpawned`(全区切りと全ノードの走査)を呼ぶので、計算量は O(n²) です。",
+   "quote_ok": true
+  }
+ ]
+}

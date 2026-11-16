@@ -1,0 +1,140 @@
+{
+ "cost_usd": 0.1410776,
+ "bugs": [
+  {
+   "id": "S16-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "PR の目的の直し残しが範囲の定義で差分の外に入るという指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再現したら直す手順と、差分の外は直さない規則との先後の矛盾には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再現を行う場所が限られておらず破壊的な操作を実行しうるという指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは issue 作成の手順を「問題ありません」とし、セキュリティの再現手順が公開される点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは「既存のテストも通っている」という条件を妥当と評価しており、テストが無い場合も空のまま満たされるという問題を指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-6",
+   "verdict": "detected",
+   "quote": "差分の外にある横展開の候補が、どこにも残らない。**\n   - 横展開の候補には範囲の欄がありません。\n   - そのため、差分の外の候補は終了時の報告にも、issue にするか尋ねる対象にも入りません。",
+   "reason": "差分の外の横展開の候補が、報告にも issue の確認にも入らず行き先が無いことを、正解と同じ場所と原因で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "環境の条件を作れずに起きなかった場合が「採らない」に入るという指摘は無い(「実行では示せない」についての指摘は別の問題)。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "判定役の「差分の外」の判断を確かめずに受け入れられる非対称には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-9",
+   "verdict": "partial",
+   "quote": "「修正が大きく、再現が確かめた範囲を超えて」には判断の基準がなく、緩くも読めます。",
+   "reason": "同じ括弧書きを緩いと指摘しているが、「大きい」という条件に結び付いているため小さな修正がすり抜けるという原因は述べていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-10",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再現すれば PR が意図した変更を戻しうるという指摘は無い。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/SKILL.md 63行、132行、JUDGE_PROMPT",
+   "summary": "新しい欄の名前「範囲」が、レビューの範囲という既存の意味と重なり、紛らわしい。",
+   "quote": "新しい欄の名前「範囲」が、既存の「範囲」と重なっている(重め)。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/SKILL.md 5節",
+   "summary": "「横展開の候補は、差分の内にあるもの」が、原因ではなく場所で決める読み方になりやすく、判定プロンプトの「差分の内」と意味がずれる。",
+   "quote": "5節の「横展開の候補は、差分の内にあるもの」で、同じ語の意味がずれている。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/review-loop/SKILL.md 78行、JUDGE_PROMPT",
+   "summary": "範囲の定義と「実行では示せない」の例示が SKILL.md と JUDGE_PROMPT の2か所に重複しており、将来ずれる余地がある。",
+   "quote": "範囲の定義と「実行では示せない」の例示が、SKILL.md と JUDGE_PROMPT にほぼ同じ文で書かれています。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skill-dev/review-loop/fakes/claude",
+   "summary": "偽の判定に足した2行は、test.py が見出ししか検証しないため、新しい欄のテストになっていない。",
+   "quote": "足した2行は、新しい欄のテストになっていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skill-dev/review-loop/fakes/claude",
+   "summary": "偽の判定に分類の行が無いのに「再現: 対象外」と書かれていて、意味が噛み合わない。",
+   "quote": "偽の判定には分類の行がないのに「再現: 対象外」と書かれていて、意味が噛み合いません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/review-loop/SKILL.md:103, :126, :128",
+   "summary": "「実行では示せない」が仕様に無い例外になっており、文書を変える PR では再レビューが続き、反復を減らす狙いが効かない。",
+   "quote": "「実行では示せない」が、仕様にない例外になっている。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skills/review-loop/SKILL.md:128",
+   "summary": "再レビューを省く条件の「どの修正も」が、style などの基準外の修正まで含むかあいまいで、含むと読めば厳しすぎる。",
+   "quote": "再現なしで直してよい基準外の修正(style など)まで含むと読めば、省ける場面はほとんどなく、厳しすぎます。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "skills/review-loop/SKILL.md",
+   "summary": "差分の外として採らなかった理由を次の反復へ伝える手順が無く、レビュー役が毎回同じ指摘を出す。",
+   "quote": "差分の外で採らなかった理由を、次の反復へ伝える手順がない。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "skills/review-loop/SKILL.md:102",
+   "summary": "「書いたテストを回帰テストとして残す」は仕様に無い追加で、PR が膨らむのを防ぐという動機と少し逆向き。",
+   "quote": ":102 の「書いたテストを回帰テストとして残す」は仕様にありません。動機の「PR が目的の外へ膨らむ」とは少し逆向きです。",
+   "quote_ok": true
+  }
+ ]
+}

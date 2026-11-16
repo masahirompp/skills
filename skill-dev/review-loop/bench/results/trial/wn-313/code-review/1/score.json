@@ -1,0 +1,112 @@
+{
+ "cost_usd": 0.2613936,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "detected",
+   "quote": "案内のセッションを作り直すのは `whatnext workbench` の attach の前だけで、一覧や `pane-died` が案内へ切り替える経路(`doFollow`、`killSafely`、`@wn_paned_sh` の `switch-client -t =wbguide`)は、案内がないと黙って失敗する。",
+   "reason": "項目4が、作業台を映している間に wbguide が消えると作り直されず、doFollow・killSafely・pane-died の切り替えが失敗して画面が離れると、正解と同じ場所と原因で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "起動し直しの回数 `@wn_respawned` はペインの寿命を通して増えるだけで、安定して動いたあとも戻らない。",
+   "reason": "項目3が、@wn_respawned が通算で数えられ数え直されないため、間をあけた終了でも6回目に案内が畳まれると指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "attach の判定について述べた項目2は status 0 を成功扱いにする話で、シグナルで終わり status が null のときに「つなげなかった」と誤判定する点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "detected",
+   "quote": "`pane-died` の `wbguide)` の分岐はセッション名だけで判定するので、案内のプログラム以外のペイン(案内のセッションで利用者が `ctrl+q %` / `ctrl+q c` で作ったシェル)も起動し直してしまう。",
+   "reason": "項目1が、wbguide の分岐がセッション名だけで判定し利用者のペインも起動し直すこと、@wn_guide_died の上書きまで指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなったことへの言及がどこにもない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "detected",
+   "quote": "5 回を超えて案内のペインだけ `kill-pane` されると、利用者のペインだけの `wbguide` が残り、`ensureGuide` は 'exists' を返して案内のないセッションにつなぐ。",
+   "reason": "項目1の末尾が、セッションは残るが案内のペインがないとき ensureGuide が 'exists' を返して作り直さないことを、正解と同じ原因で指摘している。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/cli/workbench.ts:33",
+   "summary": "案内のセッションが畳まれてクライアントが離れると tmux は 0 で終わるため成功扱いになり、理由も出さずキーも待たずに分割が閉じる。",
+   "quote": "案内のセッションが畳まれてクライアントが離れたとき、tmux は 0 で終わるので成功扱いになり、理由も出さずキーも待たずに分割が閉じる。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/cli/workbench.ts:27",
+   "summary": "頼みごと guide の SIGUSR2 を attach より前に送るので、一覧の唯一の follow() がクライアントの接続前に使われ、作業台の画面が古い案内を映し続けることがある。",
+   "quote": "頼みごと `guide` の SIGUSR2 を attach より前に送るので、一覧は `wbChanged` による唯一の `follow()` をクライアントがつながる前に使ってしまうことがある。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "lib/tmux/tmux.ts:51",
+   "summary": "原因が未解明のまま起動し直しで症状を覆っており、@wn_guide_died は tail -5 や上書き、kill-server で肝心の情報を落としやすく、原因の調査に使いにくい。",
+   "quote": "原因が分からないまま症状(セッションの消失)だけを起動し直しで覆っており、原因を突き止めるための `@wn_guide_died` は肝心の情報を落としやすい。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/cli/workbench.ts:58",
+   "summary": "利用者に見える挙動の追加(新しいエラー文言、キー待ち、案内の自動の作り直し)が DESIGN.md にしかなく PRODUCT.md になく、記述と実際が食い違う。",
+   "quote": "利用者に見える挙動の追加(新しいエラー文言 2 つ、`Press any key to close.` のキー待ち、案内の自動の作り直し)が DESIGN.md にしかなく、PRODUCT.md にない。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "src/cli/workbench.ts:43",
+   "summary": "askListToRefreshGuide が guide.ts の Enter の処理と同じ頼みごとの書き込みと SIGUSR2 を写しており、3 か所に重複している。",
+   "quote": "頼みごとの名前の形(`takeRequests` の並べ替えが頼る)と知らせ方が、`@wn_req_sh`、guide.ts、workbench.ts の 3 か所に重複する。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "src/cli/list.ts:67",
+   "summary": "ensureGuide が作成時に workbenchOptions(GUIDE, '') を入れるのに直後に同じ呼び出しをもう一度しており、tmux の起動が1回余分に走る。",
+   "quote": "通常の起動(案内を新しく作る経路)のたびに、9 個の `set` を並べた tmux の起動が 1 回余分に走る。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "src/cli/list.ts:67",
+   "summary": "ensureGuide の 'failed' の戻り値を捨てているので、new-session の失敗が記録に残らず、案内なしで一覧が立ち上がった理由を追えない。",
+   "quote": "`new-session` が失敗しても記録に残らず、続く `workbenchOptions` も黙って失敗するので、案内なしで一覧が立ち上がった理由を `WHATNEXT_DEBUG_LOG` から追えない。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "test/e2e/workbench.test.ts:255",
+   "summary": "追加したテストが `signal=kill` という macOS/BSD のシグナル名の表記に依存しており、Linux では数字の 9 になって落ちる。",
+   "quote": "tmux の `#{pane_dead_signal}` は `sys_signame` がある macOS/BSD では `kill` だが、Linux では数字の `9` になり、`/signal=kill/` が落ちる。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "test/unit/cli.test.ts:26",
+   "summary": "it.each(['bash', 'zsh', 'sh']) のテストが zsh のない環境では ENOENT で落ち、npm test が通らなくなる。",
+   "quote": "`test/unit/cli.test.ts` 26 行目の `it.each(['bash', 'zsh', 'sh'])` は、zsh のない環境では `execFileSync` が ENOENT で落ち、コミット前のローカルチェック `npm test` が通らなくなる。",
+   "quote_ok": true
+  }
+ ]
+}

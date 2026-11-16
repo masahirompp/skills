@@ -1,0 +1,704 @@
+{
+ "case": "clean-wn-315",
+ "cost_usd": 0.1212852,
+ "clusters": [
+  {
+   "title": "エラーの間も古い this.rows の cwd が2番目以降の候補に並び、「見えない行は先頭にしない」という理由と食い違う",
+   "location": "src/ops/app.ts:951",
+   "members": [
+    "e1",
+    "e11",
+    "e24",
+    "e25"
+   ],
+   "id": "clean-wn-315/c1",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/ops/app.ts:235-241 では、エラーのとき this.rows を残したまま return する。openNew(943-951) は、3番目以降に this.rows の全行の cwd を入れる。指摘の事実は正しい。ただ、3番目以降に行の cwd を並べるのは main の openNew でも同じで、PRODUCT.md:591 の「--json の各行の cwd」とも合う。差分が変えたのは先頭だけで、誤った起動先になる経路はない。残るのは理由づけの一貫性と文書の書き方の話なので trivial。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "Other... を空のまま Enter で確定すると起動したディレクトリで起動し、候補の先頭と行き先が食い違う",
+   "location": "docs/PRODUCT.md:592",
+   "members": [
+    "e2",
+    "e8"
+   ],
+   "id": "clean-wn-315/c2",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "resolveDir(app.ts の 'if (!t) return this.p.launchDir') は、空のとき起動したディレクトリを返す。PRODUCT.md:592 にもそう書いてある。入力欄には app.ts:592 で `Enter confirm (empty: <起動したディレクトリ>)` と行き先を示すので、利用者が行き先を取り違える経路はない。候補の先頭と空の Enter の行き先を揃えるかは設計の好みで、どちらも文書と実装が一致している。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "openNew の省略できる2つの位置引数(waitFor と preferredFrom)が紛らわしく、1つにまとめるべき",
+   "location": "src/ops/app.ts:943",
+   "members": [
+    "e3",
+    "e31"
+   ],
+   "id": "clean-wn-315/c3",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "app.ts:944 は `waitFor ?? preferredFrom` なので、両方渡すと preferredFrom は使われない。ただ、呼び出しは 853・1260 の (undefined, sid) と 917 の (waiter) だけで、両方を渡すところはない。挙動には関わらず、引数の形の好みの話。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "PRODUCT.md の決定日「2026-11-02、利用者の判断」に裏付けが無く、コミット日とも合わない",
+   "location": "docs/PRODUCT.md:591",
+   "members": [
+    "e4",
+    "e12",
+    "e17",
+    "e18",
+    "e49"
+   ],
+   "id": "clean-wn-315/c4",
+   "class": "wrong",
+   "scope": "na",
+   "ran": true,
+   "evidence": "`gh issue view 316` で、issue #316(spec-change、2026-11-02T14:35 作成)の本文に「利用者の判断(2026-11-02)」とある。日付の裏付けはある。コミットの日付(実際は 2026-11-16 00:32)は判断を docs に反映した日で、判断した日と違っていても矛盾しない。「裏付けが無い」という主張は事実と食い違う。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "1つの it に2つの挙動の確認が入っており、前半が落ちると後半を確かめられず、原因も読み取りにくい",
+   "location": "test/e2e/ops.test.ts:103-121",
+   "members": [
+    "e5",
+    "e42"
+   ],
+   "id": "clean-wn-315/c5",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "テストの書き方の好みの話。`npx vitest run --dir test/e2e -t \"8: 一覧の n\"` で 1 passed になり、両方の確認が通る。挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "エラーの間に ctrl+q ctrl+n を押すと、いたセッションのリポジトリが先頭になる挙動を確かめるテストが無い",
+   "location": "docs/PRODUCT.md:513",
+   "members": [
+    "e6",
+    "e32",
+    "e33",
+    "e46",
+    "e50"
+   ],
+   "id": "clean-wn-315/c6",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "テストが無いという指摘。実装は app.ts:1260 で、エラーの有無にかかわらず openNew(undefined, sid) を呼ぶ。エラーの間も rows は残る(235-241)ので、rootOfSid で先頭が決まる。PRODUCT.md:513 のとおりに動く経路を最後まで追えた。テストの不足だけなので trivial。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "新しいテストは通常のリポジトリしか扱っておらず、worktree・(tty)・行が無い場合・ghq の候補が未テストである",
+   "location": "test/e2e/ops.test.ts:103-121",
+   "members": [
+    "e7",
+    "e16"
+   ],
+   "id": "clean-wn-315/c7",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "テストが無いという指摘。worktree は rootOfSid の locations.get(r.cwd)?.root、git でない場所は ?? r.cwd、行が無いときは rows.get が undefined なので launchDir、ghq は後から add する。どれも openNew と rootOfSid(943-968)で文書どおりに扱われていて、挙動の欠陥ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "worktree の行で n を押したとき、先頭が元のリポジトリになることを確かめるテストが無い",
+   "location": "test/e2e/ops.test.ts:103",
+   "members": [
+    "e15",
+    "e30",
+    "e40",
+    "e47",
+    "e51"
+   ],
+   "id": "clean-wn-315/c8",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "テストが無いという指摘。worktree を元のリポジトリに寄せる処理は rootOfSid(app.ts:964-968)の locations.get(r.cwd)?.root が担う。f の New session(917)と共通の、既存の経路を使っている。挙動の欠陥ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "(tty) の行などリポジトリでない場所では ~ が先頭になり、「同じリポジトリで作業を始める」という根拠が当てはまりにくい",
+   "location": "src/ops/app.ts:853",
+   "members": [
+    "e9"
+   ],
+   "id": "clean-wn-315/c9",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/ops/app.ts:853 は sid を openNew に渡し、openNew(:943-) は rootOfSid で root を出す。git でない場所では cwd がそのまま root になるので、(tty) の行が ~ にあれば ~ が先頭になる。ただ、これは差分で書いた docs/PRODUCT.md:591「カーソルのあるセッションのリポジトリ（git でない場所ならその場所）」のとおりの挙動で、誤りではない。指摘は根拠(同じリポジトリで作業を始めることが多い)が当てはまるかという設計の意見にとどまる。ほかの候補は残るので選び直せる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "git でない場所の根が realpath になるため、/tmp と /private/tmp が重複除きをすり抜ける",
+   "location": "src/ops/app.ts:946-948",
+   "members": [
+    "e10"
+   ],
+   "id": "clean-wn-315/c10",
+   "class": "wrong",
+   "scope": "na",
+   "ran": true,
+   "evidence": "launchDir は process.cwd()(src/cli/list.ts:89)。`cd /tmp && node -e 'console.log(process.cwd())'` を実行すると、PWD=/tmp でも /private/tmp を返した。git でない場所の root は realpathSync の結果(src/input/where.ts:27-31)で、realpathSync('/tmp') も /private/tmp を返した。どちらも /private/tmp になるので、文字列の重複除きで1つにまとまる。加えて prefRoot は、main にもある rows のループ(:951)が足す値と同じなので、差分で新しい重複は生まれない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "slice(1, 3) で先頭の2つしか見ておらず、先頭のリポジトリが後ろに重複して出ないことを確かめていない",
+   "location": "test/e2e/ops.test.ts",
+   "members": [
+    "e13"
+   ],
+   "id": "clean-wn-315/c11",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "テストが無いという指摘にあたる。openNew の add(:946-948) は paths.includes で重複を除くので、先頭のリポジトリが後ろにもう一度出ることはコードの上で起きない。挙動の問題ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "カーソル行の cwd が存在しないと、無いパスが既定の先頭候補になり claude --bg の起動に失敗する",
+   "location": "src/ops/app.ts:853",
+   "members": [
+    "e14",
+    "e26",
+    "e48",
+    "e53"
+   ],
+   "id": "clean-wn-315/c12",
+   "class": "real",
+   "scope": "in",
+   "ran": true,
+   "evidence": "一時の e2e テストで再現した。存在しない <tmp>/gone-dir を cwd に持つ bg の行 ghost を作り、カーソルをそこに置いて n を押すと、パネルは [\"> gone-dir\",\"  app\",...] で、無いパスが選ばれた状態の先頭になった。そのまま Enter, Enter を押すと『claude --bg did not start a session:』だけが出て理由は示されず、h.calls() に --bg の呼び出しは無かった(execFile が cwd の ENOENT で起動できない)。main では先頭が launchDir なので、無いパスが既定の選択になるのは差分による。テストのファイルは消した。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "シナリオ 8 にエラーの間の場合が書かれておらず、テストと受け入れシナリオが対応しない",
+   "location": "docs/PRODUCT.md:787",
+   "members": [
+    "e19",
+    "e34"
+   ],
+   "id": "clean-wn-315/c13",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/PRODUCT.md:787 のシナリオ 8 に足した文は通常の場合だけを書いている。エラーの間の挙動は本文の :591 に書かれていて、コードもテストもそれに合っている。受け入れシナリオとテストの対応の付け方という文書の構成の問題で、利用者が挙動を取り違えるような食い違いではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "エラーの間の挙動を、利用者の判断(層2)を経ずに仕様に書いている",
+   "location": "docs/PRODUCT.md:513",
+   "members": [
+    "e20",
+    "e29"
+   ],
+   "id": "clean-wn-315/c14",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "指摘は進め方(層2のエスカレーションを経たか)についてのもの。docs の記述(:513、:591)と、コードの挙動(:853 の this.error ? undefined : sid、:1260 の ctrl+q ctrl+n の経路)は互いに合っていて、文書とコードの食い違いも誤った結果も無い。挙動の欠陥ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "エラー時のテストが panel(s2)[1] しか見ておらず、lib の位置や先頭から外れたことを固めていない",
+   "location": "test/e2e/ops.test.ts:117-120",
+   "members": [
+    "e21",
+    "e22"
+   ],
+   "id": "clean-wn-315/c15",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "一時のテストで、エラーの間のパネルが [\"> app\",\"  lib\",\"  Other...\"] になることを確かめた。挙動は正しく、lib は2番目に出る。指摘はテストが [1] しか見ていないという、テストの弱さの話にとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "カーソルが自動で動いたときの guard を確かめないため、意図しないリポジトリが先頭になる",
+   "location": "src/ops/app.ts:853",
+   "members": [
+    "e23"
+   ],
+   "id": "clean-wn-315/c16",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "this.guard(:89, :302) は、行が外れてカーソルが自動で動いた直後の Ctrl+X を断るためのもの(:1273)。n は何も壊さず、先頭はいまカーソルのある、見えている行のリポジトリになる(仕様 :591 のとおり)。候補は確定の前に画面に出て選び直せるので、データを失ったり誤って起動したりする経路は無い。n に guard を効かせるかは設計の好みにあたる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "ctrl+q ctrl+n がエラーの間に古い this.rows から sid を引くため、直前に起動したセッションでは起動したディレクトリが先頭になる",
+   "location": "src/ops/app.ts:1260",
+   "members": [
+    "e27"
+   ],
+   "id": "clean-wn-315/c17",
+   "class": "wrong",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/ops/app.ts:1214 で sid は this.sidOfSession(session) から取る。sidOfSession(:1223-1228)は [...this.rows.values()].find(r => r.id === id)?.sid なので、行に無いセッションなら sid は undefined になる。attachKey の :1256 `if (!sid || this.isSpawned(sid)) return;` で openNew を呼ぶ前に戻る。そのため「行に無いと起動したディレクトリが先頭になる」は起きない(n の候補自体が開かない)。sid が取れたなら行は this.rows にあり、rootOfSid(:965)はその行のリポジトリを返す。:1260 は差分で変わっておらず、main でも同じ。経路をコードで追ったので実行はしていない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "tier === null の行は locations.refresh で解決されず、worktree のパスのまま候補に入る",
+   "location": "src/ops/app.ts:952",
+   "members": [
+    "e28",
+    "e52"
+   ],
+   "id": "clean-wn-315/c18",
+   "class": "real",
+   "scope": "out",
+   "ran": false,
+   "evidence": "lib/tier/classify.ts:60 で、interactive かつ idle の行は tier: null(一覧に出さない)。this.rows(:267)は obs.rows の全行を持つ。locations.refresh を呼ぶのは :244 と :1542 で、どちらも tier !== null の cwd に絞っている。src/input/where.ts:98 は渡されなかった cwd を known から消すので、tier null の行では get(cwd) が undefined になる。openNew の :952 は全行について `locations.get(r.cwd)?.root ?? r.cwd` を足すので、worktree にいる非表示の対話セッションは worktree のパスのまま候補に入る。PRODUCT.md の「worktree に移ったセッションの cwd は元のリポジトリのパスに寄せる」と食い違う。main の :951 も同じコードなので、この差分が原因ではない。コードで追い、実行はしていない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "PR の本文に、エラーの間は起動したディレクトリを先頭にする挙動が書かれていない",
+   "location": "PR本文",
+   "members": [
+    "e35"
+   ],
+   "id": "clean-wn-315/c19",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "`git log main..HEAD --format=%B` で見た本文(PR 本文にあたる)には「行がないときは従来どおり」としか書かれておらず、エラーの間の扱いは載っていない。指摘の内容は事実。ただし説明文の書き漏れで、挙動には関わらない。挙動は PRODUCT.md:591 とコード(:853)に書かれていて、互いに合っている。gh pr view は remote が GitHub を指していないため使えなかった。",
+   "classified_by": "llm"
+  },
+  {
+   "title": ":513 から理由のある :591 を見出しの名前で参照しておらず、ctrl+q の節だけでは理由が見えない",
+   "location": "docs/PRODUCT.md:513",
+   "members": [
+    "e36"
+   ],
+   "id": "clean-wn-315/c20",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "PRODUCT.md:513 は「一覧の `n` と同じく候補の先頭を…」と、一覧の n を名前で指しており、理由は :591(操作の `n`)にある。見出しの名前で参照する形にするかは文書の構成の問題で、挙動にも、利用者の誤解にもつながらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "新しいテストの前半の準備が既存のテスト 54・55 と重複している",
+   "location": "test/e2e/ops.test.ts:103",
+   "members": [
+    "e37"
+   ],
+   "id": "clean-wn-315/c21",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "テストの準備が重なっているという、構造の指摘。挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "行が1つでもあればカーソル行が先頭になり、起動ディレクトリに意味を持たせる使い方ができなくなる",
+   "location": "docs/PRODUCT.md:591",
+   "members": [
+    "e38"
+   ],
+   "id": "clean-wn-315/c22",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "PRODUCT.md:591 は、カーソルのある行のリポジトリを先頭にすることを「2026-11-02、利用者の判断」として決めており、コード(:853、openNew)も文書どおりに動く。起動したディレクトリは2番目の候補として残る(openNew :950)。指摘は仕様の良し悪しの意見で、文書とコードの食い違いや不具合ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "層2の決定なのに、エスカレーションの記録(issue 番号など)への参照が無い",
+   "location": "docs/PRODUCT.md:591",
+   "members": [
+    "e39"
+   ],
+   "id": "clean-wn-315/c23",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "エスカレーションの記録(issue 番号)への参照があるかどうかは、文書の追跡性の問題で、挙動には関わらない。判断の日付と、利用者の判断であることは :591 に書かれている。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "openNew のループで rootOfSid と同じ式を手で重複して書いている",
+   "location": "src/ops/app.ts:951",
+   "members": [
+    "e41"
+   ],
+   "id": "clean-wn-315/c24",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "app.ts:952 の `locations.get(r.cwd)?.root ?? r.cwd` と rootOfSid(:968)は同じ式で、いまは同じ結果になり、paths.includes で重複も除かれる。重複が問題になるのは、将来どちらか一方だけを変えたとき。書き方の指摘にあたる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "852 のコメントが 822 のコメントとほぼ同じ趣旨で重複している",
+   "location": "src/ops/app.ts:852",
+   "members": [
+    "e43"
+   ],
+   "id": "clean-wn-315/c25",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/ops/app.ts:822 は「エラーの間は画面に出ていない行への操作を受け付けない」、852 は「エラーの間は行が見えないので、見えない行のリポジトリを先頭にしない」と書いており、趣旨が近いのは事実。ただしコメントなので挙動には関わらない。読むだけで判断できるため実行していない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "「見えない行のリポジトリを先頭にしない」が、PRODUCT.md と app.ts の注釈にほぼ同じ文言で重複している",
+   "location": "docs/PRODUCT.md",
+   "members": [
+    "e44"
+   ],
+   "id": "clean-wn-315/c26",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/PRODUCT.md の `n` の項(差分 588 行付近)の「エラーの間は行が画面に出ていないので、見えない行のリポジトリを先頭にしない」と、src/ops/app.ts:852 のコメントはほぼ同じ文言。両者の内容は食い違っておらず、コードの挙動(エラーの間は sid を渡さない)とも合っている。文言が重なっているだけで挙動には関わらないので trivial。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "エラーの間に非表示の行を使わない判断が 823 行と 853 行の2か所に分かれている",
+   "location": "src/ops/app.ts:823",
+   "members": [
+    "e45"
+   ],
+   "id": "clean-wn-315/c27",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/ops/app.ts:823 のガードは main の時点でも 'n' を通している。差分で足した 853 行の `this.error ? undefined : sid` が、エラーの間はカーソルの sid を捨てる。今のコードでは、エラーの間 n を押すと起動したディレクトリが先頭になり、PRODUCT.md の記述どおりに動く。判断が2か所に分かれているのは事実だが、問題になるのは将来どちらか片方だけを直したときなので、分類の基準に従って trivial とした。",
+   "classified_by": "llm"
+  }
+ ],
+ "members": {
+  "e1": {
+   "dir": "clean-wn-315/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 1
+  },
+  "e2": {
+   "dir": "clean-wn-315/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 9
+  },
+  "e3": {
+   "dir": "clean-wn-315/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 4
+  },
+  "e4": {
+   "dir": "clean-wn-315/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 1
+  },
+  "e5": {
+   "dir": "clean-wn-315/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 4
+  },
+  "e6": {
+   "dir": "clean-wn-315/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 1
+  },
+  "e7": {
+   "dir": "clean-wn-315/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 3
+  },
+  "e8": {
+   "dir": "clean-wn-315/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 3
+  },
+  "e9": {
+   "dir": "clean-wn-315/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 8
+  },
+  "e10": {
+   "dir": "clean-wn-315/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 3
+  },
+  "e11": {
+   "dir": "clean-wn-315/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 1
+  },
+  "e12": {
+   "dir": "clean-wn-315/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 3
+  },
+  "e13": {
+   "dir": "clean-wn-315/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 6
+  },
+  "e14": {
+   "dir": "clean-wn-315/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 1
+  },
+  "e15": {
+   "dir": "clean-wn-315/plain/3",
+   "config": "plain",
+   "trial": 3,
+   "n": 2
+  },
+  "e16": {
+   "dir": "clean-wn-315/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 3
+  },
+  "e17": {
+   "dir": "clean-wn-315/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 5
+  },
+  "e18": {
+   "dir": "clean-wn-315/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 5
+  },
+  "e19": {
+   "dir": "clean-wn-315/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 7
+  },
+  "e20": {
+   "dir": "clean-wn-315/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 8
+  },
+  "e21": {
+   "dir": "clean-wn-315/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 5
+  },
+  "e22": {
+   "dir": "clean-wn-315/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 3
+  },
+  "e23": {
+   "dir": "clean-wn-315/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 2
+  },
+  "e24": {
+   "dir": "clean-wn-315/plain/3",
+   "config": "plain",
+   "trial": 3,
+   "n": 1
+  },
+  "e25": {
+   "dir": "clean-wn-315/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 2
+  },
+  "e26": {
+   "dir": "clean-wn-315/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 1
+  },
+  "e27": {
+   "dir": "clean-wn-315/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 2
+  },
+  "e28": {
+   "dir": "clean-wn-315/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 1
+  },
+  "e29": {
+   "dir": "clean-wn-315/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 7
+  },
+  "e30": {
+   "dir": "clean-wn-315/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 2
+  },
+  "e31": {
+   "dir": "clean-wn-315/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 3
+  },
+  "e32": {
+   "dir": "clean-wn-315/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 4
+  },
+  "e33": {
+   "dir": "clean-wn-315/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 2
+  },
+  "e34": {
+   "dir": "clean-wn-315/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 2
+  },
+  "e35": {
+   "dir": "clean-wn-315/plain/3",
+   "config": "plain",
+   "trial": 3,
+   "n": 4
+  },
+  "e36": {
+   "dir": "clean-wn-315/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 4
+  },
+  "e37": {
+   "dir": "clean-wn-315/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 2
+  },
+  "e38": {
+   "dir": "clean-wn-315/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 4
+  },
+  "e39": {
+   "dir": "clean-wn-315/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 5
+  },
+  "e40": {
+   "dir": "clean-wn-315/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 4
+  },
+  "e41": {
+   "dir": "clean-wn-315/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 3
+  },
+  "e42": {
+   "dir": "clean-wn-315/plain/3",
+   "config": "plain",
+   "trial": 3,
+   "n": 3
+  },
+  "e43": {
+   "dir": "clean-wn-315/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 4
+  },
+  "e44": {
+   "dir": "clean-wn-315/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 2
+  },
+  "e45": {
+   "dir": "clean-wn-315/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 4
+  },
+  "e46": {
+   "dir": "clean-wn-315/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 5
+  },
+  "e47": {
+   "dir": "clean-wn-315/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 5
+  },
+  "e48": {
+   "dir": "clean-wn-315/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e49": {
+   "dir": "clean-wn-315/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 6
+  },
+  "e50": {
+   "dir": "clean-wn-315/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 1
+  },
+  "e51": {
+   "dir": "clean-wn-315/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 5
+  },
+  "e52": {
+   "dir": "clean-wn-315/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 2
+  },
+  "e53": {
+   "dir": "clean-wn-315/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 5
+  }
+ },
+ "classify_cost_usd": 1.7759318000000002
+}

@@ -1,0 +1,41 @@
+{
+ "cost_usd": 0.044598,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/ops/app.ts:952",
+   "summary": "openNew が tier === null の非表示行も候補に含めるため、worktree パスがリポジトリのルートに戻されないまま候補に入る。",
+   "quote": "openNew (the function this diff touches) collects candidates from every row in this.rows, including rows with tier === null that are not shown in the list.",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/ops/app.ts:853",
+   "summary": "n がカーソル行に依存するのに、自動でカーソルが移動したときの guard を確認しないため、意図しないリポジトリが先頭の候補になる。",
+   "quote": "n now depends on which row the cursor is on, but it doesn't check the guard (this.guard) that is set when the cursor moves automatically.",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/e2e/ops.test.ts:103",
+   "summary": "新しいテストは通常のリポジトリの cwd しか扱っておらず、worktree、(tty) 行、行が無い場合、ghq による候補の追加が未テストである。",
+   "quote": "The new test only covers sessions whose cwd is a normal repository. It doesn't cover the worktree case (rootOfSid must map back to the original repo), the cursor on a (tty) row, the no-rows case, or ghq adding candidates later.",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/ops/app.ts:823",
+   "summary": "エラー中に非表示の行を使わないための判断が 823 行と 853 行の2か所に分かれており、将来の変更で片方だけ直して漏れやすい。",
+   "quote": "The guard at line 823 explicitly lets n through during the error, and line 853 checks this.error again to drop sid. The 'don't act on hidden rows during the error' decision is now split across two places.",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "docs/PRODUCT.md:591",
+   "summary": "PRODUCT.md に追加した決定日 2026-11-02 が、この変更のコミット日 2026-11-15 と一致しない。",
+   "quote": "The decision date added to the permanent docs, '2026-11-02、利用者の判断', doesn't match the commit date of this change (2026-11-15).",
+   "quote_ok": true
+  }
+ ]
+}

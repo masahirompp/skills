@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.10403760000000001,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--perspective の空白を正規化しないことによる照合と起動プロンプトの食い違いには触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "指示を判定役の入力に添えても、`JUDGE_PROMPT` にはその扱いが書かれていません。",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いがなく、指示で外した範囲を欠落と取り違えうると指摘しており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "観点を既定と比べるとき、スキル名しか見ていません。",
+   "reason": "引数違いが既定扱いになる点と、並べ替えが差とみなされる点の両方を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "detected",
+   "quote": "SKILL.md に載せたコマンド例が、そのままでは終了コード2で止まります。** 例では `--perspective` に `code-review` と `mattpocock-skills:code-review` だけを渡し、外した `security-review` に `--instruct` を付けています。",
+   "reason": "外した観点への --instruct で終了コード2になると、正確に指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "detected",
+   "quote": "`perspectives` が文字列でも検証を通ります。** `a.get(\"perspectives\") or []` が `\"abc\"` のときは、1文字ずつの反復になるため検証を通り、表には `a, b, c` と出ます。",
+   "reason": "リストかどうかを確かめないため文字列が検証を通る、と指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt の指示がサブエージェントに届かない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "partial",
+   "quote": "指示の本文に区切りの行を入れると、判定役の入力の構造が崩れます。** 指示の中に `===== ここまで: 指示 =====` や `===== 観点: X =====` があると、偽の観点の出力を差し込めます。",
+   "reason": "同じ入力に同じ区切りで混ぜるという場所と原因は合うが、偽装の向きが逆で、レビュー出力が指示を装う危険を指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭の `/` を取り除かないことによる照合の失敗には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "review_loop.py:743-749",
+   "summary": "追加の指示が「スキルの手順より優先」とされ、REVIEW_CONSTRAINT(編集・push の禁止)より優先すると読まれる余地がある。",
+   "quote": "追加の指示と `REVIEW_CONSTRAINT` のどちらが優先かがはっきりしません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "review_loop.py:961-964",
+   "summary": "指示で範囲を絞った試行かどうかが状態コメントの表に残らず、絞った反復と既定の反復を区別できない。",
+   "quote": "状態コメントの表からは、範囲を絞ったかどうかが読めません。** 指示を付けた試行も、付けない試行と同じ `completed` として残ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test.py:553-586",
+   "summary": "引数だけを変えた --perspective が記録されるかを確かめるテストがない。",
+   "quote": "引数だけを変えた `--perspective` が記録されるかどうか。上の不具合を捕まえるテストです。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test.py:553-586",
+   "summary": "指示を付けた観点のシステムプロンプトに REVIEW_CONSTRAINT が残っているかを確かめるテストがない。",
+   "quote": "指示を付けた観点のシステムプロンプトに、`REVIEW_CONSTRAINT` が残っているかどうか。",
+   "quote_ok": true
+  }
+ ]
+}

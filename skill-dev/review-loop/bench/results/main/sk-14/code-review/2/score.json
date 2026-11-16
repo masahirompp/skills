@@ -1,0 +1,63 @@
+{
+ "cost_usd": 0.0851496,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "detected",
+   "quote": "hk_is_protected と hk_path_in_use は here-doc を使っており、/bin/bash 3.2 では here-doc ごとに $TMPDIR(書けなければ /tmp)に一時ファイルを作る。作成に失敗したときは安全側でなく危険側に倒れる。",
+   "reason": "lib.sh の hk_is_protected / hk_path_in_use がヒアドキュメントに依存し、一時ファイルを作れないと『保護対象でない』『使用中でない』に倒れる fail-open を正しく指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "detected",
+   "quote": "一時ディレクトリを作る処理と失敗時の停止が、git fetch --prune と hk_default_branch(gh repo view を呼ぶことがある)の後にある。そのため SKILL.md の「作れなければ何もせずに止まる」と食い違う。",
+   "reason": "scan.sh で一時ディレクトリの作成が fetch --prune の後にあり、SKILL.md の記述と食い違うことを、場所も原因も一致する形で指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い、またはプロセスを見られないときに空の一覧を『使用中でない』と扱う問題には触れていません。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh:186",
+   "summary": "TMPDIR に存在しないディレクトリを渡す apply.sh のテストは、macOS の mktemp や bash のフォールバックのせいで回帰を検出できず、『一時ファイルを使わない』という主張を検証していない。",
+   "quote": "apply.sh に TMPDIR=存在しないディレクトリ を渡すテストは回帰を検出できない。macOS の mktemp はテンプレートが無いと TMPDIR を無視するため、変更前のコード(input=$(mktemp))でも成功する。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skill-dev/housekeeping/test.sh:175",
+   "summary": "一時ディレクトリの片付けのテストは hk-tmp が空かどうかしか見ておらず、HOUSEKEEPING_TMPDIR の下に作られたことを検証していない。",
+   "quote": "「一時ディレクトリを片付ける」テストは hk-tmp が空かどうかしか見ていない。scan.sh が HOUSEKEEPING_TMPDIR を無視して別の場所に作っても pass してしまい",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "apply.sh を `!` で実行してもらう案内に標準入力の渡し方が無く、ユーザーが入力無しで実行すると何もせずに成功したように見える。",
+   "quote": "apply.sh は承認済みの行を標準入力で受け取る。リダイレクトを含むコマンドの形が示されていないので、ユーザーが入力無しで実行しうる。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/scripts/scan.sh:31",
+   "summary": "一時ディレクトリの場所を決める式が lib.sh とエラーメッセージに重複しており、片方だけ変えると案内するパスがずれる。",
+   "quote": "一時ディレクトリの場所を決める式 ${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}} が lib.sh の hk_mktemp_dir とエラーメッセージに重複しており、片方だけ変えると表示と実際の場所がずれる。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/scripts/lib.sh:20",
+   "summary": "mktemp -d が成功した後の [ -n \"$d\" ] && [ -d \"$d\" ] の検査は冗長である。",
+   "quote": "mktemp -d が成功した後の [ -n \"$d\" ] && [ -d \"$d\" ] の検査は冗長で、mktemp の終了コードの確認で足りる。",
+   "quote_ok": true
+  }
+ ]
+}

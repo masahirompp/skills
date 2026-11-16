@@ -1,0 +1,62 @@
+{
+ "cost_usd": 0.063842,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/scripts/lib.sh:96",
+   "summary": "lsof の出力に自分自身が含まれるかだけで「プロセスを見られる」と判断しているため、同じサンドボックス内しか見えない環境では、別セッションが使っている worktree が削除候補になり得る。",
+   "quote": "lsof の出力に自分自身(`$$`)が含まれているかだけで「プロセスを見られる」と判断しています。この確認で分かるのは、少なくとも自分は見えるということだけです。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/scripts/scan.sh:134",
+   "summary": "PR の状態が分からないとき(UNKNOWN など)に keep にする経路を確かめるテストが無い。",
+   "quote": "PR の状態が分からないとき keep にする経路(`parse_pr_info` が `UNKNOWN` を返す場合など)を確かめるテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/scripts/scan.sh:85-86",
+   "summary": "first-parent の履歴を読めないときに止まる経路のテストが無い。",
+   "quote": "first-parent の履歴を読めないときに止まる経路と、`scan.sh:20` jq が無いときに止まる経路にもテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/scripts/scan.sh:20",
+   "summary": "jq が無いときに止まる経路のテストが無い(fake-bin の方法で書ける)。",
+   "quote": "jq が無い場合は、`fake-bin` で lsof を偽装したのと同じやり方で書けます。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/scripts/scan.sh:119-124",
+   "summary": "`on_fp -gt 1` の分岐は86行目で既に終了しているため事実上たどり着かず、意図を示すコメントが無い。",
+   "quote": "`on_fp -gt 1`(first-parent の履歴を読めない)の分岐には、事実上たどり着きません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/housekeeping/scripts/scan.sh:119",
+   "summary": "keep になる場合でも先に grep を実行しており、判定の順番と処理の順番がそろっていない。",
+   "quote": "`merged_into_default` が偽になる(keep になる)場合でも、先に `grep` を実行しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skills/housekeeping/scripts/lib.sh:45-46",
+   "summary": "hk_protect_patterns 内の `set -f` が外に漏れないことは、呼び出し側が `$(...)` で呼ぶことに頼っており、その前提が明記されていない。",
+   "quote": "`hk_protect_patterns` の中の `set -f` は、コメントで「`$(...)` の中で呼ぶので外には漏れない」としています。ただ、これは呼び出し側の書き方に頼っています。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "skills/housekeeping/scripts/lib.sh:21-22",
+   "summary": "TMPDIR が相対パスのとき、相対パスの一時ディレクトリを作ってしまう。",
+   "quote": "`TMPDIR` が相対パスでも、そのまま相対パスの一時ディレクトリを作ります。",
+   "quote_ok": true
+  }
+ ]
+}

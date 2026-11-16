@@ -1,0 +1,28 @@
+{
+ "case": "wn-313",
+ "kind": "ts",
+ "config": "mattpocock",
+ "trial": 3,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 959795,
+  "cache_read": 811462,
+  "output": 18030
+ },
+ "cost_usd": 1.3859413999999999,
+ "started_at": "2026-11-15T15:08:16",
+ "duration_s": 172,
+ "num_turns": 2,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [
+  "Bash ls docs docs/lib docs/adr | head -60; ls CODING_STANDARDS.md CONTRIBUTING.md biome.json* 2>/dev/null; ls .claude/skills; gh issue list --search \"wbguide OR 作業台 閉じる\" --state all --limit 10 2>/dev/null",
+  "Bash grep -rn \"SIGUSR2\\|wn_req_\" lib src | head; grep -n \"'agentview'\\|=== '\" src/ops/app.ts | sed -n 1,20p; grep -n \"workbenchOptions\" src/cli/*.ts; gh issue list -R masahirompp/whatnext --search \"wbguide OR 案内のセッション\" --state all -L 5 2>&1 | head"
+ ],
+ "tree_changed": [],
+ "head_changed": false
+}

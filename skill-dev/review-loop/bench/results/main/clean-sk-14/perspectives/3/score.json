@@ -1,0 +1,62 @@
+{
+ "cost_usd": 0.0724456,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/scripts/lib.sh:96",
+   "summary": "$$ が見えるかだけでプロセスを見られるかを判定しているため、サンドボックスで一部のプロセスしか見えない場合、使用中の worktree が「使用中でない」と判定されて delete に進む(fail-open)。",
+   "quote": "このとき `$$` は見つかるので一覧はそのまま使われます。実際に使われている worktree が「使用中でない」と判定され、`delete` に進みます(fail-open)。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/SKILL.md:20,61",
+   "summary": "TMPDIR が無いときの出力先が共有の /tmp にある固定のファイル名なので、他のユーザーが先にファイルを作れば中身を書き換えられ、また中身を読まれる。",
+   "quote": "`${TMPDIR:-/tmp}/housekeeping-scan.tsv` は名前が予測できます。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/scripts/apply.sh:37-44",
+   "summary": "プロセス一覧をループの前に1回しか取らないので、一覧を取ってから削除するまでの間に worktree が使われ始めても検知できない(TOCTOU)。",
+   "quote": "worktree が多いと、一覧を取ってから `git worktree remove` までの間に、別のプロセスがその worktree に `cd` する可能性が残ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/scripts/scan.sh:104-105",
+   "summary": "設定を読めないときも hk_is_protected が 0 を返すので、理由が「保護対象」と表示され、壊れた gitconfig が原因だとユーザーに分からない。",
+   "quote": "`hk_is_protected` は、設定の読み取りに失敗したときも 0 を返します(`lib.sh:52,62`)。その結果、理由は「保護対象(既定ブランチ・監査用・設定による保護)」と表示されます。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/scripts/scan.sh:85",
+   "summary": "$fp_refs をクォートせずに展開していて、グローバルの set -f に頼っている。set -f に頼らないという同じ変更の方針と食い違う。",
+   "quote": "これはグローバルの `set -f`(`lib.sh:14`)と既定の IFS に頼る書き方です。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/housekeeping/scripts/lib.sh:91",
+   "summary": "lsof の無い環境では worktree を一切消せなくなり、回避手段も無い。",
+   "quote": "lsof の入っていない Linux コンテナなどでは、この機能が恒久的に使えなくなります。しかも回避手段がありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skills/housekeeping/scripts/scan.sh:165, apply.sh:43",
+   "summary": "「使用中」と「確かめられない」が1つの理由文にまとめられていて、区別の手がかりが括弧の中の文字列しかないので、エージェントが読み違えるおそれがある。",
+   "quote": "しかも区別の手がかりが括弧の中の文字列しかないので、エージェントが読み違えるおそれがあります。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "skill-dev/housekeeping/test.sh (temp_usage)",
+   "summary": "一時ファイルを使っていないかを grep で字面だけ確かめているので、他の書き方で一時ファイルを使うようになっても検知できない。",
+   "quote": "`$(cat <<…)` を関数に包むなど、他の書き方で一時ファイルを使うようになっても検知できません。",
+   "quote_ok": true
+  }
+ ]
+}

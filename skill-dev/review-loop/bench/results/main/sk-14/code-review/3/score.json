@@ -1,0 +1,70 @@
+{
+ "cost_usd": 0.0852336,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューはヒアドキュメントが失敗しないと検証して、hk_is_protected と hk_path_in_use は問題ないと結論しており、fail-open を指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "detected",
+   "quote": "一時ディレクトリを作る前に `git fetch --prune` を実行しているので、SKILL.md の『作れなければ何もせずに止まる』は事実と違う。",
+   "reason": "scan.sh で fetch --prune が一時ディレクトリの作成より前にあり、SKILL.md の記述と食い違うことを、場所も原因も正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無いかプロセスを見られないときに、空の一覧を「使用中でない」と扱う問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh:186",
+   "summary": "書き込めない TMPDIR のテストは macOS では修正前のコードでも通るので、退行を検出できない。",
+   "quote": "apply.sh の『書き込めない TMPDIR でも動く』テストは、macOS では修正前のコードでも通るので、この PR が直した不具合を検出できない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "SKILL.md の案内が scan.sh の error 文と食い違い、HOUSEKEEPING_TMPDIR の指定に触れていない。",
+   "quote": "『一時ディレクトリを作れない』ときの案内が、scan.sh の error 文と食い違っている。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skill-dev/housekeeping/test.sh:174",
+   "summary": "HOUSEKEEPING_TMPDIR のテストは空になったことしか見ておらず、その下に作られたかを確かめていない。",
+   "quote": "『HOUSEKEEPING_TMPDIR の下に作り、終了時に消す』のテストは、空になったことしか見ていないので、実際にその下に作られたかを確かめていない。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/scripts/scan.sh:31",
+   "summary": "error 文が一時ディレクトリの既定値を計算し直していて、lib.sh と同じロジックが2か所にある。",
+   "quote": "error 文が一時ディレクトリの場所を `${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}}` で計算し直していて、lib.sh の hk_mktemp_dir と同じ既定値のロジックが2か所にある。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "apply.sh を手動で実行する案内に、承認済みの行を標準入力に渡すことが書かれておらず、実行すると入力待ちで止まる。",
+   "quote": "apply.sh を `!` で実行してもらう案内に、承認済みの行を標準入力に渡すことが書かれていない。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/housekeeping/scripts/lib.sh:20",
+   "summary": "mktemp -d が成功した後の存在確認は冗長である。",
+   "quote": "`mktemp -d` が成功した直後の `[ -n \"$d\" ] && [ -d \"$d\" ] || return 1` は冗長な確認になっている。",
+   "quote_ok": true
+  }
+ ]
+}

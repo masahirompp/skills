@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.12321,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "detected",
+   "quote": "少なくとも `reason_type` も条件に加えて、ホワイトリストを狭めるのが安全です。",
+   "reason": "source: config だけで止めない拒否とみなす範囲が広すぎ、reason_type を見ていないと指摘しており、原因が一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "detected",
+   "quote": "`tool_use_id` のない `source: config` のイベントが1件でもあると、`seen` に `None` が入ります。",
+   "reason": "キー None が seen に入り、id のない permission_denials がすべて除外されて止めるべき拒否を見逃すと、正解どおりに指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "detected",
+   "quote": "判定役が判定を2回出した場合(書き直しなど)は、2つ分が重なります。見出しの確認は `re.search` で最初の一致しか見ないため、古い方を正としたまま通ります。",
+   "reason": "判定役の result 行をすべてつなぐため、後ろの短い行や判定の出し直しが verdict に混ざり、見出しの確認でも見逃すと指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "is_error の result 行をつなぐときに除いていない点への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "別の観点の失敗でループを抜けたとき、止めない拒否の記録が漏れる点への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "detected",
+   "quote": "以前は最後の `result` 行の文(API エラーなど)を出していましたが、今はつないだ `text[:500]` を出します。",
+   "reason": "child_error の詳細がつないだ本文の先頭500字になり、末尾のエラー文が切れると指摘している。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "review_loop.py:309、:323",
+   "summary": "config_denied が dict なので、キーが重なると件数が増えず、新しい拒否が denials.txt と warn に出なくなる。",
+   "quote": "dict のキーが重なると(`tool_use_id` が `None` 同士、または同じ id のイベントがもう一度出たとき)、件数が増えません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "review_loop.py:238 と :340",
+   "summary": "拒否のあと result 行を出さずに異常終了した子が、permission_denied ではなく child_error に分類される。",
+   "quote": "拒否のあと `result` 行を出さずに異常終了した子は、`permission_denied` ではなく `child_error` に分類されます。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "review_loop.py:336-339",
+   "summary": "拒否されたコマンドの入力が、stderr と denials.txt に平文で残り、トークンが漏れるおそれがある。",
+   "quote": "`denials.txt` と stderr の `warn:` に、拒否されたツールの入力が最大200字そのまま書かれます。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "review_loop.py:232-236、SKILL.md の結果の節",
+   "summary": "判定役が、レビュー役の途中経過の文を観点の出力として受け取り、判断を誤るおそれがある。",
+   "quote": "判定役は、途中経過の文(「Standards のレビューは終わりました」など)も観点の出力として受け取ります。これを指摘や欠落の判断材料として扱うおそれがあります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "テストの FAKE_JUDGE=multi",
+   "summary": "判定役のテストが最後の行が空のケースしか試しておらず、複数の result 行が判定に混ざる問題を検出できない。",
+   "quote": "テストの `FAKE_JUDGE=multi` は最後の行が空のケースしか試していないので、この問題を検出できません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skill-dev/review-loop/fakes/claude の deny()",
+   "summary": "偽の claude が仮定した形のイベントしか出さず、tool_use_id のない拒否や入れ子の source をテストしていない。",
+   "quote": "`source` を最上位に置き、`tool_use_id` を必ず入れています。そのため、3・4 の入力(id なし)も、6 の入力(source が入れ子)も通りません。",
+   "quote_ok": true
+  }
+ ]
+}

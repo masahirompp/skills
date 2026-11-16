@@ -1,0 +1,34 @@
+{
+ "cost_usd": 0.050502000000000005,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md:591 / src/ops/app.ts:951",
+   "summary": "エラーの間は見えない行のリポジトリを先頭にしないという理由づけと、エラーの間も前回の this.rows の cwd を候補に並べ続ける実装が食い違っている。",
+   "quote": "先頭にしない理由が「見えないから」なら、見えない行が候補に並ぶのも同じ理由に引っかかります。どちらかに揃えるのがよいと考えます。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "test/e2e/ops.test.ts:103",
+   "summary": "worktree の行で n を押したとき、先頭が元のリポジトリに寄せられることを確かめるテストがない。",
+   "quote": "**`test/e2e/ops.test.ts:103`:worktree の行で `n` を押す場合のテストがない。**",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/e2e/ops.test.ts:103-121",
+   "summary": "1つのテストにカーソル行を先頭にする挙動とエラー時の挙動の2つが入っており、失敗したときにテスト名から原因が読み取れない。",
+   "quote": "**`test/e2e/ops.test.ts:103-121`:1つのテストに2つの挙動が入っている(好みの範囲)。**",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "PR本文",
+   "summary": "PR の本文に、エラーの間は起動したディレクトリを先頭にする挙動が書かれていない。",
+   "quote": "PR の本文には、エラーの間は起動したディレクトリを先頭にする挙動(`this.error ? undefined : sid`)が書かれていません。",
+   "quote_ok": true
+  }
+ ]
+}

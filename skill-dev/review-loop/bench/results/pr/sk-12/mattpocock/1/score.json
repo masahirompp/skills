@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.0943136,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "source == \"config\" だけで止めない拒否とみなし reason_type(分類器による拒否)を見ていない点への指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "detected",
+   "quote": "`seen = set(tail.config_denied)` に `None` が入ります。その結果、result 側の `permission_denials` のうち id がないものがすべて除かれます。",
+   "reason": "tool_use_id のない拒否が None をキーに config_denied に入り、seen によって id なしの permission_denials まで除外される、という原因と場所が正解と一致している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "detected",
+   "quote": "判定役が途中の行で下書きの判定を出し、最後の行で最終版を出すと、両方が `verdict.md` に入ります。最後の行が「変わりません」のような短い文なら、それが判定の末尾に付きます。",
+   "reason": "判定役の出力で複数の result の行がつながり、下書きと最終版、あるいは短い文が判定に混ざると指摘しており、detect_criteria を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "result の行をつなぐときに is_error の行を除いていない点への指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "別の観点の失敗でループを抜けたとき、動いている子の止めない拒否が記録から漏れる点への指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "child_error が先頭500字を出すようになったことには触れているが、小さな副次変更として扱っているだけで、エラーの内容が出なくなるという問題としては指摘していない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "SKILL.md「失敗したとき」",
+   "summary": "SKILL.md には「source がなければ止める」とあるが、実際のコードは config 以外をすべて止めるため、記述がコードと合っていない。",
+   "quote": "SKILL.md の「失敗したとき」には「`source` がなければ止める」と書かれています。実際のコードは `source == \"config\"` 以外をすべて止めます。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "run_reviews / run_judge",
+   "summary": "run_reviews と run_judge が、子を見張る処理を同じ順に重ねて書いており、コードが重複している。",
+   "quote": "`run_reviews` と `run_judge` は、poll → `watch_denials(running=True)` → タイムアウトの確認 → finish → poll → `watch_denials(running=False)` → `check_result` を同じ順に並べています。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "watch_denials",
+   "summary": "watch_denials が、拒否の記録と止める拒否での例外送出という2つの仕事を、フラグ引数 running で切り替えて兼ねている。",
+   "quote": "`watch_denials` は、設定のルールでの拒否を記録する仕事と、止める拒否で例外を投げる仕事を兼ねています。`running=False` のときは記録しかしません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "StreamTail.summary",
+   "summary": "denial_summary を StreamTail.summary に改名したため、引数が拒否のイベントであることが名前から読めなくなった。",
+   "quote": "`denial_summary` を `StreamTail.summary` に変えたので、引数が拒否のイベントだと名前から読めなくなりました。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "review_loop.py",
+   "summary": "{\"tool_name\", \"tool_input\"} の dict を何か所かで組み立てており、Primitive Obsession / Data Clumps にあたる可能性がある。",
+   "quote": "**Primitive Obsession / Data Clumps の可能性**:`{\"tool_name\", \"tool_input\"}` の dict を何か所かで組み立てています。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skill-dev/review-loop/test.py / FAKE_JUDGE",
+   "summary": "判定役が source のない拒否で途中で止まる経路をテストしておらず、FAKE_JUDGE にも拒否を出すモードがない。",
+   "quote": "判定役が `source` のない拒否で途中で止まる経路にはテストがありません。",
+   "quote_ok": true
+  }
+ ]
+}

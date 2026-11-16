@@ -1,0 +1,13 @@
+{
+ "cost_usd": 0.028506,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューの出力は利用上限のエラーメッセージだけで、cleanupLeftovers やステータス行の書式についての指摘が一切無いため。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

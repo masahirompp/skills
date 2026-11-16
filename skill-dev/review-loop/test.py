@@ -542,9 +542,9 @@ check("設定のルールで拒否された" in err and "grep -n KEY .env" in er
 stdin = [c for c in calls() if c["kind"] == "judge"][-1]["stdin"]
 check("権限の設定で拒否された" in stdin and "review security-review: Bash" in stdin, "止めなかった拒否は判定役の入力にも添える")
 
-# source が config でも、分類器による拒否や、tool_use_id のない拒否は止める
+# 分類器による拒否や、tool_use_id のない拒否は止める
 rc, _, err = run(wt, FAKE_REVIEW_security_review="denyclassifier")
-check(rc == 1 and "permission_denied: review security-review" in err, "source が config でも、分類器による拒否は止める")
+check(rc == 1 and "permission_denied: review security-review" in err, "分類器による拒否(decision_reason_type が classifier)は止める")
 rc, _, err = run(wt, FAKE_REVIEW_security_review="denynoid")
 check(rc == 1 and "permission_denied: review security-review" in err, "tool_use_id のない拒否は止める")
 run(wt, "--new-run")
@@ -640,6 +640,26 @@ for flags, label in ((("--instruct", "security-review"), "`=` のない --instru
     rc, _, err = run(wt, *flags)
     check(rc == 2, f"{label}: 終了コード2({rc}) {err.strip().splitlines()[-2:] if rc != 2 else ''}")
 check(json.dumps(state()) == before, "観点の指定の誤りは状態に記録しない")
+
+# --- --focus -----------------------------------------------------------------
+wt = setup()
+n = len(calls())
+rc, out, err = run(wt, "--perspective", "code-review high {pr}", "--focus", "並行性と  タイミング", "--focus", "文書とコードの食い違い")
+wd = err.rstrip().splitlines()[-1]
+new = calls()[n:]
+prompts = [c["args"][-1] for c in new if c["kind"] == "review"]
+judge = [c for c in new if c["kind"] == "judge"]
+check(rc == 0 and len(prompts) == 3 and "/code-review high 7" in prompts
+      and any(p.startswith("PR #7 の差分を") and p.endswith("観点: 並行性と タイミング") for p in prompts),
+      f"--focus は、スキルを使わないレビュー役を観点ごとに足す(空白は詰める)。{prompts}")
+check(judge and "===== 観点: focus-1 =====" in judge[0]["stdin"] and "===== 観点: focus-2 =====" in judge[0]["stdin"]
+      and os.path.isfile(os.path.join(wd, "review-focus-2.result.md")),
+      "--focus のレビュー役の出力も、判定役に区切って渡し、作業ディレクトリに残す")
+check("focus 並行性と タイミング" in state()["attempts"][-1]["perspectives"] and "focus 並行性と タイミング" in last_row(),
+      "--focus の観点も状態コメントに記録し、表に出す")
+before = json.dumps(state())
+rc, _, err = run(wt, "--focus", "  ")
+check(rc == 2 and "--focus" in err and json.dumps(state()) == before, "空の --focus は終了コード2で、状態に記録しない")
 
 if os.environ.get("KEEP"):
     print("作業ディレクトリ:", root)

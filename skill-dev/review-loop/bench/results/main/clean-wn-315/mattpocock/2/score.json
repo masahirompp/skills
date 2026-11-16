@@ -1,0 +1,55 @@
+{
+ "cost_usd": 0.06385360000000001,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/ops/app.ts:853",
+   "summary": "openNew の1つ目の位置引数に undefined を渡す呼び出しが2か所になったので、名前付きの引数にすべきだという指摘。",
+   "quote": "`openNew(undefined, this.error ? undefined : sid)` は、1つ目の位置引数に `undefined` を渡しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "test/e2e/ops.test.ts:103",
+   "summary": "1つのテストケースで2つの振る舞いを確かめているのに、題名がエラーの間の場合に触れていないという指摘。",
+   "quote": "1つのケースで2つの振る舞いを確かめていますが、題名はエラーの間の場合に触れていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "docs/PRODUCT.md:591,643",
+   "summary": "591行は「f と同じ」と書きながら、書き添えている点が643行と違うので、読み手が差があるのかと迷うという指摘。",
+   "quote": "591行は「`f` と同じ」と書いているので、読み手は差があるのかと迷います。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "docs/PRODUCT.md:513",
+   "summary": "513行で「同じ」が2回続き、2つ目の「同じ」が何と同じなのかが曖昧だという指摘。",
+   "quote": "2つ目の「同じ」が何と同じなのかが曖昧です。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "コミットメッセージ",
+   "summary": "コミットメッセージは「ctrl+q ctrl+n と同じ扱い」と書いているが、実装ではエラーの間の扱いが違っていて、メッセージと食い違うという指摘。",
+   "quote": "実装は `this.error ? undefined : sid` で、エラーの間は `ctrl+q ctrl+n` と違う扱いになります。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "src/ops/app.ts:853",
+   "summary": "エラーの間は起動したディレクトリを先頭にする挙動は、利用者が頼んでいない観測できる変更で、層2のエスカレーションが要るという指摘。",
+   "quote": "CLAUDE.md の層2(観測できる挙動の変更はエスカレーション必須)に当たるので、合意済みかを確かめてください。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "test/e2e/ops.test.ts",
+   "summary": "worktree、git でない場所、(tty) の行、ctrl+q ctrl+n のエラー中の各分岐にテストがなく、退行に気づけないという指摘。",
+   "quote": "片側しかテストがないと、退行に気づけません。",
+   "quote_ok": true
+  }
+ ]
+}

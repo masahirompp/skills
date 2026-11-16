@@ -1,0 +1,9 @@
+housekeeping: 取り込み済みの判定を読みやすくする
+
+scan.sh の、ブランチが既定ブランチや PR に取り込み済みかを確かめる部分を整理する。挙動は変えない。
+
+- `git merge-base --is-ancestor` の呼び出しを `is_ancestor` にまとめる
+- first-parent の履歴を、rev-list の1回の呼び出しで作る
+- first-parent 上にあるかの判定を `on_first_parent` に切り出す
+
+skill-dev/housekeeping/test.sh は全件成功。

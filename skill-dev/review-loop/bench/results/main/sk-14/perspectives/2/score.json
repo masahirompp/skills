@@ -1,0 +1,63 @@
+{
+ "cost_usd": 0.0810536,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "hk_is_protected や hk_path_in_use がヒアドキュメント経由で一時ファイルに依存し、fail-open になる点への言及が無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "detected",
+   "quote": "一時ディレクトリを作る処理(`hk_mktemp_dir`)は、`git fetch --prune` の後に走ります。そのため、作れずに止まった時点で、リモート追跡ブランチの更新と prune はもう済んでいます。",
+   "reason": "scan.sh で一時ディレクトリの作成が fetch --prune の後にあり、SKILL.md の「何もせずに止まる」と合わないことを正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い、またはプロセスを見られないときに、空の一覧を「使用中でない」と扱う問題への言及が無い。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/scripts/scan.sh:31",
+   "summary": "一時ディレクトリの場所を決める式が lib.sh とエラーメッセージの2か所にあり、既定値を変えたときにずれるおそれがある。",
+   "quote": "同じ `${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}}` を `lib.sh:18` と、ここのエラーメッセージの両方で計算しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "apply.sh を `!` で実行するときの案内が足りず、手順4のコマンドが $TMPDIR の違いやユーザーが指定した出力ファイルに対応していない。",
+   "quote": "ユーザーのシェルでは `$TMPDIR` が違うことがある、と直前に書いている問題が、ここでもそのまま起きます。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skill-dev/housekeeping/test.sh:172-175",
+   "summary": "片付けのテストが、HOUSEKEEPING_TMPDIR で指定した場所に作ったことを確かめていない。",
+   "quote": "このテストが見ているのは「`hk-tmp` が空であること」だけです。仮に `HOUSEKEEPING_TMPDIR` を無視して別の場所に作っても通ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skill-dev/housekeeping/test.sh:186",
+   "summary": "TMPDIR を存在しない場所にするテストは、サンドボックスの書き込み制限そのものを再現していない。",
+   "quote": "ただし、サンドボックスの書き込み制限そのものを再現しているわけではありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "削除を伴う apply.sh をサンドボックスの外で実行するよう案内しているが、実行前に承認した対象の一覧を示すべきだ。",
+   "quote": "apply.sh は削除する操作です。ユーザーが実行前にコマンドを確認できるよう、案内のときに承認した対象の一覧を一緒に示すと安全です。",
+   "quote_ok": true
+  }
+ ]
+}

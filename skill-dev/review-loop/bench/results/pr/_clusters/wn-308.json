@@ -1,0 +1,663 @@
+{
+ "case": "wn-308",
+ "cost_usd": 0.1169772,
+ "clusters": [
+  {
+   "title": "標準の狭い配置ではセッション名やウィンドウ一覧が先に幅を使い、足したキーが1つも見えない",
+   "location": "docs/PRODUCT.md:442",
+   "members": [
+    "e1",
+    "e43"
+   ],
+   "id": "wn-308/c1",
+   "class": "real",
+   "scope": "in",
+   "ran": true,
+   "evidence": "外側の tmux に幅を決めたペインを作り、その中で専用サーバに attach してステータス行を capture した(差分の status-format[0] をそのまま使用、tmux 3.8)。幅34・窓1つでは [workbench: fix-login  0:zsh*  · ^Q] となり、キーは1つも読めない(docs/PRODUCT.md:442 の図も『0:zsh*  · ^』で切れている)。幅40でも [· ^Q% spli] まで。右寄せの案(退けた形)も幅34では [workbench: fix-login  0:zsh* indow] となり読めない。差分の目的(分けられることを知らせる)は、docs が典型として描く幅では果たせていない。docs の『^Q% が最後まで残る』も、この幅では成り立たない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "ウィンドウが増えるとキーの案内が押し出されて見えなくなる",
+   "location": "docs/PRODUCT.md:557",
+   "members": [
+    "e38",
+    "e48"
+   ],
+   "id": "wn-308/c2",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "挙動は事実。幅60で窓3つのときは [workbench: fix-login  0:zsh* 1:zsh 2:zsh  · ^Q% split │ · ^Q]、幅34で窓2つのときは [workbench: fix-login  0:zsh* 1:zsh] となり、キーが消える。ただし docs/PRODUCT.md:557 にすでに『ウィンドウを増やすほどキーは右へ押し出される』と書かれていて、文書とコードは食い違っていない。指摘の求めは、許容することを一言書き足すかどうかという文書の書き方。狭い幅でキーが見えない問題そのものは c1 に含まれる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "@wn_name を切り詰めないので、名前が長いと ^Q% も含めてキーがすべて消え、docs の「最後まで残る」が言い過ぎになる",
+   "location": "docs/PRODUCT.md:557",
+   "members": [
+    "e45"
+   ],
+   "id": "wn-308/c3",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "幅60で @wn_name を長くすると [workbench: very-long-session-name-for-testing-truncation  0:] となり、キーはすべて消える(事実)。ただし docs の『^Q% が最後まで残る』は、右寄せと比べたときのキーどうしの消える順を言っていて、続ける形では ^Q% が最後に消えることは実測と合う(幅60・窓3つで ^Q% だけ残る)。言い回しの強さの問題で、利用者が操作を誤る食い違いではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "案内のセッション(GUIDE)ではキーを出さないことを確かめる e2e テストが無い",
+   "location": "test/e2e/workbench.test.ts:25",
+   "members": [
+    "e2",
+    "e4",
+    "e7",
+    "e51"
+   ],
+   "id": "wn-308/c4",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "テストが無いという指摘。lib/tmux/tmux.ts:338 の GUIDE の分岐の書式を幅34で描くと [workbench: fix-login] になり、キーは出ない(挙動は正しい)。test/e2e/workbench.test.ts:25 は部分一致の /workbench: alpha/ だけで、否定の確認が無いのは事実だが、挙動の欠陥ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "e2e がウィンドウ1つの場合しか確かめず、ウィンドウ2つのときと案内のセッションを確かめていない",
+   "location": "test/e2e/workbench.test.ts:117",
+   "members": [
+    "e29"
+   ],
+   "id": "wn-308/c5",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "テストの範囲の指摘。test/e2e/workbench.test.ts:117 の正規表現は窓1つの場合だけを確かめている。窓2つと案内のセッションの挙動は、c2・c4 の実測で仕様どおりと確かめた。テストが無いという指摘なので trivial。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "昇格済みの lib の status-format・workbenchOptions の変更(%% エスケープや GUIDE の分岐)を確かめる単体テストが無く、消える e2e にしか無い",
+   "location": "lib/tmux/tmux.ts:340",
+   "members": [
+    "e5",
+    "e12",
+    "e16",
+    "e20",
+    "e28",
+    "e49",
+    "e50"
+   ],
+   "id": "wn-308/c6",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "grep で lib/tmux/tmux.test.ts に workbenchOptions と status-format を確かめるテストが無いことを確かめた。%% の書式は、実測で『^Q% split』と正しく出る。テストの置き場所の指摘で、挙動の欠陥ではない(cycle-end で e2e が消えたあとに初めて問題になる)。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "狭い幅で右から欠けて ^Q% が残ることを確かめるテストが無い",
+   "location": "test/e2e/workbench.test.ts:117",
+   "members": [
+    "e9",
+    "e15",
+    "e34",
+    "e41"
+   ],
+   "id": "wn-308/c7",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "テストが無いという指摘。e2e は広い幅の全文だけを確かめている。実測では、幅60・窓3つで ^Q% が残り、右から欠けることは確かめられた(幅34では残らない。これは c1)。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "「採らなかった形」の画面例が、取った画面を書き換えて作る方針に沿っているか分からない",
+   "location": "docs/PRODUCT.md:559-562",
+   "members": [
+    "e3"
+   ],
+   "id": "wn-308/c8",
+   "class": "wrong",
+   "scope": "na",
+   "ran": true,
+   "evidence": "退けた右寄せの書式(#[align=right] でキーを分けたもの)を、幅60・窓2つで実際に描いて capture すると [workbench: fix-login  0:zsh* 1:zsh  ^Q\" split ─ · ^Qc window] となった。docs/PRODUCT.md:561 の例と1文字も違わない。実際の描画から取った画面と一致しているので、方針に沿っているか分からないという懸念は当たらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "採った形の画面例が、採らなかった形と同じ幅60で並べられておらず、見た目の決定の規約に沿っていない",
+   "location": "docs/PRODUCT.md:558-562",
+   "members": [
+    "e10",
+    "e17",
+    "e31",
+    "e40",
+    "e47"
+   ],
+   "id": "wn-308/c9",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/PRODUCT.md:555-562 を読んだ。採った形は本文の中の例(`workbench: fix-login  0:zsh* 1:zsh  · ^Q% split │ …`)と冒頭の図(幅34)で示されていて、幅60の画面で並べているのは採らなかった形だけ。指摘の事実は合っているが、CLAUDE.md の「見た目の決定」は合意の進め方についての規約で、アプリの挙動には関わらない。参考までに、採った形を幅60で実際に描画すると `workbench: fix-login  0:zsh* 1:zsh  · ^Q% split │ · ^Q\" spli` になった(下の c10 と同じスクリプトで確かめた)。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "冒頭の図の新しい最下行が実際の描画から取られておらず手書きで、1文字ずれている",
+   "location": "docs/PRODUCT.md:442",
+   "members": [
+    "e8",
+    "e11",
+    "e13",
+    "e19",
+    "e30"
+   ],
+   "id": "wn-308/c10",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "/tmp/wnchk/r.sh で、別の tmux サーバに同じ status-format[0] を設定し、外側の tmux(-x 34)から attach して capture-pane で取った。幅34の実際の描画は `workbench: fix-login  0:zsh*  · ^Q`(行頭から始まり、`^Q` まで見える)。図の行 ` workbench: fix-login  0:zsh*  · ^` は、図のどの行にも付いている1桁の余白(` $ pnpm test:e2e` など)を足しているので、実際より1文字早く切れていて `^` だけが残る。確かに1文字ずれていて、手で書いたとみられる。ただし図は「右端が欠ける」ことを示す説明で、`^` か `^Q` かの違いで利用者が挙動を取り違えることはない。挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "根拠に issue 番号が書かれておらず辿れない",
+   "location": "docs/PRODUCT.md:556",
+   "members": [
+    "e14"
+   ],
+   "id": "wn-308/c11",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/PRODUCT.md:556 の根拠は「2026-10-28、利用者の判断」とだけ書かれていて、issue 番号は無い。追いやすさの問題で、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "キー説明の文言が使う側から渡されず lib/tmux に直に書き込まれ、lib の方針に反している",
+   "location": "lib/tmux/tmux.ts:340",
+   "members": [
+    "e6",
+    "e42"
+   ],
+   "id": "wn-308/c12",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "lib/tmux/tmux.ts:340 に、キーの説明の文字列が直に書かれている(@wn_keys は使う側から渡す形で、それとはそろっていない)。設計とモジュールの境界についての好みで、出てくる表示は正しい(c10 の実測で確かめた)。挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "表示しているキーが tmux の prefix の表の既定に頼っており、unbind などで表示だけ残って押しても動かなくなり、それを検知するテストも無い",
+   "location": "lib/tmux/tmux.ts:340",
+   "members": [
+    "e18"
+   ],
+   "id": "wn-308/c13",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "grep で調べると、lib/tmux/tmux.ts:125-133 で unbind しているのは wnq の表全体と、prefix の C-j と j だけ。src/ops/keys.ts:16-22 の ATTACH_KEYS の文字は l w v e x n f で、%、\"、c はどれも無い。今のコードでは、表示している3つのキーは tmux の既定のまま効く。指摘は、将来 c を足したり unbind したりしたら、という仮定の話で、テストが無いという指摘も合わせて、今の挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "│・─・· は East Asian Ambiguous 幅の文字で、端末の設定によってステータス行の幅や欠け方がずれる",
+   "location": "lib/tmux/tmux.ts:340",
+   "members": [
+    "e21",
+    "e27",
+    "e35"
+   ],
+   "id": "wn-308/c14",
+   "class": "undetermined",
+   "scope": "na",
+   "ran": false,
+   "evidence": "│(U+2502)、─(U+2500)、·(U+00B7)が East Asian Ambiguous なのは事実。曖昧な幅を2桁で描く設定の端末なら、tmux が数える幅(macOS の wcwidth では1桁)とずれうる。ただし、そういう設定の端末がここには無く、ずれ方を確かめられなかった。なお `·` は main の時点でも、claude の画面のキーの説明(ATTACH_KEYS_HELP の ` · `)で使われている。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "実際の Ghostty の分割での見え方を capture で確かめていない",
+   "location": "PR の本文「確かめたこと」",
+   "members": [
+    "e22",
+    "e33",
+    "e54"
+   ],
+   "id": "wn-308/c15",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "Ghostty での確認が無いという、確かめ方についての指摘で、挙動の欠陥を言ってはいない。代わりに tmux の capture で確かめた。幅34では `workbench: fix-login  0:zsh*  · ^Q`、幅60では `workbench: fix-login  0:zsh*  · ^Q% split │ · ^Q\" split ─ ·` になった。窓が2つのときは、幅34で `workbench: fix-login  0:zsh* 1:zsh`、幅60で `… 1:zsh  · ^Q% split │ · ^Q\" spli` になった。どの幅でも右から欠け、`%` も %% の書き方で正しく出ていて、docs の説明のとおりだった。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "表示の ^Q が prefix C-q の設定と別々にハードコードされ、prefix を変えると表示がずれる",
+   "location": "lib/tmux/tmux.ts:340",
+   "members": [
+    "e23",
+    "e25",
+    "e36",
+    "e46"
+   ],
+   "id": "wn-308/c16",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "lib/tmux/tmux.ts:324 の `prefix C-q` と、:340 の表示の `^Q` は、別々に書かれている。今はどちらも C-q で一致しているので、表示は正しい。食い違うのは、将来 prefix を変えたときだけで、重複の指摘にあたる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "「いちばん使う ^Q%」という主張に根拠が無い",
+   "location": "docs/PRODUCT.md:557",
+   "members": [
+    "e24"
+   ],
+   "id": "wn-308/c17",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/PRODUCT.md:557 の「いちばん使う `^Q%`」は、キーを並べる順の理由を書いた文言にすぎない。根拠を足すかどうかは文書の書き方の問題で、作業台の画面に出る内容(lib/tmux/tmux.ts:340 の書式)は変わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "差し込む値には strftime がかからないことを SKILL.md に書き足すべき",
+   "location": ".claude/skills/working-with-tmux/SKILL.md:41",
+   "members": [
+    "e26"
+   ],
+   "id": "wn-308/c18",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "`tmux -L <tmp> -f /dev/null` で `set @v 'a%Hb'` を置き、`display -p '#{@v} %%H %H'` を実行すると `a%Hb %H 00` が出た。書式の地の文には strftime がかかり、差し込んだ値にはかからないので、指摘の主張は事実。ただし SKILL.md に注意書きを足す提案で、今の挙動は正しい(コードは地の文の `%` だけを `%%` にしている)。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "契約にどのキーをどの字面で出すかが書かれていない",
+   "location": "docs/lib/tmux.md:31",
+   "members": [
+    "e32"
+   ],
+   "id": "wn-308/c19",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/lib/tmux.md:31 は「分割とウィンドウのキーを続ける」とだけ書き、字面は PRODUCT.md の 555〜556 行とシナリオ 49 にある。契約の書き込みの細かさの問題で、コードと食い違ってはおらず、契約を読んだ人が誤った使い方をする経路もない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "tmux のウィンドウを「窓」と呼んでおり、スクロールの見える範囲を指す既存の「窓」と用語が衝突している",
+   "location": "docs/PRODUCT.md:557",
+   "members": [
+    "e37",
+    "e52"
+   ],
+   "id": "wn-308/c20",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "PRODUCT.md の 161、297、354 行と DESIGN.md の 68、132 行では、「窓」がスクロールで見える範囲を指している。557 行の「窓の一覧」は tmux のウィンドウの一覧を指していて、同じ箇条の 555 行では「ウィンドウの一覧」と書いているので、用語の揺れは事実。ただし前後の文脈(作業台のステータス行、ウィンドウを増やすと右へ押し出される)から意味は決まり、挙動の取り違えには至らない。用語の問題。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "契約がキーを出す振る舞いを createWorkbench に書いているが、実際は workbenchOptions が置き、GUIDE での出し分けも書かれていない",
+   "location": "docs/lib/tmux.md:31",
+   "members": [
+    "e39"
+   ],
+   "id": "wn-308/c21",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "lib/tmux/tmux.ts:317 では createWorkbench が workbenchOptions を呼び、321〜341 行の workbenchOptions が `session === GUIDE` で書式を出し分けている。src/cli/list.ts:68 は GUIDE に対して workbenchOptions を呼ぶ。契約は createWorkbench の注記にキーのことを書いているが、createWorkbench が作る sh-<id> には実際にキーが出る。既にある「ステータス行1行」も同じく workbenchOptions が置いているので、書き方は既存の注記と揃っている。書く場所の問題で、利用者が誤る挙動の食い違いはない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "契約の「作業台では」が曖昧で、案内のセッションを除くことが明記されていない",
+   "location": "docs/lib/tmux.md",
+   "members": [
+    "e44"
+   ],
+   "id": "wn-308/c22",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/lib/tmux.md:31 の「作業台では」は createWorkbench(sh-<id>)の注記の中にあり、案内のセッションは createWorkbench では作られないので、内容は正しい。案内のセッションを除くと明記するかは文言の問題で、コード(tmux.ts:337 の GUIDE の分岐)と矛盾しない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "ステータス行に tmux の既定のキーを出す設計が DESIGN.md に反映されておらず、「tmux は利用者から隠す」と食い違う",
+   "location": "docs/DESIGN.md:230",
+   "members": [
+    "e53"
+   ],
+   "id": "wn-308/c23",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "DESIGN.md:230 の「作業台の画面のステータス行は sh-<id> と案内のセッションにだけ出し、1行にする」は、差分のあとも成り立つ。206 行の「tmux は利用者から隠す」のあとには、ステータス行は claude の画面と作業台の画面にだけ出すと続き、作業台では前から prefix の ctrl+q と ctrl+q %(シナリオ 26)を使っている。出すキーの字面は PRODUCT.md(要件)に書いてあり、DESIGN.md に書き足していないのは文書の整理の問題。設計と実装が食い違って挙動を誤る経路はない。",
+   "classified_by": "llm"
+  }
+ ],
+ "members": {
+  "e1": {
+   "dir": "wn-308/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 1
+  },
+  "e2": {
+   "dir": "wn-308/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 6
+  },
+  "e3": {
+   "dir": "wn-308/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 6
+  },
+  "e4": {
+   "dir": "wn-308/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 2
+  },
+  "e5": {
+   "dir": "wn-308/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 1
+  },
+  "e6": {
+   "dir": "wn-308/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 2
+  },
+  "e7": {
+   "dir": "wn-308/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 5
+  },
+  "e8": {
+   "dir": "wn-308/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 4
+  },
+  "e9": {
+   "dir": "wn-308/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 3
+  },
+  "e10": {
+   "dir": "wn-308/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 4
+  },
+  "e11": {
+   "dir": "wn-308/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 3
+  },
+  "e12": {
+   "dir": "wn-308/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 2
+  },
+  "e13": {
+   "dir": "wn-308/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 3
+  },
+  "e14": {
+   "dir": "wn-308/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 3
+  },
+  "e15": {
+   "dir": "wn-308/plain/3",
+   "config": "plain",
+   "trial": 3,
+   "n": 3
+  },
+  "e16": {
+   "dir": "wn-308/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 1
+  },
+  "e17": {
+   "dir": "wn-308/plain/3",
+   "config": "plain",
+   "trial": 3,
+   "n": 4
+  },
+  "e18": {
+   "dir": "wn-308/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 1
+  },
+  "e19": {
+   "dir": "wn-308/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 4
+  },
+  "e20": {
+   "dir": "wn-308/plain/3",
+   "config": "plain",
+   "trial": 3,
+   "n": 2
+  },
+  "e21": {
+   "dir": "wn-308/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 6
+  },
+  "e22": {
+   "dir": "wn-308/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 6
+  },
+  "e23": {
+   "dir": "wn-308/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 4
+  },
+  "e24": {
+   "dir": "wn-308/plain/3",
+   "config": "plain",
+   "trial": 3,
+   "n": 5
+  },
+  "e25": {
+   "dir": "wn-308/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 7
+  },
+  "e26": {
+   "dir": "wn-308/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 1
+  },
+  "e27": {
+   "dir": "wn-308/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 5
+  },
+  "e28": {
+   "dir": "wn-308/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 2
+  },
+  "e29": {
+   "dir": "wn-308/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 7
+  },
+  "e30": {
+   "dir": "wn-308/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 2
+  },
+  "e31": {
+   "dir": "wn-308/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 1
+  },
+  "e32": {
+   "dir": "wn-308/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 4
+  },
+  "e33": {
+   "dir": "wn-308/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 9
+  },
+  "e34": {
+   "dir": "wn-308/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 4
+  },
+  "e35": {
+   "dir": "wn-308/plain/1",
+   "config": "plain",
+   "trial": 1,
+   "n": 5
+  },
+  "e36": {
+   "dir": "wn-308/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 2
+  },
+  "e37": {
+   "dir": "wn-308/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 1
+  },
+  "e38": {
+   "dir": "wn-308/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 3
+  },
+  "e39": {
+   "dir": "wn-308/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 6
+  },
+  "e40": {
+   "dir": "wn-308/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 2
+  },
+  "e41": {
+   "dir": "wn-308/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 4
+  },
+  "e42": {
+   "dir": "wn-308/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e43": {
+   "dir": "wn-308/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 3
+  },
+  "e44": {
+   "dir": "wn-308/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 3
+  },
+  "e45": {
+   "dir": "wn-308/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 2
+  },
+  "e46": {
+   "dir": "wn-308/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 3
+  },
+  "e47": {
+   "dir": "wn-308/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 5
+  },
+  "e48": {
+   "dir": "wn-308/plain/2",
+   "config": "plain",
+   "trial": 2,
+   "n": 8
+  },
+  "e49": {
+   "dir": "wn-308/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 6
+  },
+  "e50": {
+   "dir": "wn-308/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 5
+  },
+  "e51": {
+   "dir": "wn-308/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 5
+  },
+  "e52": {
+   "dir": "wn-308/plain/3",
+   "config": "plain",
+   "trial": 3,
+   "n": 1
+  },
+  "e53": {
+   "dir": "wn-308/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 5
+  },
+  "e54": {
+   "dir": "wn-308/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 7
+  }
+ },
+ "classify_cost_usd": 1.402283
+}

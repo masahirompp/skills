@@ -1,0 +1,25 @@
+{
+ "case": "sk-14",
+ "kind": "shell",
+ "config": "perspectives",
+ "trial": 1,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 280538,
+  "cache_read": 245008,
+  "output": 9627
+ },
+ "cost_usd": 0.5257256000000001,
+ "started_at": "2026-11-15T07:13:52",
+ "duration_s": 108,
+ "num_turns": 7,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [],
+ "head_changed": false
+}

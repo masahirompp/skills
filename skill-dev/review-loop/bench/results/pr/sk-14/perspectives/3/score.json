@@ -1,0 +1,56 @@
+{
+ "cost_usd": 0.08781800000000001,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "detected",
+   "quote": "`skills/housekeeping/scripts/lib.sh:48`(保護判定)と `lib.sh:67`(使用中プロセスの判定): ヒアドキュメント用の一時ファイルを作れないと、どちらも「安全」側に倒れる",
+   "reason": "lib.sh の hk_is_protected と hk_path_in_use がヒアドキュメントに依存し、一時ファイルを作れないと保護対象でない・使用中でない側に倒れる fail-open を正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "detected",
+   "quote": "`SKILL.md:98` は「作れなければ何もせずに止まる」と書いていますが、実際にはリモート追跡ブランチを prune したあとで止まります。",
+   "reason": "scan.sh で一時ディレクトリの確保が git fetch --prune より後にあり、SKILL.md の記述と食い違う点を正解どおりに指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い・プロセスを見られないときに空の一覧を使用中でないと扱う問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh:185-186",
+   "summary": "書き込めない TMPDIR のテストは bash が /tmp に移るため常に通り、一時ファイルを作れない状況を再現できず fail-open を見逃す。",
+   "quote": "bash は使えない `$TMPDIR` を見ると `/tmp` に移るので、このテストは常に通ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "SKILL.md:34",
+   "summary": "apply.sh を ! で実行してもらう案内に標準入力の渡し方が無く、入力が空のまま何もしないか入力待ちで止まるおそれがある。",
+   "quote": "apply.sh は承認済みの行を標準入力で受け取ります。`! <skill-dir>/scripts/apply.sh` とだけ伝えると、入力が空のまま何もしないか、入力待ちで止まるおそれがあります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "SKILL.md:34",
+   "summary": "! で実行したコマンドがサンドボックスの外で動くという前提が確かめられていない。",
+   "quote": "Claude Code の `!` がサンドボックスの対象外かどうかは、私は確認していません。ここが違うと、この案内はそもそも成り立ちません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test.sh:172-175",
+   "summary": "片付けのテストが、HOUSEKEEPING_TMPDIR で指定した場所に一時ディレクトリが作られたかを確かめていない。",
+   "quote": "scan.sh が `HOUSEKEEPING_TMPDIR` を無視して別の場所に作っても、`hk-tmp` は空のままなのでテストは通ります。",
+   "quote_ok": true
+  }
+ ]
+}

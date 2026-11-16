@@ -1,0 +1,98 @@
+{
+ "cost_usd": 0.115646,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "detected",
+   "quote": "`--perspective ' code-review high {pr}'` は事前確認を通ります(`split()[0]` が `code-review` になるため)。ところが実際のプロンプトは `\"/ code-review high 7\"` になり、スラッシュコマンドとして解釈されないおそれがあります。",
+   "reason": "spec の前後の空白を取り除かないため、事前確認は通るのに起動するプロンプトが食い違う、と場所も原因も正解どおりに指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "判定役の入力に指示の区切りを足しましたが、判定役のプロンプトにはその区切りの扱いが書かれていません。",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いが無いことを指摘し、判定役が指示を取り違えるおそれと、欠落と扱わないようにする修正案まで挙げているので基準を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "状態コメントに観点の名前が残るのは、既定と比べてスキル名の並びが違うときだけです。引数だけを変えた場合は何も残りません。",
+   "reason": "比較がスキル名だけで行われ、引数だけを変えた観点が記録されないと指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が、外した security-review に --instruct を渡していて終了コード2になる、という指摘が無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "detected",
+   "quote": "`valid_state` は `perspectives` が文字列でも通します。文字列は1文字ずつ回すと全部 `str` になるためです。",
+   "reason": "perspectives がリストかを確かめないため文字列が検査を通る、と正解どおりに指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt で渡した指示がサブエージェントに届かない、という指摘が無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "指示とレビュー出力が同じ区切りで混ざり、偽装されうる、という指摘が無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭の `/` を取り除かないために照合が失敗する、という指摘が無い。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "review_loop.py:962-964",
+   "summary": "--instruct を付けたことが状態に一切残らず、指示付きの反復を既定どおりの反復と見分けられない。",
+   "quote": "`--instruct` も状態には一切残りません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "review_loop.py:743-749",
+   "summary": "「指示を優先」という書き方のため、変更を求める指示が NO_MUTATION の制約とぶつかり、モデルが指示を優先しうる。",
+   "quote": "ただし、指示が変更を求める文(たとえば「見つけたら直して」)だと、`NO_MUTATION` とぶつかります。モデルが指示を優先してしまう余地があります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "SKILL.md:54",
+   "summary": "--append-system-prompt に入れた指示の本文が、同じマシンの ps から見える。",
+   "quote": "`--append-system-prompt` に指示の本文が入るので、同じマシンの `ps` から見えます。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "SKILL.md:57、review_loop.py:926",
+   "summary": "オプションを反復をまたいで覚えないため、付け忘れると観点が黙って既定に戻り、条件の違う反復が同じシリーズに混ざる。",
+   "quote": "付け忘れると、観点が黙って既定に戻ります。逆に既定の観点で通ったあと、絞った観点で「収束した」と見える反復も同じシリーズに混ざります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skill-dev/review-loop/test.py:553-586",
+   "summary": "引数だけを変えた観点、前後に空白がある spec、文字列の perspectives を試すテストが無い。",
+   "quote": "次の3つの場合が試されていません。",
+   "quote_ok": true
+  }
+ ]
+}

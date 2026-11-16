@@ -1,0 +1,84 @@
+{
+ "cost_usd": 0.09638160000000001,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "detected",
+   "quote": "apply.sh が読み込む `lib.sh` の `hk_is_protected`(48行目)と `hk_path_in_use`(67行目)はヒアドキュメント `<<EOF` を使っています。",
+   "reason": "lib.sh の両関数がヒアドキュメントに頼っており、一時ファイルを作れないと保護判定と使用中判定が安全でない側に倒れる(fail-open)と、原因と場所の両方を正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "scan.sh で一時ディレクトリの作成が git fetch --prune より後にあることや、SKILL.md の『何もせずに止まる』と合わないことには触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い、またはプロセスを見られないときに空の一覧を使用中でないと扱う問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib.sh hk_mktemp_dir / scan.sh エラーメッセージ",
+   "summary": "既定値の連鎖 `${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}}` が2か所に重複しており、変えるときに両方を直す必要がある。",
+   "quote": "`${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}}` が `lib.sh` の `hk_mktemp_dir` と `scan.sh` のエラーメッセージの両方に書かれています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "scan.sh",
+   "summary": "mktemp が失敗するとエラーが2行に分かれて出て、既存の1行に埋め込む書き方と揃っていない。",
+   "quote": "mktemp が失敗すると、mktemp 自身のメッセージが先に出て、続けて `error: 一時ディレクトリを作れない(...)` が出ます。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test.sh",
+   "summary": "HOUSEKEEPING_TMPDIR の下に作ることを確かめるテストが、終了後に hk-tmp が空であることしか見ておらず、別の場所を使っても通る。",
+   "quote": "「HOUSEKEEPING_TMPDIR の下に作り、終了時に消す」のテストは、終了後に `hk-tmp` が空であることしか見ていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "lib.sh hk_mktemp_dir",
+   "summary": "`[ -n \"$d\" ] && [ -d \"$d\" ] || return 1` は直前の mktemp の失敗チェックとほぼ同じことを確かめており、重複している。",
+   "quote": "`lib.sh` の `[ -n \"$d\" ] && [ -d \"$d\" ] || return 1` は、直前の `mktemp -d ... || return 1` とほぼ同じことを確かめています。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test.sh",
+   "summary": "test.sh は apply.sh に HOUSEKEEPING_TMPDIR を渡しているが、apply.sh はこの変数を読まない。",
+   "quote": "`test.sh` は apply.sh に `HOUSEKEEPING_TMPDIR` を渡していますが、apply.sh はこの変数を読みません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "SKILL.md",
+   "summary": "サンドボックスの項目が1つの箇条書きに5文を詰めていて読みにくい。",
+   "quote": "サンドボックスの項目は1つの箇条書きに5文を詰めています。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "test.sh(apply.sh のテスト)",
+   "summary": "apply.sh の新しいテストは、macOS の mktemp が TMPDIR を見ないため旧実装でも通り、退行を検出できない。",
+   "quote": "サブエージェントが main の apply.sh を一時コピーに戻して test.sh を走らせたところ、全件成功しました。このテストでは退行を検出できません。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "test.sh",
+   "summary": "HOUSEKEEPING_TMPDIR → TMPDIR → /tmp のフォールバックの順序が、HOUSEKEEPING_TMPDIR の経路しかテストされていない。",
+   "quote": "テストしているのは HOUSEKEEPING_TMPDIR の経路だけです。",
+   "quote_ok": true
+  }
+ ]
+}

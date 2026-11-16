@@ -1,0 +1,49 @@
+{
+ "cost_usd": 0.058298,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューには cleanupLeftovers の引き継ぎ(Y を選んだ分岐)で workbenchOptions や status-format を入れ直していない点への言及が一切ない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/lib/tmux.md:31、docs/PRODUCT.md:557",
+   "summary": "tmux のウィンドウを「窓」と呼んでおり、スクロールの見える範囲を指す既存の「窓」と取り違えられるので「ウィンドウの一覧」に揃えるべきだという指摘。",
+   "quote": "「窓の一覧」という言葉が、すでにある「窓」とぶつかっています",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "昇格済みモジュールの status-format の変更を確かめるテストが、サイクル末に消える e2e にしかなく、lib/tmux/tmux.test.ts にテストを持ち越すべきだという指摘。",
+   "quote": "昇格済みモジュールの振る舞いを変えたのに、確かめるテストが使い捨て層にしかありません",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "docs/PRODUCT.md:557、test/e2e/workbench.test.ts:117",
+   "summary": "狭い画面でも ^Q% が残るというこの形を選んだ理由が、全部が収まる幅でしかテストされていないという指摘。",
+   "quote": "この形を選んだ理由が、テストで確かめられていません",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "docs/PRODUCT.md:558-563",
+   "summary": "採らなかった形の画面しかなく、同じ幅60で採った形の実際の画面が並べられていないため、見た目の決定の方針に沿っていないという指摘。",
+   "quote": "「採らなかった形」の画面だけがあり、同じ幅で「採った形」の画面がありません",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "docs/PRODUCT.md:557",
+   "summary": "「いちばん使う ^Q%」という主張に根拠や出どころが書かれておらず、キーの並び順の根拠が弱いという指摘。",
+   "quote": "「いちばん使う `^Q%`」には根拠が書かれていません",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.0667056,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "source == \"config\" の扱いには触れているが偽装できないので問題ないと結論しており、reason_type を見ずに分類器の拒否まで通すという原因を指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "tool_use_id のない拒否が None をキーとして seen に入る問題に一切触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "result の行をつなぐ変更はプロンプトの変更として除外しており、判定に複数の判定や余計な文が混ざる問題を指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "is_error の行を除かずにつなぐ問題に言及していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "別の観点の失敗で抜けたとき、止めない拒否が記録から漏れる問題に触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "child_error の詳細がつないだ本文の先頭を載せる問題に触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

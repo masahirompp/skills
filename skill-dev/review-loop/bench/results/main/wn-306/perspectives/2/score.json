@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.1172656,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "`trailing` で `cursorBlock[1]` を、すぐ下に続く `(sub)` の行の終わりまで伸ばしています。その一方で、`:233` の「入力欄は最後の行まで窓に入れる」は今も `b1` を入力欄の終わりとして扱っています。",
+   "reason": "render の cursorBlock に (sub) を含めたことと start = b1 - avail / start = b0 の補正が原因で、選んだ行や入力欄が窓から外れることを、2件の指摘で両方の条件について示している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "detected",
+   "quote": "選んだ行が区切りの最後の行で、次の区切りの先頭がトップレベルの `(sub)` の行(起動元が一覧に出ていない行)だと、空行、見出し、その `(sub)` の行まで塊に入ります。",
+   "reason": "trailing が区切りの境界で切れず、次の区切りの (sub) まで塊に入ることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "detected",
+   "quote": "選べる行がなく、`(sub)` の行だけが高さを超えて並ぶときは、`pos` が `0/0` になります。",
+   "reason": "選べる行がないときに通し番号が 0/0 になることを、正解と同じ条件で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "直後の `Ctrl+X` には `Ctrl+X ignored: <名前> left the list and the selection moved.` と表示されます。行は一覧に残っているので、文言が事実と合いません。",
+   "reason": "(sub) に変わってカーソルが移ったときに guard が立ち、文言『left the list』が事実と合わないことを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "detected",
+   "quote": "気になるのは、入力欄やメニューを開いたまま、その行が更新で起動された行に変わる場合です。メモや待ち先を確定する時点で、起動された行への関係が保存されえます。",
+   "reason": "入力中に対象の行が (sub) に変わっても入力が閉じず、確定すると起動された行にメモが付くという原因と条件を指摘している(既存の穴と見積もっているが、内容は一致している)。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは attachKey と GUIDE の経路を確かめた上で、起動された行には届かず問題なしと結論しており、案内が古い行を指す経路を見落としている。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の『Both can be selected』の記述と実装の食い違いには触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/screen/screen.ts:201 と src/model/cursor.ts:11",
+   "summary": "選べる行の判定が、描画の marker !== 'sub' とカーソルの selectableOrder の2か所に分かれており、印の付け方が変わると黙ってずれる。",
+   "quote": "描画は `r.marker !== 'sub'` で数え、カーソルは `selectableOrder`(layout の `spawned`)で動かしています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/model/cursor.ts:41-57",
+   "summary": "トップレベルの行が別の区切りの起動元の下に入ると、カーソルは元の区切りに残って行を追わないので、仕様として望ましいかを利用者に確かめるべきだ。",
+   "quote": "ただし、トップレベルの `(tty)` だった行が別の区切りの起動元の下に入ると、カーソルは元の区切りに残り、その行を追いません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/unit/screen.test.ts の 24",
+   "summary": "追加した単体テストは (sub) 4 行・高さ 10 なので、選んだ行が窓の外に出る境界の不具合を検出できない。",
+   "quote": "追加したテスト(`test/unit/screen.test.ts` の 24)は `(sub)` 4 行・高さ 10 なので、この境界に届きません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test/e2e/deps.test.ts:464-466",
+   "summary": "f と e が何もしないことを、描画が反映される前に評価されうる画面の文字列だけで確かめており、変更前の挙動でも通りうる。",
+   "quote": "`keys('f')`、`keys('e')` の直後に、画面に `waits for:|can't` がないことを確かめているだけです。描画が反映される前に評価されれば、変更前の挙動でも通りえます。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test/e2e/deps.test.ts:446-450",
+   "summary": "Down/Up を5回押すループに待ちがなく、途中で (sub) の行に止まったかを検出できない可能性がある。",
+   "quote": "`h.keys` が描画を待たないなら、最後の画面しか見ていません。途中で `(sub)` の行に止まったかどうかは検出できない可能性があります。",
+   "quote_ok": true
+  }
+ ]
+}

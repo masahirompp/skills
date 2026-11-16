@@ -1,0 +1,105 @@
+{
+ "cost_usd": 0.1078056,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "作業台(sh-<id>)を映している間に wbguide が消えたとき、一覧の追従や killSafely・pane-died で作り直されない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "起動し直した回数 `@wn_respawned` が減らないので、文書の「起動してすぐ終わるときに回り続けないため」という目的とずれています。何時間もの間に散発的に 6 回落ちただけでも、6 回目でセッションが畳まれます。",
+   "reason": "通算で数えて数え直さないため、散発的な落ち方でも上限に達してセッションが畳まれる、と場所も原因も一致している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "attach の判定はむしろ実測と合っていると評価していて、シグナルで status が null になる場合には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が、利用者が分割したペインと案内のペインを区別しない点を指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなる点に触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide が 'exists' を返す件は sleep 1 の間に死んだペインが見える件だけで、利用者の分割が残って案内のペインがない場合の作り直し漏れは指摘していない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/cli/guide.ts:18",
+   "summary": "whatnext workbench から作り直した案内が、一覧ではなく呼び出し側のプロセスの環境から組み立てられるので、別の版の案内が動いて壊れうる。",
+   "quote": "たとえば一覧が global の whatnext で動いていて、利用者が別の checkout や `npx` で `whatnext workbench` を打つと、一覧とは別の版の案内のプログラムが、一覧が終わるまで動き続けます。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "test/e2e/workbench.test.ts:255",
+   "summary": "`/signal=kill/` の小文字は macOS が前提で、Linux の CI では落ちる見込みがある。",
+   "quote": "`/signal=kill/` の小文字は macOS 向けの前提です。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "lib/tmux/tmux.ts:56-57",
+   "summary": "sleep 1 の間は ensureGuide が 'exists' を返すので、attach すると「Pane is dead」が最大1秒見える。",
+   "quote": "この間の `ensureGuide` は `'exists'` を返し、attach すると「Pane is dead」が最大 1 秒見えます。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/cli/guide.ts:19-20",
+   "summary": "同時に作られたとき、相手側の workbenchOptions がまだ入っておらず、既定のステータス行などが一瞬見える可能性がある。",
+   "quote": "ただ、そのとき相手側の `workbenchOptions` がまだ入っていない可能性があります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "lib/tmux/tmux.test.ts:75-81",
+   "summary": "案内の分岐のテストは文字列が含まれるかを見るだけで、回数の境目を確かめていない。",
+   "quote": "案内の分岐のテストは、文字列が含まれているかを見るだけです。`-lt 5` が `-le 5` に変わっても通るので、回数の境目は E2E でも確かめていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "lib/tmux/tmux.ts:400",
+   "summary": "Tmux.signalGuide が読む @wn_guide_pid を書いている箇所がない(差分の外)。",
+   "quote": "`Tmux.signalGuide`(`lib/tmux/tmux.ts:400`)が読む `@wn_guide_pid` を、書いている箇所がありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "",
+   "summary": "落ちる原因が起動直後に落ちる種類なら、上限を使い切ったあと ensureGuide が同じコマンドで作り直して落ちる、を繰り返す。",
+   "quote": "5 回の上限を使い切ったあと、`ensureGuide` が同じコマンドで作り直して同じように落ちる、を繰り返します。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "test/real",
+   "summary": "Ghostty + bash の実機テストを流しておらず、bash でだけ起きる exec の重複の修正を確かめていない。",
+   "quote": "PR の本文にあるとおり、Ghostty + bash の実機(`test/real`)は流していません。",
+   "quote_ok": true
+  }
+ ]
+}

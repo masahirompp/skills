@@ -1,0 +1,29 @@
+{
+ "case": "wn-306",
+ "kind": "ts",
+ "config": "mattpocock",
+ "trial": 2,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 1045547,
+  "cache_read": 915461,
+  "output": 15673
+ },
+ "cost_usd": 1.2562972000000003,
+ "started_at": "2026-11-15T08:05:22",
+ "duration_s": 150,
+ "num_turns": 2,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [
+  "Bash gh issue view 305 --json title,body,labels,comments --jq '{title,body,labels:[.labels[].name],comments:[.comments[].body]}'; ls docs/agents; cat biome.json 2>/dev/null | head -40; git log -1 --format=%B HEAD",
+  "Bash sed -n 20,400p /Users/masahirompp/.claude/projects/-private-var-folders-5t-j2015ppn7pj1lf0h39j3c5jm0000gn-T-rb-v3u49r-y-w-df338ede0a-whatnext/bf35c1bb-8a2b-4739-a649-1adfa452852c/tool-results/bj6w2p238.txt",
+  "Bash grep -n \"marker\" src/ops/*.ts | head; gh issue view 305 --json title,labels,milestone 2>&1 | head -5; npm test 2>&1 | tail -6"
+ ],
+ "tree_changed": [],
+ "head_changed": false
+}

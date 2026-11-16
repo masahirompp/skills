@@ -1,0 +1,111 @@
+{
+ "cost_usd": 0.08762160000000001,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/scripts/review_loop.py(JUDGE_PROMPT)、skills/review-loop/SKILL.md 134 行目",
+   "summary": "新しい欄の名前「範囲」が、同じ文書内の別の意味の「範囲」と重なっており、判定役が取り違えるおそれがある。",
+   "quote": "新しい欄の名前「範囲」(差分の内か外か)は、同じプロンプトの別の意味の「範囲」と重なっています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/SKILL.md 99 行目",
+   "summary": "「定義は JUDGE_PROMPT が正」としながら、99 行目でプロンプトの文をほぼそのまま書き写しており、片方だけ直すと食い違いが生じる。",
+   "quote": "それなのに 99 行目は、`JUDGE_PROMPT` の 863 行目と 865 行目をほぼ同じ文で書き写しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/review-loop/SKILL.md 99、111、128、134、136 行目",
+   "summary": "差分の外の指摘を扱う同じ分岐が複数箇所に散らばっている。",
+   "quote": "という分岐が、99、111、128、134、136 行目に散らばっています。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/review-loop/SKILL.md 130 行目",
+   "summary": "130 行目の箇条だけ条件分岐が 4〜5 段あり、ほかの箇条と書き方が揃っていない。",
+   "quote": "130 行目の箇条には条件分岐が 4〜5 段入っています。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skill-dev/review-loop/fakes/claude",
+   "summary": "判定の形を変えると、プロンプト、SKILL.md、偽コマンドの 3 か所を同時に直す必要がある(Shotgun Surgery)。",
+   "quote": "判定の形を変えると、プロンプト、`SKILL.md`、偽コマンドの 3 か所を同時に直す必要があります。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "test.py",
+   "summary": "テストが「### F1: s」の有無しか見ておらず、新しい欄の追加を確かめていない。",
+   "quote": "`test.py` は「### F1: s」があるかしか見ていないので、欄を足したことはテストで確かめられていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skills/review-loop/SKILL.md 86 行目",
+   "summary": "「範囲」の説明に、確かめられないときは「差分の内」に倒すという仕様の規則が欠けている。",
+   "quote": "86 行目の「範囲」の説明に、仕様の「確かめられないときは『差分の内』に倒すよう書き」に当たる規則がありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "skills/review-loop/SKILL.md 99 行目、JUDGE_PROMPT",
+   "summary": "「PR の目的の直し残しは差分の内とする」という例外が仕様に無く、判断基準が一つ増えている。",
+   "quote": "「PR の目的の直し残しは差分の内とする」という例外(99 行目と `JUDGE_PROMPT`)。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "skills/review-loop/SKILL.md 136 行目",
+   "summary": "issue 作成について仕様に無い追加規則(重複の検索、セキュリティ指摘の扱い、統合、順序)が入っている。",
+   "quote": "issue 作成に関する追加の規則(136 行目)。重複の検索、公開リポジトリでのセキュリティ指摘の扱い、反復をまたいだ統合、並べる順序が入っています。",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "skills/review-loop/SKILL.md 116 行目",
+   "summary": "「PR 本文に悪用手順を書かない」という規則が仕様に根拠なく追加されている。",
+   "quote": "「PR 本文に悪用手順を書かない」(116 行目)。仕様に根拠がありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 11,
+   "location": "skills/review-loop/SKILL.md 103 行目",
+   "summary": "再現を安全に行うための規則が仕様に無いまま追加されている。",
+   "quote": "再現を安全に行うための規則(103 行目)。仕様にはありませんが、作業ツリーを変えないという既存の制約から自然に出てくるものです。",
+   "quote_ok": true
+  },
+  {
+   "n": 12,
+   "location": "skills/review-loop/SKILL.md 130 行目",
+   "summary": "再レビューの条件から仕様の「修正が大きく」という条件が落ち、修正の大きさに関係なく回すようになっており、反復を減らす狙いと逆向きになっている。",
+   "quote": "実装は「再現が確かめた経路の外の挙動も変えているなら、**修正の大きさに関係なく**回す」です。安全側に倒していますが、反復を減らすという狙いとは逆向きです。",
+   "quote_ok": true
+  },
+  {
+   "n": 13,
+   "location": "skills/review-loop/SKILL.md 99 行目",
+   "summary": "仕様では任意のベースでの確認が、影響が高の指摘を外すときは必須になっており、同じ段落の「差分の外は再現もしない」とも衝突する。",
+   "quote": "実装では、影響が高の指摘を外すときは必須になっています。同じ段落の「差分の外は再現もしない」とも衝突します。",
+   "quote_ok": true
+  },
+  {
+   "n": 14,
+   "location": "skills/review-loop/SKILL.md 10 行目",
+   "summary": "冒頭の要約「リスクの高い指摘がなくなるまで回す」が、128 行目の「差分の外の指摘は継続の理由にしない」と合っていない。",
+   "quote": "「リスクの高い指摘がなくなるまで回す」は、128 行目の「差分の外の指摘は影響の段階に関係なく継続の理由にしない」と文面が合いません。",
+   "quote_ok": true
+  },
+  {
+   "n": 15,
+   "location": "JUDGE_PROMPT",
+   "summary": "観点の欠落(分類 other)の指摘で「範囲」欄にどちらを書くかが決まっていない。",
+   "quote": "`JUDGE_PROMPT` はすべての指摘に「範囲」を書かせますが、観点の欠落(分類 other)の指摘にどちらを書くかが決まっていません。",
+   "quote_ok": true
+  }
+ ]
+}

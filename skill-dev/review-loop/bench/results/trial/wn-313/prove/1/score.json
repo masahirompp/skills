@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.1601776,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "作業台の画面がつながったまま wbguide が消えたときに作り直されず、切り替えの失敗や切断になるという指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "`@wn_respawned` は増えるだけで戻りません。「起動してすぐ終わる」場合と、長く動いたあとに終わる場合を区別しません。",
+   "reason": "@wn_respawned が通算で数えられて数え直されず、間を置いた終了でも6回目に案内が畳まれると指摘しており、正解の原因と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "attach 後にクライアントがシグナルで止められた場合を「つなげなかった」と誤判定する点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "detected",
+   "quote": "`pane-died` の `wbguide)` の分岐は、案内のプログラムのペインかどうかを見ていません。案内の画面で `ctrl+q %` で分割したシェルも「起動し直す」対象になります。",
+   "reason": "wbguide の分岐が案内のペインと利用者の分割ペインを区別せず、起動し直しと @wn_guide_died の上書きが起きると指摘しており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "attach 失敗の道でタイトルを消す OSC 2 が出なくなった点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定し、案内のペインがない場合に作り直されない点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

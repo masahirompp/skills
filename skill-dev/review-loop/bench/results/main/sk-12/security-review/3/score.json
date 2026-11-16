@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.0663456,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは「止めずに続けるのは、利用者自身の deny ルールに当たった拒否だけ」と述べており、reason_type を見ないため分類器の拒否まで通る点には気づいていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "partial",
+   "quote": "`tool_use_id` が None の拒否が両方から外れる、という細かい挙動はあります。ただし理論上の話にとどまります。",
+   "reason": "check_result で tool_use_id が None の拒否が除外される挙動には触れているが、config_denied に None がキーとして入り、id のない拒否全般が seen で消えるという原因の説明が曖昧で、問題ではないと退けている。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "run_judge が result の行を全てつないで判定に使う問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "is_error の行をつないだ本文から除いていない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "run_reviews で例外により抜けたとき、他の子の拒否が記録されずに漏れる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "child_error の詳細に、つないだ本文の先頭500字が載る点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

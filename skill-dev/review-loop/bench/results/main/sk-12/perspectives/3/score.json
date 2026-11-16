@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.1113816,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "detected",
+   "quote": "許可リストにないことによる拒否まで `config` として出るなら、このブランチの変更で `permission_denied` による停止はほぼ働かなくなります。",
+   "reason": "source == \"config\" だけで止めるかを決めているため、deny ルールの一部に当たっただけではない拒否まで止めずに通る、と同じ箇所(:308)について原因を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "detected",
+   "quote": "さらに `seen` に `None` が入るので、result の `permission_denials` のうち `tool_use_id` のないものが全て見逃されます(:249 からの照合)。",
+   "reason": "tool_use_id がないと None がキーとして入り、seen によって id なしの拒否まで照合から外れる、と正解の仕組みどおりに指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "detected",
+   "quote": "たとえば判定を2回出せば見出しと `F1` が重複しますし、最後に「変わりません」のような文があれば末尾に残ります。",
+   "reason": "判定役の出力も result の行をつなぐため、判定の重複や余計な文が verdict に混ざる、と run_judge と check_result の使い方を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "result の行をつなぐときに is_error の行を除いていない、という指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "detected",
+   "quote": "1つの観点が `permission_denied` で例外を出すと、ほかの観点の `tail` に溜まった設定の拒否は `denials.txt` に書かれないまま止まります。",
+   "reason": "run_reviews で別の観点の例外によって抜けると、ほかの子の止めない拒否が記録されない、と指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "detected",
+   "quote": "以前は失敗した result の行の `result` を出していましたが、今は全行をつないだ `text[:500]` を出しています。",
+   "reason": "child_error の詳細が、つないだ全体の先頭500字を載せるため最後の行のエラー文が切れる、と指摘している。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/scripts/review_loop.py:308",
+   "summary": "テストは fake が出す形を確かめているだけで、本物の CLI の拒否イベントの形を確かめる fixture が無い。",
+   "quote": "テストは fake が出す形の確認にとどまっています。次の2つを本物の CLI で採って比べ、fixture にすることを勧めます。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "review_loop.py:237",
+   "summary": "modelUsage の docstring が矛盾しており、最後の行だけを数えるとトークン数を少なく数えるおそれがあるのに、テストで確かめられていない。",
+   "quote": "行ごとの値が実はそのターンだけの量だった場合、トークン数を少なく数えます。本物の出力で確かめ、コメントを直してください。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "review_loop.py:238",
+   "summary": "止める側の拒否のあとに子が result の行を出さずに落ちると、permission_denied ではなく child_error に分類され、2回続いたら報告する仕組みが働きにくい。",
+   "quote": "止める側の拒否(`tail.denial`)のあとに子が result の行を出さずに落ちると、`permission_denied` ではなく `child_error` に分類されます。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "SKILL.md:103 / review_loop.py:327 watch_denials",
+   "summary": "設定のルールで拒否されても試行が成功として記録され、痕跡が warn と denials.txt にしか残らないため、拒否の件数を目に見える形で出すべき。",
+   "quote": "たとえば利用者の deny ルールが `gh pr diff` に当たると、その観点は差分を読まずに「指摘なし」を返しても成功になります。PR の状態コメントにも成功と載ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "review_loop.py:327 watch_denials",
+   "summary": "git push や Edit のような書き込み系の操作が deny ルールで拒否されても試行を止めなくなり、禁じた操作を試みたという信号が弱くなった。",
+   "quote": "子が `git push` や `Edit` を試み、deny ルールで拒否された場合も、以前は試行が失敗していましたが、今は続きます。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "review_loop.py:327 denials.txt / stderr",
+   "summary": "拒否されたツールの入力(最大200字)が denials.txt と stderr に平文で残るため、直書きされたトークンが漏れるおそれがある。",
+   "quote": "ただ、コマンドの中にトークンを直書きした呼び出しが拒否されると、それが平文でファイルに残ります。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,105 @@
+{
+ "cost_usd": 0.1206256,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "作業台の画面が sh-<id> を映している間に wbguide が消えても一覧の側で作り直されない、という指摘はレビューに無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "起動し直しの回数 `@wn_respawned` は戻されず、ペインの生涯で5回までになっている。docs が言う「起動してすぐ終わるときに回り続けないため」の制限(時間あたりの回数)になっておらず、まれに落ちるだけでもいずれ案内のセッションが畳まれる。",
+   "reason": "pane-died の案内の分岐で回数が通算で数えられ、数え直されないため、いずれ上限に達して案内が畳まれると正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "detected",
+   "quote": "tmux attach がシグナルで終わったとき(`res.status === null`)も `!== 0` で失敗とみなし、hasSession(LIST) が真ならエラーを出して fail() でキーを待つ。",
+   "reason": "workbench() の attach の判定が、シグナルで終わり status が null の場合も失敗扱いになると、場所と原因の両方が一致している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が、利用者が分割したペインと案内のペインを区別しないという指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなったという指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定し、案内のペインが無い場合を見逃すという指摘は無い。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib/tmux/tmux.ts:51",
+   "summary": "@wn_guide_died に最後の5行しか残さないので、Node の例外のエラー文が残らず、落ちた原因の手がかりにならない。",
+   "quote": "`@wn_guide_died` に残すのは画面の空でない最後の5行だけで、Node が落ちたときに出すエラー文(`TypeError: ...` などスタックの先頭)がほとんど残らない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/cli/workbench.ts:27",
+   "summary": "SIGUSR2 を attach の前に送るので、WB_TTY の変化をその知らせで使い切り、後の client-attached では follow が走らず、作業台の画面が案内に残りうる。",
+   "quote": "頼みごと `guide` の SIGUSR2 を attach の前に送るので、一覧は WB_TTY が変わったことをこの知らせで使い切る。そのあとの `client-attached` の知らせでは `wbChanged` が false になり、follow が走らない。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/cli/guide.ts:19",
+   "summary": "workbench から作り直す案内は、workbench のプロセスの node・cli・環境で起動するので、一覧が起動した案内と版や環境が食い違いうる。",
+   "quote": "`whatnext workbench` から作り直す案内のペインは、workbench のプロセスの node と cli と process.env(PATH、CLAUDE_CONFIG_DIR、XDG_STATE_HOME、WHATNEXT_DEBUG_LOG など)で起動するので、一覧が起動した案内と版や環境が違いうる。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/cli/workbench.ts:43",
+   "summary": "askListToRefreshGuide が頼みごとを書いて知らせる手順を重複して写しており、変更時にずれる危険がある。",
+   "quote": "askListToRefreshGuide は、guide.ts の Enter の処理(`@wn_req_<秒>_<pid>` を書き、`@wn_pid` を読んで SIGUSR2)と、`@wn_req_sh` の手順をもう一度写している。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "src/cli/list.ts:67",
+   "summary": "ensureGuide が作ったときにすでに入れた workbenchOptions を、startList がもう一度入れており重複している。",
+   "quote": "ensureGuide が案内のセッションを作ったときはもう workbenchOptions(GUIDE, '') を入れているのに、startList はそのあと同じ呼び出しをもう一度している。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "src/ops/app.ts:1156",
+   "summary": "案内の名前をセッションのオプションに置いているのが根の原因で、作り直すと消えるのを新しい頼みごとでつくろっている設計上の問題。",
+   "quote": "根の原因は、案内の名前をセッションのオプション `@wn_name` に置いていて、セッションを作り直すと消えることにある。それを新しい頼みごと `guide` と lastGuide の消去でつくろっている。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "docs/DESIGN.md:229",
+   "summary": "観測できる振る舞いの変更を DESIGN.md にだけ書き、PRODUCT.md を直していない。",
+   "quote": "観測できる振る舞いの変更を DESIGN.md にだけ書き、PRODUCT.md を直していない。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "test/e2e/workbench.test.ts:255",
+   "summary": "/signal=kill/ のアサーションは OS ごとの signal 名の表記に依存し、macOS 以外で落ちうる。",
+   "quote": "`@wn_guide_died` を `/signal=kill/` で確かめているが、`pane_dead_signal` の文字列は tmux の sig2name の実装、つまり OS に依存する。",
+   "quote_ok": true
+  }
+ ]
+}

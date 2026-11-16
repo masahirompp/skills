@@ -1,0 +1,62 @@
+{
+ "cost_usd": 0.0720136,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--perspective の値の空白を正規化しないことによる照合と起動プロンプトの食い違いには触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "JUDGE_PROMPT に追加の指示ブロックの扱いが無いことは指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "既定の観点との比較がスキル名と並び順だけで行われる問題には言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md はドキュメントとして除外しており、例が終了コード2で止まる点を指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "valid_state の検証を問題なしと評価しており、perspectives がリストか確かめていない欠陥は指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt だけで渡すとサブエージェントに指示が届かない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "judge-input.md で指示とレビュー出力が同じ区切りで混ざり、偽装されうる点を指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭の `/` を取り除かないことで事前確認や照合が失敗する点は指摘していない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

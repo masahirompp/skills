@@ -1,0 +1,2394 @@
+# 採点の抜き取り用の一覧
+
+検出の判定と、余計な指摘の分類を、根拠つきで並べる。★ は乱数(種は固定)で選んだ抜き取りの対象。
+レビューの出力の全文は、各試行の `result.md`。基準は `score.py` の SCORE_PROMPT と CLASSIFY_PROMPT。
+
+## 検出の判定
+
+- `sk-12/code-review/1` S12-1 → **detected**
+  - 理由: source == "config" だけで止めない拒否とみなすため、reason_type が違う意図外の拒否まで通ってしまうと StreamTail の振り分けを指摘しており、原因が正解と一致する(例に挙げた拒否は分類器ではないが)。
+  - 引用: 「Any denial with source == "config" is now non-fatal. If real claude in -p mode also tags the ordinary case (a call with no allow rule is turned into a deny, e.g. reason_type subcommandResults) as sour」
+- `sk-12/code-review/1` S12-2 → **detected**
+  - 理由: tool_use_id のないイベントで None が seen に入り、id のない permission_denials が除外されると、正解と同じ原因と結果を指摘している。
+  - 引用: 「config_denied is a dict keyed by tool_use_id, so if a config-denial event has no tool_use_id, None goes into seen and fatal denials in the result's permission_denials that also lack tool_use_id are dr」
+- `sk-12/code-review/1` S12-3 → **detected**
+  - 理由: 判定役の result の行を全てつなぐため、下書きと最終版の判定が verdict.md に混ざると指摘している。
+  - 引用: 「For the judge itself, a draft verdict plus a final verdict both go into verdict.md, giving two '## 指摘' sections.」
+- `sk-12/code-review/1` S12-4 → **missed**
+  - 理由: result の行をつなぐときに is_error の行を除いていない点には触れていない。
+- `sk-12/code-review/1` S12-5 → **missed**
+  - 理由: 別の観点の失敗で抜けたとき、他の子の止めない拒否が記録されず漏れる点には触れていない。
+- `sk-12/code-review/1` S12-6 → **detected**
+  - 理由: child_error の詳細が最後の行ではなく、つないだテキストの先頭500字を載せるため、エラーの文が切れると正確に指摘している。
+  - 引用: 「The child_error message now shows the first 500 characters of the joined text instead of the last result, so the actual error text is cut off.」
+- `sk-12/code-review/2` S12-1 → **detected**
+  - 理由: StreamTail の振り分けが source == config だけで止めない拒否とみなすため、ルールの一部に当たっただけではない拒否まで通ると指摘し、reason_type == subcommandResults に絞るよう提案しているので、原因が正解と一致する。
+  - 引用: 「Any denial with source == "config" is now treated as allowed to continue.」
+- `sk-12/code-review/2` S12-2 → **detected**
+  - 理由: tool_use_id のない拒否が None をキーとして入り、seen に None が入るため、result の id なしの拒否まで除外されると、正解と同じ原因を指摘している。
+  - 引用: 「config_denied is keyed by tool_use_id, so config denial events with no id collapse into one entry, and None gets into seen.」
+- `sk-12/code-review/2` S12-3 → **detected**
+  - 理由: 判定役の出力も result の行を全てつなぐため、判定の後の短い文や判定の重複が verdict.md に混ざると、正解と同じ場所と原因を指摘している。
+  - 引用: 「The judge's output now joins every non-empty top-level result line, and verdict is sliced from the first heading to the end of that joined text.」
+- `sk-12/code-review/2` S12-4 → **missed**
+  - 理由: result の行をつなぐ処理への指摘はあるが、is_error の行を除いていないことには触れていない。
+- `sk-12/code-review/2` S12-5 → **detected**
+  - 理由: 別の観点の失敗でループを抜けると、動いている子の止めない拒否が denials.txt や warn に残らないと、正解と同じ内容を指摘している。
+  - 引用: 「If another review fails first, config denials from the reviews still running are never recorded.」
+- `sk-12/code-review/2` S12-6 → **missed**
+  - 理由: child_error の詳細に、最後の行ではなく、つないだ本文の先頭500字が出る問題への指摘がない。
+- `sk-12/code-review/3` S12-1 → **partial**
+  - 理由: source=config をすべて止めない扱いにしている点が広すぎるという場所と方向性は合っていますが、reason_type を見ていないことや分類器による拒否には触れていないため partial としました。
+  - 引用: 「Treating every source=config denial as continue-the-attempt also lets through denials of reads a review cannot do without, so a review that saw nothing can pass as completed with no findings」
+- `sk-12/code-review/3` S12-2 → **detected**
+  - 理由: tool_use_id のないイベントで seen に None が入り、id のない permission_denials がすべて除外されるという原因と結果を正確に指摘しています。
+  - 引用: 「A config denial event with no tool_use_id puts None into `seen`, so every permission_denials entry in result that also lacks tool_use_id is silently treated as an allowed config denial (fails open).」
+- `sk-12/code-review/3` S12-3 → **detected**
+  - 理由: 判定役でも result の行をすべてつなぐため、下書きと最終版の判定が混ざると指摘しています。
+  - 引用: 「Applying the join-all-result-lines policy to the judge as well means an intermediate draft verdict and the final verdict both end up in the verdict when each carries the headings.」
+- `sk-12/code-review/3` S12-4 → **partial**
+  - 理由: 途中の is_error の行が無視されて成功扱いになる点は指摘していますが、つなぐときにエラーの行を除いていないためエラーの文が本文に混ざる、という原因には触れていません。
+  - 引用: 「Success is judged only from the last result line, so an error in an earlier result line (is_error or a non-success subtype) is ignored.」
+- `sk-12/code-review/3` S12-5 → **missed**
+  - 理由: 別の観点の失敗でループを抜けるときに、動いている子の止めない拒否が記録から漏れるという指摘はありません。
+- `sk-12/code-review/3` S12-6 → **missed**
+  - 理由: child_error の詳細に最後の行ではなく、つないだテキストの先頭500字が載るという指摘はありません。
+- `sk-12/mattpocock/1` S12-1 → **missed**
+  - 理由: レビューは config 以外の source の拒否が止まる点を安全側として述べただけで、source == config の拒否が reason_type を見ずに分類器の拒否まで素通りさせる点を指摘していない。
+- `sk-12/mattpocock/1` S12-2 → **detected**
+  - 理由: tool_use_id のない config の拒否が None をキーに入り、seen の None のせいで id なしの permission_denials が除外されると、場所と原因を正確に指摘している。
+  - 引用: 「さらに `seen` に `None` が入るので、result にしか載らない `tool_use_id` のない拒否は「既に見た」と扱われます。その結果、止めるべき拒否が素通りします。」
+- `sk-12/mattpocock/1` S12-3 → **missed**
+  - 理由: 判定役の出力も result の行を全てつなぐため複数の判定や余計な文が混ざる、という指摘は無い。
+- `sk-12/mattpocock/1` S12-4 → **missed**
+  - 理由: result の行をつなぐときに is_error の行を除いていない、という指摘は無い。
+- `sk-12/mattpocock/1` S12-5 → **missed**
+  - 理由: run_reviews が別の観点の失敗で抜けたとき、他の子の止めない拒否が記録されないという指摘は無い。
+- `sk-12/mattpocock/1` S12-6 → **missed**
+  - 理由: child_error の詳細に、最後の行のエラーの文ではなく、つないだ本文の先頭が載るという指摘は無い。
+- `sk-12/mattpocock/2` S12-1 → **missed**
+  - 理由: source で止める・止めないを分けていることは挙げているが、reason_type を見ていないために分類器の拒否まで通る点は指摘せず、むしろ妥当と結論している。
+- ★ `sk-12/mattpocock/2` S12-2 → **detected**
+  - 理由: tool_use_id のない拒否が None をキーに config_denied へ入り、seen によって id のない permission_denials が除かれて止まらない、という原因と場所が正解と一致する。
+  - 引用: 「すると、既に処理したものの集合 `seen` に `None` が入ります(`review_loop.py:249`)。その結果、result の `permission_denials` にある id のない拒否は、出どころが config 以外でも飛ばされ、試行が止まりません。」
+- `sk-12/mattpocock/2` S12-3 → **missed**
+  - 理由: 判定役の出力で result の行を全てつなぐため、判定が混ざる点には触れていない。
+- `sk-12/mattpocock/2` S12-4 → **missed**
+  - 理由: 連結のときに is_error の行を除いていない点の指摘がない。
+- `sk-12/mattpocock/2` S12-5 → **missed**
+  - 理由: run_reviews で途中の例外によって抜けるとき、ほかの子の止めない拒否の記録が漏れる点の指摘がない。
+- `sk-12/mattpocock/2` S12-6 → **missed**
+  - 理由: child_error の詳細がつないだテキストの先頭500字になり、エラーの内容が出ない点の指摘がない。
+- `sk-12/mattpocock/3` S12-1 → **missed**
+  - 理由: レビューは source が config 以外なら止まる点を安全側として妥当としただけで、source: config の分類器による拒否まで止めずに通ることや、reason_type を見ていないことには触れていない。
+- `sk-12/mattpocock/3` S12-2 → **detected**
+  - 理由: config_denied が tool_use_id をキーにしているため None が seen に入り、id のない別の拒否が除外される、と正解の原因どおりに指摘している。
+  - 引用: 「config の拒否に `tool_use_id` がないと、`seen` に `None` が入ります。そうなると、result の `permission_denials` にある、`tool_use_id` のない別の拒否が読み飛ばされます。」
+- `sk-12/mattpocock/3` S12-3 → **detected**
+  - 理由: 判定役でも result の行を全てつなぐため、後ろの短い文や下書きと修正版の重なりが verdict.md に入る、と run_judge の使い方を指摘している。
+  - 引用: 「`run_judge` が判定にするのは、つないだテキストの最初の見出しから末尾までです。見出しより前の前置きは落ちますが、後ろの行はそのまま残ります。」
+- `sk-12/mattpocock/3` S12-4 → **partial**
+  - 理由: 途中の is_error の行が無視されて成功になる点は述べているが、エラーの文がレビュー本文につながって混ざる、という肝心の原因には触れていない。
+  - 引用: 「仕様どおりですが、途中の行の `is_error: true` は無視されます。途中のターンが失敗しても、最後の行が成功なら成功になります。」
+- `sk-12/mattpocock/3` S12-5 → **missed**
+  - 理由: run_reviews で別の観点の失敗によりループを抜けたとき、動いている子の止めない拒否が記録されない点への言及がない。
+- `sk-12/mattpocock/3` S12-6 → **missed**
+  - 理由: child_error の詳細が最後の行のエラーの文ではなく、つないだ本文の先頭500字を載せる点への言及がない。
+- `sk-12/perspectives/1` S12-1 → **detected**
+  - 理由: source == "config" だけで止めない拒否とみなし reason_type を見ないため、deny ルールに当たった以外の拒否まで試行を止めずに通る、と同じ箇所と原因を指摘している。
+  - 引用: 「止めない条件を「deny ルールに当たったもの」に限るのが安全です(例: `reason_type` が rule 系のときだけにする、`message` で区別する)。」
+- `sk-12/perspectives/1` S12-2 → **detected**
+  - 理由: None キーが seen に入り、id のない permission_denials が除外されるという仕組みを正確に指摘している。
+  - 引用: 「`seen = set(tail.config_denied)` では、tool_use_id のない設定の拒否のキーが `None` になります。すると、`permission_denials` のうち tool_use_id のないものは、出どころと関係なく 258 行目で読み飛ばされます。」
+- `sk-12/perspectives/1` S12-3 → **detected**
+  - 理由: 判定役でも result の行を全てつなぐため、出し直しや後の短い行が判定に混ざると run_judge/check_result の使い方を指摘している。
+  - 引用: 「(b) 下書きの判定のあとに本番の判定を出すと、見出しが2組つながり、最初の見出しから両方とも verdict になる。」
+- `sk-12/perspectives/1` S12-4 → **missed**
+  - 理由: is_error の行を除かずにつなぐ問題には触れていない。
+- `sk-12/perspectives/1` S12-5 → **missed**
+  - 理由: 別の観点の失敗でループを抜けたとき、ほかの子の止めない拒否が記録から漏れる問題には触れていない。
+- `sk-12/perspectives/1` S12-6 → **missed**
+  - 理由: child_error の詳細が、つないだテキストの先頭500字になる問題には触れていない。
+- `sk-12/perspectives/2` S12-1 → **detected**
+  - 理由: source == "config" だけで止めない拒否とみなすため、意図より広い拒否まで通してしまうと指摘しています。対策として reason_type で絞ることも挙げています。
+  - 引用: 「コメントと SKILL.md:103 は「設定のルール(利用者の deny ルールなど)に当たった拒否」を見逃す前提です。しかし実装は `source` しか見ていません。」
+- `sk-12/perspectives/2` S12-2 → **detected**
+  - 理由: tool_use_id のないイベントが None キーで入り、seen 経由で id なしの permission_denials が除外されると、正確に指摘しています。
+  - 引用: 「さらに `seen = set(tail.config_denied)`(`:249`)に `None` が入ります。そのため、result にしかない拒否で `tool_use_id` を持たないものが「処理済み」として飛ばされ、止めるべき拒否を見逃します。」
+- `sk-12/perspectives/2` S12-3 → **detected**
+  - 理由: 判定役にも result の行をつなぐ処理を当てたため、後に続く短い行などが判定に混ざると、run_judge での使い方を指摘しています。
+  - 引用: 「判定役の結果もつなぐと、`verdict.md` に余計な文が混ざりえます」
+- `sk-12/perspectives/2` S12-4 → **partial**
+  - 理由: 途中の is_error の行を見逃して成功になる点は指摘しています。一方で、つなぐときに is_error の行を除いていないため、エラーの文が本文に混ざる、という原因には触れていません。
+  - 引用: 「途中のターンの result が `is_error: true` でも、最後の行が `success` なら通ります。バックグラウンドの子の失敗がこの形で現れるなら、観点の欠落を見落とします。」
+- `sk-12/perspectives/2` S12-5 → **missed**
+  - 理由: 別の観点の失敗で抜けたときに、止めない拒否の記録が漏れる点には触れていません。並行性については問題なしと結論しています。
+- ★ `sk-12/perspectives/2` S12-6 → **missed**
+  - 理由: child_error の詳細に、つないだ本文の先頭500字が出てエラーの文が載らない点には触れていません。
+- `sk-12/perspectives/3` S12-1 → **detected**
+  - 理由: source == "config" だけで止めるかを決めているため、deny ルールの一部に当たっただけではない拒否まで止めずに通る、と同じ箇所(:308)について原因を指摘している。
+  - 引用: 「許可リストにないことによる拒否まで `config` として出るなら、このブランチの変更で `permission_denied` による停止はほぼ働かなくなります。」
+- `sk-12/perspectives/3` S12-2 → **detected**
+  - 理由: tool_use_id がないと None がキーとして入り、seen によって id なしの拒否まで照合から外れる、と正解の仕組みどおりに指摘している。
+  - 引用: 「さらに `seen` に `None` が入るので、result の `permission_denials` のうち `tool_use_id` のないものが全て見逃されます(:249 からの照合)。」
+- `sk-12/perspectives/3` S12-3 → **detected**
+  - 理由: 判定役の出力も result の行をつなぐため、判定の重複や余計な文が verdict に混ざる、と run_judge と check_result の使い方を指摘している。
+  - 引用: 「たとえば判定を2回出せば見出しと `F1` が重複しますし、最後に「変わりません」のような文があれば末尾に残ります。」
+- `sk-12/perspectives/3` S12-4 → **missed**
+  - 理由: result の行をつなぐときに is_error の行を除いていない、という指摘はない。
+- `sk-12/perspectives/3` S12-5 → **detected**
+  - 理由: run_reviews で別の観点の例外によって抜けると、ほかの子の止めない拒否が記録されない、と指摘している。
+  - 引用: 「1つの観点が `permission_denied` で例外を出すと、ほかの観点の `tail` に溜まった設定の拒否は `denials.txt` に書かれないまま止まります。」
+- `sk-12/perspectives/3` S12-6 → **detected**
+  - 理由: child_error の詳細が、つないだ全体の先頭500字を載せるため最後の行のエラー文が切れる、と指摘している。
+  - 引用: 「以前は失敗した result の行の `result` を出していましたが、今は全行をつないだ `text[:500]` を出しています。」
+- `sk-12/prove/1` S12-1 → **missed**
+  - 理由: source == "config" だけで止めない拒否とみなし、reason_type(分類器による拒否)を見ていない点にはどこも触れていない。
+- `sk-12/prove/1` S12-2 → **detected**
+  - 理由: tool_use_id のない拒否で config_denied のキーが None になり、それが seen に入るため、result にある id なしの拒否まで除外されて成功になる、と原因と結果を正解どおりに示している。
+  - 引用: 「実際は、`seen` に入った `None` と一致して読み飛ばされ、成功しています。」
+- `sk-12/prove/1` S12-3 → **detected**
+  - 理由: 判定役の複数の result の行がつながって判定になり、下書きと確定版や、後に出た短い文が verdict.md に混ざる、と run_judge の問題として指摘している。
+  - 引用: 「実際には、見出しの切り出しが最初に見つかった `## 指摘` から始まります。そのため、取り消されたはずの `F1` と、見出しが2組ある判定が verdict.md と stdout に出ます。」
+- `sk-12/prove/1` S12-4 → **missed**
+  - 理由: is_error の result の行をつなぐ対象から除いていない点には触れていない。
+- `sk-12/prove/1` S12-5 → **missed**
+  - 理由: run_reviews が途中で抜けたとき、ほかの子の止めない拒否が記録から漏れる点には触れていない。
+- `sk-12/prove/1` S12-6 → **missed**
+  - 理由: child_error の詳細に、エラーになった最後の行ではなく、つないだ本文の先頭500字が載る点には触れていない。
+- `sk-12/prove/2` S12-1 → **missed**
+  - 理由: source == 'config' だけで振り分けて reason_type を見ていない点には触れておらず、設定のルール以外の拒否は意図どおり止まると結論しています。
+- `sk-12/prove/2` S12-2 → **missed**
+  - 理由: tool_use_id のない拒否で config_denied に None が入り、seen で id なしの拒否が除外される点には触れていません。
+- `sk-12/prove/2` S12-3 → **detected**
+  - 理由: run_judge が result の行を全てつないで使うため、判定の出し直しや後に続く短い文が判定に混ざり、見出しの確認も重なりを見逃すと、正解の trigger の (a)(b) の両方を指摘しています。
+  - 引用: 「どちらも判定役(judge)が `result` の行を複数出したときに起きます。今回の変更で、判定役の `result` の行もすべてつなぐようになったことが原因です。」
+- `sk-12/prove/2` S12-4 → **missed**
+  - 理由: is_error の result の行がつながれて本文に混ざる点には触れていません。
+- `sk-12/prove/2` S12-5 → **missed**
+  - 理由: run_reviews が別の観点の失敗で抜けたときに止めない拒否の記録が漏れる点には触れていません。
+- `sk-12/prove/2` S12-6 → **missed**
+  - 理由: child_error の詳細にエラーの文ではなく、つないだ本文の先頭500字が載る点には触れていません。
+- `sk-12/prove/3` S12-1 → **missed**
+  - 理由: 拒否の振り分けは「調べたが指摘にしなかったもの」に入っているだけで、reason_type を見ていない点は指摘していない。
+- `sk-12/prove/3` S12-2 → **missed**
+  - 理由: tool_use_id で重複なく数える処理には触れているが、指摘にはしておらず、id の欠けや None キーの問題も述べていない。
+- `sk-12/prove/3` S12-3 → **detected**
+  - 理由: run_judge が result の行をすべてつないだテキストを判定に使うため、後ろの短い文や出し直す前の判定が混ざると、場所も原因も正解どおりに指摘している。
+  - 引用: 「判定役の `result` の行をすべてつなぐようにしたことで、判定(`verdict.md` と標準出力)に判定でない文や古い判定が混ざります。」
+- `sk-12/prove/3` S12-4 → **missed**
+  - 理由: is_error の行を除かずにつないでいる点には触れていない。
+- `sk-12/prove/3` S12-5 → **missed**
+  - 理由: run_reviews のループを抜けるときに、止めない拒否の記録が漏れる点には触れていない。
+- `sk-12/prove/3` S12-6 → **missed**
+  - 理由: child_error の詳細につないだ本文の先頭が載る点には触れていない。
+- `sk-12/security-review/1` S12-1 → **missed**
+  - 理由: レビューは source=config で止まらなくなった変更に触れているが、セキュリティの境界ではないとして問題とせず、reason_type を見ずに分類器の拒否まで通してしまう点は指摘していない。
+- `sk-12/security-review/1` S12-2 → **missed**
+  - 理由: tool_use_id が None の場合を候補に挙げてはいるが、攻撃者が操作できないとして棄却しており、None キーが seen に入って id なしの拒否まで除外される仕組みは指摘していない。
+- `sk-12/security-review/1` S12-3 → **missed**
+  - 理由: result の行を全てつなぐ点は「除外対象」として棄却しており、判定役で複数の判定や余計な文が混ざる問題は指摘していない。
+- `sk-12/security-review/1` S12-4 → **missed**
+  - 理由: is_error の行を除かずにつなぐため、エラーの文が本文になって成功扱いになる問題には触れていない。
+- `sk-12/security-review/1` S12-5 → **missed**
+  - 理由: run_reviews で途中で抜けたとき、ほかの子の止めない拒否が記録から漏れる問題には触れていない。
+- `sk-12/security-review/1` S12-6 → **missed**
+  - 理由: child_error の詳細に、エラーの文ではなくつないだ本文の先頭が載る問題には触れていない。
+- `sk-12/security-review/2` S12-1 → **missed**
+  - 理由: source=config で止めない点には触れているが、reason_type を見ていないことや分類器による拒否まで通してしまうことは指摘していない。
+- `sk-12/security-review/2` S12-2 → **detected**
+  - 理由: tool_use_id が None の config 拒否のせいで、id のない permission_denials が照合で除外されるという原因と結果を、正解どおりに指摘している。
+  - 引用: 「config の拒否で `tool_use_id` が None だと、result の `permission_denials` のうち `tool_use_id` のないものが読み飛ばされます。これは判定の正確さの問題で」
+- `sk-12/security-review/2` S12-3 → **missed**
+  - 理由: result の行をつなぐ変更は信頼の境界の観点でしか扱っておらず、判定役の出力に複数の判定や余計な文が混ざる問題には触れていない。
+- `sk-12/security-review/2` S12-4 → **missed**
+  - 理由: is_error の result の行を除かずにつないでいる点には触れていない。
+- `sk-12/security-review/2` S12-5 → **missed**
+  - 理由: run_reviews が途中で抜けたときに、ほかの子の止めない拒否の記録が漏れる点には触れていない。
+- `sk-12/security-review/2` S12-6 → **missed**
+  - 理由: child_error の詳細メッセージが、エラーの行ではなくつないだ本文の先頭を載せる点には触れていない。
+- `sk-12/security-review/3` S12-1 → **missed**
+  - 理由: レビューは「止めずに続けるのは、利用者自身の deny ルールに当たった拒否だけ」と述べており、reason_type を見ないため分類器の拒否まで通る点には気づいていない。
+- `sk-12/security-review/3` S12-2 → **partial**
+  - 理由: check_result で tool_use_id が None の拒否が除外される挙動には触れているが、config_denied に None がキーとして入り、id のない拒否全般が seen で消えるという原因の説明が曖昧で、問題ではないと退けている。
+  - 引用: 「`tool_use_id` が None の拒否が両方から外れる、という細かい挙動はあります。ただし理論上の話にとどまります。」
+- `sk-12/security-review/3` S12-3 → **missed**
+  - 理由: run_judge が result の行を全てつないで判定に使う問題には触れていない。
+- `sk-12/security-review/3` S12-4 → **missed**
+  - 理由: is_error の行をつないだ本文から除いていない点には触れていない。
+- `sk-12/security-review/3` S12-5 → **missed**
+  - 理由: run_reviews で例外により抜けたとき、他の子の拒否が記録されずに漏れる点には触れていない。
+- `sk-12/security-review/3` S12-6 → **missed**
+  - 理由: child_error の詳細に、つないだ本文の先頭500字が載る点には触れていない。
+- `sk-13/code-review/1` S13-1 → **detected**
+  - 理由: 正規化しないために skill_name での照合・事前確認と実際のプロンプトが食い違う、という原因を正しく指摘している。
+  - 引用: 「--perspective の値の前後の空白を除いていない。skill_name は split()[0] で空白を飛ばして事前確認を通すが、expand はそのまま `/` を前に付けるので、プロンプトが `/ code-review high 7` になる。」
+- `sk-13/code-review/1` S13-2 → **detected**
+  - 理由: JUDGE_PROMPT に指示ブロックの扱いがなく、指示で外した範囲を観点の欠落としないことがプロンプトで保証されていない、と指摘しており条件を満たす。
+  - 引用: 「judge-input.md の先頭に「追加の指示」の区画を足したのに、JUDGE_PROMPT にはこの区画の意味も扱い方も書いていない。」
+- `sk-13/code-review/1` S13-3 → **detected**
+  - 理由: スキル名だけで比べるため引数違いが記録されないことと、並び順の誤検出の両方を指摘している。
+  - 引用: 「引数を変えたこと(code-review の low など)も記録されない。逆に、同じ観点を順番だけ変えて渡すと「既定と違う」と記録される。」
+- `sk-13/code-review/1` S13-4 → **missed**
+  - 理由: SKILL.md の例が外した観点へ --instruct を渡して終了コード2になる点には触れていない。
+- `sk-13/code-review/1` S13-5 → **detected**
+  - 理由: リストかどうかを確かめないため文字列が検査を通る、と指摘している。
+  - 引用: 「valid_state は perspectives の要素が str かどうかしか確かめないので、手で編集されて文字列そのものになった perspectives を受け入れてしまい、render で1文字ずつ区切って描く。」
+- `sk-13/code-review/1` S13-6 → **detected**
+  - 理由: --append-system-prompt だけで渡すためサブエージェントに届かない、という原因と一致している。
+  - 引用: 「--instruct は親の claude の --append-system-prompt にだけ足すので、観点スキルがサブエージェントに作業を任せると、サブエージェントには届かない。」
+- `sk-13/code-review/1` S13-7 → **missed**
+  - 理由: レビュー出力が指示ブロックの見出しを偽装・混同させうる、という信頼境界の問題は指摘していない(指摘3は判定役による読み違えの話にとどまる)。
+- ★ `sk-13/code-review/1` S13-8 → **missed**
+  - 理由: 先頭の `/` を取り除かないために照合が失敗する点には触れていない。
+- `sk-13/code-review/2` S13-1 → **detected**
+  - 理由: 未整形の spec を '/' + expand で起動し、split()[0] による照合・事前確認は通るという食い違いを正しく指摘している。
+  - 引用: 「--perspective の値は空かどうかを確かめるだけで前後の空白を除かないため、先頭に空白がある値では「/」の直後に空白が入り、スラッシュコマンドとして起動されない。」
+- `sk-13/code-review/2` S13-2 → **detected**
+  - 理由: JUDGE_PROMPT に指示ブロックの扱いがなく、指示で外した範囲が観点の欠落として扱われうると指摘しており、基準を満たす。
+  - 引用: 「judge-input.md に「追加の指示」の区画を足したのに、JUDGE_PROMPT はその区画の扱いを説明しておらず、観点の欠落の規則も指示を考慮するよう更新されていない。」
+- `sk-13/code-review/2` S13-3 → **detected**
+  - 理由: スキル名だけで比べるので引数の違いが無視されること、並び順まで比べることの両方を指摘している。
+  - 引用: 「既定と違う観点を記録するかどうかを、スキル名の並びだけで比べている。引数だけを変えた観点は記録されず、並べ替えただけの既定は記録される。」
+- `sk-13/code-review/2` S13-4 → **missed**
+  - 理由: SKILL.md の例が、外した security-review に --instruct を渡していて終了コード2になる、という指摘がない。
+- `sk-13/code-review/2` S13-5 → **detected**
+  - 理由: リストかどうかを確かめないため文字列や辞書が検査を通る、と正確に指摘している。
+  - 引用: 「valid_state が perspectives の型をリストに限らないので、文字列や dict でも妥当と判定し、render が1文字ずつ区切って表示する。」
+- `sk-13/code-review/2` S13-6 → **missed**
+  - 理由: --append-system-prompt だけで渡す指示がサブエージェントに届かない、という指摘がない。
+- `sk-13/code-review/2` S13-7 → **partial**
+  - 理由: 同じ区切りで混ぜることの危険は指摘しているが、偽装の向きが逆(レビュー出力ではなく指示の側に区切りが紛れ込む)で、信頼できない入力であるレビュー出力から偽装されるという核心に届いていない。
+  - 引用: 「利用者の指示の文をそのまま区切り行の間に書き込むので、指示に区切りの文字列が含まれると、判定役の入力の区画構造が崩れる。」
+- `sk-13/code-review/2` S13-8 → **missed**
+  - 理由: 先頭の '/' を取り除かないため照合や事前確認で失敗する、という問題としての指摘がない(9で直し方の例として触れただけ)。
+- `sk-13/code-review/3` S13-1 → **missed**
+  - 理由: --perspective の値の前後の空白やタブを整えないため、照合と起動プロンプトが食い違う、という指摘はありません。
+- `sk-13/code-review/3` S13-2 → **detected**
+  - 理由: JUDGE_PROMPT に指示ブロックの扱いが無く、外した範囲を観点の欠落と扱いうる、と正確に指摘しています。
+  - 引用: 「判定役の入力に追加の指示の区画を足したのに、JUDGE_PROMPT にはその扱い方(指示で外した範囲を「観点の欠落」にしない、指示の区画は観点の出力ではない)が書かれていない。」
+- `sk-13/code-review/3` S13-3 → **detected**
+  - 理由: スキル名だけで比べるので、引数違いの観点が記録されないという原因と結果が正解と一致します。
+  - 引用: 「既定と違う観点かどうかをスキル名の並びだけで比べているため、引数だけを変えた --perspective の試行が状態コメントに記録されない。」
+- `sk-13/code-review/3` S13-4 → **missed**
+  - 理由: SKILL.md の例が、外した security-review に --instruct を渡していて終了コード2になる、という指摘はありません。
+- `sk-13/code-review/3` S13-5 → **missed**
+  - 理由: valid_state が perspectives をリストか確かめない、という指摘はありません。
+- `sk-13/code-review/3` S13-6 → **missed**
+  - 理由: --append-system-prompt で渡した指示がサブエージェントに届かない、という指摘はありません。
+- `sk-13/code-review/3` S13-7 → **partial**
+  - 理由: 同じ区切りで混ぜることによる偽装という場所と原因は近いものの、偽装の向きが正解(レビュー出力が指示を偽装する)と逆です。
+  - 引用: 「利用者が与えた指示の本文を、区切り行の中にエスケープせず書いているため、本文に区切りの形が含まれると判定役の入力の構造が崩れる。」
+- `sk-13/code-review/3` S13-8 → **detected**
+  - 理由: --perspective の先頭の `/` を取り除かないため、事前確認で失敗すると指摘しています。
+  - 引用: 「先頭の `/` を取り除かず」
+- `sk-13/mattpocock/1` S13-1 → **detected**
+  - 理由: skill_name の split()[0] での照合は通るのに、未整形の spec に / を前置して起動するため食い違う、と原因と場所の両方を指摘している。
+  - 引用: 「ところがプロンプトは `"/" + expand(spec, pr)`(`review_loop.py:759`)なので `/ code-review high 7` になり、スラッシュコマンドとして読まれません。」
+- `sk-13/mattpocock/1` S13-2 → **detected**
+  - 理由: JUDGE_PROMPT に指示ブロックの扱いが無く、観点の欠落の規則との関係が定まらないと指摘しており、基準を満たす。
+  - 引用: 「しかし、判定役への指示文 `JUDGE_PROMPT` は変わっていません。そのため「観点の欠落」や「指摘を捨てない」という規則と、利用者の指示との関係が判定役任せです。」
+- `sk-13/mattpocock/1` S13-3 → **detected**
+  - 理由: 比較がスキル名だけで引数違いが表に載らないこと、並べ替えだけで差とみなされることの両方を指摘している。
+  - 引用: 「既定との比較はスキル名の並びだけです(`review_loop.py:962-964`)。」
+- `sk-13/mattpocock/1` S13-4 → **missed**
+  - 理由: SKILL.md の例が外した観点に --instruct を渡して終了コード2になる点には触れていない。
+- `sk-13/mattpocock/1` S13-5 → **missed**
+  - 理由: valid_state が perspectives をリストか確かめない点には触れていない。
+- `sk-13/mattpocock/1` S13-6 → **missed**
+  - 理由: 指示が --append-system-prompt だけで渡され、サブエージェントに届かない点には触れていない。
+- `sk-13/mattpocock/1` S13-7 → **missed**
+  - 理由: 指示ブロックとレビュー出力が同じ区切りで混ざり、偽装されうる点には触れていない。
+- `sk-13/mattpocock/1` S13-8 → **missed**
+  - 理由: 先頭の / を取り除かずに照合が失敗する点には触れていない。
+- `sk-13/mattpocock/2` S13-1 → **missed**
+  - 理由: --perspective の値を正規化しないまま起動プロンプトを作る点には触れていない。
+- `sk-13/mattpocock/2` S13-2 → **detected**
+  - 理由: JUDGE_PROMPT が指示ブロックを説明していないため、判定役が誤読するか、外した範囲を観点の欠落と扱う、と場所と原因の両方を指摘している。
+  - 引用: 「`run_judge` は judge-input.md に「観点 X に利用者が与えた追加の指示」のブロックを書くだけで、`JUDGE_PROMPT` は変わっていません」
+- `sk-13/mattpocock/2` S13-3 → **detected**
+  - 理由: 並び順を比べることと、引数だけ変えた観点が記録されないことの両方を指摘している。
+  - 引用: 「`names != [skill_name(s) for s in PERSPECTIVES]` は順序も含めて比べています。そのため、既定を並べ替えて渡しただけで表に名前が載ります。」
+- `sk-13/mattpocock/2` S13-4 → **missed**
+  - 理由: SKILL.md の例が、外した観点に --instruct を渡して終了コード2になる点には触れていない。
+- `sk-13/mattpocock/2` S13-5 → **detected**
+  - 理由: valid_state がリストかを確かめず、文字列が検査を通ると指摘しており、正解と一致する。
+  - 引用: 「`valid_state` は、`perspectives` がリストかどうかを確かめていません。値が文字列 `"abc"` でも検査を通り、表に「a, b, c」と出ます。」
+- `sk-13/mattpocock/2` S13-6 → **missed**
+  - 理由: --append-system-prompt で渡した指示がサブエージェントに届かない点には触れていない。
+- `sk-13/mattpocock/2` S13-7 → **missed**
+  - 理由: 指示ブロックとレビュー出力が同じ区切りで混ざり、偽装されうる点には触れていない。
+- `sk-13/mattpocock/2` S13-8 → **missed**
+  - 理由: 先頭の `/` を取り除かないために照合で失敗する点には触れていない。
+- `sk-13/mattpocock/3` S13-1 → **missed**
+  - 理由: --perspective の空白を正規化しないまま起動プロンプトを作る点への言及がない。
+- `sk-13/mattpocock/3` S13-2 → **detected**
+  - 理由: JUDGE_PROMPT に指示ブロックの扱いが無く、範囲を絞ったレビューが観点の欠落と判定されうると、場所と原因の両方を指摘している。
+  - 引用: 「指示は judge-input.md に見出し付きで添えられます(`review_loop.py:845`)。しかし JUDGE_PROMPT には、その指示をどう扱うかの一文がありません。」
+- `sk-13/mattpocock/3` S13-3 → **detected**
+  - 理由: 既定との比較がスキル名だけで、引数違いが記録されないことと、並べ替えが差になることを iterate の比較箇所で指摘している。
+  - 引用: 「引数だけを既定から変えても、表には何も載りません。逆に、同じ観点を並べ替えただけでも表に載ります。」
+- `sk-13/mattpocock/3` S13-4 → **missed**
+  - 理由: SKILL.md の例が、外した観点に --instruct を渡していて終了コード2になる点への言及がない。
+- `sk-13/mattpocock/3` S13-5 → **missed**
+  - 理由: valid_state が perspectives をリストか確かめない点への言及がない。
+- `sk-13/mattpocock/3` S13-6 → **missed**
+  - 理由: --append-system-prompt に足した指示がサブエージェントに届かない点への言及がない。
+- `sk-13/mattpocock/3` S13-7 → **missed**
+  - 理由: 指示とレビュー出力を同じ区切りで混ぜるため偽装・混同されうる点への言及がない。
+- `sk-13/mattpocock/3` S13-8 → **missed**
+  - 理由: 先頭の / を取り除かずに照合して失敗する点への言及がない。
+- `sk-13/perspectives/1` S13-1 → **detected**
+  - 理由: spec を正規化しないため、split()[0] による照合・事前確認は通る一方で、`/`+spec のプロンプトが壊れるという食い違いを指摘しています。
+  - 引用: 「名前の検査は `split()[0]` を使うので、`' code-review high {pr}'` は `code-review` と読まれ、`:397` の空チェックも事前確認も通ります。」
+- `sk-13/perspectives/1` S13-2 → **detected**
+  - 理由: JUDGE_PROMPT に指示ブロックの扱いが書かれておらず、指示で外した範囲を欠落と取り違えうると指摘しています。
+  - 引用: 「一方 `JUDGE_PROMPT` は「観点の欠落」の基準だけを書いていて、指示の節をどう扱うかに触れていません。」
+- `sk-13/perspectives/1` S13-3 → **detected**
+  - 理由: 比較がスキル名だけで行われるため引数違いが記録されない点と、並べ替えを差とみなす点の両方を指摘しています。
+  - 引用: 「`--perspective 'code-review medium {pr}'` のようにレベルだけ下げると、名前の一覧は既定と同じなので `perspectives` は記録されません。」
+- `sk-13/perspectives/1` S13-4 → **missed**
+  - 理由: SKILL.md の例が、外した security-review に --instruct を渡しているため終了コード2になる、という指摘はありません。
+- `sk-13/perspectives/1` S13-5 → **detected**
+  - 理由: リストかどうかを確かめないため、文字列や辞書が検査を通ると指摘しています。
+  - 引用: 「`a.get("perspectives") or []` を回しているだけなので、値が文字列 `"abc"` でも各要素が str になって検査を通ります。」
+- `sk-13/perspectives/1` S13-6 → **missed**
+  - 理由: --append-system-prompt で渡した指示がサブエージェントに届かない、という指摘はありません。
+- `sk-13/perspectives/1` S13-7 → **missed**
+  - 理由: 指示ブロックとレビュー出力が同じ区切りで並ぶため偽装・混同されうる、という指摘はありません。
+- `sk-13/perspectives/1` S13-8 → **detected**
+  - 理由: --perspective の先頭の `/` を取り除かないため、事前確認で「見つからない」として止まると指摘しています。
+  - 引用: 「先頭の `/` も、取り除くか終了コード2で止めるとよいです。今は `//code-review` を作り、事前確認で「見つからない」として止まるだけです。」
+- `sk-13/perspectives/2` S13-1 → **missed**
+  - 理由: --perspective の空白を正規化しないことによる照合と起動プロンプトの食い違いには触れていない。
+- `sk-13/perspectives/2` S13-2 → **detected**
+  - 理由: JUDGE_PROMPT に指示ブロックの扱いがなく、指示で外した範囲を欠落と取り違えうると指摘しており、正解と一致する。
+  - 引用: 「指示を判定役の入力に添えても、`JUDGE_PROMPT` にはその扱いが書かれていません。」
+- `sk-13/perspectives/2` S13-3 → **detected**
+  - 理由: 引数違いが既定扱いになる点と、並べ替えが差とみなされる点の両方を指摘している。
+  - 引用: 「観点を既定と比べるとき、スキル名しか見ていません。」
+- `sk-13/perspectives/2` S13-4 → **detected**
+  - 理由: 外した観点への --instruct で終了コード2になると、正確に指摘している。
+  - 引用: 「SKILL.md に載せたコマンド例が、そのままでは終了コード2で止まります。** 例では `--perspective` に `code-review` と `mattpocock-skills:code-review` だけを渡し、外した `security-review` に `--instruct` を付けています。」
+- `sk-13/perspectives/2` S13-5 → **detected**
+  - 理由: リストかどうかを確かめないため文字列が検証を通る、と指摘している。
+  - 引用: 「`perspectives` が文字列でも検証を通ります。** `a.get("perspectives") or []` が `"abc"` のときは、1文字ずつの反復になるため検証を通り、表には `a, b, c` と出ます。」
+- `sk-13/perspectives/2` S13-6 → **missed**
+  - 理由: --append-system-prompt の指示がサブエージェントに届かない点には触れていない。
+- `sk-13/perspectives/2` S13-7 → **partial**
+  - 理由: 同じ入力に同じ区切りで混ぜるという場所と原因は合うが、偽装の向きが逆で、レビュー出力が指示を装う危険を指摘していない。
+  - 引用: 「指示の本文に区切りの行を入れると、判定役の入力の構造が崩れます。** 指示の中に `===== ここまで: 指示 =====` や `===== 観点: X =====` があると、偽の観点の出力を差し込めます。」
+- `sk-13/perspectives/2` S13-8 → **missed**
+  - 理由: 先頭の `/` を取り除かないことによる照合の失敗には触れていない。
+- `sk-13/perspectives/3` S13-1 → **missed**
+  - 理由: --perspective の値を正規化しないために照合と起動プロンプトが食い違う点は、どこにも指摘されていない。
+- `sk-13/perspectives/3` S13-2 → **detected**
+  - 理由: JUDGE_PROMPT に指示ブロックの扱いが無く、判定役が偽の「観点の欠落」を出しうると、正解と同じ原因と場所で指摘している。
+  - 引用: 「しかし判定役のプロンプトには、指示のブロックの説明も、それを考慮せよという規則もありません。」
+- `sk-13/perspectives/3` S13-3 → **detected**
+  - 理由: 引数違いの観点が記録されないことと、並べ替えが差とみなされることの両方を、963行の比較について指摘している。
+  - 引用: 「既定と比べているのはスキル名の並びだけで、引数は比べていません。」
+- `sk-13/perspectives/3` S13-4 → **missed**
+  - 理由: SKILL.md の例が、外した security-review に --instruct を渡していて終了コード2になる点には触れていない。
+- `sk-13/perspectives/3` S13-5 → **detected**
+  - 理由: valid_state がリストかを確かめないため文字列や dict が通り、表示が崩れると正確に指摘している。
+  - 引用: 「`all(isinstance(n, str) for n in a.get("perspectives") or [])` は、文字列や dict でも通ります。」
+- `sk-13/perspectives/3` S13-6 → **missed**
+  - 理由: --append-system-prompt の指示がサブエージェントに届かない点は指摘されていない。
+- `sk-13/perspectives/3` S13-7 → **missed**
+  - 理由: 区切りの類似には触れているが、判定役が指示ブロックを観点の出力と読み違える話(S13-2)にとどまり、レビュー出力から指示を偽装・混同されうる原因は述べていない。
+- `sk-13/perspectives/3` S13-8 → **missed**
+  - 理由: 先頭の `/` を取り除かないために照合や事前確認で失敗する点には触れていない。
+- `sk-13/prove/1` S13-1 → **detected**
+  - 理由: spec を整えずに `/` を前置するため、skill_name による照合・事前確認と実際のプロンプトが食い違うと、正解と同じ原因と場所を指摘している。
+  - 引用: 「その結果、事前確認は通るのに、実際の子には `/` の後ろに空白が入った文字列が渡ります。」
+- `sk-13/prove/1` S13-2 → **missed**
+  - 理由: JUDGE_PROMPT が追加の指示ブロックを扱っていない点には触れていない。
+- `sk-13/prove/1` S13-3 → **detected**
+  - 理由: 既定との比較がスキル名だけで行われ、引数違いの観点が記録されないことを、該当の比較箇所を挙げて指摘している。
+  - 引用: 「既定と違うかどうかの判定(`review_loop.py` の `if names != [skill_name(s) for s in PERSPECTIVES]`)が、スキル名だけを比べています。」
+- ★ `sk-13/prove/1` S13-4 → **missed**
+  - 理由: SKILL.md の例で --instruct と --perspective が矛盾する点には触れていない。
+- `sk-13/prove/1` S13-5 → **missed**
+  - 理由: valid_state が perspectives をリストか確かめない点には触れていない。
+- `sk-13/prove/1` S13-6 → **missed**
+  - 理由: --append-system-prompt の指示がサブエージェントに届かない点には触れていない。
+- `sk-13/prove/1` S13-7 → **missed**
+  - 理由: 判定役の入力で指示ブロックとレビューの出力が混同されうる点には触れていない。
+- `sk-13/prove/1` S13-8 → **missed**
+  - 理由: 先頭に `/` を付けた観点名やスキル名の扱いには触れていない。
+- `sk-13/prove/2` S13-1 → **detected**
+  - 理由: skill_name の split による照合・事前確認と、未整形の spec に `/` を前置した実際のプロンプトが食い違う、という正解と同じ原因と場所を指摘している。
+  - 引用: 「ところが実際のプロンプトは `"/" + expand(spec, pr)` で作られるので、空白が残って `/ code-review high 7` になります。」
+- `sk-13/prove/2` S13-2 → **missed**
+  - 理由: JUDGE_PROMPT が指示ブロックの扱いを定めていない点には触れていない。
+- `sk-13/prove/2` S13-3 → **missed**
+  - 理由: 既定の観点との比較をスキル名だけで行っている点には触れていない。
+- `sk-13/prove/2` S13-4 → **missed**
+  - 理由: SKILL.md の例が自分の中で矛盾している点には触れていない。
+- `sk-13/prove/2` S13-5 → **missed**
+  - 理由: valid_state が perspectives の型を検査していない点には触れていない。
+- `sk-13/prove/2` S13-6 → **missed**
+  - 理由: 指示がサブエージェントに届かない点には触れていない。
+- `sk-13/prove/2` S13-7 → **missed**
+  - 理由: 指示ブロックとレビュー出力が同じ区切りで混ざる点には触れていない。
+- `sk-13/prove/2` S13-8 → **missed**
+  - 理由: `/` 付きの観点名が終了コード2で止まることは確かめているが、レビューは自分で「指摘にはしていません」と結論しており、不具合としては挙げていない。
+- `sk-13/prove/3` S13-1 → **detected**
+  - 理由: spec を整えないまま `/` を前置するので、照合・事前確認は通るのに起動プロンプトが食い違う、と原因まで正しく指摘している。
+  - 引用: 「`skill_name()` は `spec.split()[0]` なので、名前は `code-review` と読めます。そのため事前確認も `--instruct code-review=...` の照合も通ります。」
+- `sk-13/prove/3` S13-2 → **missed**
+  - 理由: JUDGE_PROMPT に指示ブロックの扱いが書かれていない点には触れていない。
+- `sk-13/prove/3` S13-3 → **detected**
+  - 理由: 比較がスキル名だけで行われ、引数違いの観点が表に記録されないことを、実行して確かめたうえで指摘している。
+  - 引用: 「既定との比較がスキル名のリストだけ(`names != [skill_name(s) for s in PERSPECTIVES]`)なので、引数の違いを見ません。」
+- ★ `sk-13/prove/3` S13-4 → **missed**
+  - 理由: SKILL.md の例が終了コード2になる矛盾には触れていない。
+- `sk-13/prove/3` S13-5 → **detected**
+  - 理由: valid_state がリストかどうかを確かめないため、文字列が検査を通ると指摘している。
+  - 引用: 「`all(isinstance(n, str) for n in a.get("perspectives") or [])` は、文字列を1文字ずつ回して真になります。」
+- `sk-13/prove/3` S13-6 → **missed**
+  - 理由: --append-system-prompt の指示がサブエージェントに届かない点には触れていない。
+- `sk-13/prove/3` S13-7 → **missed**
+  - 理由: 判定役の入力で指示とレビュー出力を同じ区切りで混ぜる点には触れていない。
+- `sk-13/prove/3` S13-8 → **missed**
+  - 理由: `/` を付けたスキル名は終了コード2で止まることを確かめて「指摘なし」としており、不具合として扱っていない。
+- `sk-13/security-review/1` S13-1 → **missed**
+  - 理由: --perspective の値を整えずに起動プロンプトを作るため、照合した名前と実際のプロンプトが食い違う点には触れていない。
+- `sk-13/security-review/1` S13-2 → **missed**
+  - 理由: JUDGE_PROMPT に追加の指示ブロックの扱いが書かれていない点には触れていない。
+- `sk-13/security-review/1` S13-3 → **missed**
+  - 理由: 既定の観点との比較がスキル名の並びだけで行われる点には触れていない。
+- `sk-13/security-review/1` S13-4 → **missed**
+  - 理由: SKILL.md の例が --perspective で外した観点に --instruct を渡している点には触れていない。
+- `sk-13/security-review/1` S13-5 → **partial**
+  - 理由: valid_state が list かを確かめていないという原因は正しく指摘しているが、文字列や辞書が検査を通って表示が崩れることは述べず、影響なしとして除外している。
+  - 引用: 「追加された検査は `a.get("perspectives")` が list かどうかを確かめていません。それでも、この値は表示にしか使われず、セキュリティ上の影響はありません。」
+- `sk-13/security-review/1` S13-6 → **missed**
+  - 理由: 指示が --append-system-prompt だけで渡るため、サブエージェントに届かない点には触れていない。
+- `sk-13/security-review/1` S13-7 → **missed**
+  - 理由: judge-input.md で指示とレビューの出力を同じ区切りで並べるため、偽装や混同が起きうる点には触れていない。
+- `sk-13/security-review/1` S13-8 → **missed**
+  - 理由: 先頭の `/` を取り除かないため、事前確認や照合で失敗する点には触れていない。
+- `sk-13/security-review/2` S13-1 → **missed**
+  - 理由: --perspective の値の空白を正規化しないことによる照合と起動プロンプトの食い違いには触れていない。
+- `sk-13/security-review/2` S13-2 → **missed**
+  - 理由: JUDGE_PROMPT に追加の指示ブロックの扱いが無いことは指摘していない。
+- ★ `sk-13/security-review/2` S13-3 → **missed**
+  - 理由: 既定の観点との比較がスキル名と並び順だけで行われる問題には言及がない。
+- `sk-13/security-review/2` S13-4 → **missed**
+  - 理由: SKILL.md はドキュメントとして除外しており、例が終了コード2で止まる点を指摘していない。
+- `sk-13/security-review/2` S13-5 → **missed**
+  - 理由: valid_state の検証を問題なしと評価しており、perspectives がリストか確かめていない欠陥は指摘していない。
+- `sk-13/security-review/2` S13-6 → **missed**
+  - 理由: --append-system-prompt だけで渡すとサブエージェントに指示が届かない点には触れていない。
+- `sk-13/security-review/2` S13-7 → **missed**
+  - 理由: judge-input.md で指示とレビュー出力が同じ区切りで混ざり、偽装されうる点を指摘していない。
+- `sk-13/security-review/2` S13-8 → **missed**
+  - 理由: 先頭の `/` を取り除かないことで事前確認や照合が失敗する点は指摘していない。
+- `sk-13/security-review/3` S13-1 → **missed**
+  - 理由: プロンプトが "/" + expand(spec, pr) になる点は安全の根拠として述べるだけで、spec の空白を整えないことによる照合との食い違いには触れていない。
+- `sk-13/security-review/3` S13-2 → **missed**
+  - 理由: JUDGE_PROMPT に指示ブロックの扱いがないことを指摘していない。
+- `sk-13/security-review/3` S13-3 → **missed**
+  - 理由: 既定の観点との比較がスキル名だけで行われる点や、並び順まで比べる点に言及がない。
+- `sk-13/security-review/3` S13-4 → **missed**
+  - 理由: SKILL.md の例のオプションの組み合わせが終了コード2になることを指摘していない。
+- `sk-13/security-review/3` S13-5 → **missed**
+  - 理由: valid_state で要素が文字列か確かめていることを問題なしの根拠に挙げるだけで、perspectives がリストか確かめていない点は指摘していない。
+- `sk-13/security-review/3` S13-6 → **missed**
+  - 理由: --append-system-prompt の指示がサブエージェントに届かない点を述べていない。
+- `sk-13/security-review/3` S13-7 → **missed**
+  - 理由: judge-input.md で指示とレビュー出力が同じ区切りで混ざり、偽装されうる点を指摘していない。
+- `sk-13/security-review/3` S13-8 → **missed**
+  - 理由: 先頭に / を付けた観点名やスキル名を取り除かずに照合する問題に触れていない。
+- `sk-14/code-review/1` S14-1 → **detected**
+  - 理由: hk_is_protected と hk_path_in_use がヒアドキュメントに頼っており、一時ファイルを作れないと fail-open になる、と正しく指摘している。
+  - 引用: 「lib.sh の hk_is_protected は here-document で保護パターンを読むが、bash 3.2 ではこれが一時ファイルになり、作れないと保護判定が『保護対象ではない』側に倒れる。」
+- `sk-14/code-review/1` S14-2 → **detected**
+  - 理由: 一時ディレクトリの作成が fetch --prune より後にあるため、SKILL.md の記述と食い違う、と正確に指摘している。
+  - 引用: 「『作れなければ何もせずに止まる』は事実と違う。scan.sh は一時ディレクトリを作る前に git fetch --prune を実行し、hk_default_branch 経由で gh repo view を呼ぶこともある。」
+- `sk-14/code-review/1` S14-3 → **missed**
+  - 理由: lsof が無い、またはプロセスを見られないときに空の一覧を『使用中でない』と扱う問題には触れていない。hk_path_in_use への指摘はヒアドキュメントの失敗が原因の話だけで、原因が違う。
+- `sk-14/code-review/2` S14-1 → **detected**
+  - 理由: lib.sh の hk_is_protected / hk_path_in_use がヒアドキュメントに依存し、一時ファイルを作れないと『保護対象でない』『使用中でない』に倒れる fail-open を正しく指摘しています。
+  - 引用: 「hk_is_protected と hk_path_in_use は here-doc を使っており、/bin/bash 3.2 では here-doc ごとに $TMPDIR(書けなければ /tmp)に一時ファイルを作る。作成に失敗したときは安全側でなく危険側に倒れる。」
+- `sk-14/code-review/2` S14-2 → **detected**
+  - 理由: scan.sh で一時ディレクトリの作成が fetch --prune の後にあり、SKILL.md の記述と食い違うことを、場所も原因も一致する形で指摘しています。
+  - 引用: 「一時ディレクトリを作る処理と失敗時の停止が、git fetch --prune と hk_default_branch(gh repo view を呼ぶことがある)の後にある。そのため SKILL.md の「作れなければ何もせずに止まる」と食い違う。」
+- `sk-14/code-review/2` S14-3 → **missed**
+  - 理由: lsof が無い、またはプロセスを見られないときに空の一覧を『使用中でない』と扱う問題には触れていません。
+- `sk-14/code-review/3` S14-1 → **missed**
+  - 理由: レビューはヒアドキュメントが失敗しないと検証して、hk_is_protected と hk_path_in_use は問題ないと結論しており、fail-open を指摘していない。
+- `sk-14/code-review/3` S14-2 → **detected**
+  - 理由: scan.sh で fetch --prune が一時ディレクトリの作成より前にあり、SKILL.md の記述と食い違うことを、場所も原因も正しく指摘している。
+  - 引用: 「一時ディレクトリを作る前に `git fetch --prune` を実行しているので、SKILL.md の『作れなければ何もせずに止まる』は事実と違う。」
+- `sk-14/code-review/3` S14-3 → **missed**
+  - 理由: lsof が無いかプロセスを見られないときに、空の一覧を「使用中でない」と扱う問題には触れていない。
+- `sk-14/mattpocock/1` S14-1 → **detected**
+  - 理由: apply.sh から mktemp を外しても lib.sh の判定関数がヒアドキュメント経由で一時ファイルに依存したままだと指摘しており、detect_criteria の「で可」の条件を満たす。
+  - 引用: 「`hk_is_protected` と `hk_path_in_use` はヒアドキュメントを使っています。macOS 標準の bash 3.2 は、ヒアドキュメントの中身を一時ファイルに書きます。サンドボックスで `/tmp` にも書けない場合は失敗する可能性があります。」
+- `sk-14/mattpocock/1` S14-2 → **detected**
+  - 理由: scan.sh で一時ディレクトリの作成が git fetch --prune より後にあり、SKILL.md の記述と合わないことを正しく指摘している。
+  - 引用: 「**`SKILL.md` の「作れなければ何もせずに止まる」は、実際の順序と合いません。** 一時ディレクトリを作る前に `git fetch --prune` が実行されます。」
+- `sk-14/mattpocock/1` S14-3 → **missed**
+  - 理由: lsof が無い・プロセスを見られないときに空の一覧を使用中でないと扱う問題には触れていない。
+- `sk-14/mattpocock/2` S14-1 → **missed**
+  - 理由: レビューは、lib.sh/scan.sh の判定がヒアドキュメントの一時ファイルに依存しており、作れないと保護対象でない・使用中でない側に倒れる(fail-open)点に触れていない。
+- `sk-14/mattpocock/2` S14-2 → **missed**
+  - 理由: 一時ディレクトリの作成が git fetch --prune より後にあり、作れなくても fetch の副作用が起きて SKILL.md の記述と合わない点を、レビューは指摘していない。
+- `sk-14/mattpocock/2` S14-3 → **missed**
+  - 理由: lsof が無い・プロセスを見られないとき、空の一覧を使用中のプロセスなしと扱ってしまう点について、レビューに言及がない。
+- `sk-14/mattpocock/3` S14-1 → **detected**
+  - 理由: lib.sh の両関数がヒアドキュメントに頼っており、一時ファイルを作れないと保護判定と使用中判定が安全でない側に倒れる(fail-open)と、原因と場所の両方を正しく指摘している。
+  - 引用: 「apply.sh が読み込む `lib.sh` の `hk_is_protected`(48行目)と `hk_path_in_use`(67行目)はヒアドキュメント `<<EOF` を使っています。」
+- `sk-14/mattpocock/3` S14-2 → **missed**
+  - 理由: scan.sh で一時ディレクトリの作成が git fetch --prune より後にあることや、SKILL.md の『何もせずに止まる』と合わないことには触れていない。
+- `sk-14/mattpocock/3` S14-3 → **missed**
+  - 理由: lsof が無い、またはプロセスを見られないときに空の一覧を使用中でないと扱う問題には触れていない。
+- `sk-14/perspectives/1` S14-1 → **detected**
+  - 理由: lib.sh の hk_is_protected と hk_path_in_use がヒアドキュメントに依存しており、一時ファイルを作れないと保護判定が削除側に倒れる(fail-open)と指摘していて、detect_criteria を満たす。
+  - 引用: 「一時ファイルを作れなかった場合が危険です。`hk_is_protected` の `while … done <<EOF` はリダイレクトに失敗して実行されず、関数は `return 1`(保護対象ではない)を返します。」
+- `sk-14/perspectives/1` S14-2 → **detected**
+  - 理由: scan.sh で一時ディレクトリの作成が fetch --prune より後にあるため、SKILL.md の「何もせずに止まる」と食い違うと指摘しており、正解と一致する。
+  - 引用: 「一時ディレクトリを作る前に、`git fetch --prune` がすでに走っています(scan.sh:22)。そのため、止まる時点でリモート追跡ブランチはもう刈り込まれています。」
+- `sk-14/perspectives/1` S14-3 → **missed**
+  - 理由: lsof が無い、またはプロセスを見られないときに hk_process_cwds が空の一覧を返し、使用中でないと判定される問題には触れていない。
+- `sk-14/perspectives/2` S14-1 → **missed**
+  - 理由: hk_is_protected や hk_path_in_use がヒアドキュメント経由で一時ファイルに依存し、fail-open になる点への言及が無い。
+- `sk-14/perspectives/2` S14-2 → **detected**
+  - 理由: scan.sh で一時ディレクトリの作成が fetch --prune の後にあり、SKILL.md の「何もせずに止まる」と合わないことを正しく指摘している。
+  - 引用: 「一時ディレクトリを作る処理(`hk_mktemp_dir`)は、`git fetch --prune` の後に走ります。そのため、作れずに止まった時点で、リモート追跡ブランチの更新と prune はもう済んでいます。」
+- `sk-14/perspectives/2` S14-3 → **missed**
+  - 理由: lsof が無い、またはプロセスを見られないときに、空の一覧を「使用中でない」と扱う問題への言及が無い。
+- `sk-14/perspectives/3` S14-1 → **detected**
+  - 理由: lib.sh の hk_is_protected と hk_path_in_use がヒアドキュメントに依存しており、一時ファイルを作れないと「保護しない」「使っていない」側に倒れることを正確に指摘している。
+  - 引用: 「ヒアドキュメントが失敗すると `while read` が1行も読まずに終わり、`return 1`(保護対象ではない)が返ります。」
+- `sk-14/perspectives/3` S14-2 → **detected**
+  - 理由: 一時ディレクトリの作成が git fetch --prune より後にあり、止まる前に副作用が出て文書と食い違うことを指摘している。
+  - 引用: 「SKILL.md:98 は「作れなければ何もせずに止まる」と書いていますが、実際には fetch(リモート追跡ブランチの prune を含む)を済ませてから止まります。」
+- `sk-14/perspectives/3` S14-3 → **missed**
+  - 理由: lsof が無い、またはプロセスを見られないときに空の一覧を「使用中でない」と扱う問題には触れておらず、ヒアドキュメントの失敗という別の原因しか述べていない。
+- `sk-14/prove/1` S14-1 → **missed**
+  - 理由: レビューは hk_is_protected や hk_path_in_use がヒアドキュメント経由で一時ファイルに依存し、一時ファイルを作れないと fail-open になる点に触れていない。
+- `sk-14/prove/1` S14-2 → **missed**
+  - 理由: 一時ディレクトリの作成が git fetch --prune の後にあるため、止まる場合でも副作用が先に起きるという指摘は無い。
+- `sk-14/prove/1` S14-3 → **missed**
+  - 理由: lsof が無いときやプロセスを見られないときに、使用中の worktree を『使用中でない』と判定する問題には触れていない。
+- `sk-14/prove/2` S14-1 → **detected**
+  - 理由: lib.sh の hk_is_protected がヒアドキュメントに依存しているため、一時ファイルを作れないと保護対象でない側に倒れる(fail-open)ことを、正解と同じ原因で指摘しています。
+  - 引用: 「`lib.sh` の `hk_is_protected` はヒアドキュメント(`<<EOF`)で保護パターンを読んでいます。bash 3.2 はヒアドキュメントに一時ファイルを使うので、それが作れないと保護パターンが空になり、関数は「保護対象ではない」(戻り値 1)を返します。」
+- `sk-14/prove/2` S14-2 → **missed**
+  - 理由: scan.sh で一時ディレクトリの作成が git fetch --prune より後にあり、止まる前に副作用が起きる点には触れていません。
+- `sk-14/prove/2` S14-3 → **missed**
+  - 理由: lsof が無い、またはプロセスを見られないときに空の一覧を『使用中でない』と扱う問題には触れていません。
+- `sk-14/prove/3` S14-1 → **missed**
+  - 理由: ヒアドキュメントが一時ファイルに依存していて、保護判定や使用中判定が fail-open になる点には、どこにも触れていない。
+- `sk-14/prove/3` S14-2 → **detected**
+  - 理由: scan.sh で一時ディレクトリの作成が git fetch --prune より後にあり、SKILL.md の『何もせずに止まる』と食い違うことを、実行して示している。
+  - 引用: 「scan.sh では fetch(27行目より前)が `hk_mktemp_dir` より先に走ります。そのため、一時ディレクトリを作れずに止まる場合でも、リモート追跡ブランチの刈り込みは済んでいます。」
+- ★ `sk-14/prove/3` S14-3 → **missed**
+  - 理由: lsof が無い、またはほかのプロセスを見られないときに、使用中でないと判定されてしまう点には触れていない。
+- `sk-14/security-review/1` S14-1 → **missed**
+  - 理由: レビューは lib.sh の判定がヒアドキュメントに頼っていることにも、一時ファイルを作れないときに保護判定が fail-open になることにも触れていない。
+- `sk-14/security-review/1` S14-2 → **missed**
+  - 理由: レビューは scan.sh で一時ディレクトリの作成が git fetch --prune より後にあることも、SKILL.md の記述と食い違うことも指摘していない。
+- `sk-14/security-review/1` S14-3 → **missed**
+  - 理由: レビューは使用中プロセスの確認が残っていることを確かめただけで、lsof が無い・プロセスを見られないときに空の一覧を『使用中でない』と扱う問題には触れていない。
+- `sk-14/security-review/2` S14-1 → **missed**
+  - 理由: lib.sh の hk_is_protected / hk_path_in_use がヒアドキュメントで一時ファイルに頼っていて fail-open になる点には触れておらず、一時ファイルが無くなったことをむしろ安全側の変更と評価している。
+- `sk-14/security-review/2` S14-2 → **missed**
+  - 理由: 一時ディレクトリを作れないと止まることは確認しているが、その前に git fetch --prune が走って『何もせずに止まる』と食い違う点は指摘していない。
+- `sk-14/security-review/2` S14-3 → **missed**
+  - 理由: lsof が無い、またはプロセスを見られないときに使用中の worktree を『使用中でない』と判定する問題には一切触れていない。
+- `sk-14/security-review/3` S14-1 → **missed**
+  - 理由: hk_is_protected は「差分の前後で変わっていない」と確認されただけで、ヒアドキュメントが一時ファイルに頼っていて fail-open になる点には触れていない。
+- `sk-14/security-review/3` S14-2 → **missed**
+  - 理由: 一時ディレクトリを作れないと exit 1 で止まる点を改善として評価しているだけで、その前に git fetch --prune が実行されることや SKILL.md の記述と食い違うことは指摘していない。
+- `sk-14/security-review/3` S14-3 → **missed**
+  - 理由: lsof が無い、またはプロセスを見られないとき、空の一覧を「使用中でない」と扱ってしまう問題には触れていない。
+- `sk-16/code-review/1` S16-1 → **detected**
+  - 理由: PR の前から起きるという範囲の定義のせいで直し残しが差分の外になり、直されず継続の理由にもならないと指摘しており、正解と一致する。
+  - 引用: 「A PR fixes bug X in path A, and the judge points out that path B still triggers X. Path B behaves the same before and after the PR, so it gets "差分の外". The PR ships with an incomplete fix」
+- `sk-16/code-review/1` S16-2 → **partial**
+  - 理由: 「終了の基準に当たる」が曖昧だという点には触れているが、差分の外の指摘を再現して直してしまうことと、L107 の規則と食い違うことは述べていない。
+  - 引用: 「Line 99 also says "終了の基準に当たる" findings must be reproduced, while the stop criteria at line 126 themselves depend on the repro result, which is circular.」
+- `sk-16/code-review/1` S16-3 → **detected**
+  - 理由: 再現を行う場所が限られておらず、本物のリポジトリで破壊的な操作を実行しうると指摘しており、正解と一致する。
+  - 引用: 「Nothing says to do this in a throwaway environment, yet the high-impact findings that need it are exactly the ones about data loss or deleting things that should stay.」
+- `sk-16/code-review/1` S16-4 → **detected**
+  - 理由: 公開リポジトリで issue に起きる操作の順を書くと、未修正の脆弱性を公開することになると指摘しており、正解と一致する。
+  - 引用: 「On a public repository, a pre-existing vulnerability with impact "高: セキュリティ" is listed first when the user is asked. The user agrees, and the parent publishes it as an issue with the exact steps to tr」
+- `sk-16/code-review/1` S16-5 → **detected**
+  - 理由: 既存のテストが修正箇所を通らなくても再レビューを省く条件が満たされ、副作用を確かめないまま終わると指摘しており、正解と一致する。
+  - 引用: 「The fix also changes behaviour on another branch of the code with no existing test, introducing a new bug. Under the new rule the parent stops without re-running, and the new bug is never reviewed.」
+- `sk-16/code-review/1` S16-6 → **missed**
+  - 理由: 差分の外になる横展開の候補が、終了時の報告にも issue の確認にも載らないという点は指摘していない。
+- `sk-16/code-review/1` S16-7 → **detected**
+  - 理由: 指摘の前提となる環境を作れないまま試して起きなかった場合でも、採らず継続の理由にもしないで済むと指摘しており、正解と一致する。
+  - 引用: 「A data-loss bug only shows up with GNU sed on Linux, or only on a specific git version. The parent tries it once on macOS, sees nothing, and rejects it.」
+- `sk-16/code-review/1` S16-8 → **missed**
+  - 理由: 判定役の範囲の判断を、読んだだけの仮説のまま確かめずに受け入れてよいという非対称は指摘していない(項目7の原因は、判定役にベースの ref が渡されないことで、正解とは別)。
+- `sk-16/code-review/1` S16-9 → **partial**
+  - 理由: 再現の外の退行がレビューされないことと「大きく」が主観的なことには触れているが、例外が修正の大きさに結び付いているため小さい修正がすり抜ける、という原因は明確に述べていない。
+  - 引用: 「Any regression the fix introduces outside what the repro covers, and any cross-path changes bundled into the same fix, reach the end without review.」
+- `sk-16/code-review/1` S16-10 → **missed**
+  - 理由: PR が意図して変えた挙動への指摘でも、再現すれば採用して戻してしまうという点は指摘していない。
+- `sk-16/code-review/2` S16-1 → **detected**
+  - 理由: 範囲の定義が PR の前から起きるかだけで決まるため、目的の直し残しが差分の外に入り、直されず継続の理由にもならないと指摘しており、detect_criteria と一致する。
+  - 引用: 「「差分の外」を「PR の前から同じように起きる」で定義しているため、PR の目的そのものの直し漏れまで「差分の外」に入り、この PR では直さないことになる。」
+- `sk-16/code-review/2` S16-2 → **missed**
+  - 理由: 再現して直す手順と、差分の外は直さないという規則が両立しない点には触れていない。
+- `sk-16/code-review/2` S16-3 → **missed**
+  - 理由: 再現を実行する場所が限られておらず、破壊的な操作を本物のリポジトリで実行しうるという指摘はない。
+- `sk-16/code-review/2` S16-4 → **missed**
+  - 理由: 134行目への指摘は fork のときの起票先の話で、セキュリティの指摘の悪用手順が公開される問題には触れていない。
+- `sk-16/code-review/2` S16-5 → **detected**
+  - 理由: 既存のテストが修正箇所を覆っていなくても再レビューを省く条件が満たされ、退行を確かめないまま終わると、128行目について指摘している。
+  - 引用: 「しかし修正が同じ関数の別の分岐を壊していて、そこは再現テストも既存のテストも覆っていない。」
+- `sk-16/code-review/2` S16-6 → **detected**
+  - 理由: 差分の外になる横展開の候補が、終了時の報告にも issue 化の確認にも入らないと指摘しており、detect_criteria と一致する。
+  - 引用: 「横展開の候補を「差分の内にあるもの」に絞ったが、外れた候補(差分の外で同じ規則を破る経路)を報告や issue 化に回す手順がなく、黙って消える。」
+- `sk-16/code-review/2` S16-7 → **partial**
+  - 理由: 場所(L102 と L126)と結果は合っているが、原因を入力の組み立ての不足とし、OS やツールの実装などの前提の条件を作れない場合と「実行では示せない」との境界がないことには触れていない。
+  - 引用: 「再現を1回試みて起きなければ影響が高の defect でも採らず、終了の基準からも外れる(126行目)。」
+- `sk-16/code-review/2` S16-8 → **partial**
+  - 理由: 判定役の差分の外の判断を確かめずに受け入れて直さない点には触れているが、主な原因をベースを渡していないことに置いており、採るには再現が要るのに外すのは無検証という非対称は述べていない。
+  - 引用: 「親はその範囲の判断を信じて直さずに終える(107行目の決め直しは「疑わしければ」の任意の手順)。」
+- `sk-16/code-review/2` S16-9 → **missed**
+  - 理由: 省けない条件が「修正が大きい」ことに結び付いている問題は述べていない。指摘3は、その判断を修正した本人に任せている点を挙げているだけである。
+- `sk-16/code-review/2` S16-10 → **missed**
+  - 理由: PR が意図して変えた挙動への指摘を、再現して採用し戻してしまう問題には触れていない。
+- `sk-16/code-review/3` S16-1 → **detected**
+  - 理由: 範囲の定義のせいで、PR の目的の直し残しが差分の外に入り、直されず継続の理由にもならない、と正解どおりに指摘している。
+  - 引用: 「範囲の定義が「PR の変更で起きるようになったか」だけなので、PR が直すはずの問題の直し残しも「差分の外」になり、直さず、継続の理由にもしない扱いになる。」
+- `sk-16/code-review/3` S16-2 → **partial**
+  - 理由: L99 の「終了の基準に当たる」が曖昧だという点は合っているが、差分の外の指摘を再現して直してしまうという L107 との衝突には触れていない。
+  - 引用: 「再現が要るかどうかを「終了の基準に当たる指摘」で決めているが、終了の基準(126 行)が再現の結果を参照しているので、定義が循環している。」
+- `sk-16/code-review/3` S16-3 → **missed**
+  - 理由: 再現を行う場所が限られておらず、破壊的な操作を本物の環境で実行しうるという指摘は無い。
+- `sk-16/code-review/3` S16-4 → **missed**
+  - 理由: issue に関する指摘は作成先のリポジトリについてだけで、公開リポジトリでセキュリティの悪用手順が公開されるという点には触れていない。
+- `sk-16/code-review/3` S16-5 → **detected**
+  - 理由: 既存のテストが修正箇所を覆っていなくても再レビューを省く条件が満たされ、副作用を確かめずに終えられる、と指摘している。
+  - 引用: 「既存のテストがほかの呼び出し元を覆っていなければ、それも通る。この場合は終えてよいことになり、修正が別の場所に入れた回帰は誰にも見られない。」
+- `sk-16/code-review/3` S16-6 → **missed**
+  - 理由: 差分の外になる横展開の候補が、報告にも issue の確認にも載らず捨てられうるという指摘は無い(指摘2は強制の仕組みとの両立の問題を述べている)。
+- `sk-16/code-review/3` S16-7 → **detected**
+  - 理由: 前提の条件(プラットフォームなど)を作れないまま試して起きなかった指摘が、採らず継続の理由にもしない扱いに入り、「実行では示せない」との扱いが逆になる、と指摘している。
+  - 引用: 「影響が高のタイミング依存やプラットフォーム依存の欠陥に対し、親が「再現できそう」と考えてテストを組み直す(99 行は組み直しを認めている)。条件が合わずに通ってしまうと、102 行で採らず、126 行で継続の理由からも外れる。」
+- `sk-16/code-review/3` S16-8 → **missed**
+  - 理由: 判定役の「差分の外」の判断を、確かめずに受け入れてよいという非対称は指摘されていない。
+- `sk-16/code-review/3` S16-9 → **missed**
+  - 理由: 括弧書きについては判断が主観に任されているとだけ述べ、例外が「修正が大きい」ことに結び付いているため小さな修正がすり抜ける、という原因は述べていない。
+- `sk-16/code-review/3` S16-10 → **missed**
+  - 理由: 再現したら採用するという規則が、PR が意図して変えた挙動への指摘にも当たり、意図した変更を戻しうるという指摘は無い。
+- `sk-16/mattpocock/1` S16-1 → **missed**
+  - 理由: 範囲の定義のせいで、PR の目的そのものの直し残しが差分の外になるという指摘がない。
+- `sk-16/mattpocock/1` S16-2 → **missed**
+  - 理由: 再現したら直すという手順と、差分の外は直さないという規則の先後が定まらない、という指摘がない。
+- `sk-16/mattpocock/1` S16-3 → **missed**
+  - 理由: 再現を実行する場所が限られておらず、破壊的な操作になりうる、という指摘がない。
+- `sk-16/mattpocock/1` S16-4 → **missed**
+  - 理由: issue の本文に操作の順を書くと、公開リポジトリでセキュリティの指摘の悪用手順を公開することになる、という指摘がない。
+- `sk-16/mattpocock/1` S16-5 → **missed**
+  - 理由: L128 の条件には触れているが、「再レビューを増やす方向なので抜け道にはならない」と結論しており、テストが無い場合でも条件を満たせるという原因を指摘していない。
+- `sk-16/mattpocock/1` S16-6 → **missed**
+  - 理由: 差分の外になる横展開の候補の行き先が定まっていない、という指摘がない。
+- `sk-16/mattpocock/1` S16-7 → **missed**
+  - 理由: 「実行では示せない」が抜け道になるという指摘はあるが、指摘の前提の環境を作れずに試して起きなかった場合が「起きなかった=採らない」に入る、という原因ではない。
+- `sk-16/mattpocock/1` S16-8 → **missed**
+  - 理由: 判定役の「差分の外」の判断を確かめずに受け入れてよい非対称を指摘していない。
+- `sk-16/mattpocock/1` S16-9 → **missed**
+  - 理由: 「修正が大きく」に基準がない点は挙げているが、条件が大きさに結び付いているため小さくても挙動を変える修正がすり抜ける、という原因ではなく、抜け道ではないと結論している。
+- `sk-16/mattpocock/1` S16-10 → **missed**
+  - 理由: PR が意図して変えた挙動への指摘が、再現すると採用されて意図した変更を戻してしまう、という指摘がない。
+- `sk-16/mattpocock/2` S16-1 → **missed**
+  - 理由: 差分の外の定義に PR が直そうとした問題の直し残しが入ってしまう点には触れていない。
+- `sk-16/mattpocock/2` S16-2 → **missed**
+  - 理由: 再現したら直すという手順と、差分の外は直さないという規則の先後の矛盾には触れていない。
+- `sk-16/mattpocock/2` S16-3 → **missed**
+  - 理由: 再現を行う場所が限られておらず破壊的な操作を実行しうる点には触れていない。
+- `sk-16/mattpocock/2` S16-4 → **missed**
+  - 理由: issue に起きる操作の順を書くとセキュリティの指摘で悪用の手順を公開することになる点には触れていない。
+- `sk-16/mattpocock/2` S16-5 → **missed**
+  - 理由: 再レビューを省く条件についての指摘は「どの修正も」の対象が曖昧という別の原因で、テストが無い場合にも条件が満たされる点ではない。
+- `sk-16/mattpocock/2` S16-6 → **missed**
+  - 理由: 差分の外になる横展開の候補の行き先が定まっていない点には触れていない。
+- `sk-16/mattpocock/2` S16-7 → **missed**
+  - 理由: 環境の条件を作れないまま試して起きなかった場合の扱いには触れていない。
+- `sk-16/mattpocock/2` S16-8 → **missed**
+  - 理由: 判定役の「差分の外」の判断を確かめずに受け入れられる非対称には触れていない。
+- `sk-16/mattpocock/2` S16-9 → **missed**
+  - 理由: 再レビューを省けない例外が「修正が大きい」ことに結び付いている点には触れていない。
+- `sk-16/mattpocock/2` S16-10 → **missed**
+  - 理由: 再現したら採用するという規則が、PR が意図して変えた挙動への指摘にも当たる点には触れていない。
+- `sk-16/mattpocock/3` S16-1 → **missed**
+  - 理由: PR の目的の直し残しが範囲の定義で差分の外に入るという指摘は無い。
+- `sk-16/mattpocock/3` S16-2 → **missed**
+  - 理由: 再現したら直す手順と、差分の外は直さない規則との先後の矛盾には触れていない。
+- `sk-16/mattpocock/3` S16-3 → **missed**
+  - 理由: 再現を行う場所が限られておらず破壊的な操作を実行しうるという指摘は無い。
+- ★ `sk-16/mattpocock/3` S16-4 → **missed**
+  - 理由: レビューは issue 作成の手順を「問題ありません」とし、セキュリティの再現手順が公開される点には触れていない。
+- `sk-16/mattpocock/3` S16-5 → **missed**
+  - 理由: レビューは「既存のテストも通っている」という条件を妥当と評価しており、テストが無い場合も空のまま満たされるという問題を指摘していない。
+- `sk-16/mattpocock/3` S16-6 → **detected**
+  - 理由: 差分の外の横展開の候補が、報告にも issue の確認にも入らず行き先が無いことを、正解と同じ場所と原因で指摘している。
+  - 引用: 「差分の外にある横展開の候補が、どこにも残らない。**
+   - 横展開の候補には範囲の欄がありません。
+   - そのため、差分の外の候補は終了時の報告にも、issue にするか尋ねる対象にも入りません。」
+- `sk-16/mattpocock/3` S16-7 → **missed**
+  - 理由: 環境の条件を作れずに起きなかった場合が「採らない」に入るという指摘は無い(「実行では示せない」についての指摘は別の問題)。
+- `sk-16/mattpocock/3` S16-8 → **missed**
+  - 理由: 判定役の「差分の外」の判断を確かめずに受け入れられる非対称には触れていない。
+- `sk-16/mattpocock/3` S16-9 → **partial**
+  - 理由: 同じ括弧書きを緩いと指摘しているが、「大きい」という条件に結び付いているため小さな修正がすり抜けるという原因は述べていない。
+  - 引用: 「「修正が大きく、再現が確かめた範囲を超えて」には判断の基準がなく、緩くも読めます。」
+- `sk-16/mattpocock/3` S16-10 → **missed**
+  - 理由: 再現すれば PR が意図した変更を戻しうるという指摘は無い。
+- `sk-16/perspectives/1` S16-1 → **missed**
+  - 理由: PR が直そうとした問題の直し残しが「PR の前から起きる」ために差分の外へ入る、という指摘はなく、最後の問いは PR が触った行にある既存の不具合の話なので別の問題です。
+- `sk-16/perspectives/1` S16-2 → **missed**
+  - 理由: 「再現したら採用して直す」と「差分の外は直さない」の先後が定まっていないという指摘はありません。
+- `sk-16/perspectives/1` S16-3 → **detected**
+  - 理由: 再現を行う場所が隔離されておらず、利用者の本物の環境で破壊的な操作を実行しうると指摘しており、ベースを確かめるときに作業ツリーを壊すことにも触れています。
+  - 引用: 「`SKILL.md:99` と `:101` 影響が高の defect を「実際に実行して」再現させると、取り返しのつかない操作を本物の環境で起こしうる」
+- `sk-16/perspectives/1` S16-4 → **detected**
+  - 理由: L134 で issue の本文に起きる操作の順を書くことが、公開リポジトリでは脆弱性の再現手順の公開になると指摘しています。
+  - 引用: 「公開リポジトリだと、まだ直っていない脆弱性の再現手順をそのまま公開することになります。」
+- `sk-16/perspectives/1` S16-5 → **missed**
+  - 理由: L128 への指摘は「大きい」の判断が曖昧だという点で、テストが無い・修正箇所を通らない場合にも「既存のテストが通る」が満たされる、という原因には触れていません。
+- `sk-16/perspectives/1` S16-6 → **missed**
+  - 理由: 差分の外になる横展開の候補の行き先が定まっていない、という指摘はありません。
+- `sk-16/perspectives/1` S16-7 → **partial**
+  - 理由: L102 と L126 で、起きなかった再現によって本物の不具合が落ちることは指摘していますが、原因を手順の誤りとしており、前提の環境(OS やツールの実装)を作れない場合と「実行では示せない」との境界がないことには触れていません。
+  - 引用: 「手順の誤り(前提の状態を作っていない、別の経路を叩いている)で再現が失敗しても、見分ける仕組みがありません。」
+- `sk-16/perspectives/1` S16-8 → **missed**
+  - 理由: 判定役の「差分の外」の判断を確かめずに受け入れて落とせる、という採否の非対称には触れていません。
+- `sk-16/perspectives/1` S16-9 → **partial**
+  - 理由: L128 の括弧書きの条件が不十分だという場所は合っていますが、「大きい」の判断が曖昧だという点を挙げるだけで、小さくても再現の外の挙動を変える修正がすり抜けるという原因は述べていません。
+  - 引用: 「括弧書きの「修正が大きく…なら回す」で手当てはしてあります。それでも「大きい」の判断は親に任されたままです。」
+- `sk-16/perspectives/1` S16-10 → **missed**
+  - 理由: PR が意図して変えた挙動への指摘が、再現すると採用され、意図した変更を戻してしまう、という指摘はありません。
+- `sk-16/perspectives/2` S16-1 → **missed**
+  - 理由: PR が直そうとした問題の直し残しが「差分の外」に入るという指摘はない。
+- `sk-16/perspectives/2` S16-2 → **missed**
+  - 理由: 再現したら直すという手順と、差分の外は直さないという規則が食い違う点には触れていない。:118 の指摘は別の食い違いを扱っている。
+- `sk-16/perspectives/2` S16-3 → **missed**
+  - 理由: 再現を実行する場所が限られておらず、破壊的な操作を本物のリポジトリで実行しうるという指摘はない。
+- `sk-16/perspectives/2` S16-4 → **detected**
+  - 理由: L134 の issue 本文の定めが、公開リポジトリでは悪用の手順を公開することになると明確に指摘している。
+  - 引用: 「本文に「場所、影響と起きやすさ、起きる操作の順」を書く決まりです。そのため、影響が高のセキュリティ指摘では、悪用の手順を公開の issue に書くことになります。」
+- `sk-16/perspectives/2` S16-5 → **missed**
+  - 理由: :128 への指摘は観点別のレビューを受けないことを問題にしており、テストが無い・修正箇所を通らない場合に条件が空のまま満たされる点は述べていない。
+- `sk-16/perspectives/2` S16-6 → **missed**
+  - 理由: 差分の外になる横展開の候補の行き先が定まっていないという指摘はない。
+- `sk-16/perspectives/2` S16-7 → **partial**
+  - 理由: L102-103 の境目が無いために高影響の指摘が落ちるという場所と構造は合っているが、例が確率的なタイミングの問題で、OS やツールの実装といった前提の環境を作れない場合には触れていない。
+  - 引用: 「`skills/review-loop/SKILL.md:102-103` 「再現を試みたが起きなかった」と「実行では示せない」の境目が、競合やタイミングの指摘ではっきりしない」
+- `sk-16/perspectives/2` S16-8 → **detected**
+  - 理由: 採るときと外すときの検証の非対称と、高影響の指摘が確かめられないまま外れることを正確に指摘している。
+  - 引用: 「採る側は「再現しなければ採らない」と実行での確認を求めます。一方、「差分の外」で捨てる側は、判定役が読んだだけの判断を受け入れます。親が確かめ直すのも「疑わしければ」だけです。」
+- `sk-16/perspectives/2` S16-9 → **partial**
+  - 理由: L128 の括弧書きを問題にしているが、述べているのは「大きい」の基準が曖昧なことで、小さくても再現の外の挙動を変える修正がすり抜けるという原因までは言っていない。
+  - 引用: 「括弧書きの「修正が大きく…なら回す」が歯止めですが、「大きい」の基準は親の判断に任されています。」
+- `sk-16/perspectives/2` S16-10 → **missed**
+  - 理由: PR が意図して変えた挙動への指摘を、再現したら採用して戻してしまうという問題には触れていない。
+- `sk-16/perspectives/3` S16-1 → **missed**
+  - 理由: 範囲の定義(:863)には触れているが、指摘は既存の問題を悪化させる PR の扱いで、PR が直そうとした問題の直し残しが差分の外に入るという原因ではない。
+- `sk-16/perspectives/3` S16-2 → **partial**
+  - 理由: 再現の手順と差分の外の規則の関係が定まっていないという場所と曖昧さは合っているが、差分の外の指摘を再現して直してしまうおそれではなく、未確認のまま issue になると逆向きの結果を述べている。
+  - 引用: 「`:99` は「直す前に再現する」としています。一方 `:107` では差分の外の指摘は直さないので、再現が求められる場面がありません。」
+- `sk-16/perspectives/3` S16-3 → **detected**
+  - 理由: 再現を行う場所に制限がなく、本物のリポジトリで破壊的な操作を実行しうると指摘しており、ベースの確かめ方が作業ツリーを乱すことにも触れている。
+  - 引用: 「そうした欠陥を手元で実際に実行して再現すると、本物のデータを壊します。たとえば同じリポジトリの housekeeping スキルの「消してはいけないブランチを消す」を、実際のリポジトリで試す場合です。」
+- `sk-16/perspectives/3` S16-4 → **detected**
+  - 理由: :134 の issue 本文に起きる操作の順を書く定めのせいで、公開リポジトリでは脆弱性の再現手順が公開されると指摘している。
+  - 引用: 「影響が高には「セキュリティ」が含まれ、しかも「先頭に置く」とされています。公開リポジトリでは、未修正の脆弱性を再現手順付きで公開することになります。」
+- `sk-16/perspectives/3` S16-5 → **partial**
+  - 理由: :128 で退行の確認が既存テストの網羅に頼ることは述べているが、テストが無い場合や修正箇所を通らない場合に条件が空のまま満たされることまでは指摘していない。
+  - 引用: 「再現テストは「指摘が直ったこと」を確かめますが、「修正が新しい問題を入れていないこと」は既存テストの網羅に頼ります。」
+- `sk-16/perspectives/3` S16-6 → **missed**
+  - 理由: 差分の外になる横展開の候補の行き先についての指摘は無い。
+- `sk-16/perspectives/3` S16-7 → **missed**
+  - 理由: OS やツールの実装など、指摘の前提の条件を作れないまま試して起きなかった場合の扱いには触れていない。
+- `sk-16/perspectives/3` S16-8 → **missed**
+  - 理由: 判定役の「差分の外」の判断を確かめずに受け入れられるという非対称は指摘していない。
+- `sk-16/perspectives/3` S16-9 → **missed**
+  - 理由: 括弧書きの条件には触れているが、問題にしているのは修正した本人が判断する点で、「大きい」という条件があるために小さい修正がすり抜けるという原因ではない。
+- `sk-16/perspectives/3` S16-10 → **missed**
+  - 理由: PR が意図して変えた挙動を再現して戻してしまうという問題への指摘は無い。
+- `sk-16/prove/1` S16-1 → **missed**
+  - 理由: 範囲の定義で PR の目的の直し残しが差分の外に入る問題には触れていない。
+- `sk-16/prove/1` S16-2 → **missed**
+  - 理由: 再現したら直す規則と差分の外は直さない規則の関係が定まっていないことに触れていない。
+- `sk-16/prove/1` S16-3 → **missed**
+  - 理由: 再現を行う場所が限られず、破壊的な操作を実行しうることに触れていない。
+- `sk-16/prove/1` S16-4 → **missed**
+  - 理由: issue の本文に起きる操作の順を書くとセキュリティの悪用手順が公開されることに触れていない。
+- `sk-16/prove/1` S16-5 → **missed**
+  - 理由: テストが無い場合でも再レビューを省ける条件を満たしてしまうことに触れていない。
+- `sk-16/prove/1` S16-6 → **missed**
+  - 理由: 差分の外の横展開の候補の行き先が定まっていないことに触れていない。
+- `sk-16/prove/1` S16-7 → **missed**
+  - 理由: 環境の条件を作れずに再現しなかった場合の扱いに触れていない。
+- `sk-16/prove/1` S16-8 → **missed**
+  - 理由: 差分の外の判断を確かめずに受け入れられる非対称に触れていない。
+- `sk-16/prove/1` S16-9 → **missed**
+  - 理由: 再レビューを省けない条件が修正の大きさに結び付いていることに触れていない。
+- `sk-16/prove/1` S16-10 → **missed**
+  - 理由: 再現したら採用して直すと、PR が意図した変更を戻しうることに触れていない。
+- `sk-16/prove/2` S16-1 → **missed**
+  - 理由: レビューは指摘を出しておらず、範囲の定義が PR の目的の直し残しを差分の外にしてしまうことに触れていない。
+- `sk-16/prove/2` S16-2 → **missed**
+  - 理由: 再現したら直すという手順と、差分の外は直さないという規則の食い違いに触れていない。
+- `sk-16/prove/2` S16-3 → **missed**
+  - 理由: 再現を行う場所が限られていないために、破壊的な操作を実行しうる危険に触れていない。
+- `sk-16/prove/2` S16-4 → **missed**
+  - 理由: issue の本文に起きる操作の順を書くと、セキュリティの指摘では悪用の手順を公開することになる点に触れていない。
+- `sk-16/prove/2` S16-5 → **missed**
+  - 理由: 再レビューを省く条件が、テストの無いプロジェクトでも空のまま満たされる点に触れていない。
+- ★ `sk-16/prove/2` S16-6 → **missed**
+  - 理由: 差分の外になる横展開の候補の行き先が定まっていない点に触れていない。
+- `sk-16/prove/2` S16-7 → **missed**
+  - 理由: 前提の環境を作れないまま試して起きなかった場合が「採らない」に入りうる点に触れていない。
+- `sk-16/prove/2` S16-8 → **missed**
+  - 理由: 判定役が読んだだけで付けた差分の外の判断を、確かめずに受け入れられる非対称に触れていない。
+- `sk-16/prove/2` S16-9 → **missed**
+  - 理由: 再レビューを省けない例外が修正の大きさに結び付いている点に触れていない。
+- `sk-16/prove/2` S16-10 → **missed**
+  - 理由: 再現したら採用するという手順が、PR が意図して変えた挙動を戻しうる点に触れていない。
+- `sk-16/prove/3` S16-1 → **missed**
+  - 理由: レビューは指摘を出しておらず、範囲の定義が PR の目的の直し残しを差分の外へ入れてしまう問題にも触れていない。
+- `sk-16/prove/3` S16-2 → **missed**
+  - 理由: 再現したら直す手順と、差分の外は直さない規則が両立しない点への言及がない。
+- `sk-16/prove/3` S16-3 → **missed**
+  - 理由: 判定役のツール制限には触れているが、親が再現を行う場所が限られておらず破壊的な操作を実行しうる点は述べておらず、しかも指摘にしないと結論している。
+- `sk-16/prove/3` S16-4 → **missed**
+  - 理由: issue の本文に操作の順を書くことで、セキュリティの指摘の悪用手順が公開される点への言及がない。
+- `sk-16/prove/3` S16-5 → **missed**
+  - 理由: 再レビューを省く条件の「既存のテストが通る」が、テストが無くても満たされてしまう点を指摘していない。
+- `sk-16/prove/3` S16-6 → **missed**
+  - 理由: 差分の外になる横展開の候補の行き先が定まっていない点への言及がない。
+- `sk-16/prove/3` S16-7 → **missed**
+  - 理由: 前提の環境を作れずに再現しなかった場合の扱いの曖昧さに触れていない。
+- `sk-16/prove/3` S16-8 → **missed**
+  - 理由: 判定役が付けた差分の外の判断を、親が確かめずに受け入れられる非対称を指摘していない。
+- `sk-16/prove/3` S16-9 → **missed**
+  - 理由: 再レビューを省けない例外が「修正が大きい」ことに結び付いている問題を述べていない。
+- `sk-16/prove/3` S16-10 → **missed**
+  - 理由: PR が意図して変えた挙動も、再現すれば採用されて元に戻されうる点への言及がない。
+- `sk-16/security-review/1` S16-1 → **missed**
+  - 理由: 範囲の定義で PR の目的そのものの直し残しが差分の外に入る問題には触れていない。
+- `sk-16/security-review/1` S16-2 → **missed**
+  - 理由: 再現したら直す手順と、差分の外は直さないという規則が食い違う点は指摘していない。
+- `sk-16/security-review/1` S16-3 → **missed**
+  - 理由: 再現を実行する場所が限られておらず、破壊的な操作を本物の環境で実行しうる点は指摘していない。
+- `sk-16/security-review/1` S16-4 → **detected**
+  - 理由: 差分の外の指摘を issue にする定めが、公開リポジトリではセキュリティの指摘の詳細(悪用の手順)を公開してしまう点を、同じ場所について指摘している。
+  - 引用: 「公開リポジトリでは、差分の外で見つかったセキュリティの指摘を issue にすると、まだ直っていない脆弱性の詳細が公開されます。」
+- `sk-16/security-review/1` S16-5 → **missed**
+  - 理由: テストが無い場合にも再レビューを省く条件を満たせてしまう点には触れていない。
+- `sk-16/security-review/1` S16-6 → **missed**
+  - 理由: 差分の外になる横展開の候補の行き先が定まっていない点には触れていない。
+- `sk-16/security-review/1` S16-7 → **missed**
+  - 理由: 前提の環境を作れずに試して起きなかった場合の扱いには触れていない。
+- `sk-16/security-review/1` S16-8 → **missed**
+  - 理由: 判定役が付けた差分の外の判断を確かめずに受け入れられる非対称には触れていない。
+- `sk-16/security-review/1` S16-9 → **missed**
+  - 理由: 再レビューを省けない条件が「修正が大きい」ことに結び付いている点には触れていない。
+- `sk-16/security-review/1` S16-10 → **missed**
+  - 理由: 意図した挙動への指摘が、再現すると採用されてしまう点には触れていない。
+- `sk-16/security-review/2` S16-1 → **missed**
+  - 理由: SKILL.md を対象外とし、範囲の定義と PR の目的の直し残しの関係には触れていない。
+- `sk-16/security-review/2` S16-2 → **missed**
+  - 理由: 再現の手順と差分の外は直さないという規則の矛盾には言及がない。
+- `sk-16/security-review/2` S16-3 → **missed**
+  - 理由: 判定役の手順を親が実行する流れには触れているが、実行場所が限られず破壊的な操作になりうるという原因は述べず、除外の基準に当たるとして問題なしと結論している。
+- `sk-16/security-review/2` S16-4 → **missed**
+  - 理由: gh issue create は利用者の承認時だけだとして問題なしと結論しており、公開 issue に悪用の手順が載る点は指摘していない。
+- `sk-16/security-review/2` S16-5 → **missed**
+  - 理由: 再レビューを省く条件の「既存のテストが通る」が、テストが無くても満たされる点への言及がない。
+- `sk-16/security-review/2` S16-6 → **missed**
+  - 理由: 差分の外になる横展開の候補の扱いには触れていない。
+- `sk-16/security-review/2` S16-7 → **missed**
+  - 理由: 環境の違いで再現しない場合の扱いへの言及がない。
+- `sk-16/security-review/2` S16-8 → **missed**
+  - 理由: 判定役の「差分の外」の判断を無検証で受け入れられる非対称には触れていない。
+- `sk-16/security-review/2` S16-9 → **missed**
+  - 理由: 再レビューを省けない条件が修正の大きさに結び付いている点への言及がない。
+- `sk-16/security-review/2` S16-10 → **missed**
+  - 理由: 意図による却下と「再現したら採用して直す」の先後の問題には触れていない。
+- `sk-16/security-review/3` S16-1 → **missed**
+  - 理由: PR の目的の直し残しが差分の外に入る問題には一切触れていない。
+- `sk-16/security-review/3` S16-2 → **missed**
+  - 理由: 再現して直す手順と差分の外は直さない規則の関係を論じていない。
+- `sk-16/security-review/3` S16-3 → **missed**
+  - 理由: 再現を実行する場所が限られていない危険について指摘がない。
+- `sk-16/security-review/3` S16-4 → **missed**
+  - 理由: gh issue create には触れたが利用者の確認があるので問題なしと結論しており、操作の順を公開する危険は指摘していない。
+- `sk-16/security-review/3` S16-5 → **missed**
+  - 理由: 再レビューを省く条件の既存テストの空振りについて指摘がない。
+- `sk-16/security-review/3` S16-6 → **missed**
+  - 理由: 差分の外の横展開の候補の行き先について指摘がない。
+- `sk-16/security-review/3` S16-7 → **missed**
+  - 理由: 環境の違いで再現しなかった場合の扱いについて指摘がない。
+- `sk-16/security-review/3` S16-8 → **missed**
+  - 理由: 判定役の差分の外の判断を確かめずに受け入れる非対称について指摘がない。
+- `sk-16/security-review/3` S16-9 → **missed**
+  - 理由: 小さい修正が再レビューの例外から漏れる点について指摘がない。
+- `sk-16/security-review/3` S16-10 → **missed**
+  - 理由: 意図した変更を再現して戻してしまう点について指摘がない。
+- `wn-306/code-review/1` W306-1 → **detected**
+  - 理由: render で cursorBlock に続く (sub) を含めたことと start=b1-avail の補正が原因で選んだ行と入力欄が窓から外れることを指摘しており、2件目では頭の (sub) で start=b0 になる場合も示している。
+  - 引用: 「選んだ行のすぐ下に続く (sub) の行まで cursorBlock を伸ばしたので、b1 が入力欄の終わりではなく最後の (sub) の行の位置になった。そのため『入力欄は最後の行まで窓に入れる』の補正が窓を下へずらしすぎ、選んだ行もメモの入力欄も窓の外に出る。」
+- `wn-306/code-review/1` W306-2 → **detected**
+  - 理由: trailing が区切りの境目で戻らず、次の区切りの (sub) まで塊に入ることを指摘しており、正解と一致する。
+  - 引用: 「trailing は区切りをまたいでも戻らないので、区切り A の最後の行を選ぶと、空行、次の区切り B の見出し、B の先頭にあるトップレベルの (sub) の行まで、選んだ行の塊に入る。」
+- `wn-306/code-review/1` W306-3 → **detected**
+  - 理由: 選べる行がなくカーソルが undefined のときに通し番号が 0/0 になることを指摘している。
+  - 引用: 「選べる行がなくカーソルが undefined のとき、cursorBlock は [0,0] のままなので窓は先頭に固定され、高さを超えた (sub) の行はどの操作でも見られない。通し番号も '0/0' になる。」
+- `wn-306/code-review/1` W306-4 → **detected**
+  - 理由: (sub) に変わった行で guard が立ち、文言『left the list』が事実と違うことを正しく指摘している。
+  - 引用: 「選んでいた行が消えずに起動された行へ変わったときも、prevLayout.order に入っているので goneName が付き、Ctrl+X の保護が『left the list』の文言で出る。実際には行は一覧に残っている。」
+- `wn-306/code-review/1` W306-5 → **missed**
+  - 理由: メモの入力中に行が (sub) に変わっても入力欄が閉じないという指摘はない。
+- `wn-306/code-review/1` W306-6 → **missed**
+  - 理由: attachKey や作業台の案内の経路から (sub) の行にメモが開くという指摘はなく、9件目は openNote の判定を外したことをテストの不足として述べているだけである。
+- `wn-306/code-review/1` W306-7 → **missed**
+  - 理由: README の『Both can be selected』の記述が実装と食い違うという指摘はない。
+- `wn-306/code-review/2` W306-1 → **missed**
+  - 理由: レビューの出力は利用上限のエラー文だけで、指摘が1件もない。
+- `wn-306/code-review/2` W306-2 → **missed**
+  - 理由: レビューの出力は利用上限のエラー文だけで、指摘が1件もない。
+- `wn-306/code-review/2` W306-3 → **missed**
+  - 理由: レビューの出力は利用上限のエラー文だけで、指摘が1件もない。
+- `wn-306/code-review/2` W306-4 → **missed**
+  - 理由: レビューの出力は利用上限のエラー文だけで、指摘が1件もない。
+- `wn-306/code-review/2` W306-5 → **missed**
+  - 理由: レビューの出力は利用上限のエラー文だけで、指摘が1件もない。
+- `wn-306/code-review/2` W306-6 → **missed**
+  - 理由: レビューの出力は利用上限のエラー文だけで、指摘が1件もない。
+- `wn-306/code-review/2` W306-7 → **missed**
+  - 理由: レビューの出力は利用上限のエラー文だけで、指摘が1件もない。
+- `wn-306/code-review/3` W306-1 → **detected**
+  - 理由: render の cursorBlock の頭を 0 にして start = b0 になるため、頭の (sub) が多いと選んだ行が窓から外れる、という正解の原因と条件を指摘している。
+  - 引用: 「最初の選べる行を選んでいると、塊の始まりを 0(一覧の先頭)にする。その上にある見出しと (sub) の行で窓が埋まると、塊が窓以上の長さになって start = b0 = 0 に固定され、選んだ行(`>`)が窓の外に押し出される。」
+- `wn-306/code-review/3` W306-2 → **missed**
+  - 理由: trailing が区切りの境目で切れず、次の区切りの (sub) まで塊に入るという指摘はない。
+- `wn-306/code-review/3` W306-3 → **detected**
+  - 理由: 選べる行がないときに通し番号が 0/0 になることを、正解と同じ条件で指摘している。
+  - 引用: 「カーソルがない(選べる行がない)まま一覧があふれると、idx は 0 になり、`0/0` や `0/N` のような意味のない通し番号が出る。」
+- `wn-306/code-review/3` W306-4 → **detected**
+  - 理由: (sub) に変わってカーソルが移ったときも guard が立ち、『left the list』という誤った文言が出ることを指摘している。
+  - 引用: 「選んでいた行が一覧に残ったまま起動された行に変わったときも、goneName を求め(prevLayout.order に含まれるため)守りを立てる。そのため、行が消えていないのに `Ctrl+X ignored: <名前> left the list and the selection moved.` と示される。」
+- `wn-306/code-review/3` W306-5 → **missed**
+  - 理由: メモの入力中に対象の行が (sub) に変わっても入力欄が閉じないという指摘はない。
+- `wn-306/code-review/3` W306-6 → **partial**
+  - 理由: 守りを外したことと attachKey の経路という場所と原因は合っているが、案内が古い行を指しているという起きる条件を捉えておらず、いまは起きないと結論している。
+  - 引用: 「openNote と openWait から、起動された行を断る守りを外した。いまは、カーソルが起動された行に乗らないことだけが守りになっている。attachKey は sidOfSession から得た sid を、選べるかを確かめずに this.cursor に入れ、openNote と openWait を呼ぶ。」
+- `wn-306/code-review/3` W306-7 → **missed**
+  - 理由: README の『Both can be selected』の記述が実装と食い違うという指摘はない。
+- `wn-306/mattpocock/1` W306-1 → **detected**
+  - 理由: cursorBlock の頭を 0 にしたことと、塊が窓より大きいときの start = b0 によって、選んだ行が窓から外れることを、原因まで含めて指摘している。
+  - 引用: 「一覧の先頭から見せるために塊の先頭を 0 にし(`screen.ts:213`)、塊が窓より大きいときは塊の先頭(=0)から窓を出します(`:227`)。」
+- `wn-306/mattpocock/1` W306-2 → **detected**
+  - 理由: trailing が区切りの境目で戻らず、次の区切りの (sub) の行まで塊に入ることを、正解と同じ仕組みで指摘している。
+  - 引用: 「`trailing` は区切りの境目で戻らないので、空行と見出しを挟んで、次の区切りの先頭にあるトップレベルの (sub) の行まで塊に入ります。」
+- `wn-306/mattpocock/1` W306-3 → **detected**
+  - 理由: 選べる行がないとき、通し番号が 0/0 と出ることを指摘している。
+  - 引用: 「このときの `<通し番号>/<総数>` が仕様に書かれていません。実装では `0/0` になります(`screen.ts:222-223`)。」
+- `wn-306/mattpocock/1` W306-4 → **detected**
+  - 理由: 行が一覧に残ったまま (sub) に変わったときも guard が立ち、『left the list』という事実と違う文言が出ることを指摘している。
+  - 引用: 「`app.ts:262-265` は、一覧に残っている行でも `goneName` を立てます。そのため `<名前> left the list and the selection moved.` と示されます。」
+- `wn-306/mattpocock/1` W306-5 → **missed**
+  - 理由: メモの入力中に対象の行が (sub) に変わっても入力欄が閉じない問題には触れていない。
+- `wn-306/mattpocock/1` W306-6 → **missed**
+  - 理由: openNote から判定を消したことや、attachKey と作業台の案内を経由して (sub) の行が選ばれる経路には触れていない。
+- `wn-306/mattpocock/1` W306-7 → **detected**
+  - 理由: README の『選べる』という記述が、選べなくした実装と食い違うことを指摘している。
+  - 引用: 「`README.md:45` に「Both can be selected but not attached.」とあり、(sub) の行も選べると書いたままです。」
+- `wn-306/mattpocock/2` W306-1 → **detected**
+  - 理由: 先頭の (sub) が窓の高さを超えると選んだ行が窓の外に出ることを、cursorBlock の頭を 0 にする処理が原因だとして指摘しており、正解の条件(1)と一致する。
+  - 引用: 「原因: `screen.ts` の `cursorBlock = [rowIndex.length === 1 ? 0 : start, …]` で、窓の始まりが先頭に固定されます。」
+- `wn-306/mattpocock/2` W306-2 → **partial**
+  - 理由: 塊が区切りをまたぐという実装の挙動には触れているが、docs に書かれていない点として扱っており、選んだ行が窓の先頭に寄って上の行が見えなくなる不具合としては述べていない。
+  - 引用: 「「選んだ行のすぐ下に続く (sub)」が区切りをまたぐかが書かれていません。実装はまたいで、次の区切りの見出しまで窓に入れます。」
+- `wn-306/mattpocock/2` W306-3 → **detected**
+  - 理由: 選べる行がないときに通し番号が 0/0 と出ることを指摘している。
+  - 引用: 「選べる行がないとき、(sub) の行が窓の外に残ります。**
+   - スクロールの手段がなく、`0/0` と出ます。」
+- `wn-306/mattpocock/2` W306-4 → **detected**
+  - 理由: 行が (sub) に変わったときにも guard が立ち、文言『left the list』が事実と違うことを applyObservation の該当箇所とあわせて指摘している。
+  - 引用: 「選んでいた行が (sub) に変わっただけで、`Ctrl+X` の守りが立ちます。**
+   - 押すと `… left the list` と出ますが、その行は一覧に残っているので文言が事実と食い違います。」
+- `wn-306/mattpocock/2` W306-5 → **missed**
+  - 理由: メモの入力中に対象の行が (sub) に変わっても入力欄が閉じない問題には触れていない。
+- `wn-306/mattpocock/2` W306-6 → **missed**
+  - 理由: openNote の判定を消したため、attachKey などの経路から (sub) の行にメモが開ける問題には触れていない。
+- `wn-306/mattpocock/2` W306-7 → **missed**
+  - 理由: README の『Both can be selected』という記述と実装の食い違いには触れていない。
+- `wn-306/mattpocock/3` W306-1 → **detected**
+  - 理由: render の塊の始まりが 0 になり、頭の (sub) が窓より多いと start = b0 で選んだ行が外れるという原因と条件を、正解と同じ場所で示しているため。
+  - 引用: 「最初の選べる行を選ぶと、塊の始まりが 0 になります。その上のトップレベルの `(sub)` の行が窓の高さ以上あると、`blockLen >= avail` で窓は 0 から始まり、選んだ行が画面に出ません。」
+- `wn-306/mattpocock/3` W306-2 → **detected**
+  - 理由: trailing が区切りの境目で戻らず、次の区切りの (sub) まで塊に入るという原因を正しく指摘しているため。
+  - 引用: 「`trailing` は区切りが変わってもリセットされません。そのため、区切りの最後の行を選んでいて、次の区切りがトップレベルの `(sub)` の行で始まると、窓の範囲が空行と見出しをまたいで伸びます。」
+- `wn-306/mattpocock/3` W306-3 → **missed**
+  - 理由: 選べる行がないときに通し番号が 0/0 になる点には触れていないため。
+- `wn-306/mattpocock/3` W306-4 → **detected**
+  - 理由: 行が (sub) に変わってカーソルが移ったときも guard が立ち、文言が事実と違うことを指摘しているため。
+  - 引用: 「このときも `Ctrl+X ignored: <名前> left the list…` と出ますが、行は一覧から消えていません。」
+- `wn-306/mattpocock/3` W306-5 → **missed**
+  - 理由: メモ入力中に対象行が (sub) に変わっても入力が閉じない点には触れていないため。
+- `wn-306/mattpocock/3` W306-6 → **missed**
+  - 理由: isSpawned の判定を消したことはむしろ妥当と評価しており、attachKey 経由の経路には触れていないため。
+- `wn-306/mattpocock/3` W306-7 → **missed**
+  - 理由: README の『Both can be selected』の食い違いには触れておらず、指摘は PRODUCT.md の別の箇所だけのため。
+- `wn-306/perspectives/1` W306-1 → **detected**
+  - 理由: render の cursorBlock が (sub) を含めて窓より長いとき start = b0 になること、さらに b1 - avail の補正が伸びた b1 に合わせて働くことを、原因として両方指摘している。
+  - 引用: 「その上に並ぶ見出しとトップレベルの `(sub)` の行が窓の高さ以上あると、`blockLen >= avail` なので `start = b0 = 0` になり、窓は先頭の行で埋まります。選んだ行は窓の下に外れます。」
+- `wn-306/perspectives/1` W306-2 → **detected**
+  - 理由: trailing が区切りの境目で切れず、次の区切りの (sub) の行まで選んだ行の塊に入ることを指摘している。
+  - 引用: 「次の区切りの先頭の `(sub)` の行も、空行と見出しごと塊に入ります。」
+- `wn-306/perspectives/1` W306-3 → **detected**
+  - 理由: 選べる行がなくカーソルが undefined のとき、通し番号が 0/0 になることを指摘している。
+  - 引用: 「`(sub)` の行だけが並ぶときはカーソルが `undefined` になり、`cursorBlock = [0,0]` のままです。端末の高さを超えた分は見られず、位置の表示も `0/0` になります。」
+- `wn-306/perspectives/1` W306-4 → **detected**
+  - 理由: (sub) に変わってカーソルが移った場合にも guard が立ち、『left the list』という事実と違う文言が出ることを指摘している。
+  - 引用: 「選んでいた行が更新で起動された行に変わったとき、行は前の並びにも新しい並びにも残っていますが、`goneName` が入って `guard` が立ちます。」
+- `wn-306/perspectives/1` W306-5 → **missed**
+  - 理由: メモの入力中に対象の行が (sub) に変わっても入力欄が閉じない、という mode の扱いの不具合には触れていない。
+- `wn-306/perspectives/1` W306-6 → **detected**
+  - 理由: openNote から断りの判定を消したため、カーソル以外の経路 (attach 中の直接代入) から (sub) の行にカーソルが乗り、メモを書けることを指摘している。
+  - 引用: 「今回 `openNote` と `openWait` の `isSpawned` による断り(`:835`、`:856`)を外したので、その間に `e` を押すと起動された行にメモを書けます。」
+- `wn-306/perspectives/1` W306-7 → **missed**
+  - 理由: README の『Both can be selected』という記述と実装の食い違いには触れていない。
+- `wn-306/perspectives/2` W306-1 → **detected**
+  - 理由: render の cursorBlock に (sub) を含めたことと start = b1 - avail / start = b0 の補正が原因で、選んだ行や入力欄が窓から外れることを、2件の指摘で両方の条件について示している。
+  - 引用: 「`trailing` で `cursorBlock[1]` を、すぐ下に続く `(sub)` の行の終わりまで伸ばしています。その一方で、`:233` の「入力欄は最後の行まで窓に入れる」は今も `b1` を入力欄の終わりとして扱っています。」
+- `wn-306/perspectives/2` W306-2 → **detected**
+  - 理由: trailing が区切りの境界で切れず、次の区切りの (sub) まで塊に入ることを指摘している。
+  - 引用: 「選んだ行が区切りの最後の行で、次の区切りの先頭がトップレベルの `(sub)` の行(起動元が一覧に出ていない行)だと、空行、見出し、その `(sub)` の行まで塊に入ります。」
+- `wn-306/perspectives/2` W306-3 → **detected**
+  - 理由: 選べる行がないときに通し番号が 0/0 になることを、正解と同じ条件で指摘している。
+  - 引用: 「選べる行がなく、`(sub)` の行だけが高さを超えて並ぶときは、`pos` が `0/0` になります。」
+- `wn-306/perspectives/2` W306-4 → **detected**
+  - 理由: (sub) に変わってカーソルが移ったときに guard が立ち、文言『left the list』が事実と合わないことを指摘している。
+  - 引用: 「直後の `Ctrl+X` には `Ctrl+X ignored: <名前> left the list and the selection moved.` と表示されます。行は一覧に残っているので、文言が事実と合いません。」
+- `wn-306/perspectives/2` W306-5 → **detected**
+  - 理由: 入力中に対象の行が (sub) に変わっても入力が閉じず、確定すると起動された行にメモが付くという原因と条件を指摘している(既存の穴と見積もっているが、内容は一致している)。
+  - 引用: 「気になるのは、入力欄やメニューを開いたまま、その行が更新で起動された行に変わる場合です。メモや待ち先を確定する時点で、起動された行への関係が保存されえます。」
+- `wn-306/perspectives/2` W306-6 → **missed**
+  - 理由: レビューは attachKey と GUIDE の経路を確かめた上で、起動された行には届かず問題なしと結論しており、案内が古い行を指す経路を見落としている。
+- `wn-306/perspectives/2` W306-7 → **missed**
+  - 理由: README の『Both can be selected』の記述と実装の食い違いには触れていない。
+- `wn-306/perspectives/3` W306-1 → **detected**
+  - 理由: render の範囲が (sub) の分だけ延びて窓より長くなり、start = b0 と b1 基準の補正のせいで選んだ行と入力欄が窓から外れることを、2つの場合とも原因つきで指摘している。
+  - 引用: 「起動された行が多いと、選んだ行と入力欄が上へ押し出されます。」
+- `wn-306/perspectives/3` W306-2 → **detected**
+  - 理由: trailing が区切りの境目で切れず、次の区切りの (sub) まで選んだ行の塊に入ることを指摘している。
+  - 引用: 「このとき、空行、見出し、選んだ行と関係のない `(sub)` まで同じ塊になります。」
+- ★ `wn-306/perspectives/3` W306-3 → **detected**
+  - 理由: 選べる行がないときに通し番号が 0/0 になることを指摘している。
+  - 引用: 「選べる行がなく、一覧が窓に収まらないときは `0/0` が出ます。」
+- `wn-306/perspectives/3` W306-4 → **detected**
+  - 理由: 行が (sub) に変わったときも guard が立ち、一覧に残っている行について『left the list』と出ることを指摘している。
+  - 引用: 「選んでいた行が更新で起動された行に変わると、その行はまだ `prevLayout.order` にあるので `goneName` が入り、`guard` が張られます。」
+- `wn-306/perspectives/3` W306-5 → **missed**
+  - 理由: メモの入力中に対象の行が (sub) に変わっても入力欄が閉じないことには触れていない。
+- `wn-306/perspectives/3` W306-6 → **detected**
+  - 理由: openNote から isSpawned の判定を消したため、attachKey の経路から (sub) の行にカーソルが乗り、メモが開くことを指摘している。
+  - 引用: 「作業台のキーから届く経路(`attachKey` → `app.ts:1197-1202`)があり、そこでは `sidOfSession` の結果をそのまま `this.cursor` に入れて開きます。」
+- `wn-306/perspectives/3` W306-7 → **missed**
+  - 理由: README の『Both can be selected』の記述が実装と食い違うことには触れていない。
+- `wn-306/prove/1` W306-1 → **detected**
+  - 理由: render の cursorBlock に (sub) を含めたことと start = b1 - avail / start = b0 の補正を原因として、入力欄や選んだ行が窓から外れる2つの起き方をどちらも指摘している。
+  - 引用: 「cursorBlock の終わりが、最後の (sub) の行まで伸びます。そこへ既存の「入力欄は最後の行まで窓に入れる」(`start = b1 - avail`)が効き、窓が (sub) の行の末尾に合わさります。」
+- `wn-306/prove/1` W306-2 → **missed**
+  - 理由: trailing が区切りの境目で切れず、次の区切りの (sub) まで塊に入ることには触れていない。
+- `wn-306/prove/1` W306-3 → **missed**
+  - 理由: 選べる行がないときの通し番号 0/0 には触れていない。
+- `wn-306/prove/1` W306-4 → **missed**
+  - 理由: app.ts の guard の文言『left the list』には触れていない。
+- `wn-306/prove/1` W306-5 → **missed**
+  - 理由: メモの入力中に対象の行が (sub) に変わっても入力が閉じない問題には触れていない。
+- `wn-306/prove/1` W306-6 → **missed**
+  - 理由: openNote の判定を消したことや attachKey の経路には触れていない。
+- `wn-306/prove/1` W306-7 → **missed**
+  - 理由: README の記述との食い違いには触れていない。
+- `wn-306/prove/2` W306-1 → **detected**
+  - 理由: 先頭の (sub) で start=0 に固定される件と、伸びた b1 を基準にした start = b1 - avail で入力欄が外れる件の両方を、原因まで正しく指摘している。
+  - 引用: 「選んだ行のすぐ下に続く `(sub)` の行の分まで、`cursorBlock[1]` が伸びます。そのため、「入力欄は最後の行まで窓に入れる」の `start = b1 - avail` が `(sub)` の最後の行を基準にしてしまい、選んだ行と入力欄が上に押し出されます。」
+- `wn-306/prove/2` W306-2 → **missed**
+  - 理由: trailing が区切りの境目で切れず、次の区切りの (sub) まで塊に含まれる件には触れていない。
+- `wn-306/prove/2` W306-3 → **missed**
+  - 理由: 選べる行がないときに通し番号が 0/0 になる件には触れていない。
+- `wn-306/prove/2` W306-4 → **detected**
+  - 理由: 行が (sub) に変わってカーソルが移った場合にも guard が立ち、文言が「left the list」で事実と違うことを正しく指摘している。
+  - 引用: 「今回の変更で、行が残っていても起動された行に変われば followCursor に入るようになりました。その結果、消えていない行に対しても Ctrl+X の取り消しが「一覧から消えた」という文言で出ます。」
+- `wn-306/prove/2` W306-5 → **missed**
+  - 理由: メモの入力中に行が (sub) に変わっても入力欄が閉じない件には触れていない。
+- `wn-306/prove/2` W306-6 → **missed**
+  - 理由: openNote の判定を消したことと、attachKey 経由で (sub) の行にカーソルが乗る件には触れていない。
+- `wn-306/prove/2` W306-7 → **missed**
+  - 理由: README の記述と実装の食い違いには触れていない。
+- `wn-306/prove/3` W306-1 → **detected**
+  - 理由: render で、頭の (sub) を含めた cursorBlock が窓より長いと start = b0 で選んだ行が窓から外れる、と原因と場所を正しく示している。
+  - 引用: 「`src/screen/screen.ts` の `cursorBlock = [rowIndex.length === 1 ? 0 : start, body.length]` は、選んだ行が選べる最初の行のとき、窓の起点を一覧の先頭(0)にします。その塊が窓より大きいと `start = b0`(= 0)になり、選んだ行が窓の外に押し出されます。」
+- `wn-306/prove/3` W306-2 → **missed**
+  - 理由: 次の区切りの (sub) まで塊が伸びる挙動を調べたが、レビュー自身が指摘に含めないと結論している。
+- `wn-306/prove/3` W306-3 → **missed**
+  - 理由: 選べる行がないときに通し番号が 0/0 になる問題には触れていない。
+- `wn-306/prove/3` W306-4 → **missed**
+  - 理由: guard の文言『left the list』が事実と食い違う問題には触れていない。
+- `wn-306/prove/3` W306-5 → **missed**
+  - 理由: メモの入力中に対象の行が (sub) に変わっても入力が閉じない問題には触れていない。
+- ★ `wn-306/prove/3` W306-6 → **missed**
+  - 理由: 作業台のキーの経路を調べたが、カーソルを (sub) の行に乗せられないと結論しており、正解と逆の判断になっている。
+- `wn-306/prove/3` W306-7 → **missed**
+  - 理由: README の記述と実装の食い違いには触れていない。
+- `wn-306/security-review/1` W306-1 → **missed**
+  - 理由: render の cursorBlock に (sub) を含めたため選んだ行や入力欄が窓から外れる問題には触れていない。
+- `wn-306/security-review/1` W306-2 → **missed**
+  - 理由: trailing が区切りの境目で切れない問題への言及がない。
+- `wn-306/security-review/1` W306-3 → **missed**
+  - 理由: 選べる行がないときに通し番号が 0/0 になる問題への言及がない。
+- `wn-306/security-review/1` W306-4 → **missed**
+  - 理由: guard の『left the list』の文言が事実と違う問題への言及がない。
+- `wn-306/security-review/1` W306-5 → **missed**
+  - 理由: メモの入力中に行が (sub) に変わっても入力欄が閉じない問題には触れていない。
+- `wn-306/security-review/1` W306-6 → **detected**
+  - 理由: openNote の判定を消したことと、attachKey などカーソル以外の経路から起動された行のメモ欄が開くことを指摘しており、detect_criteria を満たす。
+  - 引用: 「`src/ops/app.ts` の `openNote` と `openWait` で、起動された行を断る判定(`isSpawned`)が外されました。ところが、カーソルを置く道のうち3つが `selectableOrder` を通っていません。」
+- `wn-306/security-review/1` W306-7 → **missed**
+  - 理由: README の記述が実装と食い違う問題への言及がない。
+- `wn-306/security-review/2` W306-1 → **missed**
+  - 理由: cursorBlock の範囲には触れているが「範囲を誤っても、表示が崩れるだけ」とするだけで、(sub) を含めて窓より長くなり選んだ行や入力欄が外れることは指摘していない。
+- `wn-306/security-review/2` W306-2 → **missed**
+  - 理由: trailing が区切りの境目で切れない問題への言及がない。
+- `wn-306/security-review/2` W306-3 → **missed**
+  - 理由: 選べる行がないときに通し番号が 0/0 になる問題への言及がない。
+- `wn-306/security-review/2` W306-4 → **missed**
+  - 理由: guard の文言『left the list』が事実と食い違う問題への言及がない。
+- `wn-306/security-review/2` W306-5 → **missed**
+  - 理由: メモの入力中に対象の行が (sub) に変わっても入力が閉じない問題への言及がない。
+- `wn-306/security-review/2` W306-6 → **missed**
+  - 理由: openNote の判定を外したことには触れているが、カーソルが (sub) の行に乗ることはないと逆の結論を出しており、作業台の案内からの経路は指摘していない。
+- `wn-306/security-review/2` W306-7 → **missed**
+  - 理由: README の記述が実装と食い違う問題への言及がない。
+- `wn-306/security-review/3` W306-1 → **missed**
+  - 理由: screen.ts については cursorBlock の範囲を変えているだけと説明しただけで、(sub) を含めた塊が窓より長いと選んだ行や入力欄が窓から外れることには触れていない。
+- `wn-306/security-review/3` W306-2 → **missed**
+  - 理由: trailing が区切りの境目で切れず、次の区切りの (sub) まで塊に入ることへの言及がない。
+- `wn-306/security-review/3` W306-3 → **missed**
+  - 理由: 通し番号の数え方を変えたと説明しただけで、選べる行がないときに 0/0 と出ることは指摘していない。
+- `wn-306/security-review/3` W306-4 → **missed**
+  - 理由: guard の文言『left the list』が、一覧に残って (sub) に変わった行には事実と違うことに触れていない。
+- `wn-306/security-review/3` W306-5 → **missed**
+  - 理由: メモの入力中に対象の行が (sub) に変わっても入力が閉じないことへの言及がない。
+- `wn-306/security-review/3` W306-6 → **missed**
+  - 理由: openNote から isSpawned の判定を外したことには触れているが、抜け道は仮定として述べただけで権限の問題ではないと結論しており、attachKey などの具体的な経路も示していない。
+- `wn-306/security-review/3` W306-7 → **missed**
+  - 理由: README の記述と実装の食い違いには触れていない。
+- `wn-308/code-review/1` W308-1 → **partial**
+  - 理由: 異常終了のあとに残った作業台へ workbenchOptions を入れ直していない、という原因は合っている。ただし指摘の場所は src/cli/list.ts で、cleanupLeftovers の Y 分岐を指していない。
+  - 引用: 「異常終了(abnormalExit)で、コマンドが動いている作業台だけが残る。その tmux サーバに新しい版の whatnext をつなぐと、sourceConfig と GUIDE の書式は入り直す。一方、生き残った sh-<id> の status-format[0] は古い版のままなので」
+- `wn-308/code-review/2` W308-1 → **partial**
+  - 理由: 異常終了後に残った前の版の作業台へ workbenchOptions が入れ直されないという原因は合っているが、場所を tmux.ts:340 と list.ts の起動時としており、cleanupLeftovers の Y の分岐（引き継ぎの処理）を特定していない。
+  - 引用: 「abnormalExit は、動いているものがある作業台を残してサーバを生かす(app.ts の shutdown 以外の経路)。そのあと 0.20.x の一覧を起動し直すと、既存の作業台 sh-<id> を映しても `workbench: fix-login  0:zsh*` だけが出て、`^Q% split │ ...` が出ない。」
+- `wn-308/code-review/3` W308-1 → **missed**
+  - 理由: レビューは cleanupLeftovers で引き継いだ作業台にステータス行の書式を入れ直していない点にまったく触れておらず、正しさの不具合は無いと結論している。
+- `wn-308/mattpocock/1` W308-1 → **missed**
+  - 理由: レビューは cleanupLeftovers や、異常終了のあとに Y で引き継いだ作業台へ workbenchOptions/status-format を入れ直していない点に一切触れていない。
+- `wn-308/mattpocock/2` W308-1 → **missed**
+  - 理由: レビューは cleanupLeftovers での引き継ぎ(Y の分岐)でステータス行の書式を入れ直していない点に一切触れず、実装の誤りは無いと結論している。
+- `wn-308/mattpocock/3` W308-1 → **missed**
+  - 理由: レビューは cleanupLeftovers で Y を選んで引き継いだ作業台に workbenchOptions や status-format[0] を入れ直していない点に一切触れていない。
+- `wn-308/perspectives/1` W308-1 → **partial**
+  - 理由: 既存の作業台に workbenchOptions を入れ直していないという原因は合っていますが、指摘している場所は tmux.ts と一覧の起動で、異常終了のあとに Y で引き継ぐ cleanupLeftovers の分岐には触れていないため partial としました。
+  - 引用: 「この書式は `createWorkbench` のときにしか設定されません。GUIDE 以外の既存の作業台には、あとから設定し直されません(呼び出しは `lib/tmux/tmux.ts:317` と `src/cli/list.ts:68` の2か所だけ)。」
+- `wn-308/perspectives/2` W308-1 → **detected**
+  - 理由: workbenchOptions が作成時と案内セッションでしか呼ばれず、異常終了後に引き継いだ作業台(app.ts の引き継ぎ処理)へ入れ直されないため古い書式が残る、と原因と条件を正解どおりに指摘している。
+  - 引用: 「whatnext が異常終了すると、何かが動いている作業台は消されずに残ります(`src/ops/app.ts:1539-1542`)。その状態で新しい版を起動すると、残った作業台のステータス行は古い形のまま、キーが出ません。」
+- `wn-308/perspectives/3` W308-1 → **detected**
+  - 理由: status-format[0] を入れるのが createWorkbench 経由の workbenchOptions と GUIDE だけで、異常終了後に引き継いだ sh-<id> の作業台には入れ直されず古い書式のままになる、と原因と起きる条件を正解どおりに述べ、起動時に既存の sh-* へ当て直す直し方も示しているため。
+  - 引用: 「そのため、たとえば `docker compose up` が動いたまま whatnext がシグナルで落ち、版を上げて起動し直すと、残った `sh-<id>` の作業台は古い書式のままです。」
+- `wn-308/prove/1` W308-1 → **missed**
+  - 理由: レビューは新しく作った作業台の描画とキーの動きしか確かめておらず、cleanupLeftovers で Y を選んで引き継いだ作業台に status-format を入れ直していない点には触れていない。
+- `wn-308/prove/2` W308-1 → **missed**
+  - 理由: レビューは workbenchOptions が作るときにしか呼ばれないことに気づいたが、作業台は終了時に消えるため起きないと結論して指摘から外し、異常終了後に cleanupLeftovers で Y を選んで引き継ぐ経路には触れていない。
+- `wn-308/prove/3` W308-1 → **missed**
+  - 理由: レビューは古い書式が残る作業台を検討したものの、正常終了で killServer が呼ばれることを根拠に問題なしと結論しており、異常終了後に cleanupLeftovers で Y を選ぶと workbenchOptions が入れ直されないという原因には触れていない。
+- `wn-308/security-review/1` W308-1 → **missed**
+  - 理由: レビューはセキュリティ観点で固定文字列の追加だけを確認しており、cleanupLeftovers で引き継いだ作業台に status-format を入れ直していない点には触れていない。
+- `wn-308/security-review/2` W308-1 → **missed**
+  - 理由: レビューは書式文字列のセキュリティしか確認しておらず、cleanupLeftovers で引き継いだ作業台に workbenchOptions を入れ直していない点には触れていない。
+- `wn-308/security-review/3` W308-1 → **missed**
+  - 理由: レビューはセキュリティの観点で定数の文字列を足したことを確認しただけで、cleanupLeftovers で引き継いだ作業台に status-format を入れ直していない点には触れていない。
+- `wn-313/code-review/1` W313-1 → **detected**
+  - 理由: 作り直しが起動時だけで、作業台の画面がつながったまま wbguide が消えると pane-died や killSafely の切り替えが失敗してクライアントが離れると指摘しており、detect_criteria を満たす。
+  - 引用: 「作り直し(ensureGuide)は `whatnext workbench` の起動時だけで、作業台の最後のシェルが終わるときの `switch-client -t =wbguide` と App.killSafely の `switchClient(c.tty, GUIDE)` は、案内のセッションがあることを前提にしたまま。」
+- `wn-313/code-review/1` W313-2 → **detected**
+  - 理由: @wn_respawned が通算で数えられ、数え直されないため、まれに落ちるだけでもいずれ上限に達して案内が畳まれると指摘している。
+  - 引用: 「`@wn_respawned` には「短い間に続けて落ちた」という条件がなく、リセットもされないので、上限の5回は「起動してすぐ終わるとき」ではなく、ペインが生きている間の通算の回数として効く。」
+- `wn-313/code-review/1` W313-3 → **missed**
+  - 理由: attach の結果判定で、シグナルで終わった場合(status が null)を失敗と誤判定する点への指摘がない。
+- ★ `wn-313/code-review/1` W313-4 → **missed**
+  - 理由: wbguide の分岐が、利用者が分割したペインと案内のペインを区別しない点への指摘がない。
+- `wn-313/code-review/1` W313-5 → **missed**
+  - 理由: 失敗の道でタイトルを消す OSC 2 が出なくなった点への指摘がない。
+- `wn-313/code-review/1` W313-6 → **missed**
+  - 理由: ensureGuide がセッションの有無だけで判定し、案内のペインが無い状態を見逃す点への指摘がない。
+- `wn-313/code-review/2` W313-1 → **missed**
+  - 理由: 作業台の画面がつながったまま wbguide が消えたときに一覧の追従・killSafely・pane-died の切り替えで作り直されない、という指摘は無い。
+- `wn-313/code-review/2` W313-2 → **detected**
+  - 理由: @wn_respawned が通算で数えられ数え直されないため、間をおいて落ちても上限に達して案内が畳まれる、と正しく指摘している。
+  - 引用: 「案内のペインの起動し直しの回数(`@wn_respawned`)は、ペインが長く動いても0に戻りません。そのため上限の5回は短時間の連続ではなく、セッションの一生の累計になっています。」
+- `wn-313/code-review/2` W313-3 → **detected**
+  - 理由: つながったあとにクライアントが止められた場合([terminated] など)も失敗と判定し、誤ったエラーを出すと指摘している。
+  - 引用: 「attach に成功したあとで tmux が 0 以外で終わった場合も、一覧がまだあれば「つなげなかった」として扱います。その経路では誤った文言を出し、OSC 2 でのタイトル消しも飛ばします。」
+- `wn-313/code-review/2` W313-4 → **missed**
+  - 理由: wbguide の分岐が利用者の分割したペインと案内のペインを区別しない、という指摘は無い。
+- `wn-313/code-review/2` W313-5 → **detected**
+  - 理由: 失敗と判定した道でタイトルを消す OSC 2 が出なくなる、と具体的に指摘している。
+  - 引用: 「さらに `\x1b]2;\x07` が送られないので、端末のタイトルが `whatnext workbench` のまま残ります。」
+- `wn-313/code-review/2` W313-6 → **missed**
+  - 理由: ensureGuide がセッションの有無だけで判定し、案内のペインが無い場合に作り直さない、という指摘は無い。
+- `wn-313/code-review/3` W313-1 → **missed**
+  - 理由: 作業台の画面が sh-<id> を映している間に wbguide が消えても一覧の側で作り直されない、という指摘はレビューに無い。
+- `wn-313/code-review/3` W313-2 → **detected**
+  - 理由: pane-died の案内の分岐で回数が通算で数えられ、数え直されないため、いずれ上限に達して案内が畳まれると正しく指摘している。
+  - 引用: 「起動し直しの回数 `@wn_respawned` は戻されず、ペインの生涯で5回までになっている。docs が言う「起動してすぐ終わるときに回り続けないため」の制限(時間あたりの回数)になっておらず、まれに落ちるだけでもいずれ案内のセッションが畳まれる。」
+- `wn-313/code-review/3` W313-3 → **detected**
+  - 理由: workbench() の attach の判定が、シグナルで終わり status が null の場合も失敗扱いになると、場所と原因の両方が一致している。
+  - 引用: 「tmux attach がシグナルで終わったとき(`res.status === null`)も `!== 0` で失敗とみなし、hasSession(LIST) が真ならエラーを出して fail() でキーを待つ。」
+- `wn-313/code-review/3` W313-4 → **missed**
+  - 理由: wbguide の分岐が、利用者が分割したペインと案内のペインを区別しないという指摘は無い。
+- `wn-313/code-review/3` W313-5 → **missed**
+  - 理由: 失敗の道でタイトルを消す OSC 2 が出なくなったという指摘は無い。
+- `wn-313/code-review/3` W313-6 → **missed**
+  - 理由: ensureGuide がセッションの有無だけで判定し、案内のペインが無い場合を見逃すという指摘は無い。
+- `wn-313/mattpocock/1` W313-1 → **missed**
+  - 理由: 作業台の画面がつながったまま wbguide が消えたときに作り直す者がいない、という指摘は無く、doFollow についての指摘も別の原因(一覧が作業台の画面を知るまで効かない)です。
+- `wn-313/mattpocock/1` W313-2 → **detected**
+  - 理由: pane-died の案内の分岐で、回数が通算で数えられて数え直されないため、いずれ上限に達して畳まれると指摘しており、基準を満たします。
+  - 引用: 「`@wn_respawned` は増えるだけで戻らず、経過時間も見ていません。何時間もかけて5回落ちた場合でも畳みます。」
+- `wn-313/mattpocock/1` W313-3 → **partial**
+  - 理由: 場所(attach の結果の判定)は合っていますが、シグナルで終わり status が null になって失敗扱いになる、という原因は示さず、疑いを述べるにとどまっています。
+  - 引用: 「attach の失敗判定(`status !== 0 && hasSession(LIST)`)が実測されていない**:`detach-client` で譲るときや、`kill-server` との順序の競合で、tmux がどの終了コードを返すかは確かめられていません。」
+- `wn-313/mattpocock/1` W313-4 → **missed**
+  - 理由: wbguide の分岐が、利用者の分割したペインまで起動し直すという指摘はありません。
+- `wn-313/mattpocock/1` W313-5 → **missed**
+  - 理由: 失敗の道でタイトルを消す OSC 2 が出なくなった、という指摘はありません。
+- `wn-313/mattpocock/1` W313-6 → **missed**
+  - 理由: ensureGuide がセッションの有無だけで判定し、案内のペインが無い場合を見落とす、という指摘はありません。
+- `wn-313/mattpocock/2` W313-1 → **missed**
+  - 理由: 作業台の画面がつながったまま wbguide が消えたときに誰も作り直さない点には触れていない。
+- `wn-313/mattpocock/2` W313-2 → **detected**
+  - 理由: @wn_respawned が通算で数えられ、数え直されないため、いずれ上限に達して畳まれる、と正しく指摘している。
+  - 引用: 「実際の上限は「ペインが生きている間に通算5回」です。長く動いては時々落ちる場合も、6回目で畳まれます。」
+- `wn-313/mattpocock/2` W313-3 → **partial**
+  - 理由: attach の結果の判定条件が、つながったあとの終了を失敗と取り違えうる点には触れているが、例が案内を畳んだ場合で、シグナルで止められて status が null になる原因は述べていない。
+  - 引用: 「「0 以外で終わり、かつ一覧が残っている」で失敗と見なしています。tmux の終了コードを実測した記録は docs にありません。」
+- `wn-313/mattpocock/2` W313-4 → **missed**
+  - 理由: wbguide の分岐が、利用者が分割したペインまで起動し直す点には触れていない。
+- `wn-313/mattpocock/2` W313-5 → **missed**
+  - 理由: 失敗の道でタイトルを消す OSC 2 が出なくなった点には触れていない。
+- `wn-313/mattpocock/2` W313-6 → **missed**
+  - 理由: ensureGuide がセッションの有無だけで判定する問題には触れていない。
+- `wn-313/mattpocock/3` W313-1 → **detected**
+  - 理由: 作り直しが workbench の起動時だけで、つながったまま wbguide が消えると最後のシェルの exit で切り替えに失敗し作業台の画面ごと離れると指摘しており、detect_criteria を満たす。
+  - 引用: 「作り直すのは `whatnext workbench` を起動したときだけなので(DESIGN 228)、つながっているあいだに消えた場合は救えません。」
+- `wn-313/mattpocock/3` W313-2 → **detected**
+  - 理由: 起動し直しの回数が通算で数えられて戻らず、間をおいて落ちてもいずれ上限に達して wbguide が消えると指摘している。
+  - 引用: 「`@wn_respawned` はペインのオプションで、`respawn-pane` してもペインは変わらないので、値は増えるだけで戻りません(`lib/tmux/tmux.ts:52-58`)。」
+- `wn-313/mattpocock/3` W313-3 → **missed**
+  - 理由: シグナルで終わった attach を「つなげなかった」と誤判定する点には触れておらず、判定方法は問題なしとしている。
+- `wn-313/mattpocock/3` W313-4 → **missed**
+  - 理由: wbguide のうち利用者が分割したペインまで起動し直す点への指摘がない。
+- `wn-313/mattpocock/3` W313-5 → **missed**
+  - 理由: 失敗の道でタイトルを消す OSC 2 が出なくなった点への指摘がない。
+- `wn-313/mattpocock/3` W313-6 → **missed**
+  - 理由: ensureGuide がセッションの有無だけで判定し、案内のペインが無い場合に作り直さない点への指摘がない。
+- `wn-313/perspectives/1` W313-1 → **missed**
+  - 理由: 作業台の画面がつながったまま wbguide が消えたとき、一覧の追従・作業台を畳む前・pane-died で作り直されず、切り替えの失敗や画面の切断になる、という指摘がない。
+- `wn-313/perspectives/1` W313-2 → **detected**
+  - 理由: @wn_respawned がペインのオプションとして残り、通算で数えられて数え直されないため、長く使ううちに上限に達して畳まれると指摘しており、detect_criteria と一致する。
+  - 引用: 「そのため上限は「すぐ落ちたのが続けて5回」ではなく「セッションが続く間の合計5回」です。」
+- `wn-313/perspectives/1` W313-3 → **detected**
+  - 理由: workbench.ts の attach 結果の判定が、つながったあとにシグナルで終わった場合も「つなげなかった」と扱うと指摘しており、原因と場所が一致する。
+  - 引用: 「端末を閉じた(SIGHUP)場合など、つなげなかったのではない終わり方でも、一覧が残っていれば「could not open」を出します。」
+- `wn-313/perspectives/1` W313-4 → **detected**
+  - 理由: wbguide の分岐が案内のペインと利用者が分割したペインを区別せず、どのペインも起動し直すと指摘しており、detect_criteria と一致する。
+  - 引用: 「分割したペインのシェルで `exit` すると、閉じずに最大5回起動し直します。回数もそのペインごとに数えます。」
+- `wn-313/perspectives/1` W313-5 → **detected**
+  - 理由: attach が失敗と判定された道で OSC 2 が出ず、タイトルが残ると指摘しており、detect_criteria と一致する。
+  - 引用: 「タイトルを消す OSC 2(`\x1b]2;\x07`)は、うまく終わったときにしか出していません。」
+- `wn-313/perspectives/1` W313-6 → **missed**
+  - 理由: ensureGuide がセッションの有無だけで判定するため、案内のペインがないのにセッションが残る場合に作り直されない、という指摘がない。
+- `wn-313/perspectives/2` W313-1 → **missed**
+  - 理由: 作業台の画面がつながったまま wbguide が消えたときに、一覧の追従や作業台を畳む処理、pane-died の切り替えで案内が作り直されないという指摘がない。
+- `wn-313/perspectives/2` W313-2 → **detected**
+  - 理由: 回数が通算で数えられて数え直されないため、たまに落ちるだけでも6回目に畳まれる、と正確に指摘している。
+  - 引用: 「`@wn_respawned` はペインのオプションで、`respawn-pane` してもペインの ID は変わりません。回数は減らず、元に戻すところもありません。」
+- `wn-313/perspectives/2` W313-3 → **detected**
+  - 理由: attach の判定で、シグナルで終わり status が null になった場合も失敗と扱う点を、場所と原因の両方で指摘している。
+  - 引用: 「`res.status` はシグナルで終わると `null` になり、`!== 0` が真になります。一覧が残っていれば、エラーを出してキーを待ちます。」
+- `wn-313/perspectives/2` W313-4 → **missed**
+  - 理由: wbguide の分岐が、利用者の分割したペインと案内のペインを区別していないという指摘がない。
+- `wn-313/perspectives/2` W313-5 → **missed**
+  - 理由: 失敗の道でタイトルを消す OSC 2 が出なくなった点に触れていない。
+- `wn-313/perspectives/2` W313-6 → **missed**
+  - 理由: ensureGuide がセッションの有無だけで判定しているため、案内のペインがない場合に作り直されない、という指摘がない。
+- `wn-313/perspectives/3` W313-1 → **missed**
+  - 理由: 作業台の画面がつながったまま wbguide が消えたときに一覧の側で作り直されない、という指摘はなく、指摘1は版と環境の食い違いという別の原因を述べている。
+- `wn-313/perspectives/3` W313-2 → **detected**
+  - 理由: @wn_respawned が数え直されず通算で上限に達し、案内が畳まれるという原因と場所が正解と一致している。
+  - 引用: 「コメントの意図は「起動してすぐ終わるときに回り続けないため」ですが、実際はペインごとに生涯5回の上限です。長く動かしていると、まばらに5回落ちただけで6回目に `kill-pane` され、セッションが消えます。」
+- `wn-313/perspectives/3` W313-3 → **detected**
+  - 理由: シグナルで終わると status が null になり、つなげなかった扱いになるという原因を正しく指摘している。
+  - 引用: 「`null !== 0` は真なので、tmux のクライアントだけがシグナルで終わり一覧が残っている場合に、一度つながっていても「could not open the workbench screen」と出ます。」
+- `wn-313/perspectives/3` W313-4 → **missed**
+  - 理由: wbguide の分岐が利用者の分割したペインと案内のペインを区別しない、という指摘はない。
+- `wn-313/perspectives/3` W313-5 → **missed**
+  - 理由: 失敗の道でタイトルを消す OSC 2 が出なくなる点には触れていない。
+- `wn-313/perspectives/3` W313-6 → **missed**
+  - 理由: ensureGuide がセッションの有無だけで判定し、案内のペインがない状態を見逃す点には触れていない。
+- `wn-313/prove/1` W313-1 → **missed**
+  - 理由: 作業台の画面がつながったまま wbguide が消えたときに案内が作り直されない点には触れていない。
+- `wn-313/prove/1` W313-2 → **detected**
+  - 理由: pane-died の案内の分岐で回数が通算で数えられ数え直されないため、続けて落ちていなくても上限に達すると指摘しており、detect_criteria を満たす。
+  - 引用: 「しかし `@wn_respawned` の回数は戻されないので、上の出力のように、5秒以上動いてから落ちた場合も数えられます。ペインが生きているかぎり、落ちた回数は通算で積み上がります。」
+- `wn-313/prove/1` W313-3 → **missed**
+  - 理由: attach の判定には触れているが、主張は終了コード 0 の場合を捕まえられないことで、シグナルで status が null になり誤ってエラーになるという原因とは異なる。
+- `wn-313/prove/1` W313-4 → **missed**
+  - 理由: wbguide の分岐が利用者の分割したペインも起動し直す点には触れていない。
+- `wn-313/prove/1` W313-5 → **missed**
+  - 理由: 失敗の道でタイトルを消す OSC 2 が出なくなる点には触れていない。
+- `wn-313/prove/1` W313-6 → **missed**
+  - 理由: ensureGuide がセッションの有無だけで判定する点には触れていない。
+- `wn-313/prove/2` W313-1 → **missed**
+  - 理由: 作業台の画面がつながったまま wbguide が消えたときに案内が作り直されない点に触れておらず、wbguide を消してから開き直す場合は問題なしとしている。
+- `wn-313/prove/2` W313-2 → **missed**
+  - 理由: 起動し直しの上限は試しているが、続けて落とした場合だけで、通算で数えて数え直さない点は指摘せず、仕様どおりと結論している。
+- `wn-313/prove/2` W313-3 → **missed**
+  - 理由: attach がシグナルで終わり status が null になる場合を誤って失敗と扱う点に触れていない。
+- `wn-313/prove/2` W313-4 → **missed**
+  - 理由: wbguide の分岐が、利用者が分割したペインと案内のペインを区別しない点に触れていない。
+- `wn-313/prove/2` W313-5 → **missed**
+  - 理由: 失敗の道でタイトルを消す OSC 2 が出なくなる点に触れていない。
+- `wn-313/prove/2` W313-6 → **missed**
+  - 理由: ensureGuide がセッションの有無だけで判定する点に触れていない。
+- `wn-313/prove/3` W313-1 → **missed**
+  - 理由: 作業台の画面がつながったまま wbguide が消えたときに案内が作り直されない点には触れておらず、T4 では逆に作り直されると報告している。
+- `wn-313/prove/3` W313-2 → **missed**
+  - 理由: 回数が戻らず、間隔をあけて落ちても使い切ることには気づいているが、「仕様どおり」として指摘から外しており、問題として挙げていない。
+- `wn-313/prove/3` W313-3 → **missed**
+  - 理由: attach の終了コードは確かめているが、シグナルで終わり status が null になる場合を誤って失敗と扱う点には触れていない。
+- `wn-313/prove/3` W313-4 → **missed**
+  - 理由: wbguide の分岐が利用者の分割したペインまで起動し直す点への言及がない。
+- `wn-313/prove/3` W313-5 → **missed**
+  - 理由: 失敗の道でタイトルを消す OSC 2 が出なくなる点への言及がない。
+- `wn-313/prove/3` W313-6 → **missed**
+  - 理由: ensureGuide がセッションの有無だけで判定し、案内のペインがない場合を見逃す点への言及がない。
+- `wn-313/security-review/1` W313-1 → **missed**
+  - 理由: レビューはセキュリティの観点だけを扱っていて、wbguide が消えたあとに作り直されない問題には触れていない。
+- `wn-313/security-review/1` W313-2 → **missed**
+  - 理由: @wn_respawned の回数が通算で数えられ、数え直されないことについての指摘がない。
+- `wn-313/security-review/1` W313-3 → **missed**
+  - 理由: attach の結果の判定で、シグナルで終わって status が null になる場合を誤って失敗と扱う点に触れていない。
+- `wn-313/security-review/1` W313-4 → **missed**
+  - 理由: pane-died の wbguide の分岐が、利用者が分割したペインまで起動し直す問題を指摘していない。
+- `wn-313/security-review/1` W313-5 → **missed**
+  - 理由: 失敗と判定された道でタイトルを消す OSC 2 が出なくなった点に触れていない。
+- `wn-313/security-review/1` W313-6 → **missed**
+  - 理由: ensureGuide はシェル注入の観点でしか見ておらず、セッションの有無だけで案内があると判定する問題には触れていない。
+- `wn-313/security-review/2` W313-1 → **missed**
+  - 理由: 作業台の画面がつながったまま wbguide が消えたときに作り直されない、という指摘はレビューに無い。
+- `wn-313/security-review/2` W313-2 → **missed**
+  - 理由: @wn_respawned を通算で数えていて数え直さない、という指摘は無い。
+- `wn-313/security-review/2` W313-3 → **missed**
+  - 理由: attach の結果の判定で status が null の場合を誤って失敗と扱う、という指摘は無い。
+- `wn-313/security-review/2` W313-4 → **missed**
+  - 理由: pane-died の wbguide の分岐が、利用者が分割したペインと案内のペインを区別しない、という指摘は無い。
+- `wn-313/security-review/2` W313-5 → **missed**
+  - 理由: 失敗の道でタイトルを消す OSC 2 が出なくなった、という指摘は無い。
+- `wn-313/security-review/2` W313-6 → **missed**
+  - 理由: ensureGuide は ensureGuide の注入の有無しか確認しておらず、セッションの有無だけで判定する問題には触れていない。
+- `wn-313/security-review/3` W313-1 → **missed**
+  - 理由: レビューは wbguide が消えたあとに作り直されない問題に触れていない。
+- `wn-313/security-review/3` W313-2 → **missed**
+  - 理由: @wn_respawned を通算で数えている問題への言及がない。
+- `wn-313/security-review/3` W313-3 → **missed**
+  - 理由: attach の結果判定で status が null になる場合への言及がない。
+- `wn-313/security-review/3` W313-4 → **missed**
+  - 理由: wbguide の分岐が利用者の分割ペインも起動し直す問題への言及がない。
+- `wn-313/security-review/3` W313-5 → **missed**
+  - 理由: 失敗の道でタイトルを消す OSC 2 が出ない問題への言及がない。
+- `wn-313/security-review/3` W313-6 → **missed**
+  - 理由: ensureGuide についてはセキュリティ面で問題なしとしただけで、セッションの有無だけで判定する問題には触れていない。
+
+## 余計な指摘の分類(まとまりごと)
+
+- `clean-sk-14/c1` **本物・差分の内**(実行して確かめた、llm) — lsof の可視性を自分自身($$)が一覧に出るかだけで判定しているため、他プロセスだけが見えない環境で使用中の worktree を delete と判定する(fail-open)
+  - 場所: skills/housekeeping/scripts/lib.sh:96 (hk_process_cwds) / 挙げた構成: code-review ×3、mattpocock ×3、perspectives ×3、prove ×2
+  - 根拠: 再現スクリプト /tmp/hk-repro-c1.sh を実行した。マージ済みの worktree wt-busy を作り、そこで sleep を動かした。そのうえで、自分の祖先プロセスだけを返す偽の lsof を置いた(実際の lsof に -p 祖先の pid を渡すだけのもの。同じサンドボックスのプロセスしか見えない状況を模す)。通常の lsof では scan の結果が『keep … 使用中か、確かめられない(pid 7809 sleep)』になる。偽の lsof では $$ が一覧に出るので一覧がそのまま使われ、結果は『delete worktree wt-busy PR #1 マージ済み』に変わった。apply.sh もその行を『done』にし、使用中のディレクトリが消えた(dir exists? no)。lib.sh の hk_process_cwds が見ているのは $$ が一覧にあるかどうかだけで、部分的にしか見えない状況は検出しない。この差分は『サンドボックスでプロセスを見られない』ときに残す側へ倒すことを目的にしており、SKILL.md にも『ほかのプロセスを見られないことがある』と書いている。したがって目的の直し残しとして scope は in とした。
+- `clean-sk-14/c10` **些末**(実行して確かめた、llm) — hk_path_in_use が「使用中」と「確かめられない」を同じ文字列の戻り値で表している
+  - 場所: lib.sh hk_path_in_use / 挙げた構成: mattpocock ×3
+  - 根拠: 戻り値が2つの状態を1つの文字列で表しているのは事実(lib.sh:102-110)。ただ、呼び出し側はどちらでも残す・飛ばす側に倒すので、挙動は正しい。test.sh を実行すると全件成功し、lsof が使えないときの wt-merged は keep で、理由は「…使用中か、確かめられない(lsof でプロセスを確かめられない)」だった。SKILL.md が頼る「lsof でプロセスを確かめられない」はこの文字列に含まれるので、部分一致でも判定できる。文の重複や設計の好みの問題で、挙動には関わらない。
+- `clean-sk-14/c11` **些末**(実行して確かめた、llm) — 「使用中」と「確かめられない」が1つの理由文にまとめられ、利用者やエージェントが読み違えうる
+  - 場所: skills/housekeeping/scripts/scan.sh:165 / 挙げた構成: code-review ×1、perspectives ×1
+  - 根拠: scan.sh:165 の理由文は、どちらの場合も「プロセスがカレントディレクトリとして使用中か、確かめられない($proc)」になる。ただ括弧の中は「pid N cmd」か「lsof でプロセスを確かめられない」で、区別できる。SKILL.md の案内(手順4と5)は後者の文字列を条件にしており、実行した出力にもその文字列が出た。どちらの場合も keep になるので、判定の結果は変わらない。文言の分かりやすさの問題にとどまる。
+- `clean-sk-14/c12` **些末**(実行して確かめた、llm) — lsof で確かめられず worktree を残したときも、ブランチ行の理由が「worktree X で使用中」になる
+  - 場所: skills/housekeeping/scripts/scan.sh:208 / 挙げた構成: code-review ×1
+  - 根拠: test.sh を実行し、lsof が使えないときの走査結果を取り出した。worktree の行は keep で、理由は「…確かめられない(lsof でプロセスを確かめられない)」。branch の行は keep で、理由は「worktree …/wt-merged で使用中」。指摘の内容は事実。ただブランチを残すという判定は正しく、文言も「その worktree でチェックアウトされている」という意味では正しい。scan.sh:205-207 は、worktree をどの理由で残しても(ロック、未コミットの変更なども)同じ文言を出す。これは main からの既存の書き方で、理由の詳細は同じ出力の worktree の行にある。文言の問題で、挙動には関わらない。
+- `clean-sk-14/c13` **些末**(実行していない、llm) — 「使用中か、確かめられない」理由文の組み立てが2か所に重複している
+  - 場所: scan.sh:165, apply.sh:43 / 挙げた構成: mattpocock ×1
+  - 根拠: scan.sh:165 と apply.sh:43 に、似た理由文の組み立てがそれぞれあるのは事実(文言も少し違う)。重複の指摘で、挙動には関わらない。
+- `clean-sk-14/c14` **本物・差分の内**(実行して確かめた、llm) — TMPDIR 未設定時に共有 /tmp の予測可能な固定パスへ TSV を置くため、改ざん・読み取り・symlink 攻撃を受けうる
+  - 場所: skills/housekeeping/SKILL.md:20, :61 / 挙げた構成: code-review ×1、perspectives ×3
+  - 根拠: SKILL.md:20,61 は、TMPDIR が無いと /tmp/housekeeping-scan.tsv に書く。/tmp で再現した。scan.sh > /tmp/hk-demo.tsv の結果は -rw-r--r--(umask 022)で、/tmp は drwxrwxrwt なので、ほかのユーザーが中身(ブランチ名・sha・パス)を読める。続いて TSV の『keep branch feat(未取り込みのコミットあり)』を『delete』に書き換え、SKILL.md の awk で apply.sh に流すと『done branch feat』で消えた。apply.sh(54-56行)は sha が走査時と一致するかしか確かめないので、TSV から読んだ sha を使えば書き換えは通る。他人のユーザーによる先回りの作成は、Linux の fs.protected_regular=1(多くのディストリビューションの既定)では、書き込み時に拒まれて失敗する。この設定が 0 の環境や、他人が書き込めるファイルなら書き換えられる。symlink は protected_symlinks で防がれることが多い。一方、読み取りは既定の設定でもできる。macOS では TMPDIR が常に設定されているので起きない。main では TMPDIR が無いと /housekeeping-scan.tsv になり、一般ユーザーは書けずに失敗していた。共有の /tmp に置くようになったのはこの差分による。
+- `clean-sk-14/c15` **些末**(実行して確かめた、llm) — 相対パスの TMPDIR だとカレント worktree 内に一時ディレクトリができる
+  - 場所: lib.sh hk_mktemp_dir / 挙げた構成: mattpocock ×1
+  - 根拠: 一時リポジトリで、tmp/ を作ってから TMPDIR=tmp で scan.sh を実行した。実行中は tmp/housekeeping.VBFdeq ができ、終了後の ls tmp は空、git status --porcelain も空だった。カレントの worktree の中にできるのは事実。ただ、その worktree は常に keep になり(scan.sh:162-163)、scan.sh のトップレベルには cd が無いので、trap による削除も相対パスのまま効く。相対パスを指定したときに mktemp がふつうに取る挙動で、害は起きない。
+- `clean-sk-14/c16` **些末**(実行していない、llm) — コミット 961a888 に題(mktemp/TMPDIR)と無関係な変更が多数混在している
+  - 場所: コミット 961a888 / 挙げた構成: mattpocock ×2
+  - 根拠: git log main..HEAD は fac3fbc の1コミットだけ(指摘の 961a888 は、書き直し前の id と思われる)。このコミットには mktemp 以外の変更(jq の確認、hk_parse_action、first-parent の ref の確かめ、ヒアドキュメントの廃止など)も入っている。コミットの分け方の問題で、挙動には関わらない。
+- `clean-sk-14/c17` **些末**(実行して確かめた、llm) — コミット 6ff80b7 に件名以外の複数の変更が入っている
+  - 場所: コミット 6ff80b7 / 挙げた構成: mattpocock ×1
+  - 根拠: `git cat-file -t 6ff80b7` は 'Not a valid object name' で、差分のコミットは fac3fbc の1つだけ。fac3fbc の件名は mktemp/TMPDIR だが、本文の「変更」節には jq の確認、PR 一覧の JSON 検証、first-parent、保護パターン、lsof の扱いが列挙されている。コミットの粒度の話で、挙動には関わらない。
+- `clean-sk-14/c18` **些末**(実行していない、llm) — 出力の文言の変更がコミットメッセージに書かれていない
+  - 場所: scan.sh, lib.sh hk_path_in_use / 挙げた構成: mattpocock ×1
+  - 根拠: scan.sh の reason が「…使用中か、確かめられない($proc)」に、lib.sh の hk_path_in_use の出力が "pid <pid> <cmd>" に変わった。コミット本文には lsof で「確かめられない」として残すとあるが、文言の変更そのものは書かれていない。コミットメッセージの記述の話で、挙動には関わらない。
+- `clean-sk-14/c19` **些末**(実行していない、llm) — `!` で実行すると終了コードが見えない旨の注意が手順1と手順4に重複している
+  - 場所: SKILL.md 手順1・手順4 / 挙げた構成: mattpocock ×3
+  - 根拠: SKILL.md の diff を見ると、手順1(scan.sh)と手順4(apply.sh)の両方に「`!` の結果では終了コードが見えないので…確かめてから進む」がある。ただし確かめる中身は2か所で違う(手順1は error: と見出しより後の行、手順4は done/skipped)。文書の重複で、利用者を誤らせるものではない。
+- `clean-sk-14/c2` **些末**(実行していない、llm) — fake lsof のテストが自プロセスしか見えないケースを再現していない
+  - 場所: skill-dev/housekeeping/test.sh / 挙げた構成: perspectives ×1
+  - 根拠: test.sh の 163-169 行目にある偽の lsof は『exit 1』だけで、何も出力しない。自分だけが見えるケースのテストが無いのは事実。ただしテストが無いという指摘で、挙動には関わらない(そのケースの挙動の問題は c1 で扱った)。
+- `clean-sk-14/c20` **些末**(実行していない、llm) — ヒアドキュメント・一時ファイル不使用を grep で検査しているため、誤検知と見逃しが起きる
+  - 場所: skill-dev/housekeeping/test.sh (temp_usage) / 挙げた構成: code-review ×2、mattpocock ×1、perspectives ×3
+  - 根拠: test.sh:201-210 の temp_usage は `grep -nE` で探し、`^[0-9]+:[[:space:]]*#` に当たる行だけを除く。字面で判定するので、誤検知や見逃しはありうる。ただし今のスクリプトに算術シフトの `<<` は無く、テストは成功している。テストの検査方法の頑健さの話で、製品コードの挙動には関わらない。
+- `clean-sk-14/c21` **些末**(実行していない、llm) — temp_usage の if で5つの条件が || でつながり読みにくい
+  - 場所: test.sh temp_usage を使う if / 挙げた構成: mattpocock ×1
+  - 根拠: test.sh:204-206 で、5つの条件が || とパイプでつながっている。読みやすさの話。
+- `clean-sk-14/c22` **些末**(実行していない、llm) — on_fp を得る grep を無条件で実行し、未取り込みブランチで無駄な grep が走る
+  - 場所: skills/housekeeping/scripts/scan.sh:119 / 挙げた構成: code-review ×3
+  - 根拠: scan.sh の NONE 分岐で、`grep -qxF "$sha" "$tmp/first-parent"` を merged_into_default より前に毎回実行している。未取り込みのブランチでは on_fp を使わない。grep が1回余分に走るだけで、結果は同じ。効率の話で、挙動には関わらない。
+- `clean-sk-14/c23` **些末**(実行していない、llm) — 直前の exit 1 により on_fp -gt 1 分岐がほぼ到達しない
+  - 場所: scan.sh on_fp -gt 1 分岐 / 挙げた構成: mattpocock ×1
+  - 根拠: scan.sh:85-86 で、`[ -s "$tmp/first-parent" ]` が成り立たなければ exit 1 する。そのため、後の grep が 2 以上を返すのは、走査中にファイルが消えたり読めなくなったりしたときだけになる。指摘のとおりほぼ通らないが、念のための防御の分岐で、結果を誤らせない。
+- `clean-sk-14/c24` **本物・差分の内**(実行して確かめた、llm) — 既定ブランチの first-parent 履歴を読めないと走査全体が止まる
+  - 場所: skills/housekeeping/scripts/scan.sh:85-86 / 挙げた構成: code-review ×1、perspectives ×1
+  - 根拠: 一時ディレクトリにローカルの bare origin を作った。bare 側の HEAD を work に移してから origin の main を削除し、ローカルの main も削除した。origin/HEAD は refs/remotes/origin/main を指したまま、その ref は無い。PR 一覧は HOUSEKEEPING_PR_JSON で、feat が MERGED の偽データを渡した。HEAD の scan.sh は 'error: main の履歴を読めない' で rc=1 となり、何も出力しない。main の scan.sh は rc=0 で、'delete branch feat … PR #1 マージ済み' と 'keep branch work … 使用中' を出した。first-parent 履歴は NONE のブランチでしか使わないのに、差分で足した scan.sh:85-86 の exit 1 が、PR 済みブランチや worktree の判定まで止めている。安全側に倒れる止まり方だが、main では出ていた結果が出なくなる。
+- `clean-sk-14/c25` **些末**(実行して確かめた、llm) — $fp_refs をクォートせず展開し、set -f に頼っている
+  - 場所: skills/housekeeping/scripts/scan.sh:85 / 挙げた構成: mattpocock ×1、perspectives ×1
+  - 根拠: scan.sh:81-85 で、$fp_refs に入るのは "refs/remotes/$hk_remote/$default" と "refs/heads/$default" のうち `git rev-parse -q --verify` を通った ref だけ。`git check-ref-format "refs/heads/a*b"` と `"refs/heads/a b"` はどちらも拒否されたので、存在する ref 名には空白も glob 文字も入らない。lib.sh:14 のグローバル `set -f` が有効なことも `$-` で確かめた。単語分割で壊れる入力が無いので、挙動は変わらない。方針が揃っていないというのは書き方の問題にとどまる。
+- `clean-sk-14/c26` **些末**(実行して確かめた、llm) — hk_is_protected が手書きの文字列切り出しループで読みにくく、read ループで簡潔に書ける
+  - 場所: skills/housekeeping/scripts/lib.sh:62 / 挙げた構成: code-review ×2
+  - 根拠: lib.sh:60-71 のループは、`continue` より前に必ず rest を縮めている(66行目)。housekeeping.protect に空の値を入れて試しても止まらずに終わり、release/a・main・entire/x・sandbox・既定ブランチ dev は保護、foo は保護しないという正しい結果になった。無限ループになるのは、将来だれかが順序を変えたときだけ。読みやすさと書き方の好みの指摘で、挙動の問題ではない。
+- `clean-sk-14/c27` **些末**(実行していない、llm) — hk_is_protected の on_fp・fp_refs・rest の名前が分かりにくく、on_fp が不要な分岐でも先に計算される
+  - 場所: hk_is_protected / 挙げた構成: mattpocock ×1
+  - 根拠: scan.sh:119-120 の on_fp は、merged_into_default が偽になる分岐でも先に計算される。ただし grep -qxF は副作用の無い読み取りなので、出力は変わらない。名前の分かりやすさと無駄な計算の指摘で、挙動には関わらない。コードを読めば分かるので実行していない。
+- `clean-sk-14/c28` **些末**(実行して確かめた、llm) — hk_protect_patterns の set -f が $(...) 前提で、直接呼ぶと呼び出し元に set -f が残る
+  - 場所: skills/housekeeping/scripts/lib.sh:45-47 / 挙げた構成: mattpocock ×1、perspectives ×2
+  - 根拠: いまの呼び出しは lib.sh:62 の `rest=$(hk_protect_patterns "$2")` だけで、grep で確かめた。サブシェルの中なので、set -f は外に漏れない。それに lib.sh:14 で `set -f` がすでにグローバルに効いている(`$-` に f があるのを確かめた)。直接呼んでも、呼び出し元の状態は実質的に変わらない。将来の呼び方が変わって初めて問題になる指摘。
+- `clean-sk-14/c29` **些末**(実行していない、llm) — hk_protect_patterns の set -f が lib.sh 先頭の set -f と重複している
+  - 場所: lib.sh hk_protect_patterns / 挙げた構成: mattpocock ×1
+  - 根拠: lib.sh:14 と lib.sh:46 の2か所で set -f をしているのは事実。ただし同じ設定を重ねるだけで、挙動は変わらない。重複を指摘しているだけなので trivial とした。
+- `clean-sk-14/c3` **些末**(実行していない、llm) — lsof で確かめられないときの扱いのテストが scan.sh にしか無く、apply.sh で skipped になることを検証していない
+  - 場所: test.sh:162-169 / 挙げた構成: mattpocock ×2
+  - 根拠: test.sh で偽の lsof を PATH に入れて実行しているのは、165 行目の scan.sh だけ。272 行目の apply.sh は本物の lsof で動く。apply.sh で skipped になることを確かめていないのは事実だが、テストが無いという指摘なので trivial とした。コード上は、apply.sh の 37-43 行目でも hk_path_in_use が空の一覧に対して理由を返すので skipped になる。
+- `clean-sk-14/c30` **誤り**(実行して確かめた、llm) — hk_parse_action が呼び出し経路で不要な prune を受け付け、branch 行で git branch -D まで進みうる
+  - 場所: skills/housekeeping/scripts/lib.sh:81 / 挙げた構成: perspectives ×2
+  - 根拠: `hk_parse_action "prune<TAB>x"` は prune/x を返す。値を通すこと自体は事実だった。しかし hk_parse_action に渡しているのは classify_branch と verify_pr_merged の出力だけ(scan.sh:173,212,216,231)。この2つが出すのは keep・delete・ask だけで(scan.sh:89-135)、prune は出さない。prune を出すのは worktree の経路で、そこは hk_parse_action を通らない。そのため「branch の行に prune が出る」経路はコードに無い。apply.sh は hk_parse_action を使わず、branch の行は keep 以外をすべて処理する(apply.sh:29,52-61、main も同じ)。受け入れる値を絞っても、apply.sh の挙動は変わらない。指摘の言う、git branch -D まで進む経路は起きない。
+- `clean-sk-14/c31` **些末**(実行していない、llm) — parse_pr_info と hk_parse_action の値がグローバル変数経由で受け渡されている
+  - 場所: parse_pr_info, hk_parse_action / 挙げた構成: mattpocock ×1
+  - 根拠: scan.sh:48-54 の parse_pr_info はグローバルの st num oid に、lib.sh:72-85 の hk_parse_action は action reason に値を入れる。どちらも、呼び出し元の classify_branch がこれらを local と宣言しているか(scan.sh:103)、トップレベルのループの中でだけ使っている。値が漏れて誤る経路は見当たらない。設計の好みの指摘。
+- `clean-sk-14/c32` **些末**(実行していない、llm) — parse_pr_info が文字列分割を自前実装しており、read で代替できる
+  - 場所: skills/housekeeping/scripts/scan.sh:49 / 挙げた構成: code-review ×1
+  - 根拠: scan.sh:49-54 の parse_pr_info は、pr_info が出す "STATE NUM OID"(NONE のときは "NONE - -")を空白で分けている。pr_info は必ず3つの欄を出すので、read で分けても結果は同じ。lib.sh:9-11 はヒアドキュメント・ヒアストリングを使わない方針で、プロセス置換は使ってよいとしている。read に書き換えられるという、書き方の提案にとどまる。
+- `clean-sk-14/c33` **些末**(実行していない、llm) — parse_pr_info と hk_parse_action が同じ形の処理で重複している
+  - 場所: scan.sh parse_pr_info / lib.sh hk_parse_action / 挙げた構成: mattpocock ×1
+  - 根拠: scan.sh の parse_pr_info(空白で3つに分け、空なら UNKNOWN)と lib.sh:74-84 の hk_parse_action(タブで2つに分け、既知の action か確かめる)は、似ているが同じではない。どちらにしても重複かどうかは構造の好みで、挙動には関わらない。
+- `clean-sk-14/c34` **些末**(実行して確かめた、llm) — parse_pr_info が想定外の入力を黙って受け入れ、num と oid に同じ値が入りうる
+  - 場所: skills/housekeeping/scripts/scan.sh:49-54 / 挙げた構成: perspectives ×1
+  - 根拠: 関数を単体で実行すると、入力 'abc' で st=abc num=abc oid=abc になる。ここまでは指摘のとおり。ただし classify_branch の case には OPEN/CLOSED/MERGED/NONE 以外を受ける節 `*) keep 'PR の状態を判定できなかった(%s)'` があるので、残す側に倒れる。空の入力も st=UNKNOWN で keep になる。また pr_info の jq は必ず "STATE NUM OID" か "NONE - -" を出すので、空白を含まない値は来ない。誤った削除にはつながらず、挙動には関わらない。
+- `clean-sk-14/c35` **些末**(実行していない、llm) — 「PR の状態が分からなければ keep」のテストが無い
+  - 場所: test.sh / 挙げた構成: mattpocock ×2
+  - 根拠: テストが無いという指摘で、分類の定義では trivial に当たる。test.sh を grep しても、UNKNOWN や「判定できなかった」を確かめるテストは見つからず、指摘の事実は合っている。実装の側は scan.sh の `*) keep` 節と、parse_pr_info で空を UNKNOWN にする処理で、keep に倒している。
+- `clean-sk-14/c36` **些末**(実行していない、llm) — jq が無いときに止まる処理のテストが無い
+  - 場所: scan.sh:20 / 挙げた構成: mattpocock ×1
+  - 根拠: テストが無いという指摘で、trivial に当たる。実装は scan.sh:20 の `command -v jq ... || exit 1` にある。test.sh:240 にある jq 関連のテストは、読めない PR 一覧を扱うもので、jq が無い場合を確かめるテストは無い。
+- `clean-sk-14/c37` **誤り**(実行して確かめた、llm) — 標準入力が端末だと apply.sh の grep が入力待ちで止まり、SKILL.md の記述に反する
+  - 場所: skills/housekeeping/SKILL.md:72 / 挙げた構成: code-review ×1
+  - 根拠: SKILL.md の該当の一文は、`! awk ... <ファイル> | apply.sh` というパイプで渡す形を説明する文脈にあり、awk が何も出さない(空のパイプ)場合を指している。一時リポジトリで `printf '' | apply.sh` を実行すると、何も出力せず rc=0 で終わり、記述どおりだった。標準入力が端末なら grep が入力を待つのは標準入力を読むコマンド一般の性質で、文書が案内する使い方の外にある。main の時点でも `grep -v ... >"$input"` で同じように待つ。
+- `clean-sk-14/c38` **些末**(実行していない、llm) — SKILL.md 手順4の条件が多重に入れ子で読みにくい
+  - 場所: SKILL.md 手順4 / 挙げた構成: mattpocock ×1
+  - 根拠: 読みやすさについての指摘で、挙動には関わらない。手順4の内容(どの条件のときに ! で実行するか)は、apply.sh と scan.sh の挙動と食い違っていない。
+- `clean-sk-14/c39` **些末**(実行していない、llm) — hk_mktemp_dir だけが error: を出し、他の関数と書き方が揃っていない
+  - 場所: lib.sh hk_mktemp_dir / 挙げた構成: mattpocock ×1
+  - 根拠: grep すると、lib.sh で error: を出すのは28行目の hk_mktemp_dir だけで、事実としては合っている。ただし書き方の統一の話で、挙動には関わらない。呼び出し側の scan.sh は `|| exit 1` で止まり、メッセージは利用者に届く。
+- `clean-sk-14/c4` **些末**(実行して確かめた、llm) — 「自分自身すら一覧に出ない」条件をテストが確かめておらず、自分を探す awk を消してもテストが通る
+  - 場所: test.sh(lsof 検出) / 挙げた構成: mattpocock ×1
+  - 根拠: lib.sh から、自分自身を探す行『printf … | awk -v self="$$" … || return 0』を sed で消し、test.sh を実行した。結果は『ok scan: lsof でプロセスを見られなければ worktree を残す』『全件成功』で、指摘のとおりテストは通る。確認のあと lib.sh は元に戻し、git status が clean であることを確かめた。指摘は事実だが、テストの不足であり挙動には関わらない。
+- `clean-sk-14/c40` **些末**(実行していない、llm) — 配布される lib.sh のコメントが配布されない test.sh を参照している
+  - 場所: lib.sh 冒頭のコメント / 挙げた構成: mattpocock ×1
+  - 根拠: lib.sh:11 のコメントが skill-dev/housekeeping/test.sh を参照している。コメントの参照先がたどれるかどうかの話で、スクリプトの挙動には関わらない。なお .claude-plugin の source は "./"(リポジトリ全体)なので、インストールした環境にも skill-dev が入っている可能性がある。
+- `clean-sk-14/c41` **些末**(実行していない、llm) — 外で走査し中で apply すると worktree 行がすべて skipped になる組み合わせを手順で防いでいない
+  - 場所: skills/housekeeping/SKILL.md / 挙げた構成: perspectives ×1
+  - 根拠: SKILL.md の手順4に、worktree の行が「lsof でプロセスを確かめられない」で skipped になるのは scan.sh を外で、apply.sh を中で実行したときだと書いてあり、そのときは apply.sh を `!` で実行し直すよう案内している。手順5にも同じ案内がある。apply.sh はこの場合に削除せず skipped にする(apply.sh の hk_path_in_use の分岐)ので、データは失われず、案内どおりにやり直せば済む。指摘は、組み合わせを先回りして手順で防ぐべきだという、手順の組み立て方の好みにとどまる。実際に起きるのは、安全側で止まって再実行が要ることだけ。
+- `clean-sk-14/c42` **些末**(実行して確かめた、llm) — JSON の検証が外側の配列のみで、要素が不正だとスタックした PR の保護が外れる
+  - 場所: skills/housekeeping/scripts/scan.sh:46 / 挙げた構成: perspectives ×1
+  - 根拠: PR 一覧を '[1,2]' にして、PR の無いブランチ feat を持つ一時リポジトリで HOUSEKEEPING_PR_JSON=... scan.sh を実行した。open_pr_based_on と pr_info の jq はどちらも 'Cannot index number' で失敗し、feat は「keep  PR の状態を判定できなかった(UNKNOWN)」になった(rc=0、delete は出ない)。オブジェクトと文字列が混ざった配列でも、2つの jq はそろって rc=5 で失敗した。どちらの式も各要素のフィールド(.state / .headRefName)を読むので、オブジェクトでない要素があれば必ず両方とも失敗し、保護は外れない。主張のうち事実なのは、検証が外側の配列だけということ。それが問題になるのは将来の変更で片方の jq だけが失敗するようになったときで、いまの挙動には影響しない。
+- `clean-sk-14/c43` **本物・差分の内**(実行して確かめた、llm) — reflog パイプで -q を避けた理由のコメントが不正確
+  - 場所: skills/housekeeping/scripts/scan.sh:120-133 / 挙げた構成: perspectives ×1
+  - 根拠: scan.sh:127-128 のコメントは「-q を付けなければパイプが途中で閉じず、pipefail で失敗しない」という前提。約533KB の reflog 出力で `set -o pipefail; git reflog show ... | grep -E '^commit' >/dev/null` を試した結果は grep の実装で分かれた。macOS の /usr/bin/grep(BSD)では、-q なしが 0、-q ありが 141 で、コメントのとおり。ugrep 7.8.4 では、-q なしが 141 で失敗した(3回とも)。出力先が /dev/null だと最初の一致で抜けるので、-q と同じことが起きる。GNU grep にも同じ最適化があると知られているが、この環境には無く試していない。そうした実装では、reflog が大きい(パイプの容量の約64KB を超える)ブランチで条件が偽になり、delete に当たるはずのブランチが ask(「作成後にコミットした記録がない」)になる。つまりコメントは実装によっては不正確で、判定も誤る。ただし誤り方は残す側。main ではヒアドキュメントに渡していてパイプが無かったので、この差分で入った。
+- `clean-sk-14/c44` **誤り**(実行して確かめた、llm) — 設定を読めないときも「保護対象」と表示され、壊れた gitconfig が原因だと分からない
+  - 場所: skills/housekeeping/scripts/scan.sh:104-105 / 挙げた構成: perspectives ×1
+  - 根拠: GIT_CONFIG_GLOBAL に '[broken' だけのファイルを指定して scan.sh を実行すると、19行目の git rev-parse が 'fatal: bad config line'(rc=128)で失敗し、「error: git リポジトリの中で実行する」で終わった(rc=1)。設定ファイルが壊れていると、どの git コマンドも設定を読む段階で失敗する。そのため、classify_branch の hk_is_protected まで進んで理由が「保護対象」と表示される経路には、scan.sh では入らない。lib.sh 単体でなら 0 を返すが、それはテストが確かめている意図どおりの挙動で、利用者が目にする表示にはならない(rev-parse の誤ったメッセージは main からある別の問題)。
+- `clean-sk-14/c45` **些末**(実行していない、llm) — エージェントが組み立てた awk 条件をサンドボックス外で apply.sh に流させる案内で、承認外の行まで削除されうる
+  - 場所: skills/housekeeping/SKILL.md:73 / 挙げた構成: perspectives ×1
+  - 根拠: SKILL.md:58-75 では、承認した行を awk で抜き出して apply.sh に渡す。これはサンドボックスの中で実行する場合も main の時点から同じで、エージェントが awk の条件を誤れば承認していない行が流れることも、中か外かで変わらない。`!` の形では、ユーザーがコマンドを目にしたうえで実行する。apply.sh は各行の状態を確かめ直してから消す。指摘は、エージェントが誤ったときの手順の頑健さの問題で、コードの不具合として再現できる経路は無い。
+- ★ `clean-sk-14/c46` **些末**(実行していない、llm) — worktree で使用中のブランチに classify_branch を2回呼び、jq や fetch が二重に走る
+  - 場所: skills/housekeeping/scripts/scan.sh:212 / 挙げた構成: code-review ×1
+  - 根拠: scan.sh:173(handle_wt)と scan.sh:212(ローカルブランチの delete|ask の分岐)で、同じブランチについて classify_branch が2回呼ばれるのは事実で、main でも同じ構造だった。fetch は verify_pr_merged の has_commit が偽のときだけ走るので、1回目で取れていれば2回目は走らない。どちらの呼び出しも状態を変えず、結果は同じになる。効率の問題で、挙動には影響しない。
+- `clean-sk-14/c5` **些末**(実行して確かめた、llm) — lsof が無い環境では全 worktree が keep になり、worktree を片付けられず回避手段も無い
+  - 場所: skills/housekeeping/scripts/lib.sh:91 / 挙げた構成: code-review ×2、perspectives ×1
+  - 根拠: lsof だけを除いた PATH で scan.sh を実行した。HEAD 版では『keep worktree wt2 … 使用中か、確かめられない(lsof でプロセスを確かめられない)』となり、ブランチも keep になった。main 版で同じ条件だと ask になる。指摘の事実(lsof が無いと worktree を片付けられない)はそのとおり。ただしこれは、確かめられなければ残す側に倒すという意図した設計で、SKILL.md の『設定と前提』に『lsof が無い、またはプロセスを見られない…ときは、どの worktree も「確かめられない」として残す』と明記してある。誤った結果やデータの消失ではなく、安全側の既知のトレードオフで、lsof を入れれば解消する。利用者が文書に誤らされることもないので、real ではなく trivial とした。
+- `clean-sk-14/c6` **些末**(実行していない、llm) — lsof が無い経路のテストが無い
+  - 場所: test.sh / hk_process_cwds / 挙げた構成: mattpocock ×1
+  - 根拠: test.sh には、command -v lsof が失敗する経路(lsof が PATH に無い)のテストが無い。偽の lsof は存在して exit 1 を返すだけ。テストが無いという指摘で、挙動には関わらない。経路の挙動そのものは、c5 で実行して確かめた(keep になる)。
+- `clean-sk-14/c7` **本物・差分の外**(実行していない、llm) — プロセス一覧をループ前に1回しか取らないため、その後に worktree を使い始めたプロセスを見逃す(TOCTOU)
+  - 場所: skills/housekeeping/scripts/apply.sh:37-44 / 挙げた構成: perspectives ×2
+  - 根拠: apply.sh の 37 行目で、cwds=$(hk_process_cwds) をループの前に1回だけ取っている。38-48 行目のループは各行でこの一覧だけを照合し、そのまま git worktree remove に進む(git worktree remove 自身はプロセスを調べない)。そのため、ループが始まったあとに後ろの worktree へ cd したプロセスは検出されない。この経路はコードで最後まで追えた。main の apply.sh も同じ構造(cwds の取得はループの前に1回)なので、scope は out。タイミングを狙って起こすのは難しく、実行はしていない。なお SKILL.md の『削除の直前に…確かめ直す』は、走査の時点からの変化を確かめるという意味として読める。行ごとに lsof を取り直しても、競合の時間は残る。
+- `clean-sk-14/c8` **些末**(実行して確かめた、llm) — 削除対象の worktree 行が無くても全プロセスへの lsof を実行し、無駄な待ち時間が発生する
+  - 場所: skills/housekeeping/scripts/apply.sh:37 / 挙げた構成: code-review ×3
+  - 根拠: apply.sh の 37 行目は、worktree の行が無くても hk_process_cwds を呼ぶ。この点は main と同じ。この環境で『time lsof -w -a -d cwd -Fpcn』を測ると 0.051 秒(約 570 プロセス)だった。効率だけの話で、結果には関わらない。
+- `clean-sk-14/c9` **未確定**(実行していない、llm) — hk_path_in_use の awk が失敗すると出力が空になり、worktree が削除される
+  - 場所: lib.sh:108-109 / 挙げた構成: mattpocock ×1
+  - 根拠: lib.sh:108-109 で awk が出力なしで失敗すると proc は空になり、apply.sh:43 の `[ -z "$proc" ]` を通って削除に進む。ここまでの経路は指摘どおり。ただし、よくある原因の awk が無い場合は、先に呼ばれる hk_process_cwds(lib.sh:92-96)の awk も失敗して `|| return 0` で空を返す。すると hk_path_in_use は 103 行目で「lsof でプロセスを確かめられない」を返し、残す側に倒れる。直前に成功した awk が、この1か所だけで失敗する状況(資源の枯渇など)は狙って起こせないので、実行していない。なお main でも同じ awk(ヒアドキュメント入力)が空を返せば削除に進むので、仮に real でも差分が原因ではない。
+- `clean-sk-16/c1` **些末**(実行して確かめた、llm) — 偽の判定に範囲と再現の欄を足したが分類の行が無く、「再現: 対象外」と形が合わない
+  - 場所: skill-dev/review-loop/fakes/claude:100 / 挙げた構成: code-review ×1、mattpocock ×1、perspectives ×2
+  - 根拠: 指摘の事実は正しい。fakes/claude:100 の偽の判定には「分類」の行が無く、「再現: 対象外」が入っている。`git show main:skill-dev/review-loop/fakes/claude | sed -n 100p` で、main の時点から「分類」が無かったことも確かめた。ただし、この文字列を読むのは test.py:146 の `out.startswith("## 指摘") and "### F1: s" in out` だけで、review_loop.py は判定を verdict.md に書いて出力するだけ(1041〜1046, 1159〜1160 行)で、欄を解釈しない。`python3 skill-dev/review-loop/test.py` → 「全て成功」。テスト用の偽データの見た目の整合で、挙動には関わらない。
+- `clean-sk-16/c10` **些末**(実行していない、llm) — 「実行で確かめていない修正」がどの修正を指すのか曖昧
+  - 場所: skills/review-loop/SKILL.md:130 / 挙げた構成: code-review ×2、mattpocock ×1、perspectives ×2
+  - 根拠: SKILL.md:130 は「直前の判定で、継続の理由になる指摘を採って直したとき」で始まるので、このルールが働くのは継続の理由になる修正があるときだけ。低の修正だけなら、この箇条はそもそも当てはまらない。継続の理由になる修正に命名の修正が混ざったとき、広く読めば回すことになる。ただ、main の SKILL.md:112 以降でも、継続の理由になる修正があれば必ず回していた。そのため、どちらに読んでも main より悪くはならず、反復を減らす効き目が弱まるだけ。文言のあいまいさで、誤った結果にはつながらない。
+- `clean-sk-16/c11` **些末**(実行していない、llm) — 再レビューを省くかどうかを修正した本人が自分のテストで判断し、独立したレビューを経ずに終わりうる
+  - 場所: skills/review-loop/SKILL.md:130 / 挙げた構成: code-review ×2、perspectives ×3
+  - 根拠: 再レビューなしで終える道は、コミットメッセージの変更2が意図して作ったもので、不具合ではなく設計への意見に当たる。SKILL.md:130 の条件は「再現が修正前に失敗して修正後に通る」「既存のテストも通っている」で、テストを実際に走らせることを求めている。「読むだけで判断」という主張は一部しか当たらない(読むだけで決めるのは、どのテストが修正箇所を通るかの見極めだけ)。誤った結果を起こす経路は示されていない。
+- `clean-sk-16/c12` **些末**(実行していない、llm) — 回さずに終える経路に、最後の修正をコミットして push する指示がない
+  - 場所: skills/review-loop/SKILL.md:130 / 挙げた構成: code-review ×2
+  - 根拠: SKILL.md:120 の「修正したら手順1に戻る」は残っていて、手順1(SKILL.md:30-32)は「修正をコミットし、毎回 push する」。早く終える道が省くのはスクリプトを回すこと(手順2以降)で、コミットと push を省けとはどこにも書いていない。終了時の報告(SKILL.md:134)には「最後に判定を受けた SHA と終了時の HEAD の差(そのあとに入れた修正)」があり、最後の判定のあとの修正がコミットされている前提になっている。この報告の項目は main の SKILL.md:117 にもあった。つまり main でも、最後の判定のあとに低の修正を入れて終える道は同じ書き方だった。push し忘れるかは LLM の読み方次第で、実行では確かめられない。書き方の改善の範囲にとどまる。
+- `clean-sk-16/c13` **些末**(実行していない、llm) — 成果物が主に文書なので実行で示せず、反復の短縮が効かない見込み
+  - 場所: skills/review-loop/SKILL.md:107, :130 / 挙げた構成: perspectives ×2
+  - 根拠: 効き目の見込みについての意見で、挙動の誤りではない。文書の修正では、SKILL.md:107 の「実行では示せない」扱いを経て、SKILL.md:130 の「実行で確かめていない修正が1つでもあれば回す」に当たり、main と同じく回る。悪くなるわけではない。PR 本文も「反復や時間が実際に減るかは、まだ測っていない」と認めている。
+- `clean-sk-16/c14` **些末**(実行していない、llm) — JUDGE_PROMPT を正としながら、範囲と再現の定義を SKILL.md に書き写して二重管理になっている
+  - 場所: skills/review-loop/SKILL.md:86, :99 / 挙げた構成: code-review ×1、mattpocock ×3
+  - 根拠: 事実としては合っている。SKILL.md:81 は「範囲、再現の定義は JUDGE_PROMPT が正」としつつ、SKILL.md:86-87 と 99 で review_loop.py:863 の範囲の定義(PR の目的の直し残しは差分の内、など)をほぼそのまま書いている。今は2か所の内容が一致していて食い違いはない。片方だけを直したときに初めて問題になる、二重管理の指摘。
+- `clean-sk-16/c15` **些末**(実行していない、llm) — 101行目が終了の判断の継続の基準を書き写しており、片方だけ直すと食い違う
+  - 場所: skills/review-loop/SKILL.md:101 / 挙げた構成: code-review ×1、mattpocock ×1
+  - 根拠: SKILL.md:101 の「影響が高か、影響が中で普通の使い方で起きる」は、SKILL.md:127 の継続の基準と同じ内容で、今は一致している。将来片方だけを直したときに初めて食い違う、重複の指摘。
+- `clean-sk-16/c16` **些末**(実行していない、llm) — PR本文に悪用手順を書かない規則が仕様に無いまま足されている
+  - 場所: skills/review-loop/SKILL.md:116 / 挙げた構成: mattpocock ×2
+  - 根拠: `git log -1 --format=%B | grep 悪用\|セキュリティ` は何も返さず、この規則が仕様に書かれていないのは事実。ただ、書き足されたのは「公開リポジトリの PR 本文に、直していないセキュリティの指摘の悪用手順を書かない」という制限だけで、誤った結果や失敗につながる経路はない。範囲が仕様より広がったという書き方の指摘にとどまる。
+- `clean-sk-16/c17` **些末**(実行していない、llm) — 悪用手順を書かない制限が PR 本文にしか無く、コードコメントやコミットメッセージから漏れうる
+  - 場所: skills/review-loop/SKILL.md:116 / 挙げた構成: code-review ×2
+  - 根拠: SKILL.md:116 の制限は PR 本文だけにかかり、:136 では issue にもかかっている。コードコメント(:115)とコミットメッセージにはかかっていない、という点は事実。ただし、直していないセキュリティの指摘がコードコメントに残る経路を追うと、次の2つしかない。(1) 再現を試みて起きなかった(:106)。このとき残るのは、成功しなかった手順である。(2) 差分の外の指摘。これは利用者への報告と issue に回り(:134, :136)、コードコメントには書かれない。さらにコードコメントは「コードの恒久的な説明として妥当なもの」に限られている(:115)。コミットメッセージに理由を書けという指示は、スキルのどこにも無い。働く悪用手順が漏れるのは、本物の脆弱性を誤って却下し、その手順をコメントに書いたときだけになる。これは判断の誤りが前提で、書かれた手順どおりに動いて起きるものではない。文書の手順なので、実行では確かめていない。
+- `clean-sk-16/c18` **些末**(実行していない、llm) — リポジトリが公開かどうかの判定方法が書かれていない
+  - 場所: skills/review-loop/SKILL.md:116, :136 / 挙げた構成: perspectives ×1
+  - 根拠: SKILL.md:116 と :136 に判定の方法(例: gh repo view --json visibility)が書かれていない、という点は事実。ただし、このスキルは gh を使う前提で書かれており(:136 の gh issue create など)、エージェントは公開かどうかを gh で調べられる。書き足せば明確になるが、書いていないせいで誤った結果になる経路は示せない。文書の書き方の指摘なので、実行していない。
+- `clean-sk-16/c19` **些末**(実行していない、llm) — 仕様に無い振る舞いが複数足されているのに、コミットの「変更」節に書かれていない
+  - 場所: SKILL.md:99, 101, 103, 116, 136 / 挙げた構成: mattpocock ×1
+  - 根拠: git log -1 で読んだコミットの「変更」節は、issue を尋ねてから作ること(項目3)には触れている。一方、PR の目的の例外、再現を隔離した場所で行う規則、悪用手順の扱い、重複の検索は書かれていない。ここまでは事実。ただし、これはコミットメッセージの書き方の問題で、スキルの挙動は SKILL.md の本文で決まる。
+- `clean-sk-16/c2` **些末**(実行して確かめた、llm) — 偽の判定に足した欄をテストもスクリプトも読まないので、カバレッジが増えない
+  - 場所: skill-dev/review-loop/fakes/claude:100 / 挙げた構成: code-review ×2、mattpocock ×2
+  - 根拠: 指摘の事実は正しい。`grep -c "範囲\|再現" skill-dev/review-loop/test.py` → 0。review_loop.py も判定の欄を解析しない(判定を verdict.md に書いて print するだけ)。足した欄はどこからも読まれず、カバレッジは増えない。コミットメッセージにも「スクリプトが確かめるのは判定の見出しだけなので、欄の追加で挙動は変わらない」とある。テストの効果の指摘なので、挙動には関わらない。
+- `clean-sk-16/c20` **些末**(実行していない、llm) — issue 作成について仕様に無い細則が足されている
+  - 場所: skills/review-loop/SKILL.md:136 / 挙げた構成: mattpocock ×1
+  - 根拠: SKILL.md:136 に、重複の検索、公開リポジトリでのセキュリティ指摘の扱い、1件への統合、並べる順序が足されている(git diff main..HEAD で確認)。どれも、尋ねずに issue を作らないという仕様の範囲で慎重な側に寄せたもので、仕様と食い違う挙動は生まない。仕様に無いという指摘であり、挙動の問題ではない。
+- `clean-sk-16/c21` **些末**(実行していない、llm) — 「PRの目的の直し残しは差分の内」という例外が仕様に無い
+  - 場所: skills/review-loop/SKILL.md:99 / 挙げた構成: mattpocock ×1
+  - 根拠: SKILL.md:99 と review_loop.py の JUDGE_PROMPT(差分で足された範囲の段落)に、PR の目的の直し残しを差分の内とする例外がある。コミットの「変更」節3には、この例外が書かれていない。ただし、この例外は PR の目的そのものを直さずに終えることを防ぐもので、SKILL.md とプロンプトの間で食い違いもない。基準が1つ増えたという、設計についての指摘にとどまる。
+- `clean-sk-16/c22` **些末**(実行していない、llm) — 再現を安全に行うための規則が仕様に無いまま足されている
+  - 場所: skills/review-loop/SKILL.md:103 / 挙げた構成: mattpocock ×1
+  - 根拠: SKILL.md:103 の、再現を隔離した場所で行う規則は、作業ツリーや本物のデータを変えない方向にだけ働く。指摘自身も「既存の制約から自然に出てくる」と認めている。挙動の問題は無い。
+- `clean-sk-16/c23` **些末**(実行していない、llm) — 1つのコミットに複数の変更が混ざっており、分割の余地がある
+  - 場所: コミット dc3a218 / 挙げた構成: mattpocock ×1
+  - 根拠: git log main..HEAD を見ると、コミットは 6a63a68 の1つだけで、指摘にある dc3a218 という SHA とは違う。分けるべきだという主張は、コミットの構成の好みで、挙動には関わらない。
+- `clean-sk-16/c24` **些末**(実行して確かめた、llm) — ベースの取り出し方法が限定されず、git worktree add で共有 .git の状態を変えうる
+  - 場所: skills/review-loop/SKILL.md:103 / 挙げた構成: perspectives ×3
+  - 根拠: 一時リポジトリで試した。feat ブランチをチェックアウトした状態で git worktree add --detach $T/base main を実行した。結果は、git status --porcelain が空、現在のブランチは feat のままで、refs は heads/feat と heads/main だけで増えなかった。増えたのは git worktree list の1行だけで、ディレクトリを消して git worktree prune を実行すると消えた。review_loop.py:966 の find_contamination が確かめるのは、git status、HEAD、ブランチ、PR の head だけで、worktree の一覧は見ない。そのため、追加された worktree が混入として検出されて止まることもない。残った worktree は housekeeping の prune か delete の対象になるだけで、データは失われない。-b を付ければ ref は増えるが、SKILL.md はその方法を勧めていない。手段の書き方があいまいだという点は当たっているが、挙動の問題にはならない。
+- `clean-sk-16/c25` **些末**(実行していない、llm) — 隔離の規則に、外部サービスへの投稿が含まれるかが曖昧
+  - 場所: skills/review-loop/SKILL.md:103 / 挙げた構成: perspectives ×1
+  - 根拠: skills/review-loop/SKILL.md:103 の最初の文は「再現は、テストの中、fixture、一時ディレクトリに作ったリポジトリなど、隔離した場所で行う」で、操作の種類を問わず隔離を求めている。続く「消す・書き換える操作を実行しない」はその理由を補うもので、許してよい操作を並べたものではない。本物の PR に gh でコメントするのは隔離した場所ではないので、最初の文で禁じられている。さらに同じ行に「隔離して再現する手段がなければ『実行では示せない』として扱う」とある。書き方を明確にする余地はあるが、文書のとおりに進めて外部に投稿してしまう経路はない。文書の書き方の問題なので実行はしていない。
+- `clean-sk-16/c26` **些末**(実行していない、llm) — 一度再現しなかっただけで高影響の指摘を捨て、再現手順の誤りを確かめる手段がない
+  - 場所: skills/review-loop/SKILL.md:106, :128 / 挙げた構成: code-review ×3、perspectives ×3
+  - 根拠: SKILL.md:106 と :128 の記述は指摘のとおり。ただし手順の誤りへの備えは文書にある。:101 は「判定の手順が合っていなければ、自分で組み直す」とし、:103 は「その条件を作らずに試して起きなかったことは『起きなかった』に数えない」とする。:106 は試した手順と結果を理由として残すよう求めている。:95 と :18 により、採らなかった理由は PR 本文やコメントを通じて次の反復の独立したレビュー役と判定役に渡り、JUDGE_PROMPT はそれを覆す事情を「再指摘」として評価する。つまり独立した確認の経路はある。残る論点は、読んだだけの推論と再現の失敗のどちらを重く見るかで、この差分が意図して選んだ設計の判断にあたる。誤った結果を決まって生む不具合ではない。文書の方針の問題なので実行はしていない。
+- `clean-sk-16/c27` **誤り**(実行していない、llm) — 継続理由の例外に、実行で示せないとして却下した高影響の指摘が無く、ループを終えられない
+  - 場所: skills/review-loop/SKILL.md:128 / 挙げた構成: code-review ×1
+  - 根拠: SKILL.md:128 の例外が2つだけ、という点は事実。ただし「ループを終えられない」という帰結は文書と合わない。:131 は「同じ指摘の蒸し返し…が見えたら打ち切ってよい」とし、:132 は5回を目安にしている。スクリプトには上限(シリーズあたり10回、連続失敗3回)もあり、終える経路は複数ある。また :127 の「残っていないか」が、親が理由を付けて却下した指摘も含むかという曖昧さは main の時点からある。main の SKILL.md:111 も同じ文で、:95 で却下を認めている。この差分は、実行では示せない指摘をコードで追って採否を決める道(:107)を足しただけで、終えられなくなる経路を新しく作ってはいない。文書の読み比べなので実行はしていない。
+- `clean-sk-16/c28` **些末**(実行していない、llm) — 新しい欄の名前「範囲」が、既存の別の意味の「範囲」と衝突している
+  - 場所: skills/review-loop/SKILL.md:134 / 挙げた構成: code-review ×1、mattpocock ×2
+  - 根拠: SKILL.md:134 は、新しい「範囲が『差分の外』」と既存の「`--instruct` で範囲を絞った…観点と範囲」を同じ段落で使っている(:58、:63、review_loop.py:850 も既存の意味)。ただし新しい意味は、どの箇所でも「範囲が『差分の外』」「範囲: 差分の内 / 差分の外」のように値と一緒に出てくる。判定役が見る review_loop.py:863 と :879 でも欄の形が決まっている。用語が重なっているのは事実だが命名の問題で、取り違えて挙動が変わる経路は確かめられなかった。
+- `clean-sk-16/c29` **些末**(実行していない、llm) — 判定役にベースと比べさせているのに、ベースのブランチや見方を渡していない
+  - 場所: skills/review-loop/scripts/review_loop.py:863 / 挙げた構成: code-review ×2
+  - 根拠: review_loop.py:921-926 で、判定役は cwd=wt(PR の worktree)の claude -p として起動され、プロンプトには PR 番号だけが入る。worktree の中なので git も gh も使え、gh pr view でベースや本文を、git でベースのコードを読める。禁じられているのは作業ツリーを変える操作だけ(NO_MUTATION、:77)。main の時点の JUDGE_PROMPT も、同じく PR 番号だけで判定役に PR 本文を読ませている(:849)。さらに :863 は、確かめられなければ「差分の内」にするという安全側の初期値を定め、SKILL.md:99 は影響が高の指摘を外す前に親がベースで確かめるよう求めている。渡す情報を増やせば確かになるが、誤った結果に至る経路は見つからない。実行はしていない。
+- `clean-sk-16/c3` **些末**(実行して確かめた、llm) — JUDGE_PROMPT に新しい範囲と再現の欄があることを確かめるテストが無い
+  - 場所: skills/review-loop/scripts/review_loop.py:863 / 挙げた構成: code-review ×2、perspectives ×1
+  - 根拠: test.py で「範囲」「再現」を検索すると 0 件で、テストが無いのは事実。test.py:169 は判定役の引数に「## 指摘」が含まれることだけを見ている。追加した文には `{}` が無く、JUDGE_PROMPT.format は判定役のテストの経路で通る(test.py は全て成功)。分類の定義どおり、テストが無いという指摘は trivial になる。
+- `clean-sk-16/c30` **些末**(実行していない、llm) — 比べる基準の「PRのベース」が先頭か merge-base かが曖昧
+  - 場所: skills/review-loop/SKILL.md:99, :103 / 挙げた構成: perspectives ×1
+  - 根拠: SKILL.md:99 と :103 は「PR のベースのコード」とだけ書いており、merge-base か今の先頭かは書かれていない。判定が分かれるのは、分岐の時点にあった不具合が、その後 main で直された場合。今の先頭と比べると起きないので、親は差分の内と判断し、この PR で直す。このとき起きるのは、不要な修正が入るか、マージで衝突するかで、誤った挙動や見落としにはならない。差分の外と判断して直すべきものを捨てるのは、main の変更がこのブランチにない不具合を持ち込んだ場合だが、そもそもこのブランチの指摘にはならない。曖昧さは事実だが、影響のない文書の書き方の問題。実行はしていない。
+- ★ `clean-sk-16/c31` **些末**(実行していない、llm) — 判定役に「実行して確かめない」と書き、可能な再現を妨げている
+  - 場所: skills/review-loop/scripts/review_loop.py:865 / 挙げた構成: code-review ×1
+  - 根拠: review_loop.py:865 の「あなたは実行して確かめないので」は、SKILL.md:93(判定役もレビュー役も実行して確かめてはいない、確かめるのは親)と同じ役割分担を述べたもの。この差分は、確かめるのを親の受け持ちにすると意図して決めている。判定役にも再現させればよい、というのは設計の好み。判定役が一時ディレクトリで実行できるのは事実だが、JUDGE_TIMEOUT(20分、:56)の中で再現まで受け持たせるかどうかは方針の判断で、誤った結果は生まない。実行はしていない。
+- `clean-sk-16/c32` **些末**(実行していない、llm) — 判定役に全 defect の再現手順を書かせ、トークンと時間を浪費する
+  - 場所: skills/review-loop/scripts/review_loop.py:865 / 挙げた構成: code-review ×1
+  - 根拠: review_loop.py:865 は、defect の指摘すべてに再現の手順を書かせる。SKILL.md:101 で親が必ず使うのは、高の指摘と、中で普通の使い方で起きる指摘だけ。ただし SKILL.md:109 で、それ以外の指摘も親が再現を使って採否を決めることはできる。論点はトークンと時間の効率だけで、JUDGE_TIMEOUT に届くというのは推測にとどまる。どれだけ増えるかの測定もない。効率の指摘なので trivial。実行はしていない。
+- `clean-sk-16/c33` **些末**(実行していない、llm) — 差分の外の指摘を記録する決まりが無く、反復ごとに再指摘される
+  - 場所: skills/review-loop/SKILL.md:99, :136 / 挙げた構成: perspectives ×2
+  - 根拠: SKILL.md:113-118 で記録の対象になっているのは「判定と異なる判断(却下・裁定の変更)」だけ。判定役が「差分の外」とした指摘を親がそのまま直さずにおく場合は、記録の決まりがない。これは指摘のとおり。ただし挙動への影響はない。SKILL.md:128 で、差分の外の指摘は影響の段階に関係なく継続の理由にならない。SKILL.md:18 で、親は反復をまたいで過去の判定を持ち続ける。判定役は毎回コードから範囲を判断し直す(review_loop.py:863)。このため、再指摘されても誤って直したり、ループが終わらなくなったりはしない。起きるのはトークンと確かめ直しの手間の増加だけで、効率の問題にとどまる。文書の検討なので実行はしていない。
+- `clean-sk-16/c34` **些末**(実行していない、llm) — 利用者が issue にしないと答えると、差分の外の高影響のセキュリティ指摘の記録が残らない
+  - 場所: SKILL.md:99, :128, :136 / 挙げた構成: perspectives ×1
+  - 根拠: SKILL.md:134 で、差分の外で直さなかった指摘は影響の段階を添えて必ず利用者に報告される。SKILL.md:136 で、issue にするかを尋ね、影響が高のものは先頭に置く。issue にしないのは、報告を受けた利用者が明示的に決めたことになる。PR 本文に経緯を書く決まり(SKILL.md:116)もある。記録の手段を足すかどうかは設計の好みで、利用者が誤ったりデータが消えたりする経路はない。文書の検討なので実行はしていない。
+- `clean-sk-16/c35` **些末**(実行していない、llm) — 再現の進め方や継続の判断の記述が長く、簡潔さの指針に反している
+  - 場所: SKILL.md 手順5 / 挙げた構成: mattpocock ×1
+  - 根拠: SKILL.md:99-111、:130、:136 は確かに長い。ただし簡潔さは書き方の問題で、挙動には関わらない。
+- `clean-sk-16/c36` **些末**(実行していない、llm) — 130行目の箇条だけ条件分岐が深く、ほかの箇条と書き方が揃っていない
+  - 場所: skills/review-loop/SKILL.md:130 / 挙げた構成: mattpocock ×1
+  - 根拠: SKILL.md:130 の箇条には、条件分岐が何段も入っている(再現が通った / 経路の外も変えた / 既存テストがない / 実行で確かめていない / 5回を超える)。書き方が揃っていないという指摘で、挙動には関わらない。
+- ★ `clean-sk-16/c37` **些末**(実行していない、llm) — 冒頭の要約が、差分の外を継続理由にしない規則と合っていない
+  - 場所: skills/review-loop/SKILL.md:10 / 挙げた構成: mattpocock ×1
+  - 根拠: SKILL.md:10 は main から変わっていない。この行は「リスクの高い指摘がなくなるまで回す(基準は「終了の判断」)」と書いて、基準を「終了の判断」の節に委ねている。その節の SKILL.md:128 が、差分の外の指摘は継続の理由にしないと明示している。冒頭の要約が大まかなだけで、読み手が誤ってループを続ける経路はない。文面の精度の問題にとどまる。
+- `clean-sk-16/c38` **誤り**(実行していない、llm) — 横展開の修正を差分の内に限ったことで以前の振る舞いが消え、同じ文とも食い違う
+  - 場所: skills/review-loop/SKILL.md:111 / 挙げた構成: code-review ×1
+  - 根拠: main の SKILL.md:95 は「横展開の候補は、確かめたうえで同じ修正に含める」だった。HEAD の :111 では差分の内に限っている。この変更は、:99 に書かれた理由(PR が目的と関係のない変更で膨らみ、次の反復の指摘を呼ぶ)に基づく意図した変更で、差分の外の候補は :111 と :134 で終了時の報告に載る。もう1つの主張「規則を1か所で強制する形の検討」との食い違いも成り立たない。範囲は変更した行ではなく原因で決まる(review_loop.py:863「場所が PR の変えていない行でも、PR の変更が原因で起きるなら差分の内」)。1か所で強制する形は、差分の内の破れが場所を変えて続くときの手段で、差分の外の修正を求めていない。文書の検討なので実行はしていない。
+- `clean-sk-16/c39` **些末**(実行していない、llm) — 再現用の回帰テストを残すと差分が増え、PRが膨らむ
+  - 場所: skills/review-loop/SKILL.md:105 / 挙げた構成: perspectives ×1
+  - 根拠: SKILL.md:105 で回帰テストを残すのは、差分の内の defect を直すときだけ。これは PR の目的に関係する変更で、:99 が避けている「目的と関係のない変更」にはあたらない。テストへの指摘が出ても、test_gap や style のような影響の低い指摘は継続の理由にならない(:127-129)。このため、収束しなくなるといった挙動の問題には至らない。差分が増えるのはトレードオフで、設計の好みにあたる。文書の検討なので実行はしていない。
+- `clean-sk-16/c4` **些末**(実行していない、llm) — 判定の形を変えると3か所を同時に直す必要がある(Shotgun Surgery)
+  - 場所: skill-dev/review-loop/fakes/claude / 挙げた構成: mattpocock ×1
+  - 根拠: 判定の形は JUDGE_PROMPT(review_loop.py:868〜882)、SKILL.md の手順4の箇条書き、fakes/claude:100 の3か所に書かれている。ただし SKILL.md は「形…の定義は JUDGE_PROMPT が正」としており、偽の判定はスクリプトが見出ししか見ないので、形がずれても動作は変わらない。構造の好み・将来の変更の話なので trivial。実行して確かめる性質のものではない。
+- `clean-sk-16/c40` **些末**(実行していない、llm) — issue を作る先のリポジトリを決めておらず、fork からだと上流に作られうる
+  - 場所: skills/review-loop/SKILL.md:136 / 挙げた構成: perspectives ×1
+  - 根拠: SKILL.md:136 は `gh issue create` を作る先のリポジトリを指定していない。このため gh の既定のリポジトリの解決に従う。スクリプトも、`gh pr view`(review_loop.py:454)や `repos/{owner}/{repo}/issues/...`(:589, :618)で同じ解決に頼っている。つまり issue は、PR と状態コメントがあるのと同じリポジトリに作られる。fork からの PR ならそれは上流になるが、差分の外の不具合は PR のベース(上流)のコードにあるので、作る先として不自然ではない。また、作る前に必ず利用者に尋ねる(:136)。指摘の内容は事実だが、利用者に害が出る経路は示されていない。作る先を明示すべきかどうかは好みにとどまる。外部のサービスに issue を作ることになるので、実行はしていない。
+- ★ `clean-sk-16/c41` **些末**(実行していない、llm) — 再現が必須なのは defect だけなので、他の分類の高影響の指摘は未検証のまま継続理由になる
+  - 場所: skills/review-loop/SKILL.md / 挙げた構成: mattpocock ×1
+  - 根拠: SKILL.md の手順5(+74+27, +74+35 行)で、再現が必須なのは defect だけ。それ以外の分類は「再現なしで採否を決めてよい」。終了の判断(128行)で継続の理由から外れるのは「差分の外」と「再現を試みて起きなかった」ものだけなので、test_gap や other で影響が高の指摘が未検証のまま継続の理由になる、という読みは事実。ただ、コミット本文の「変更1」は、再現の対象を最初から「分類が defect で、終了の基準に当たる指摘」と決めている。test_gap はもともと「修正前に失敗するテスト」で再現できない種類でもある。親は採否を決められるので、誤った結果やデータの消失には結びつかない。反復をどれだけ減らせるかという設計の効率の話で、挙動の不具合ではない。文書だけの指摘なので実行はしていない。
+- `clean-sk-16/c42` **誤り**(実行していない、llm) — 範囲の基準では、PRが既存の不具合を起きやすくした場合を扱えない
+  - 場所: skills/review-loop/scripts/review_loop.py:863 / 挙げた構成: perspectives ×1
+  - 根拠: review_loop.py の JUDGE_PROMPT(差分の863行付近)は「場所が PR の変えていない行でも、PR の変更が原因で起きるなら『差分の内』」とし、「差分の外」は「PR の前から同じように起きる」もので、根拠には「PR の前のコードでも同じ操作の順で起きる」ことを求めている。PR が既存の不具合を普通の使い方で起きるようにした場合、PR の前は同じ操作の順では起きないので「差分の外」の条件を満たさず、「差分の内」になる。さらに「確かめられなければ差分の内」の規則もある。SKILL.md 99行では、影響が高の指摘を外す前にベースのコードで確かめることも求めている。「扱えず、直されない」という主張は文面と合わない。文面の読解なので実行はしていない。
+- `clean-sk-16/c43` **些末**(実行していない、llm) — 新しい規則が分類に頼るのに、手順4の一覧に分類がない
+  - 場所: skills/review-loop/SKILL.md:83-89 / 挙げた構成: perspectives ×1
+  - 根拠: SKILL.md 83-89行の一覧に「分類」が無いのは事実(観点・場所・根拠も載っていない)。ただ、直前の82行が「形の定義は JUDGE_PROMPT が正」とし、一覧は「次が書かれている」という抜粋にすぎない。JUDGE_PROMPT の出力の形(874行)には「分類:」の欄があり、親が読む verdict.md にも分類が出る。91行は main の時点から「分類 other」に触れている。親が分類を読めなくなる経路は無い。文書の網羅性の話なので実行はしていない。
+- `clean-sk-16/c44` **些末**(実行していない、llm) — 差分の外の指摘を扱う分岐が複数箇所に散らばっている
+  - 場所: skills/review-loop/SKILL.md:99, 111, 128, 134, 136 / 挙げた構成: mattpocock ×1
+  - 根拠: SKILL.md の99行(手順5の冒頭)、111行(横展開)、128行(終了の判断)、134行(終了の報告)、136行(issue の確認)に「差分の外」の扱いが分かれて書かれていることは、sed で行番号を合わせて確かめた。どの箇所も「直さない、継続の理由にしない、報告し issue にするかを尋ねる」で一致していて、食い違いは無い。文書の構造の好みの話。
+- `clean-sk-16/c45` **些末**(実行していない、llm) — 範囲の説明に、確かめられないときは差分の内に倒す規則が欠けている
+  - 場所: skills/review-loop/SKILL.md:86 / 挙げた構成: mattpocock ×1
+  - 根拠: SKILL.md 86行の範囲の説明に「確かめられなければ差分の内」が無いのは事実。ただ、この規則は判定役に向けたもので、JUDGE_PROMPT(「どちらか確かめられなければ『差分の内』とし、確かめられなかったと書く」)に入っている。出力の形の範囲の欄も「確かめられずに差分の内としたなら、その旨」と書かせている。SKILL.md 82行は、範囲の定義の正は JUDGE_PROMPT だと明記している。判定役の挙動も、親が読む verdict.md の内容も変わらないので、要約の書き漏れにとどまる。実行はしていない。
+- `clean-sk-16/c46` **些末**(実行していない、llm) — 分類 other の指摘で範囲の欄に何を書くかが決まっていない
+  - 場所: JUDGE_PROMPT / 挙げた構成: mattpocock ×1
+  - 根拠: JUDGE_PROMPT(849行)は、観点の欠落を分類 other で載せ、影響の欄には「観点の欠落」と書くよう決めている。範囲の欄について観点の欠落向けの決まりが無いのは事実。ただ「どちらか確かめられなければ『差分の内』」が一般の決まりとして当てはまる。SKILL.md 91行と127行により、観点の欠落は範囲に関係なく回し直しになり、終了もしない。スクリプトが確かめるのは VERDICT_SECTIONS の見出しだけなので、欄の書き方で試行が失敗することも無い。挙動に影響しない。実行はしていない。
+- `clean-sk-16/c5` **些末**(実行していない、llm) — 99行目で「差分の外は再現しない」と「高影響はベースで確かめてから外す」が矛盾している
+  - 場所: skills/review-loop/SKILL.md:99 / 挙げた構成: code-review ×3、mattpocock ×1、perspectives ×1
+  - 根拠: SKILL.md:99 は、まず「差分の外は直さず、再現もしない」という原則を置き、同じ段落の後半で「判定役の範囲の判断も、読んだだけの仮説である。影響が高の指摘を差分の外として外すときは、ベースのコードで…確かめてから外す」と例外を書いている。「再現もしない」は直すための不具合の再現のことで、ベースでの確認は範囲の判断を確かめるためのもの。段落を通して読めば例外として読め、論理の矛盾ではない。文言がぶつかって見えるのは書き方の問題で、挙動に関わる誤りまでは言えない。プロンプトの文面なので実行では確かめられない。
+- `clean-sk-16/c6` **些末**(実行していない、llm) — 仕様では任意のベースでの確認が、高影響の指摘を外すときは必須になっている
+  - 場所: skills/review-loop/SKILL.md:99 / 挙げた構成: mattpocock ×1
+  - 根拠: 「仕様」にあたるコミット 6a63a68 の本文には「親が PR のベースで確かめて決め直せるようにしてある」とあり、確認を「できる」と書いているだけで、必須にすることを禁じてはいない。SKILL.md:99 が影響が高のときに必須としたのはそれより厳しいだけで、コミットの意図(仮説として扱い、確かめる)と食い違わない。「再現もしない」との衝突は c5 と同じく書き方の問題。挙動の問題ではないので trivial。
+- `clean-sk-16/c7` **些末**(実行していない、llm) — 高影響の指摘を外す前の「確かめる」が実行か読むだけかが曖昧
+  - 場所: skills/review-loop/SKILL.md:99 / 挙げた構成: perspectives ×1
+  - 根拠: SKILL.md:99 の「確かめてから外す」は、実行か読むだけかを書いていない。SKILL.md:104 は「PR のベースのコードを確かめるときも、作業ツリーを切り替えず、`git show` や一時ディレクトリへの取り出しで行う」と書き、再現の段落の中に置いているので、実行も含むと読める余地はある。曖昧さは事実だが、文書の書き方の問題で、文書とコードの食い違いでもない。エージェントがどう解釈するかは実行では確かめられないので trivial とした。
+- `clean-sk-16/c8` **些末**(実行していない、llm) — 中影響の指摘は読んだだけで付けた「差分の外」のまま、ベースで確かめられずに外れる
+  - 場所: skills/review-loop/SKILL.md:99 / 挙げた構成: code-review ×1
+  - 根拠: 記述は指摘のとおり。SKILL.md:99 でベースでの確認が必須なのは影響が高だけで、中は「判断が疑わしければ」確かめる。SKILL.md:128 は、差分の外の指摘を継続の理由にしない。ただしこれは、コミットの変更3「差分の外を分ける」で意図して決めた方針で、文書の中でも辻褄は合っている。JUDGE_PROMPT:863 は、確かめられなければ「差分の内」に倒すよう判定役に求めている。問題になるのは判定役が差分の内の不具合を誤って差分の外とした場合だけで、それは狙って起こせない。方針についての異論で、文書が誤っているわけではないので trivial とした。
+- `clean-sk-16/c9` **本物・差分の内**(実行していない、llm) — 再レビューの条件から仕様の「修正が大きく」が落ち、仕様やPR本文と食い違っている
+  - 場所: skills/review-loop/SKILL.md:130 / 挙げた構成: code-review ×2、mattpocock ×3
+  - 根拠: `git log -1 --format=%B` の21行目(仕様)は「修正が大きく、再現が確かめた範囲を超えて挙動を変えているなら回す」。一方 skills/review-loop/SKILL.md:130 は「再現が確かめた経路の外の挙動も変えているなら、修正の大きさに関係なく回す」で、この2つは正反対のことを言っている。経路の外に触れる小さな修正は、仕様では回さないが SKILL.md では回す。親は SKILL.md に従うため、PR 本文を読んだ利用者が予想する再レビューの回数と、実際の回数がずれる。差分で新しく足した文同士の食い違いなので in。安全側にずれているので被害は反復が増えることに限られるが、文書と実装の食い違いには当たる。LLM が文書を読んで動く挙動なので、実行はしていない。
+- `clean-wn-315/c1` **些末**(実行していない、llm) — エラー中も、画面に出ていない古い this.rows の cwd が2番目以降の候補に入り、「行が見えない」という理由と矛盾する
+  - 場所: src/ops/app.ts:952 / 挙げた構成: code-review ×3、mattpocock ×1
+  - 根拠: src/ops/app.ts:952 では、this.rows のすべての行の cwd を候補に足している。この行は差分で変わっていない。エラーの間、this.rows は残る(239行で error を立てて return し、267行の差し替えに届かない)ので、指摘のとおり古い行の cwd が2番目以降の候補に入る。ただ、PRODUCT.md が「見えない行のリポジトリを先頭にしない」と定めているのは先頭だけで、候補に「--json の各行の cwd」を含めるという記述とは食い違わない。利用者が誤る挙動ではなく、理由づけの筋の揃え方の問題にとどまる。
+- `clean-wn-315/c10` **些末**(実行して確かめた、llm) — エラー中の ctrl+q ctrl+n の振る舞いを確かめるテストがない
+  - 場所: test/e2e/ops.test.ts:294 / 挙げた構成: code-review ×2、mattpocock ×1、perspectives ×2
+  - 根拠: テストが無いという指摘。挙動は一時テストで確かめた。libby に attach したあと agentsFail にして ctrl+q ctrl+n を押すと、New session in: の先頭が '> lib' になった。テストは削除済み。
+- `clean-wn-315/c11` **些末**(実行していない、llm) — worktree・git でない cwd・(tty)・行なしの各分岐にテストがない
+  - 場所: test/e2e/ops.test.ts / 挙げた構成: mattpocock ×2
+  - 根拠: worktree・git でない cwd・(tty)・行なしの分岐に、テストが無いという指摘。openNew(src/ops/app.ts:943-963)と rootOfSid(:965-969)は locations の root か cwd を先頭に、行が無ければ launchDir を先頭に置く。テストの不足で、挙動の問題ではない。
+- ★ `clean-wn-315/c12` **些末**(実行していない、llm) — 行がないときと git でない場所のときの先頭候補のテストがない
+  - 場所: test/e2e/ops.test.ts:103 / 挙げた構成: code-review ×1
+  - 根拠: テストが無いという指摘。行が無いと sid が undefined で prefRoot が無く、launchDir が先頭になる(app.ts:853, 944-950)。git でない場所では rootOfSid が r.cwd を返す。コードは docs と合っている。
+- `clean-wn-315/c13` **些末**(実行していない、llm) — worktree の行で元のリポジトリに寄るかを確かめるテストがない
+  - 場所: test/e2e/ops.test.ts:103-121 / 挙げた構成: perspectives ×2
+  - 根拠: テストが無いという指摘。rootOfSid は locations.get(r.cwd)?.root を使うので、worktree は元のリポジトリに寄る(app.ts:965-969)。この経路は main にもある。
+- `clean-wn-315/c14` **誤り**(実行して確かめた、llm) — attach していたセッションがまだ一覧に無いと rootOfSid が undefined になり、launchDir が先頭になる
+  - 場所: src/ops/app.ts:1260 / 挙げた構成: code-review ×1
+  - 根拠: ctrl+q ctrl+n の sid は sidOfSession(app.ts:1222-1227)が this.rows から引く。行に無いと sid は undefined で、attachKey の :1255『if (!sid || this.isSpawned(sid)) return;』で戻り、openNew は呼ばれない。このため rootOfSid が undefined で launchDir が先頭になる経路は無い。一時テストで、エラー中に起動したセッション(rows に無い)から ctrl+q ctrl+n を押した。結果は New session のパネルが出ずに一覧へ戻るだけで、launchDir が先頭の候補は出なかった。
+- `clean-wn-315/c15` **誤り**(実行して確かめた、llm) — エラー中は古い this.rows を引くため、エラー後に起動したセッションでは ctrl+q ctrl+n の先頭が起動ディレクトリに戻る
+  - 場所: src/ops/app.ts:1256-1260 / 挙げた構成: perspectives ×1
+  - 根拠: 一時テストで次を確かめた。agentsFail のあと、n の Other... で lib を選んで起動・attach し、C-q C-n を押した。画面はエラー行と一覧のキー説明だけで、'New session in:' は出ない。主張の『先頭が起動ディレクトリに戻る』は起きず、sid が引けずに app.ts:1255 で戻るので n が開かない(別の挙動)。エラー前に attach していた行では、古い rows から引けて先頭は lib になった(docs どおり)。
+- `clean-wn-315/c16` **誤り**(実行して確かめた、llm) — 決定の日付 2026-11-02 がコミット日 2026-11-15 と合わない
+  - 場所: docs/PRODUCT.md:591 / 挙げた構成: code-review ×2
+  - 根拠: gh issue list の結果: #316『一覧の n で、候補の先頭をカーソルのあるセッションのリポジトリにする』(spec-change)と #317 の作成日は 2026-11-02T14:35Z / 14:39Z だった。利用者の判断は 11-02 で、コミットは 11-15 になっただけ。日付は誤りではない。
+- `clean-wn-315/c17` **些末**(実行していない、llm) — エラー中は非表示の行を使わない規則が呼び出し側ごとに散らばり、経路追加時に漏れやすい
+  - 場所: src/ops/app.ts:853 / 挙げた構成: code-review ×2
+  - 根拠: src/ops/app.ts:823 のガードで n を通し、853 で `this.error ? undefined : sid` としているのは事実。ただし、今の挙動はどの経路でも正しく、指摘は構造の好みと、将来キーを足したときの書き忘れの懸念にとどまる。
+- `clean-wn-315/c18` **些末**(実行していない、llm) — openNew の省略可能な位置引数2つにより undefined を渡す呼び出しが増え、読みにくい
+  - 場所: src/ops/app.ts:852-853 / 挙げた構成: mattpocock ×3
+  - 根拠: `openNew(waitFor?, preferredFrom?)`(app.ts:943)の先頭に undefined を渡す呼び出しは 853 と 1260 の2か所で、指摘の内容は事実。中では `waitFor ?? preferredFrom` にまとめているだけで、挙動には関わらない。読みやすさの指摘。decision-log #317 にも、差分を小さく保つために変えなかったと記録がある。
+- `clean-wn-315/c19` **些末**(実行していない、llm) — followCursor がカーソルを黙って移した直後の n で、意図しないリポジトリが先頭になる(guard がない)
+  - 場所: src/ops/app.ts:853 / 挙げた構成: code-review ×2、perspectives ×1
+  - 根拠: app.ts:301-302 で、followCursor がカーソルを動かしたときに guard を立てるが、n はこれを見ない(853)。これは事実。ただし PRODUCT.md の仕様は『カーソルのあるセッションのリポジトリ』を先頭にすることで、移った後のカーソルは画面に出ており、仕様どおりに動いている。n はすぐには起動しない。候補の一覧を出し、先頭の名前を見せてから Enter を待つ。起動は不可逆な操作でもない。guard は Ctrl+X の削除のような取り返しのつかない操作のためのもの。n に守りが無いのは設計の好みの問題で、挙動の誤りではない。
+- `clean-wn-315/c2` **本物・差分の外**(実行していない、llm) — locations.refresh は tier !== null の行しか解決しないため、idle の行の worktree パスが元のリポジトリに寄せられないまま候補に入る
+  - 場所: src/ops/app.ts:950 / 挙げた構成: code-review ×1
+  - 根拠: lib/tier/classify.ts:60 で、interactive かつ idle の行は tier が null になる。src/input/observe.ts の observe() は、この行を除かずに rows に入れて返す。app.ts:267 の this.rows にもそのまま入る。一方 locations.refresh は tier !== null の cwd だけを引く(app.ts:244、1542)。そのため app.ts:952 の this.p.locations.get(r.cwd)?.root ?? r.cwd は、この行では生の cwd になる。worktree にいる対話セッションなら、worktree のパスがそのまま候補に入り、PRODUCT.md の「worktree に移ったセッションの cwd は git で元のリポジトリのパスに寄せる」に反する。ただし952行は main から変わっておらず、差分で足した先頭の候補(カーソルの行は見える行なので tier は null でない)とも関係しない。よって範囲は out。
+- `clean-wn-315/c20` **誤り**(実行していない、llm) — エラー中の先頭の扱いについて利用者への層2エスカレーションの記録がない
+  - 場所: docs/PRODUCT.md:591 / 挙げた構成: code-review ×1、mattpocock ×2
+  - 根拠: main の app.ts:852 は `this.openNew()` で、エラーの間の一覧の n は main の時点で既に起動したディレクトリを先頭にしていた。ctrl+q ctrl+n(main:1259、HEAD:1260 の `openNew(undefined, sid)`)は差分で変わっていない。差分がエラーの間に新しく持ち込んだ観測できる変化は無く、利用者が決めた変更(2026-11-02、#316)を見えない行に広げなかっただけ。また、記録が無いという主張も誤り。decision-log の #317『エラーの間の n と ctrl+q ctrl+n の候補の先頭を書き分けた』に層1として記録があり、確認フェーズで利用者に確かめると書いてある。
+- `clean-wn-315/c21` **些末**(実行していない、llm) — 1つの it で2つを確かめており、前半が落ちると後半が実行されない
+  - 場所: test/e2e/ops.test.ts / 挙げた構成: mattpocock ×1
+  - 根拠: test/e2e/ops.test.ts:103-121 の1つの it が、通常の場合とエラーの間の場合を続けて確かめているのは事実。前半が落ちると後半は流れないが、テストの構成の話で、製品の挙動には関わらない。
+- `clean-wn-315/c22` **些末**(実行していない、llm) — 1つの it に2つの場合が入っているのに、テスト名がエラー中の場合を表していない
+  - 場所: test/e2e/ops.test.ts:103 / 挙げた構成: mattpocock ×2
+  - 根拠: テスト名『8: 一覧の n では、候補の先頭がカーソルのあるセッションのリポジトリ』は、後半のエラーの間の場合に触れていない。これは事実だが、命名の指摘で挙動には関わらない。
+- `clean-wn-315/c23` **些末**(実行していない、llm) — テスト名は「8:」なのに、後半のエラー中の扱いがシナリオ8の文に含まれていない
+  - 場所: test/e2e/ops.test.ts / 挙げた構成: mattpocock ×1
+  - 根拠: PRODUCT.md のシナリオ 8 に足した文は『カーソルを別のリポジトリの行に置いて n を押すと先頭はそのリポジトリ』だけ。エラーの間の扱いは n の節(591行)にしか書いていないので、指摘の内容は事実。ただしテスト名と docs の対応づけの話で、仕様そのものは n の節に書いてあり、利用者が誤ることはない。
+- `clean-wn-315/c24` **誤り**(実行して確かめた、llm) — e2e がタイムアウトし、テストが通るか確認できていない
+  - 場所: test/e2e/ops.test.ts / 挙げた構成: mattpocock ×1
+  - 根拠: `npm run build` のあと `npx vitest run test/e2e/ops.test.ts --no-file-parallelism --testTimeout 60000` を流すと、Tests 14 passed (14) で、新しいテストも通った。既定の 5000ms で流すと Test timed out in 5000ms で落ちる。指摘のタイムアウトは、npm run test:e2e の設定(--testTimeout 60000)を使わなかったためとみられる。
+- `clean-wn-315/c25` **些末**(実行していない、llm) — (tty) の行で git でない cwd も先頭になり、先頭が変わるのが初めてなので妥当か確認が要る
+  - 場所: src/ops/app.ts:968 / 挙げた構成: perspectives ×1
+  - 根拠: src/ops/app.ts:853 は cursor の sid をそのまま openNew に渡し、rootOfSid(app.ts:964-968)は locations の root を返す。git でない場所なら where.ts の plain(root = cwd の実パス)になる。(tty) の行の cwd も先頭になるという事実は合っている。ただし docs/PRODUCT.md:591 は「カーソルのあるセッションのリポジトリ(git でない場所ならその場所)」と書いていて、(tty) の行を除くとはしていない。この cwd は main の時点でも候補に入っていた(各行の cwd)。変わったのは並びの順だけで、文書どおりに動く。指摘は欠陥を示しておらず、仕様をもう一度確かめたらどうかという提案にとどまる。
+- `clean-wn-315/c26` **些末**(実行していない、llm) — コミットメッセージがエラー中の分岐や ctrl+q ctrl+n との違いを正しく書いていない
+  - 場所: コミットメッセージ / 挙げた構成: mattpocock ×3
+  - 根拠: git log main..HEAD のコミット本文は「ctrl+q ctrl+n と同じ扱い」「openNew(undefined, sid) を呼ぶ」と書いている。実装(app.ts:853)は this.error ? undefined : sid で、エラーの間は ctrl+q ctrl+n(app.ts:1260、常に sid を渡す)と違う。食い違いは事実だが、利用者が読む docs/PRODUCT.md:510,591 にはエラーの間の違いが正しく書いてある。コミットメッセージの書き方の問題で、挙動には関わらない。
+- `clean-wn-315/c27` **些末**(実行していない、llm) — n で起動したセッションから離脱直後は行がまだ一覧に無く、次の n の先頭が前の行のリポジトリになる
+  - 場所: src/ops/app.ts:853 / 挙げた構成: code-review ×1
+  - 根拠: onReturn(app.ts:1110-1123)は、行がまだないと pendingCursorId を置くだけで、cursor は変えない。行が観測に現れた更新(app.ts:311-319)で初めて cursor が移る。そのため、離脱した直後から refresh が終わるまでの間に n を押すと、前の行のリポジトリが先頭になる。経路は指摘どおり。ただしこの間、画面のカーソルは前の行にあり、新しい行はまだ表示されていない。文書の規則「カーソルのあるセッションのリポジトリ」(PRODUCT.md:591)のとおりで、見えている状態とも合う。誤りではなく、短い時間窓での好みの問題なので、挙動の欠陥とはしない。
+- `clean-wn-315/c28` **些末**(実行していない、llm) — spec-change の issue が起票済みか確かめられていない
+  - 場所:  / 挙げた構成: mattpocock ×1
+  - 根拠: issue を起票したかという作業の手順の確認で、コードの挙動には関わらない。gh の認証に頼るので、ここでは確かめていない。
+- `clean-wn-315/c29` **本物・差分の内**(実行して確かめた、llm) — 場所を解決できない(worktree 削除など)と、存在しない cwd が検証されないまま先頭に置かれ起動に失敗する
+  - 場所: src/ops/app.ts:853 / 挙げた構成: code-review ×1
+  - 根拠: where.ts の locate は、git の問い合わせに失敗すると {root: real} を返す(realpath に失敗すれば生の cwd)。Locations は1回だけ前回の値を使い、そのあとは plain になる。そのため、worktree が消えた行の root は存在しない cwd になる。openNew(app.ts:943-952)はこれを先頭に add し、mode の sel は 0 なので既定で選ばれる。dir の Enter(app.ts:757-761)は it.path をそのまま model の段に渡し、存在するかを確かめない(resolveDir で確かめるのは Other... だけ)。startSession(app.ts:986-1009)は、run('claude', ..., {cwd: dir}) が execFile の ENOENT で失敗すると、出力が空のまま 'claude --bg did not start a session:' の画面になる。`node -e "execFile('true',[],{cwd:'/nonexistent/x'},...)"` を実行すると e.code=ENOENT、stdout と stderr は空だった。main でもこの候補はリストの中にあったが、先頭で既定の選択になったのは今回の差分による。
+- `clean-wn-315/c3` **些末**(実行していない、llm) — 候補の先頭はカーソル行のリポジトリなのに、Other... を空で確定すると起動ディレクトリになり、既定が2つある
+  - 場所: src/ops/app.ts:978 / 挙げた構成: mattpocock ×1、perspectives ×3
+  - 根拠: resolveDir(app.ts:972付近)は、空の入力に this.p.launchDir を返す。PRODUCT.md の n の節も、変更後に「空のまま Enter を押すと whatnext を起動したディレクトリで起動し、入力欄に Enter confirm (empty: <起動したディレクトリ>) と示す」と明記しており、画面に既定の場所が出る。文書とコードは一致していて、利用者が誤る経路はない。既定を候補の先頭に揃えるかどうかは、仕様の好みの問題である。
+- `clean-wn-315/c30` **些末**(実行していない、llm) — 591行は「f と同じ」としつつ書き添えた点が643行と違い、差があるのか迷う
+  - 場所: docs/PRODUCT.md:591,643 / 挙げた構成: mattpocock ×1
+  - 根拠: PRODUCT.md:591 は「f の New session で待ち元のリポジトリを先頭に置くのと同じ」と書き、git でない場所とエラーの間の扱いを書き添えている。643 にはそれがない。違いは場面の違いから来ている。f はエラーの間は受け付けず(app.ts:823 の早期 return)、(tty) の行では断るので、待ち元はいつも background の行になる。二つの規則に挙動の矛盾はなく、文書の読みやすさの指摘にとどまる。
+- `clean-wn-315/c4` **些末**(実行していない、llm) — 起動直後は initialCursor が置いた行のリポジトリが先頭になり、n Enter が起動ディレクトリで起動しなくなる
+  - 場所: src/ops/app.ts:853 / 挙げた構成: code-review ×2、perspectives ×1
+  - 根拠: 起動直後、カーソルは initialCursor(app.ts:294)が置いた行にあり、n を押すとその行のリポジトリが先頭になる。これは事実である。ただ、PRODUCT.md の変更後の文面は「カーソルのあるセッションのリポジトリ」を先頭にすると定め、起動直後を例外にしていない。先頭が起動ディレクトリになるのは「行がないとき」と「エラーの間」だけで、2026-11-02 の利用者の判断として書かれている。シナリオ8 にも追記がある。意図して変えた仕様どおりの挙動で、不具合ではない。
+- `clean-wn-315/c5` **些末**(実行していない、llm) — 止めている途中・削除している途中の行で、n だけがその行のリポジトリを先頭に使い、方針が揃っていない
+  - 場所: src/ops/app.ts:853 / 挙げた構成: code-review ×1
+  - 根拠: app.ts:856-861 で、busy(this.deleting.has(sid))の行では Enter・e・f・w・v を断っている。n はその前の852行で処理されるので、止めている途中の行のリポジトリも先頭に使う。ただ n は、その行のセッションに触れない。使うのはリポジトリのパスだけで、パスは削除の途中でも有効なので、誤った結果や失敗にはつながらない。方針の揃え方の問題にとどまる。
+- `clean-wn-315/c6` **些末**(実行していない、llm) — エラー中の先頭の規則を docs で2回述べていて冗長
+  - 場所: docs/PRODUCT.md:591 / 挙げた構成: mattpocock ×1
+  - 根拠: docs/PRODUCT.md:591 の「エラーを出している間は、whatnext を起動したディレクトリが先頭になる。エラーの間は行が画面に出ていないので、見えない行のリポジトリを先頭にしない。」は、規則とその理由を述べている。重なりは文章の書き方の問題で、挙動には関わらない。
+- `clean-wn-315/c7` **誤り**(実行して確かめた、llm) — 重複除去が文字列一致のみで、realpath 済みの root と未正規化の launchDir が二重に出る
+  - 場所: src/ops/app.ts:944 / 挙げた構成: code-review ×1
+  - 根拠: launchDir は src/cli/list.ts:89 の process.cwd() で決まる。`cd /tmp && node -e "console.log(process.cwd())"` は /private/tmp を出した。process.cwd() はシンボリックリンクを解いた物理パスを返すので、launchDir は正規化されていないという前提が誤っている。カーソルの行の root も、git でない場所なら realpathSync(cwd)(src/input/where.ts:29)、git の場所なら git が返す絶対パスである。どちらの場合も、launchDir と同じ表記になる。さらに、同じ root は main の時点から952行の rows のループで足されており、差分で生まれた重複でもない。
+- `clean-wn-315/c8` **些末**(実行していない、llm) — 513行の「同じ」の重なりや「違い」との近接で文意が曖昧
+  - 場所: docs/PRODUCT.md:513 / 挙げた構成: mattpocock ×1、perspectives ×1
+  - 根拠: docs/PRODUCT.md:513 の「一覧の n と同じく候補の先頭をいたセッションのリポジトリにする。…も同じにする(一覧の n と違い…)」の言い回しの問題である。文意は追え、挙動とも食い違わない。
+- `clean-wn-315/c9` **些末**(実行していない、llm) — ctrl+q ctrl+n の文から移した理由などについて、n の節を参照する言葉を足すべき
+  - 場所: docs/PRODUCT.md:513 / 挙げた構成: perspectives ×1
+  - 根拠: docs/PRODUCT.md:513 の書き方(相互参照の言葉を足すか)の提案。理由は :591 の n の節にあり、読み手が誤る挙動の食い違いはない。文書の書き方の好みにあたる。
+- `sk-12/c1` **些末**(実行していない、llm) — 判定役の実行中に config 以外の拒否で止まる経路(およびタイムアウト)を確かめるテストがない
+  - 場所: skill-dev/review-loop/test.py:506 付近(run_judge) / 挙げた構成: code-review ×1、mattpocock ×2、perspectives ×1
+  - 根拠: テストが無いという指摘。review_loop.py の run_judge(差分 +786 付近)では、ループの中で tail.poll() → watch_denials("judge", running=True) → JUDGE_TIMEOUT の確認、という順で処理しており、run_reviews と同じ watch_denials を使っている。fakes/claude の FAKE_JUDGE に denylive 相当のモードが無く、test.py にこの経路のテストが無いのは事実。ただし挙動の誤りを示すものではないので trivial とした。
+- `sk-12/c10` **些末**(実行していない、llm) — tool_use_id のない拒否の場合を確かめるテストがない
+  - 場所: テスト / 挙げた構成: mattpocock ×1
+  - 根拠: テストが無いという指摘。test.py の denyconfig と fake の deny() は、どちらも tool_use_id 'x' を付けている。なお tool_use_id が None だと、config_denied[None] が上書きされて2件目以降が報告されない。また check_result の seen に None が入ると、id のない result 側の拒否を素通りさせる経路がコード上はある。ただ、本件はテストの有無の指摘として trivial にした。
+- `sk-12/c11` **些末**(実行していない、llm) — 拒否されたコマンドの入力(最大200字)が denials.txt と stderr に平文で残り、トークンが漏れうる
+  - 場所: review_loop.py:337-339 / 挙げた構成: perspectives ×3
+  - 根拠: summarize_denials(review_loop.py:207-212)が入力の JSON を200字まで出すのは事実。ただ、同じコマンドは同じ作業ディレクトリの review-*.stdout.jsonl(tool_use の行)に全文が残る。また main でも、permission_denied のときは同じ要約を stderr に出していた(main の review_loop.py:252, 675)。そのため、新たに漏れる先は同じ利用者のローカルの親セッションに限られ、実質的な露出は増えない。
+- `sk-12/c12` **些末**(実行していない、llm) — フェイクで拒否されるコマンドの文字列が2か所に手書きで重複している
+  - 場所: fakes/claude / 挙げた構成: mattpocock ×1
+  - 根拠: fakes/claude の deny() と denyconfig の result の permission_denials に、同じ文字列 'gh pr diff 7; grep -n KEY .env' が2回書かれているのは事実。テスト用フェイクの書き方の重複で、挙動には関わらない。
+- `sk-12/c13` **些末**(実行していない、llm) — modelUsage の docstring で「セッションの累計」と「どの行も同じ値」が矛盾している
+  - 場所: skills/review-loop/scripts/review_loop.py:237 / 挙げた構成: code-review ×1、perspectives ×2
+  - 根拠: review_loop.py:237 の『modelUsage はセッションの累計で、どの行も同じ値になる』は、累計ならターンごとに増えるはずなので、説明として矛盾している。コメントの正確さの問題で、コードの挙動(最後の行を使う)には影響しない。
+- `sk-12/c14` **未確定**(実行していない、llm) — トークン数を最後の result の行からしか取らず、modelUsage がターンごとの値なら少なく数える
+  - 場所: skills/review-loop/scripts/review_loop.py:245 / 挙げた構成: code-review ×1、perspectives ×1
+  - 根拠: 本物の claude で、最上位の result の行が複数出る stream の実例を探した。$TMPDIR/review-loop 配下の *.jsonl 8件を走査したが、該当はなかった。modelUsage が累計かターンごとかは確かめられていない。バックグラウンドのサブエージェントを動かす実 claude の実行は費用と外部通信を伴うので行わなかった。補足として、main でもレビュー役は最後の result の行(tail.result)だけでトークンを数えていた。
+- `sk-12/c15` **些末**(実行していない、llm) — 偽の claude が全行に同じ modelUsage を出すため、最初の行と最後の行のどちらを使う実装か区別できない
+  - 場所: test.py / fakes/claude / 挙げた構成: perspectives ×1
+  - 根拠: fakes/claude の result() は、どの行にも同じ modelUsage(outputTokens 300)を出す。そのため test.py の `tokens.output == 4*300` では、最初の行を使う実装と最後の行を使う実装を区別できないのは事実。ただしテストの網羅性の指摘で、挙動の問題ではない。
+- `sk-12/c16` **本物・差分の外**(実行して確かめた、llm) — 拒否のあと子が result の行を出さずに終わると permission_denied ではなく child_error に分類される
+  - 場所: review_loop.py:238 check_result / 挙げた構成: mattpocock ×1、perspectives ×1
+  - 根拠: tool_use と source のない permission_denied だけがあり result の行がない stream を用意し、終了コード1で watch_denials(running=False) と check_result を呼んだ。出力は『child_error: review a』で、拒否の内容も含まれない。run_reviews では、子が拒否の直後に終わり、拒否の行を最初に読むのが rc 確定後の poll だと running=False になって止まらない。run_judge の while p.poll() is None も同じ。main でも、tail.result が None なら child_error になり(main の review_loop.py:238)、拒否は実行中にしか見ていなかったので、同じように起きる。
+- `sk-12/c17` **些末**(実行していない、llm) — watch_denials という名前と引数が、記録・追記・例外送出を兼ねる中身に合っていない
+  - 場所: review_loop.py watch_denials / 挙げた構成: mattpocock ×2
+  - 根拠: review_loop.py の watch_denials(差分で追加)は、new_config_denials の log 出力、denials.txt への追記、running かつ tail.denial のときの AttemptFailed 送出を1つの関数で行う。中身は docstring の説明どおりに動いており、名前が中身を表しきれていないという指摘は命名の好みで、挙動には関わらない。
+- `sk-12/c18` **些末**(実行していない、llm) — denial_summary から summary への改名で、何の要約かが名前から分からなくなった
+  - 場所: review_loop.py StreamTail.summary / 挙げた構成: mattpocock ×3
+  - 根拠: 差分で denial_summary() が summary(self, d) に変わり、引数に拒否のイベントを取るようになった(new_config_denials と watch_denials から呼ばれる)。改名で「拒否の」という意味が名前から落ちたのは事実だが、挙動は同じなので命名の問題にとどまる。
+- `sk-12/c19` **些末**(実行していない、llm) — self.reported という名前から報告済みの設定拒否の件数だと読み取れない
+  - 場所: review_loop.py self.reported / 挙げた構成: mattpocock ×1
+  - 根拠: StreamTail.__init__ の self.reported = 0 は、new_config_denials で config_denied の何件目まで報告したかを数える。名前が分かりにくいのは事実だが、動きは正しく、命名の問題にとどまる。
+- `sk-12/c2` **些末**(実行していない、llm) — run_judge のポーリングのループが run_reviews とほぼ重複しており、片方だけ直される恐れがある
+  - 場所: skills/review-loop/scripts/review_loop.py:786 / 挙げた構成: code-review ×2、mattpocock ×3
+  - 根拠: run_reviews(差分 705-717)と run_judge(差分 786-795)は、どちらも poll → watch_denials → タイムアウトの確認 → sleep → finish → poll → watch_denials(running=False) → check_result の順で書かれており、重複は事実。ただし今の2か所は同じように動いていて、問題になるのは将来片方だけ直したときに限る。構造の好みの話なので trivial。
+- `sk-12/c20` **些末**(実行していない、llm) — check_result が StreamTail の内部データを直接たどっており、StreamTail 側に移すべき(Feature Envy)
+  - 場所: review_loop.py check_result / 挙げた構成: mattpocock ×3
+  - 根拠: check_result は tail.config_denied、tail.denial、tail.tool_inputs、tail.results を直接読んで拒否の一覧を作っている(差分 +248〜259 行付近)。このロジックを StreamTail に移すべきかは構造の好みで、今の結果は変わらない。
+- `sk-12/c21` **些末**(実行していない、llm) — check_result の拒否の要約 dict の組み立てが StreamTail.summary と重複している
+  - 場所: skills/review-loop/scripts/review_loop.py:252 / 挙げた構成: code-review ×2、mattpocock ×2
+  - 根拠: check_result の {"tool_name": tail.denial.get("tool_name"), "tool_input": tail.tool_inputs.get(...)} は、StreamTail.summary が summarize_denials に渡す dict と同じ形で、重複しているのは事実。ただし重複しているだけで挙動の問題はない。
+- `sk-12/c22` **些末**(実行していない、llm) — 1つの子で config の拒否と config 以外の拒否が混ざったときに止まるかのテストがない
+  - 場所: テスト / 挙げた構成: mattpocock ×1
+  - 根拠: テストが無いという指摘。コードを追うと、StreamTail.poll は source=='config' の拒否を config_denied に入れ、それ以外の拒否を self.denial に入れる。watch_denials は running のとき tail.denial があれば止め、check_result も tail.denial を denials に足して permission_denied にする。混在していても config 以外の拒否で止まるので、挙動の問題は見つからない。
+- `sk-12/c23` **些末**(実行していない、llm) — 設定のルールでの拒否と result の permission_denials にだけ載る拒否が混在する場合のテストがない
+  - 場所: skill-dev/review-loop/test.py:511 付近 / 挙げた構成: mattpocock ×1、perspectives ×1
+  - 根拠: テストが無いという指摘。check_result は seen を set(tail.config_denied) から始め、result の permission_denials のうち tool_use_id が seen にないものを denials に足して permission_denied にする。設定のルールでの拒否と別の tool_use_id の拒否が混在していれば、後者で止まる。挙動の問題は見つからない。
+- `sk-12/c24` **本物・差分の内**(実行して確かめた、llm) — 判定役の multi テストが最後の行が空の場合しか確かめず、判定の後ろに文が残る問題を検出できない
+  - 場所: test.py(FAKE_JUDGE=multi) / 挙げた構成: mattpocock ×1、perspectives ×2
+  - 根拠: 指摘のうちテストが無いという部分は trivial に当たるが、指摘が挙げる経路そのものを再現した。/tmp/c24/t.py で review_loop の StreamTail と check_result を使い、最上位の result の行を ["突き合わせています。", 判定, "前のメッセージの内容から変わりません"] の順に読ませ、run_judge と同じく最初の見出しから後ろを切り出した。出力は '## 指摘\n\n### F1: s\n\n## 競合\n\nなし\n\n前のメッセージの内容から変わりません' で、無関係な文が判定の「競合」節の後ろに付いて残った。run_judge は見出しより前の前置きを落とすが、後ろに付いた文は落とさない。SKILL.md の 54 行目には「標準出力は判定のテキストだけ」とあり、これと食い違う。main では判定役を --output-format json で動かし、最後の result だけを使っていたので、この混入は差分の、result の行をすべてつなぐ変更から生じた(scope in)。ただし影響は小さい。判定の後ろに短い文が1つ付く程度で、見出しの検出は通る。
+- `sk-12/c25` **些末**(実行していない、llm) — SKILL.md の permission_denied の箇条書きに多くの話題が詰め込まれ読みにくい
+  - 場所: SKILL.md:103 「失敗したとき」 / 挙げた構成: mattpocock ×1、perspectives ×1
+  - 根拠: SKILL.md:103 の箇条書きは、確かに 1 項目に複数の話題(止める・config では止めない・denials.txt・source がないとき・sandbox の入れ子)を詰めている。ただしこれは読みやすさの問題で、書かれている内容はコード(watch_denials、StreamTail.poll の source == "config" の分岐)と合っている。挙動には関わらない。
+- `sk-12/c26` **些末**(実行していない、llm) — result の行をつなぐ変更と設定の拒否を許す変更は独立しており、コミットを分けるべき
+  - 場所: コミット全体 / 挙げた構成: mattpocock ×1
+  - 根拠: コミットをどう分けるかという構造の好みの指摘で、挙動には関わらない。差分の中でも check_result が results と config_denied の両方を扱っており、2 つの変更は同じ関数に絡み合っている。
+- `sk-12/c27` **些末**(実行して確かめた、llm) — 各行を strip してからつなぐため本文の先頭の字下げが消える
+  - 場所: review_loop.py:243 / 挙げた構成: mattpocock ×1
+  - 根拠: /tmp/rl_t/t.py で StreamTail に 2 つの result の行('    indented code\n    x' と 'done')を読ませてつないだ結果は 'indented code\n    x\n\ndone' だった。strip がかかるのは各 result メッセージの先頭と末尾だけで、本文の中の各行ではない。main でも、result.md の書き出しは .strip() で、judge-input.md も text.strip() で書いていたので、先頭の空白はもともと消えていた。差分で新しく起きるのは、2 つ目以降の result メッセージの先頭の字下げが消えることだけ。読むのは LLM の判定役なので、結果が誤る経路は見当たらない。
+- `sk-12/c28` **未確定**(実行していない、llm) — result の行を全てつなぐため、途中経過や取り下げ・重複した指摘が result.md と判定役の入力に残る
+  - 場所: skills/review-loop/scripts/review_loop.py:242 / 挙げた構成: code-review ×2
+  - 根拠: review_loop.py:242 では、最上位の空でない result の行をすべてつないでいる。このため、途中の行と最後の行に同じ本文があれば judge-input.md に 2 回入るし、取り下げる前の指摘もそのまま入る。ここまではコードで確定する。ただし、これは docstring と SKILL.md(「途中経過の文も混ざる」)に書かれた意図した妥協で、取り下げの文も一緒に判定役へ渡る。判定役が取り下げた指摘を採用するかは LLM の振る舞い次第で、実際の観点スキルが本文を繰り返したり取り下げたりする出力を出すかも、ここでは再現できなかった。
+- `sk-12/c29` **些末**(実行していない、llm) — test.py で wd = err.rstrip().splitlines()[-1] が2回重複している
+  - 場所: test.py / 挙げた構成: mattpocock ×1
+  - 根拠: test.py に `wd = err.rstrip().splitlines()[-1]` が 2 回あるのは事実だが、コードの重複でしかなく、テストの挙動には関わらない。
+- `sk-12/c3` **未確定**(実行して確かめた、llm) — test.py が IndexError で一度失敗しており、タイミングに依存して不安定な可能性がある
+  - 場所: test.py:248 / 挙げた構成: mattpocock ×1
+  - 根拠: `python3 test.py` を逐次で3回、6並列で6回、合わせて9回実行し、すべて rc=0・『全て成功』で FAIL は0件だった。test.py:248 は `hung = [c for c in calls() if ... 'mattpocock-skills:code-review'][-1]` で、フェイクの claude が呼び出しを記録できなかったとき(calls が空のとき)に IndexError になる。指摘では codeend 以降がまとめて FAIL になっており、タイミングよりもレビュー側の実行環境(sandbox でフェイクが書けないなど)が原因である可能性が高い。ただし再現できず、原因は確定できなかった。各テストは mkdtemp で専用の TMPDIR を使っているので、並列実行どうしの干渉ではない。
+- `sk-12/c30` **些末**(実行して確かめた、llm) — config_denied を tool_use_id キーの dict にしており、id の欠落・重複で2件目以降の拒否が記録されない
+  - 場所: skills/review-loop/scripts/review_loop.py:309 / 挙げた構成: code-review ×1
+  - 根拠: /tmp/rl_t/t.py で tool_use_id が None, None, 'a', 'a' の config の拒否を 4 件読ませると、new_config_denials が返したのは 2 件だけだった。dict での上書きという仕組みは指摘のとおり。ただし、実際の claude 2.1.325 のバイナリ(strings で確認)では、permission_denied のイベントを出す箇所は 2 つで、どちらも tool_use_id に tool use の id(Mt / s)を必ず入れている。result の permission_denials も tool_use_id で重複を除いている。実際の入力では id が欠けたり重複したりしないので、問題になるのは入力の形が変わったときだけ。(関連する別件: 同じバイナリのイベントには source のフィールドがなく、decision_reason_type だけがある。このため、実際の CLI では source == "config" の分岐が働かず、設定のルールでの拒否も止める側に倒れる可能性が高い。)
+- `sk-12/c31` **誤り**(実行して確かめた、llm) — 判定役を stream-json にしたため、末尾に改行のない最後の result の行が読まれず child_error になる
+  - 場所: skills/review-loop/scripts/review_loop.py:786 / 挙げた構成: code-review ×1
+  - 根拠: StreamTail が最後の改行より後を読まないことは確かめた(改行なしの result を 1 行だけ書くと results は 0 件)。ただし、実際の CLI で `claude -p --output-format stream-json --verbose` を実行すると、出力の最後のバイトは 0x0a(改行)で、最後の行も改行で終わっていた。レビュー役は main の時点で同じ StreamTail を使っている。改行のない最後の行という前提は、実際の CLI では起きない。
+- `sk-12/c32` **些末**(実行していない、llm) — denials.txt を with なしの open(...).read() で読んでおり、既存コードの書き方と揃っていない
+  - 場所: test.py / 挙げた構成: mattpocock ×1
+  - 根拠: test.py の denials.txt を with なしの open(...).read() で読んでいるのは事実だが、書き方の不揃いでしかない。短命のテストプロセスなので、ファイルの閉じ忘れによる挙動の差もない。
+- `sk-12/c33` **些末**(実行していない、llm) — 文字列 "config" が複数の箇所に散らばっており、定数にすべき。
+  - 場所: review_loop.py / 偽 claude / SKILL.md / 挙げた構成: mattpocock ×1
+  - 根拠: grep で確かめた。実装で文字列 "config" を比べているのは skills/review-loop/scripts/review_loop.py:308 の `msg.get("source") == "config"` の1か所だけ。偽 claude(skill-dev/review-loop/fakes/claude:94,129 の deny("config"))は別プロセスとして動くテスト用の独立したスクリプトで、claude CLI が出すイベントの値を真似ているので、実装と定数を共有する筋合いがない。SKILL.md の記述は文書。指摘のとおり文字列は3か所にあるが、どこも外部の CLI が決める source の値をそのまま書いたもので、今の挙動には関係しない。書き方の好みの話なので trivial。
+- `sk-12/c4` **本物・差分の内**(実行して確かめた、llm) — フェイクが source などの値を決め打ちしており、本物の CLI の拒否イベントの形を確かめていない
+  - 場所: skills/review-loop/scripts/review_loop.py:308 / fakes/claude / 挙げた構成: code-review ×1、perspectives ×2
+  - 根拠: 実際に入っている CLI(/Users/masahirompp/.local/share/claude/versions/2.1.325)を strings で取り出して調べた。stream に出す permission_denied イベントの schema(t4)のフィールドは type, subtype, tool_name, tool_use_id, agent_id, decision_reason_type, decision_reason_code, decision_reason, message, uuid, session_id で、`source` も `reason_type` も無い。イベントを出している2か所(de({type:"system",subtype:"permission_denied",...}) と emitPermissionDenied)も同じフィールドしか付けていない。バイナリの中の source:"config" はすべて内部の logDecision の引数で、stream のイベントには出ない。このため StreamTail.poll の `msg.get("source") == "config"`(review_loop.py 308 付近)は本物の CLI では常に偽になり、deny ルールに当たった拒否も含めて全部 denial 扱いとなり、試行が止まる。つまり差分の目的である『設定のルールでの拒否では試行を止めない』が、本物の CLI では実現していない(fail-safe 側に倒れるだけで、main と同じ挙動)。new_config_denials が読む reason_type も、本物では decision_reason_type という名前。フェイクが source="config" を決め打ちしているので、テストは通ってしまう。さらに schema の説明には『file-tool calls refused by a path-scoped deny rule are not covered』とある。CLI を API 付きで実際に動かす確認は、費用がかかり外部にも出るので行っていない。
+- `sk-12/c5` **些末**(実行していない、llm) — 終了時に watch_denials が同じ引数で2回呼ばれ、1回目が無駄になっている
+  - 場所: skills/review-loop/scripts/review_loop.py:708-716 / 挙げた構成: code-review ×2
+  - 根拠: run_reviews では、rc が None でないとき watch_denials(running=False) を呼び、finish と tail.poll() のあとにもう一度 watch_denials(running=False) を呼んでいる。1回目は、それまでに読んだ config の拒否を記録するだけで、raise はしない(running=False なので)。2回目は、そのあと増えた分を記録する。new_config_denials は reported で差分だけを返すので、1回目が無くても記録の内容は同じになる。冗長なのは事実だが挙動は変わらないので trivial。
+- `sk-12/c6` **些末**(実行していない、llm) — source が config でも空でもない拒否(例: hook)のテストがない
+  - 場所: test.py source 判定 / 挙げた構成: mattpocock ×3
+  - 根拠: テストが無いという指摘。StreamTail.poll は source == "config" のときだけ config_denied に入れ、それ以外(hook も含む)は self.denial に入れて止める。source=hook などの値のテストが test.py に無いのは事実だが、挙動の誤りではない。また c4 で確かめたとおり、本物の CLI のイベントには source が無いので、hook という値が来ることも無い。
+- `sk-12/c7` **些末**(実行していない、llm) — SKILL.md は「source がなければ止める」と書いているが、実装は config 以外の source をすべて止めており記述がずれている
+  - 場所: SKILL.md / 挙げた構成: mattpocock ×2
+  - 根拠: SKILL.md の差分では『設定のルールに当たった拒否(イベントの source が config)では試行を止めず』『permission_denied(権限の拒否。設定のルールでの拒否を除く)』『source がなければ、止める側に倒す』と書いている。止めない例外は config だけだと明記しているので、それ以外は止まると読める。読み手が誤るような食い違いではなく、書き方の精度の問題にとどまる。なお本物の CLI には source が無い(c4)ので、hook の場合という区別はそもそも起きない。
+- `sk-12/c8` **些末**(実行していない、llm) — git push などの書き込み系操作が deny ルールで拒否されても警告だけで続き、制約違反の信号が弱まる
+  - 場所: review_loop.py:308-327 / 挙げた構成: perspectives ×2
+  - 根拠: 差分と SKILL.md は、config の拒否を止めずに warn と denials.txt に残すことを意図した仕様として書いている。deny ルールで拒否された操作は実行されないので、作業ツリーやブランチは変わらない。実際に変更や push があったときは、これまでどおり contamination / head_changed の確認で検出される。データの消失や制約違反が見逃される経路は無く、『信号が弱まる』というのは設計の好み。しかも c4 のとおり、本物の CLI では source が付かないため、git push の拒否も今は止まる。
+- `sk-12/c9` **本物・差分の内**(実行して確かめた、llm) — 設定のルールでの拒否が denials.txt と stderr にしか残らず、試行が成功扱いになって判定役や状態コメントに表れない
+  - 場所: review_loop.py:327 watch_denials / SKILL.md:103 / 挙げた構成: perspectives ×2
+  - 根拠: 一時ディレクトリで review_loop を import し、`gh pr diff 7` への source=config の拒否イベントのあとに result『指摘なし』が来る stream を StreamTail に読ませて、watch_denials と check_result を呼んだ。結果は warn 行と denials.txt への1行が出るだけで、check_result は '指摘なし' を返して成功した。attempt には拒否の欄がなく、render(review_loop.py:602〜)にも載らない。judge-input.md(run_judge)に入るのは各観点のテキストだけ。SKILL.md:103 は denials.txt を確かめる場面を『観点の欠落が出たとき』に限っているので、差分を読まずに出た『指摘なし』は見落とされ、見かけ上の収束につながりうる。main ではどの拒否でも止めていたので、この差分で入った問題。
+- `sk-13/c1` **未確定**(実行していない、llm) — 追加の指示に付けた「優先してください」という文言が、REVIEW_CONSTRAINT/NO_MUTATION(編集・push の禁止)より優先すると読まれる余地がある
+  - 場所: review_loop.py:743-749 / 挙げた構成: perspectives ×3
+  - 根拠: review_loop.py:743-749 の review_constraint は REVIEW_CONSTRAINT(NO_MUTATION を含む)の後ろに「スキルの手順と食い違うときは、この指示を優先してください」と足している。文言が優先させる対象は『スキルの手順』だけで、NO_MUTATION より優先するとは書いていない。ただ、両者の優先順位が書かれていないのは事実。LLM がこれを読んで編集の禁止を破るかは、子の claude を本当に動かさないと確かめられず、狙って起こすこともできない。なお、編集が起きても find_contamination と head_changed の検出で試行は失敗になるので、黙って混ざることはない。指示は利用者が指示したときだけ付ける決まり(SKILL.md)でもある。
+- `sk-13/c10` **些末**(実行して確かめた、llm) — 引数だけを変えた --perspective が状態に記録されるかを確かめるテストが無い
+  - 場所: test.py:553-586 / 挙げた構成: perspectives ×2
+  - 根拠: テストが無いという指摘なので trivial。参考として、元になっている不具合は実行で確かめた。`python3 -I -c` で、['code-review low {pr}', 'security-review', 'mattpocock-skills:code-review PR #{pr}'] の skill_name の並びと PERSPECTIVES の並びを比べると True になる。つまり引数だけを変えた --perspective は、review_loop.py:963 の比較で既定と同じとみなされ、記録されない。test.py に、このケースのテストは無い。
+- `sk-13/c11` **些末**(実行していない、llm) — --perspective と --instruct が反復をまたいで保存・検査されず、付け忘れると黙って既定に戻る
+  - 場所: skills/review-loop/SKILL.md:57 / 挙げた構成: code-review ×3、perspectives ×2
+  - 根拠: 主張は事実で、スクリプトはオプションを状態に保存せず、反復をまたいだ一貫性も確かめない。ただし SKILL.md の追加箇所に「スクリプトは反復をまたいでオプションを覚えないので、付け忘れると既定に戻る」「以後の反復でも毎回同じものを付ける」と明記してあり、文書とコードは一致している。問題になるのは親が付け忘れたときだけで、コードが誤った結果を出すわけではない。仕組みで防ぐか規律に任せるかという設計の選択なので trivial とした。
+- `sk-13/c12` **些末**(実行して確かめた、llm) — エラー系の新しいテストが終了コードしか確かめておらず、別の理由で2を返しても通る
+  - 場所: skill-dev/review-loop/test.py / 挙げた構成: mattpocock ×1
+  - 根拠: test.py の追加ループは `check(rc == 2, ...)` だけで、メッセージは確かめていない(事実)。テストの書き方の指摘で、挙動には関わらない。実行の参考: `python3 skill-dev/review-loop/test.py` は全て成功した。4件のエラーは、review_config がそれぞれ想定どおりの Precondition を出している。
+- `sk-13/c13` **些末**(実行していない、llm) — 指示が argv に載って ps で見え、judge-input.md も一時ディレクトリに残る
+  - 場所:  / 挙げた構成: perspectives ×1
+  - 根拠: 指示は `--append-system-prompt` の値として argv に載る(review_loop.py の run_reviews)。ただし main の時点でも、REVIEW_CONSTRAINT とプロンプトは同じように argv に載っていた。指示はレビューの範囲を伝える利用者の文で、秘密を想定したものでもない。judge-input.md は、make_workdir(review_loop.py:1017-1031)が自分の所有で 0700 に絞った作業ディレクトリに置く。他のユーザーからは読めず、残すのは文書にある設計どおり。判定役が読むレビューの全文も、main の時点から同じ場所にある。具体的に何かが漏れる経路が無いので trivial とした。実行はしていない(他のユーザーのアカウントが無い)。
+- `sk-13/c14` **些末**(実行して確かめた、llm) — --perspective の重複で終了コード2になることを確かめるテストが無い
+  - 場所: skill-dev/review-loop/test.py / 挙げた構成: mattpocock ×1、perspectives ×1
+  - 根拠: テストが無いという指摘なので trivial。挙動は実行で確かめた。review_config(['security-review','security-review'], None) は Precondition「観点に同じスキルが重複している」を出し、Precondition は終了コード2になる。test.py にこのケースのテストは無い。
+- `sk-13/c15` **些末**(実行して確かめた、llm) — 空の指示と観点の重複で終了コード2になる振る舞いにテストが無い
+  - 場所: review_loop.py:398-408 / 挙げた構成: mattpocock ×1
+  - 根拠: テストが無いという指摘なので trivial。実行で確かめると、review_config(None, ['code-review=']) は「--instruct は `スキル名=指示` の形で書く」の Precondition を出し、重複も同じように止まる。test.py には `=` が無いケースと空の --perspective のテストはあるが、空の指示と重複のテストは無い。
+- `sk-13/c16` **些末**(実行して確かめた、llm) — = を含む指示、観点の重複、既定と同じ観点の明示指定、失敗した試行の表示がテストされていない
+  - 場所: test.py / 挙げた構成: mattpocock ×1
+  - 根拠: テストが無いという指摘なので trivial。挙動は実行で確かめた。review_config(None, ['code-review=a=b']) は {'code-review': 'a=b'} を返し、partition が最初の = で分けるので正しく動く。重複は Precondition で止まる。既定と同じ観点を明示しても、名前の比較で perspectives は記録されない(c10 と同じ経路)。test.py には、これらと失敗した試行の表示のテストが無い。
+- `sk-13/c17` **些末**(実行していない、llm) — 観点の構成を途中で変えても反復回数・連続失敗を同じシリーズで数え、観点を外した試行も連続失敗のリセットに数える
+  - 場所: review_loop.py:958 / 挙げた構成: perspectives ×1
+  - 根拠: review_loop.py:955-978 で、iter と consecutive_failures は観点の構成にかかわらず同じ state で数え、成功すれば consecutive_failures=0 にする。指摘の事実は正しい。ただし連続失敗の上限は暴走を止めるためのもので、原因を取り除いたあとに成功すればリセットするのは設計どおり。SKILL.md:116 も、観点を外すことを対処の案として挙げており、採るかは利用者が決める。観点を変えた試行は attempt["perspectives"] として表に残る(961-963行)。誤った結果は出ないので、設計の好みに当たる。
+- `sk-13/c18` **些末**(実行していない、llm) — 前後に空白がある --perspective を確かめるテストが無い
+  - 場所:  / 挙げた構成: perspectives ×1
+  - 根拠: テストが無いという指摘。test.py の追加部分(553-586行)には、空白だけの --perspective(" ")はあるが、前後に空白がある値はない。挙動そのものの指摘ではないので trivial。
+- `sk-13/c19` **些末**(実行していない、llm) — instructs と instructions が1字違いで取り違えやすい
+  - 場所: review_loop.py / 挙げた構成: mattpocock ×1
+  - 根拠: review_config(specs, instructs) と、その戻り値の instructions の命名の指摘。挙動には関わらない。
+- `sk-13/c2` **誤り**(実行していない、llm) — レビュー役のシステムプロンプトに、仕様に無い「スキルの手順より指示を優先」が加わっており、観点の検査を緩める方向に効く
+  - 場所: review_loop.py:749 / 挙げた構成: mattpocock ×2
+  - 根拠: 差分では SKILL.md:54 にも「スキルの引数ではなくシステムプロンプトに足し、スキルの手順より優先するよう添える」と書いてあり、SKILL.md:57 には「指示は観点の検査を緩めるため」利用者に指示されたときだけ付けると書いてある。コードと文書は一致しており、検査を緩める向きに効くことも意図した設計として文書にある。『仕様に無い一文』という前提がコードと食い違う。
+- `sk-13/c20` **些末**(実行していない、llm) — 変数名 instructs が動詞に見え、生の引数の値だと分かりにくい
+  - 場所: review_loop.py instructs / 挙げた構成: mattpocock ×1
+  - 根拠: 変数名 instructs の命名の指摘。挙動には関わらない。
+- `sk-13/c21` **些末**(実行していない、llm) — by_name.get の既定値が "x" なので、観点の呼び出しが記録されていなくてもテストが通る
+  - 場所: skill-dev/review-loop/test.py:570 / 挙げた構成: perspectives ×1
+  - 根拠: test.py:570 の check("削除したファイル" not in by_name.get("mattpocock-skills:code-review", "x")) は、キーが無いときも真になる。指摘の事実は正しい。ただし565行の check で両観点の呼び出しを args から確かめており、テストの弱さの話にとどまる。製品の挙動には関わらない。
+- `sk-13/c22` **未確定**(実行していない、llm) — 起動例が複数行と引用符付きの引数を使っており、文字列照合の sandbox 除外ルールと食い違う恐れがある
+  - 場所: skills/review-loop/SKILL.md:49 / 挙げた構成: code-review ×1
+  - 根拠: SKILL.md:49-51 の起動例は、バックスラッシュでの改行継続と、引用符付きの引数を使っている。SKILL.md:42 と46 は、先頭の形を保つためにオプションをパスの後ろに付けると書いており、前方一致の除外ルールを想定している。Claude Code の sandbox excludedCommands が、改行継続を含むコマンドをどう照合するか(シェルとして解析するか、文字列の前方一致か)は、この環境で確かめる手段が無く、未確認。
+- `sk-13/c23` **些末**(実行していない、llm) — テストで --new-run を2回続けて実行しており、反復1回分が無駄になっている
+  - 場所: skill-dev/review-loop/test.py:557 / 挙げた構成: code-review ×2、mattpocock ×1
+  - 根拠: test.py:551 の run(wt, "--new-run") の直後、558行でもう一度 run(wt, "--new-run") を呼んでいる(77-81行の run は iterate を1回実行する)。重複は事実。2回目は新しいシリーズを作り直して1反復を回すだけで、検証の結果は変わらない。テストの時間だけの問題。
+- `sk-13/c24` **些末**(実行していない、llm) — 権限の拒否への対処として --instruct を提案させているが、守られる保証が無く再び permission_denied で止まりうる
+  - 場所: SKILL.md:116 / 挙げた構成: perspectives ×1
+  - 根拠: SKILL.md:116 は --instruct を案として添えるだけで、採るかは利用者が決めるとしている。SKILL.md:54 は指示が守られる保証は無いと明記している。守られずに再び拒否されても、スクリプトは permission_denied で止まり、SKILL.md:115 の「同じ原因で2回続けて失敗したら報告」の規則が利く。安全側に止まるだけで、文書が利用者を誤らせる食い違いもない。
+- ★ `sk-13/c25` **些末**(実行して確かめた、llm) — 判定役への指示のテストが見出しの有無しか確かめていない
+  - 場所: test.py / 挙げた構成: mattpocock ×1
+  - 根拠: test.py:570 は judge[0]["stdin"] に見出し「観点 code-review に利用者が与えた追加の指示」が含まれるかだけを見ており、指示の本文が入るかは確かめていない(指摘の内容は事実)。ただし実装 review_loop.py の run_judge は見出しの直後に {text} を書いており挙動は正しい。python3 test.py を実行し全て成功。テストが足りないという指摘で挙動の問題ではない。
+- `sk-13/c26` **些末**(実行していない、llm) — 関数 review_constraint が定数 REVIEW_CONSTRAINT と同名なのに別物を返し、紛らわしい
+  - 場所: review_loop.py review_constraint / 挙げた構成: mattpocock ×1
+  - 根拠: review_loop.py の関数 review_constraint(instruction) は、指示が無ければ REVIEW_CONSTRAINT を、あれば REVIEW_CONSTRAINT に指示を足した文字列を返す。名前が定数と似ているのは事実だが命名の問題で、挙動は正しい(テストも成功)。読めば分かるので実行はしていない。
+- ★ `sk-13/c27` **些末**(実行していない、llm) — 終了時の報告に、仕様に無い「レビューされなかった観点と範囲」が加わっている
+  - 場所:  / 挙げた構成: mattpocock ×1
+  - 根拠: SKILL.md 111行の終了報告に「--perspective/--instruct で絞ったなら、レビューされなかった観点と範囲も報告する」が加わっている。コミットメッセージ(仕様の代わり)には書かれていないのは事実。ただ、観点を外すと範囲が狭まるという同じ差分の注意書きと整合する追記で、利用者を誤らせる食い違いでもスクリプトの挙動の問題でもない。文書の中身の問題なので実行はしていない。
+- `sk-13/c28` **些末**(実行して確かめた、llm) — 指示を付けた観点のシステムプロンプトに REVIEW_CONSTRAINT が残っているかを確かめるテストが無い
+  - 場所: test.py:553-586 / 挙げた構成: perspectives ×1
+  - 根拠: grep で確かめると、test.py の新しいテスト(553-586行)は指示が含まれるかだけを見ていて、REVIEW_CONSTRAINT が残っているかは確かめていない(既存の160行も --append-system-prompt があるかを見るだけ)。実装の review_constraint は REVIEW_CONSTRAINT + 指示 を返すので、制約は残る。テストが無いという指摘なので trivial。
+- `sk-13/c29` **些末**(実行して確かめた、llm) — テスト用の関数 system_prompt がファイルの途中に置かれている
+  - 場所: test.py:554 / 挙げた構成: mattpocock ×1
+  - 根拠: grep -n '^def ' test.py の結果、ほかの補助関数は38〜123行にあり、system_prompt だけが554行にある。事実だが、置き場所の好みで挙動には関わらない(テストは全て成功)。
+- `sk-13/c3` **些末**(実行して確かめた、llm) — --instruct の本文では {pr} が展開されず、--perspective と扱いが揃っていない
+  - 場所: skills/review-loop/scripts/review_loop.py:412 / 挙げた構成: code-review ×2、perspectives ×2
+  - 根拠: python3 -c で review_config(['code-review high {pr}'],['code-review=PR #{pr} の本文']) を呼ぶと、指示は 'PR #{pr} の本文' のまま review_constraint に入った。expand(spec) のほうは 'code-review high 7' になった。扱いが揃っていないのは事実。ただ SKILL.md が {pr} の置き換えを約束しているのは PERSPECTIVES と --perspective の引数だけで、--instruct では約束していない。子のプロンプトには PR 番号がすでに入っている(/code-review high 7)ので、文字どおりの {pr} が残っても誤った結果にはつながりにくい。使い勝手が揃っていないという話で、挙動の欠陥ではない。
+- `sk-13/c4` **些末**(実行していない、llm) — 観点のスキル名の一覧 [skill_name(s) for s in perspectives] を複数の箇所で作り直しており、照合の規則を変えるときに直し漏れが起きやすい
+  - 場所: skills/review-loop/scripts/review_loop.py:409 / 挙げた構成: code-review ×3、mattpocock ×3
+  - 根拠: review_loop.py の review_config(ループの中とエラーメッセージ)と iterate:962-963 で [skill_name(s) for s in perspectives] を作り直しているのは事実。どれも同じ純粋関数で計算するので、今の挙動に違いは出ない。将来規則を変えたときに直し漏れが起きうるという話で、重複の指摘にとどまる。
+- `sk-13/c5` **些末**(実行していない、llm) — 観点を文字列のまま持ち、skill_name() で毎回解析している(Primitive Obsession)
+  - 場所: review_loop.py skill_name / 挙げた構成: mattpocock ×1
+  - 根拠: 観点を文字列のまま持ち、skill_name() で毎回解析しているのは事実。挙動には関わらない構造の好みの話。
+- `sk-13/c6` **些末**(実行していない、llm) — 指示の本文が状態コメントに載らないことを守るテストが無い
+  - 場所: skill-dev/review-loop/test.py:572-574 / 挙げた構成: perspectives ×1
+  - 根拠: skill-dev/review-loop/test.py:572-574 で確かめているのは、状態コメントに perspectives が載ることだけ。指示の本文(例: 『削除したファイル』)が comments() の本文に無いことは確かめていない。render は a['perspectives'] と reason しか出さないので、今の挙動は正しい。テストが無いという指摘にあたる。
+- `sk-13/c7` **些末**(実行して確かめた、llm) — iterate の specs=None, instructs=None という既定値がどこからも使われていない
+  - 場所: review_loop.py iterate / 挙げた構成: mattpocock ×2
+  - 根拠: grep 'iterate(' の結果、呼んでいるのは review_loop.py:1076 の main だけで、args.perspective と args.instruct を必ず渡している。既定値の None は使われていない(argparse が None を渡すことはあり、review_config はそれを扱える)。挙動には関わらない。
+- `sk-13/c8` **些末**(実行していない、llm) — perspectives と instructions が常に組で渡され、引数が増えている(Data Clumps)
+  - 場所: review_loop.py run_reviews / run_judge / iterate / 挙げた構成: mattpocock ×2
+  - 根拠: run_reviews(wt, env, pr, workdir, children, attempt, perspectives, instructions) は引数が8個で、perspectives と instructions が組で渡っているのは事実。ただし run_judge が受け取るのは instructions だけ。挙動には関わらない構造の指摘。
+- `sk-13/c9` **些末**(実行していない、llm) — --instruct で範囲を絞った試行が状態コメントに残らず、既定の試行と区別できない
+  - 場所: skills/review-loop/scripts/review_loop.py:962 / 挙げた構成: code-review ×2、mattpocock ×1、perspectives ×1
+  - 根拠: review_loop.py:962-964 では、attempt に残すのは観点の名前が既定と違うときの perspectives だけで、instructions は状態に入らない。主張のとおり、--instruct だけを付けた試行は表で既定の試行と区別できない。ただし SKILL.md(差分の57行付近)が約束しているのは「既定と違う観点で回した試行は観点の名前が載る」ことだけで、指示の記録は約束していない。レビューと判定は正しく動く。指示を付けた親は自分が渡した内容を持っており、最終報告もできる。誤った結果や失敗にはつながらず、記録の網羅性という設計の好みの問題なので trivial とした。コードを読めば足りるので実行はしていない。
+- `sk-14/c1` **些末**(実行して確かめた、llm) — apply.sh を手動(!)で実行する案内に、承認済みの行を標準入力に渡す具体的な形が無く、入力待ちや空入力のまま終わる
+  - 場所: skills/housekeeping/SKILL.md:35 / 挙げた構成: code-review ×3、mattpocock ×1、perspectives ×1
+  - 根拠: SKILL.md:35 は apply.sh について「同じように `!` で実行してもらう」と書いている。「同じように」は直前の scan.sh の案内(展開済みの絶対パスで書く)と、手順4のパイプ(awk ... | apply.sh)を受けている。具体的なコマンド例が無いのは事実だが、読み手のエージェントは手順4のパイプから組み立てられる。だからこれは書き方の明確さの問題にとどまる。`printf '' | apply.sh` を実行すると何もせず rc=0 で終わった。仮に入力が空でも、何も消さない安全側に倒れる。「入力待ちで止まる」は、`!` の標準入力の扱いを確かめられないため再現していない。
+- `sk-14/c10` **些末**(実行していない、llm) — 変数 input が一時ファイルのパスから承認済みの行に変わり、名前が意図に合わなくなった
+  - 場所: apply.sh の input / 挙げた構成: mattpocock ×1
+  - 根拠: apply.sh:21 で input=$(grep -v '^action	') と行内容を保持し、rows() で printf して使う。命名の好みで挙動に影響なし。
+- ★ `sk-14/c11` **誤り**(実行して確かめた、llm) — 出力ファイルを共有の $TMPDIR に予測できる名前で置くと、他ユーザーに読まれたりシンボリックリンクで上書きされたりするおそれがある
+  - 場所: skills/housekeeping/SKILL.md:35 / 挙げた構成: perspectives ×1
+  - 根拠: `ls -ld "$TMPDIR"` → drwx------ masahirompp /var/folders/.../T/(macOS のユーザー専用ディレクトリで共有ではない)。SKILL.md:35 は `<ファイル>` をエージェントが読める場所(例: エージェント側 $TMPDIR の下)にとだけ書き、予測可能な固定名を指示していない。『共有の $TMPDIR に予測できる名前で置く』という前提が文書・環境と合わない。
+- `sk-14/c12` **些末**(実行して確かめた、llm) — hk_mktemp_dir を使うのは scan.sh だけなのに共通部分の lib.sh に置かれている
+  - 場所: lib.sh / 挙げた構成: mattpocock ×1
+  - 根拠: grep で hk_mktemp_dir の呼び出しは scan.sh:30 のみ、apply.sh は lib.sh を source するが呼ばない。配置の構造上の好みで挙動に影響なし。
+- `sk-14/c13` **些末**(実行して確かめた、llm) — HOUSEKEEPING_TMPDIR の説明が lib.sh の環境変数一覧に残っており、使う scan.sh へ移すべき
+  - 場所: lib.sh 冒頭の環境変数一覧 / 挙げた構成: mattpocock ×1
+  - 根拠: lib.sh:6 に HOUSEKEEPING_TMPDIR の説明があり、使うのは lib.sh の hk_mktemp_dir(scan.sh からのみ呼ばれる)。関数は lib.sh にあるので記載位置は不自然ではなく、コメントの位置の話で挙動に影響なし。
+- `sk-14/c14` **些末**(実行していない、llm) — apply.sh がサンドボックスで失敗しても skipped 行と終了コード1だけなので、判断の手がかりを文書に書くべき
+  - 場所: skills/housekeeping/SKILL.md:35 / 挙げた構成: perspectives ×1
+  - 根拠: 文書改善の提案。なお apply.sh:44-47 等で skip "worktree $path: $out" と git のエラー出力(2>&1)を skipped 行に含めるので、Operation not permitted 等の手がかりは既に出力される。SKILL.md:35 も apply.sh が同じ理由で失敗したときの対応を書いており、利用者を誤らせる食い違いはない。
+- `sk-14/c15` **些末**(実行していない、llm) — mktemp -d 成功後の [ -n "$d" ] && [ -d "$d" ] の検査が冗長
+  - 場所: skills/housekeeping/scripts/lib.sh:20 / 挙げた構成: code-review ×2、mattpocock ×1
+  - 根拠: lib.sh:19-20。mktemp -d が成功すればディレクトリが存在しパスが出力されるので [ -n ] && [ -d ] は冗長な防御的確認。事実だが挙動に影響しない。
+- `sk-14/c16` **些末**(実行して確かめた、llm) — test.sh が apply.sh に HOUSEKEEPING_TMPDIR を渡しているが apply.sh はこの変数を読まない
+  - 場所: test.sh / 挙げた構成: mattpocock ×1
+  - 根拠: grep で apply.sh に TMPDIR/mktemp/hk_mktemp_dir の参照なし。test.sh の apply 呼び出しで HOUSEKEEPING_TMPDIR を渡すのは不要だが、TMPDIR とあわせて『一時領域が使えなくても動く』ことの確認として害はなく、テストの結果は変わらない。
+- `sk-14/c17` **誤り**(実行していない、llm) — 削除を伴う apply.sh をサンドボックス外で実行させる前に、承認した対象の一覧を示すべき
+  - 場所: skills/housekeeping/SKILL.md:35 / 挙げた構成: perspectives ×1
+  - 根拠: skills/housekeeping/SKILL.md の手順2(一覧を提示する)と手順3(区分ごとに承認を得る)が、手順4の apply.sh より前にある。承認した行だけを awk で抜き出して apply.sh に渡す流れなので、実行前に対象の一覧を示すことはすでに手順に入っている。`!` で実行するときはユーザーが自分でコマンドを打つので、渡す内容も見える。指摘の前提(一覧を示さずに実行させている)はコードと合わない。かりに一覧を改めて示すという提案と読んでも、文書の好みで挙動には関わらない。文書を読んで判断したので実行はしていない。
+- `sk-14/c18` **些末**(実行していない、llm) — TMPDIR の確認を既存の apply テストに混ぜているため、失敗時に原因が分かりにくい
+  - 場所: test.sh / 挙げた構成: mattpocock ×1
+  - 根拠: test.sh の差分では、既存の apply テスト(185行目付近)に TMPDIR/HOUSEKEEPING_TMPDIR=no-such-dir を足している。失敗したときの見え方だけの問題で、テストの合否や scan.sh/apply.sh の挙動は変わらない。テスト構成の好みに当たる。現状は全件成功するので、失敗時の表示は再現していない。
+- `sk-14/c19` **些末**(実行していない、llm) — サンドボックスの項目が1つの箇条書きに5文を詰めていて読みにくい
+  - 場所: SKILL.md / 挙げた構成: mattpocock ×1
+  - 根拠: SKILL.md 35行目付近のサンドボックスの箇条書きは、たしかに複数の文を1項目に詰めている。ただ読みやすさの問題で、内容の誤りはない。文書を読んで判断したので実行はしていない。
+- `sk-14/c2` **誤り**(実行していない、llm) — SKILL.md の案内が scan.sh の error 文と食い違い、HOUSEKEEPING_TMPDIR の指定に触れていない
+  - 場所: skills/housekeeping/SKILL.md:35 / 挙げた構成: code-review ×1
+  - 根拠: scan.sh の error 文は「error: 一時ディレクトリを作れない(<path>)。HOUSEKEEPING_TMPDIR で書き込める場所を指定する」。SKILL.md:35 は「一時ディレクトリを作れない」という文言で原因を見分けるよう書いており、error 文と食い違っていない。HOUSEKEEPING_TMPDIR についても、SKILL.md の「設定と前提」の節で既定値の順と止まる挙動を説明している。食い違いも、触れていないという点も、コードと合わない。
+- `sk-14/c20` **些末**(実行していない、llm) — hk_mktemp_dir の関数コメントが名前と引数から書き始める既存の書式に従っていない
+  - 場所: lib.sh / 挙げた構成: mattpocock ×1
+  - 根拠: lib.sh 14-17行目の hk_mktemp_dir のコメントは『一時ディレクトリを作り…』で始まり、名前と引数から書き始める形ではない。ただし既存の hk_protect_patterns(34行目)や hk_process_cwds(54行目)もこの形ではないので、『hk_mktemp_dir だけ』という部分は事実と違う。いずれにしてもコメントの書式で、挙動には関わらない。lib.sh を読んで判断した。
+- `sk-14/c21` **些末**(実行して確かめた、llm) — mktemp 失敗時のエラーが2行に分かれ、既存の1行に埋め込む書き方と揃っていない
+  - 場所: scan.sh / 挙げた構成: mattpocock ×1
+  - 根拠: `mktemp -d /nonexist/housekeeping.XXXXXX` を実行すると 'mktemp: mkdtemp failed on ...: No such file or directory' が出て rc=1 になった。テストを KEEP=1 で実行して残した作業ディレクトリの scan-notmp.err を見ると、mktemp のメッセージと 'error: 一時ディレクトリを作れない(...)' の2行が出ていた(このエラー文は HEAD の scan.sh の文面と一致せず、今回の実行のディレクトリか確定できなかった。2行に分かれる点はコードからも明らか)。2行に分かれるのは事実だが、出力の形の問題で、止まること・終了コード・案内の内容に影響はない。
+- `sk-14/c22` **些末**(実行して確かめた、llm) — 174行目が set +e で囲まれておらず、scan.sh が失敗すると FAIL を出さずにテスト全体が止まる
+  - 場所: skill-dev/housekeeping/test.sh:174 / 挙げた構成: perspectives ×1
+  - 根拠: test.sh は set -euo pipefail(6行目)で、174行目の `HOUSEKEEPING_TMPDIR=... scan.sh >/dev/null` は set +e で囲まれていない。同じ構成の小さなスクリプト(失敗する関数を set -e の下で呼ぶ)を動かすと、stderr に 'error: something' が出て rc=1 で止まり、FAIL 行は出なかった。止まり方は指摘のとおり。ただ、テストは非ゼロで終わり、scan.sh の stderr は捨てていないのでエラーの内容も表示される。失敗を見落とすことはなく、失敗時の表示の問題にとどまる。main の時点の115行目にも同じ書き方がある。
+- `sk-14/c3` **些末**(実行していない、llm) — 手順4の apply.sh へのパイプが $TMPDIR に依存しており、絶対パスの注意や指定した出力ファイルに対応していない
+  - 場所: skills/housekeeping/SKILL.md 手順4 / 挙げた構成: mattpocock ×1、perspectives ×1
+  - 根拠: 手順4の例が "$TMPDIR/housekeeping-scan.tsv" を使っているのは事実。ただし、新しい案内は apply.sh を「同じように」`!` で実行させると書いており、絶対パスで書く注意もそこに含まれると読める。エージェントが `<ファイル>` を絶対パスに展開して渡す前提なら、問題は起きない。仮に $TMPDIR がずれて awk がファイルを読めなくても、apply.sh は空の入力で何も消さずに終わる(c1 で確認)。データが消えることは無く、案内の明確さの問題にとどまる。
+- `sk-14/c4` **本物・差分の外**(実行して確かめた、llm) — 例が "$TMPDIR/housekeeping-scan.tsv" のままで、TMPDIR が未設定だとルート直下に書きに行く
+  - 場所: SKILL.md 手順1・手順4 / 挙げた構成: mattpocock ×1
+  - 根拠: `env -u TMPDIR sh -c 'echo x > "$TMPDIR/housekeeping-scan.tsv"'` を実行すると「/housekeeping-scan.tsv: Read-only file system」で rc=1 になった。TMPDIR が無い環境では、手順1の例をそのまま実行すると失敗する(root 権限ならルート直下に書く)。`git show main:skills/housekeeping/SKILL.md` で見ると、main の20行目と56行目にも同じ例がある。この差分が持ち込んだ問題ではない。
+- `sk-14/c5` **些末**(実行して確かめた、llm) — 存在しない TMPDIR を指すテストは bash が /tmp に切り替えるため、書き込めない一時領域やサンドボックスの制限を再現できていない
+  - 場所: skill-dev/housekeeping/test.sh:186 / 挙げた構成: code-review ×1、perspectives ×3
+  - 根拠: テストがサンドボックスの書き込み制限を再現していないのは事実だが、テストが十分かどうかの指摘で、挙動の問題ではない。理由づけには誤りがある。新しい apply.sh には mktemp もヒアドキュメントも無い(grep で0件)。テストが通るのは、一時ファイルを一切使わないからで、bash が /tmp に切り替えるからではない。test.sh は全件成功した。
+- `sk-14/c6` **些末**(実行して確かめた、llm) — macOS の mktemp は TMPDIR を見ないため、apply.sh の TMPDIR 非依存テストは修正前のコードでも通り、回帰を検出できない
+  - 場所: skill-dev/housekeeping/test.sh:186 / 挙げた構成: code-review ×2、mattpocock ×3、prove ×2
+  - 根拠: `TMPDIR=/no-such-dir mktemp` は /var/folders/.../T/tmp.XXX を作り、rc=0 だった。macOS の mktemp は、テンプレートを付けないと TMPDIR を見ない。一時 worktree の apply.sh を main 版に差し替えて test.sh を実行しても、全件成功した。修正前のコードでもテストが通るという主張は正しい。ただし内容はテストが回帰を捕まえられないという指摘で、利用者が触れる挙動には関わらない。
+- `sk-14/c7` **些末**(実行していない、llm) — 一時ディレクトリの既定値の式 ${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}} が lib.sh と scan.sh のエラーメッセージに重複し、ずれるおそれがある
+  - 場所: skills/housekeeping/scripts/scan.sh:31 / 挙げた構成: code-review ×3、mattpocock ×3、perspectives ×2
+  - 根拠: lib.sh の hk_mktemp_dir と scan.sh:31 のエラーメッセージに、同じ式 ${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}} がある。今は2つとも同じなので、表示される場所と実際の場所は一致している。片方だけを直したときに初めて問題になる重複で、今の挙動には関わらない。
+- `sk-14/c8` **些末**(実行していない、llm) — 片付けのテストは hk-tmp が空かどうかしか見ておらず、HOUSEKEEPING_TMPDIR の下に作られたことを確かめていない
+  - 場所: skill-dev/housekeeping/test.sh:172-175 / 挙げた構成: code-review ×3、mattpocock ×3、perspectives ×3、prove ×2
+  - 根拠: test.sh の該当箇所は `[ -z "$(ls -A "$root/hk-tmp")" ]` だけを確かめており、hk-tmp の下に作られたことは見ていない。hk_mktemp_dir が HOUSEKEEPING_TMPDIR を無視しても通る、という主張は正しい。ただしテストの網羅性の指摘で、今の lib.sh はテンプレート "${base%/}/housekeeping.XXXXXX" で HOUSEKEEPING_TMPDIR の下に作っている。挙動の不具合ではない。
+- `sk-14/c9` **些末**(実行して確かめた、llm) — HOUSEKEEPING_TMPDIR → TMPDIR → /tmp のフォールバック順序が HOUSEKEEPING_TMPDIR の経路しかテストされていない
+  - 場所: test.sh / 挙げた構成: mattpocock ×1
+  - 根拠: テストが無いという指摘。test.sh は HOUSEKEEPING_TMPDIR 経路のみ確認しているのは事実。フォールバック自体は実行して確認: HOUSEKEEPING_TMPDIR 未設定で TMPDIR=$d とし `. ./lib.sh; hk_mktemp_dir` → $d/housekeeping.tq3Sj8、両方未設定 → /tmp/housekeeping.ff3rfn。挙動は正しく、テスト不足のみ。
+- `sk-16/c1` **些末**(実行していない、llm) — 再レビューを省く条件の「どの修正も/実行で確かめていない修正」が、基準外(低影響・style・命名・test_gap・横展開)の修正を含むか曖昧で、毎回再レビューになるか基準外の修正がレビューされずに残る。
+  - 場所: skills/review-loop/SKILL.md:128 / 挙げた構成: code-review ×3、mattpocock ×3、perspectives ×1
+  - 根拠: skills/review-loop/SKILL.md:128 の文は「直前の判定で、上の基準に当たる指摘を採って直したとき、もう1回回すかは、その修正を何で確かめたかで決める」で始まり、続く「どの修正も」「実行で確かめていない修正」の「その修正」は、文脈から基準に当たった修正を指すと読める。広く読んでも狭く読んでも、許されない挙動にはならない。広く読む(style の修正も含む)と、基準に当たる修正があれば毎回回すことになり、main の挙動(基準に当たる修正のあとは必ずもう1回)と同じになる。狭く読んでも、同じ行の括弧書き「修正が大きく、再現が確かめた範囲を超えて挙動を変えているなら回す」が、横展開でまとめて入れた変更を受け止める。基準に当たる修正がなく低影響の修正だけのときは、main でも「あなたが決める」の扱いで、再レビューせずに終えられる。書き方があいまいなのは事実だが、挙動の問題ではない。文書の文言の話なので実行はしていない。
+- `sk-16/c10` **些末**(実行していない、llm) — 差分の外として採らなかった理由や先送りした指摘を記録・伝達する手順がなく、毎回の反復で同じ指摘が戻ってくる。
+  - 場所: skills/review-loop/SKILL.md:111 / 挙げた構成: code-review ×1、mattpocock ×1
+  - 根拠: SKILL.md:111 で理由を残す対象は「判定と異なる判断(指摘の却下、裁定の変更)」に限られる。差分の外の指摘は、判定役が自分で「差分の外」と付けたものを親がそのまま採るので、この対象に入らない。そのため PR 本文などに記録する定めがない、という点は事実。ただし差分の外の指摘は、毎回の判定で範囲の欄が「差分の外」と付いて出る。SKILL.md:126 で継続の理由にしないと定めているので、同じ指摘が戻ってきても誤った修正や継続にはつながらない。親は SKILL.md:16 で過去の判定を持ち続ける。また、レビュー役は PR 本文を読むとは限らない(SKILL.md:113)ので、記録しても再指摘は止まらない。毎回出ることによる手間は増えるが、誤った結果は起きない。
+- `sk-16/c11` **誤り**(実行していない、llm) — 差分の外の指摘が毎回の判定に出続け、蒸し返しと見分けがつかず早く打ち切りうる。
+  - 場所: skills/review-loop/SKILL.md:126 / 挙げた構成: code-review ×1
+  - 根拠: 指摘は「蒸し返しと見分けがつかない」と言うが、判定役は毎回、指摘ごとに「範囲: 差分の外。<根拠>」を書く(review_loop.py の JUDGE_PROMPT にある範囲の説明と出力の形、SKILL.md:86)。親はこの欄で、差分の外の指摘が再び出たことを見分けられる。さらに SKILL.md:126 で、差分の外の指摘は継続の理由にしないと明記している。差分の外の指摘が繰り返し出ることは、終了の判断にもともと組み込まれている。見分けられないという前提が、コードと食い違う。
+- `sk-16/c12` **誤り**(実行していない、llm) — 再現を試すのが早く終えたい親自身で、試した手順と結果を残す場所がなく、毎回再現し直すことになる。
+  - 場所: skills/review-loop/SKILL.md:102, 126 / 挙げた構成: perspectives ×1
+  - 根拠: SKILL.md:103 は、再現しなかった指摘について「試した手順と結果を、採らなかった理由として残す」と定める。分類が defect の指摘を採らないことは、SKILL.md:111 の「判定と異なる判断(指摘の却下)」に当たる。その理由を残す場所は、SKILL.md:113-116 でコードコメントと PR 本文と決まっている。判定役は PR 本文にある採らなかった理由を読んで「再指摘」と付ける(JUDGE_PROMPT)。親も過去の判定と採らなかった理由を持ち続ける(SKILL.md:16)。したがって「残す場所が定まっておらず、毎回再現し直す」という主張は文書と食い違う。親自身が再現するので利害が絡む、という点は設計への意見で、挙動の欠陥ではない。
+- `sk-16/c13` **些末**(実行していない、llm) — 差分の外の指摘は次の PR でも出るため、同じ issue が PR ごとに作られる。
+  - 場所: skills/review-loop/SKILL.md:134 / 挙げた構成: perspectives ×1
+  - 根拠: SKILL.md:134 では、issue を作る前に必ず利用者に尋ね、利用者が言ったものだけを gh issue create で作る。同じ PR の反復をまたいだ重複は1件にまとめる。既存の issue を検索する手順がないのは事実。それでも、PR ごとに自動で issue が作られることはなく、作るたびに利用者の承認が要る。重複ができても、利用者が気づいて閉じられる手間の問題にとどまる。また「次の PR でもほぼ確実にまた出る」かどうかは、レビュー役が次の差分の外の行まで指摘するかに依存し、確かとは言えない。
+- `sk-16/c14` **誤り**(実行していない、llm) — JUDGE_PROMPT が PR のベースの ref/SHA を渡さないため、判定役がベースを推測して誤判定するか、自分で git/gh を叩いて権限拒否で止まりうる。
+  - 場所: skills/review-loop/scripts/review_loop.py:863 / 挙げた構成: code-review ×1、perspectives ×1
+  - 根拠: JUDGE_PROMPT と run_judge(review_loop.py:905付近)が PR 番号しか渡していないのは事実。しかし指摘の言う結果は起きない。(1) 権限の拒否: main の時点で、すでに JUDGE_PROMPT は判定役に PR 本文を読ませ、「コードを読んで確かめ」させている。gh や git の読み取りは前から必要で、SKILL.md:21 の前提で許可ルールに入っている。この差分で新しく必要になる権限はない。(2) 誤った判定: SKILL.md の既知の制約にある、ローカルのベースが古い場合や、既定ブランチ以外へ向けた PR でベースを main と推測した場合を考える。ベースとの差分は実際より広く見えるので、判定は「差分の内」の側に倒れる(直す側で安全)。さらに JUDGE_PROMPT は「確かめられなければ差分の内」と決めている。SKILL.md:107 では、範囲の判断が疑わしければ親がベースで確かめ直す。差分の内の問題を誤って「差分の外」として見逃す経路は見つからなかった。
+- `sk-16/c15` **誤り**(実行して確かめた、llm) — gh issue create の起票先リポジトリを指定しておらず、fork からの PR では意図しないリポジトリに起票するか失敗しうる(書き込み権限にも言及なし)。
+  - 場所: skills/review-loop/SKILL.md:134 / 挙げた構成: code-review ×2
+  - 根拠: 一時ディレクトリに git リポジトリを作り、origin=masahirompp/skills、upstream=cli/cli の2つの remote を置いた。gh repo set-default は設定せず、標準入力をつながない状態で実行した。`gh api 'repos/{owner}/{repo}' --jq .full_name` は cli/cli を返した(rc=0)。`gh issue list -L1 </dev/null` も cli/cli の issue を返した(rc=0)。gh repo set-default --view は「No default remote repository has been set」と出したが、どちらのコマンドも失敗せず upstream を使った。gh issue create も同じ方法でリポジトリを決める。スクリプトが状態コメントを書くのも、同じ方法で決まる `repos/{owner}/{repo}/issues/{pr}/comments`(review_loop.py:589-628)。つまり issue は、PR がある同じリポジトリに作られる。決まる先が fork だったら、スクリプト自体が PR を見つけられずに先に止まる。公開リポジトリの issue は書き込み権限なしでも作れる。gh issue create は、実際に issue ができてしまうので実行していない。
+- `sk-16/c16` **些末**(実行していない、llm) — 「実行では示せない」が仕様に無い例外になっており、文書を変える PR では再レビューが続き反復を減らす狙いが効かない。
+  - 場所: skills/review-loop/SKILL.md:103, :126, :128 / 挙げた構成: mattpocock ×1
+  - 根拠: コミット cc9c5ef のメッセージ(仕様に当たる)は「再現しなければ採らない」「再現で確かめた修正だけなら再レビューは回さない」と書いている。SKILL.md:103 の「実行では示せない」という扱いはメッセージには無く、仕様との差は事実。ただし SKILL.md:128 で、実行で確かめていない修正があればもう1回回すので、文書を変える PR での挙動は main の「直したらもう1回回す」と同じになる。誤った結果にはならず、反復を減らす改善が文書の PR には効かない、という設計上のトレードオフにとどまる。この例外がなければ、文書やプロンプトへの指摘は再現できないため一切採れなくなる。例外を置く理由はある。
+- `sk-16/c17` **些末**(実行していない、llm) — 実行では示せない指摘をコードを追って採ることは仕様の「再現しなければ採らない」より広いので、PR の本文に書くべき。
+  - 場所: SKILL.md 手順5「実行では示せない」 / 挙げた構成: mattpocock ×1
+  - 根拠: コミット cc9c5ef の本文には「再現しなければ採らない」とある。一方 SKILL.md:103 は「実行では示せない」種類に限って、コードを追って採否を決めることを認めている。SKILL.md の中では、:101 の「再現を試みたが起きなかった→採らない」と :103 の「手段がないときだけ」は矛盾せず、スキルの挙動はこの文書どおりに決まる。指摘が求めているのは PR 本文の書き方で、スキルの挙動は変わらない。LLM 向けの文書の指摘で、実行して示せる対象がないため実行していない。
+- `sk-16/c18` **誤り**(実行していない、llm) — 判定役が「実行では示せない」と書いたとき親がそのまま信じないよう求める文がなく、抜け道になりうる。
+  - 場所: SKILL.md 手順5 / 挙げた構成: mattpocock ×1
+  - 根拠: SKILL.md:101-103 の3つの扱い(再現した/起きなかった/実行では示せない)は、親が自分で再現を試みた結果の分け方で、判定役のラベルをそのまま使う形ではない。:99 に「判定の手順が合っていなければ、自分で組み直す」、:103 に「試さずにこの扱いにするのは、手段がないときだけにする(テストを書くのが手間、は理由にならない)」、:93 に「指摘は仮説として読む」とあり、判定役の「実行では示せない」をそのまま信じないよう求める文は実際にある。文書の読み取りで判断したため実行していない。
+- `sk-16/c19` **些末**(実行していない、llm) — 「横展開の候補は差分の内にあるもの」が場所で決める読み方になりやすく、判定プロンプトの「差分の内」と意味がずれる。
+  - 場所: skills/review-loop/SKILL.md 5節 / 挙げた構成: mattpocock ×1
+  - 根拠: SKILL.md:86 は「差分の内(PR の変更で起きるようになった)」と原因で定義しており、review_loop.py:863 の定義と同じ意味になっている。:109 の「差分の内にあるもの」は、この定義した語を使っているだけ。「ある」が場所の意味に読めるという点は言い回しの好みで、定義は1つに揃っている。実行して確かめる対象がないため実行していない。
+- `sk-16/c2` **本物・差分の外**(実行していない、llm) — 再レビューを回さずに終える経路に最後の修正をコミット・push する手順がなく、修正が PR の head に入らないまま終わりうる。
+  - 場所: skills/review-loop/SKILL.md:118, :128 / 挙げた構成: mattpocock ×1、perspectives ×1
+  - 根拠: push を指示しているのは、手順1(SKILL.md:30-32「修正をコミットし、毎回 push する」)と、:10 の反復の説明だけ。どちらもスクリプトの起動と結び付いている。「終了の判断」(:120-134)にも終了時の報告にも、最後の修正をコミットして push する手順は無い。そのため、:128 で「回さずに終えてよい」を選ぶと、手順1を通らずに報告へ進み、修正がローカルに残る経路が文書の上で成り立つ。ただし main にも同じ穴がある。git show main:skills/review-loop/SKILL.md の :117 には「終了時の HEAD の差(そのあとに入れた修正と、その影響の段階)」が既にあり、低影響の修正を入れて回さずに終える経路が main から認められていた。その経路にも push の手順は無かった。差分は、同じ穴を基準に当たる修正にまで広げただけで、仕組みは main と同じなので out とした。LLM が push を自分から補うかは実行で示せないため、文書の経路を追って判断した。
+- `sk-16/c20` **誤り**(実行していない、llm) — 横展開を差分の内に絞ったため「規則を1か所で強制する形を検討する」と両立せず、横展開がほぼ機能しない。
+  - 場所: skills/review-loop/SKILL.md:109 / 挙げた構成: code-review ×1
+  - 根拠: SKILL.md:109 が外すのは、PR の前から同じように起きる横展開の候補だけ。PR の変更が原因の候補(PR が変えていない行にあるものも含む。:86、review_loop.py:863)は、これまでどおり同じ修正に含める。後半の「同じ規則の破れが場所を変えて続いているなら1か所で強制する」は、反復をまたいで PR 起因の破れが続く場合の話で、前半とは食い違わない。「横展開がほぼ機能しなくなる」は言い過ぎで、コードと文書から見て成り立たない。実行はしていない。
+- `sk-16/c21` **些末**(実行していない、llm) — PR が書き換えた行の中の既存の不具合まで一律に差分の外として直さないのは不自然ではないか。
+  - 場所:  / 挙げた構成: perspectives ×1
+  - 根拠: 範囲は原因で決めると定義されている(review_loop.py:863「PR の前から同じように起きるなら差分の外」、SKILL.md:107)。そのため、PR が書き換えた行にあっても、前から同じように起きる不具合は差分の外として直さない。文書はこの方針をはっきり書いており、挙動は文書どおり。指摘はこの方針が妥当かという設計上の疑問で、誤りの指摘ではない。実行はしていない。
+- `sk-16/c22` **些末**(実行していない、llm) — 範囲の判定が、既存の問題を起きやすくしたり影響を大きくしたりする PR を扱えていない。
+  - 場所: skills/review-loop/scripts/review_loop.py:863 / 挙げた構成: perspectives ×1
+  - 根拠: review_loop.py:863 の「PR の前から同じように起きるなら差分の外」は「同じように」を条件にしているので、起きやすくなった、影響が大きくなった場合は差分の外に当たらない。さらに「どちらか確かめられなければ差分の内」という既定もある。冒頭の「起きるようになったか」とは少し揺れるが、悪化した場合も差分の内に寄る書き方になっており、扱えていないわけではない。明記すれば判定の揺れが減るという、書き方の改善にとどまる。判定役の LLM の揺れは狙って起こせないため実行していない。
+- `sk-16/c23` **些末**(実行していない、llm) — 出力の形の範囲の欄に、確かめられなかった旨を添える場所がなく注記が落ちやすい。
+  - 場所: review_loop.py:879 / 挙げた構成: perspectives ×1
+  - 根拠: review_loop.py:879 の形は「範囲: 差分の内 / 差分の外。<差分の外なら、そう判断した根拠>」で、差分の内のときに「確かめられなかった」と添える欄が書かれていない(:863 は書くよう求めている)。ただ、注記が落ちても範囲は差分の内として残り、親は直す側で扱う。誤って直さなくなる方向には働かない。また、スクリプトが確かめるのは見出しだけ(VERDICT_SECTIONS)なので、形の違いで失敗もしない。挙動への影響はほぼなく、書き方の改善の指摘。実行はしていない。
+- `sk-16/c24` **些末**(実行していない、llm) — 「あなたは実行して確かめないので」と事実のように書いているが制約になっておらず、判定役は実行もできるので SKILL.md の言い切りと挙動が食い違いうる。
+  - 場所: skills/review-loop/scripts/review_loop.py:865 / 挙げた構成: perspectives ×1
+  - 根拠: 判定役は review_loop.py:923 で `claude -p --append-system-prompt judge_system_prompt(...)` として起動される。ツールは制限されておらず、JUDGE_CONSTRAINT(:81)が禁じるのも作業ツリーを変える操作だけなので、判定役がコマンドを実行することはありうる。この点で、:865 の「あなたは実行して確かめないので」と SKILL.md:93 の言い切りは事実とずれうる。ただし、このずれで起きるのは、親が判定役の確かめた指摘も仮説として扱い、もう一度確かめることだけ。安全側に倒れるので、利用者が誤った判断をする経路はない。表現の正確さの指摘として trivial とした。LLM が実行するかどうかは狙って起こせないため実行していない。
+- `sk-16/c25` **些末**(実行していない、llm) — 冒頭の親の責任一覧に、issue にするかを尋ねることが入っていない。
+  - 場所: SKILL.md:19 / 挙げた構成: mattpocock ×1
+  - 根拠: SKILL.md:19 の「利用者とのやり取り」は「--new-run の確認、失敗の報告、終了時の報告」の3つで、issue にするかを尋ねることは確かに入っていない(事実は正しい)。ただ、この一覧は責任のまとめで、手順は SKILL.md:134 に「報告に続けて、issue にするかを利用者に尋ねる。…尋ねずに作らない」と明示されている。親が従う手順は :134 にあり、一覧が欠けていても挙動は変わらない。まとめの書き漏れなので trivial。文書の照合だけで分かるので実行していない。
+- `sk-16/c26` **誤り**(実行していない、llm) — 別のスキルが親になって呼んだとき、issue にするかを誰に尋ねるのかが書かれていない。
+  - 場所: SKILL.md issue にするかの確認 / 挙げた構成: mattpocock ×1
+  - 根拠: SKILL.md:14 に「別のスキルから使うときは、ループを回す呼び出し元が親になる」とあり、:134 では尋ねる相手を「利用者」と明記している。親が別のスキルでも、尋ねる相手は利用者のままで、--new-run の確認や「利用者に報告する」と同じ扱いになる(この部分は main の時点からある)。「誰に尋ねるのか書かれていない」という主張は本文と合わない。文書を読めば分かるので実行していない。
+- `sk-16/c27` **誤り**(実行していない、llm) — 複数の指摘を順に直すと前の修正の影響で後の指摘が再現しなくなり、誤って採らないと判定されうる。
+  - 場所: skills/review-loop/SKILL.md:99 / 挙げた構成: perspectives ×1
+  - 根拠: SKILL.md:99-102 は、指摘ごとに「直す前に再現する」と書いているだけで、1件直してから次を再現する順序は求めていない。全件を先に再現する読み方もできる。また、順に進めて前の修正のあとで指摘 B が再現しなくなったとしても、その時点のコードでは B は起きていない。採らないとしても、最終的なコードに欠陥は残らないので「誤った判定」にはならない(再現の手順が不十分だった場合の問題は、この規則とは別の話)。主張している不利益が起きないので wrong。文書の論理を追って判断したもので、実行していない。
+- `sk-16/c28` **些末**(実行していない、llm) — 終了条件に仕様に無い条件が足され、「修正が大きく」に基準がなく、仕様の「回さない」が「回さずに終えてよい」に弱まっている。
+  - 場所: SKILL.md:128 / 挙げた構成: mattpocock ×1
+  - 根拠: 仕様にあたるのは commit cc9c5ef のメッセージ「再現で確かめた修正だけなら、そのための再レビューは回さない」。SKILL.md:128 は「既存のテストも通っているなら、回さずに終えてよい(修正が大きく…なら回す)」となっていて、条件の追加と「終えてよい」への言い換えは事実どおり。ただ、どれも回し直す側に寄せた変更で、「終了の判断」は :122「あなたが総合的に判断する」という裁量の枠組みの中にある。「修正が大きく」に基準がないのも書き方の曖昧さで、誤った結果やデータの消失にはつながらない。文書を照合しただけで、実行していない。
+- `sk-16/c29` **些末**(実行していない、llm) — 影響が高の差分の外の指摘が継続の理由にならず、終える前に利用者に判断を求める余地がない。
+  - 場所: skills/review-loop/SKILL.md:126 / 挙げた構成: code-review ×1
+  - 根拠: SKILL.md:126 は差分の外の指摘を、影響に関係なく継続の理由にしないと定めている。利用者が関わるのは :134 の終了時だけ。これは commit cc9c5ef で意図した設計(「差分の外は直さず、継続の理由にもしない。終了時に報告する」)どおり。影響が高のものは尋ねるときに先頭に置くこと、範囲が疑わしければ親が決め直せること(:107)も書かれている。PR が触った関数にある既存の欠陥も止めて尋ねるべきだ、というのは設計の好みで、文書とコードの食い違いではない。実行していない。
+- `sk-16/c3` **些末**(実行していない、llm) — 手順5末尾の「修正したら手順1に戻る」が無条件のままで、再レビューを省いてよいという新しい終了基準と食い違う。
+  - 場所: skills/review-loop/SKILL.md:118 / 挙げた構成: perspectives ×1
+  - 根拠: SKILL.md:118「修正したら手順1に戻る。」は無条件のままで、:128 の「回さずに終えてよい」と文言の上で食い違うのは事実。ただ、どちらに従っても誤った結果にはならない。手順1に戻れば再レビューが1回増えるだけで、main と同じ安全側の挙動になる。終了を選ぶのは、「終了の判断」が「あなたが総合的に判断する」と定めた権限の範囲に入る。main でも、低影響の修正のあとに終える経路(main:117 の「そのあとに入れた修正」)とこの行が同じように食い違っていた。文書どうしの整合の問題で、push が漏れる実害は c2 として別に扱った。実行はしていない。
+- `sk-16/c30` **些末**(実行していない、llm) — 終了時の報告で差分の外の指摘が「残った指摘」と「差分の外で直さなかった指摘」の両方に入り重複する。
+  - 場所: skills/review-loop/SKILL.md:132 / 挙げた構成: code-review ×1
+  - 根拠: SKILL.md:132 には「残った指摘(採らなかったものはその理由も)」と「範囲が差分の外で直さなかった指摘(影響の段階も)」が並んでいて、差分の外の指摘は両方に当てはまりうる。これは事実。ただ、影響は報告の中で同じ指摘が2回出るかもしれない程度で、情報が欠けたり誤ったりはしない。書き方の重複なので trivial。実行していない。
+- `sk-16/c31` **些末**(実行していない、llm) — 「書いたテストを回帰テストとして残す」は仕様に無い追加で、PR が膨らむのを防ぐ動機と逆向き。
+  - 場所: skills/review-loop/SKILL.md:102 / 挙げた構成: mattpocock ×1
+  - 根拠: SKILL.md:101「書いたテストは、プロジェクトにテストの置き場があれば回帰テストとして残す」は、commit cc9c5ef のメッセージの箇条には確かに無い。ただ、そのメッセージにある「PR が目的の外へ膨らむ」は、差分の外の変更(:107)を指している。差分の内の欠陥を直したときの回帰テストは PR の目的の中に収まるので、逆向きとまでは言えない。挙動の誤りも無く、方針の好みにとどまるので trivial。実行していない。
+- `sk-16/c4` **些末**(実行して確かめた、llm) — 偽の判定に「分類」の行が無いのに「再現: 対象外」と書かれており、プロンプトの規則と噛み合わない。
+  - 場所: skill-dev/review-loop/fakes/claude:100 / 挙げた構成: code-review ×1、mattpocock ×3
+  - 根拠: skill-dev/review-loop/fakes/claude:100 の偽の判定には「分類」の行が無く、「再現: 対象外」だけがある。JUDGE_PROMPT の規則(分類が defect 以外なら「対象外」)とは厳密には噛み合わないが、これはテスト用の偽物の出力にすぎない。スクリプトが判定から確かめるのは見出し VERDICT_SECTIONS =("## 指摘","## 競合")(review_loop.py:839, 949-953)だけで、項目の中身は読まない。cd skill-dev/review-loop && python3 test.py は「全て成功」で、挙動に影響はない。
+- `sk-16/c5` **些末**(実行して確かめた、llm) — 偽の判定に範囲と再現だけを足し、ほかの既存の欄は欠けたままで揃え方が中途半端。
+  - 場所: skill-dev/review-loop/fakes/claude:100 / 挙げた構成: mattpocock ×1、perspectives ×1
+  - 根拠: 偽の判定に分類・起きやすさ・根拠・横展開などの欄が無いまま、範囲と再現だけを足したのは事実。ただ、スクリプトは見出ししか検査しない(review_loop.py:837-839 のコメントにも「項目の抜けまで失敗にすると…」とある)。どの欄を揃えるかは偽物の書き方の好みで、挙動には関わらない。test.py は全て成功した。
+- `sk-16/c6` **些末**(実行して確かめた、llm) — 偽の判定に足した範囲と再現の欄をどのテストも確かめておらず(test.py は見出ししか検証しない)、変更の効果がない。
+  - 場所: skill-dev/review-loop/fakes/claude:100 / 挙げた構成: code-review ×3、mattpocock ×1、perspectives ×1
+  - 根拠: grep -n '範囲\|再現' skill-dev/review-loop/*.py はヒットしない。test.py が判定の中身として見るのは :146 の out.startswith("## 指摘") と "### F1: s" だけなので、足した2行はどのテストからも確かめられておらず、効果がないという主張は事実。ただ、これはテストが無い・使われない偽物の行という指摘で、挙動には関わらない。test.py は全て成功した。
+- `sk-16/c7` **些末**(実行していない、llm) — 範囲の定義と「実行では示せない種類」の例示が SKILL.md と JUDGE_PROMPT に重複しており、片方だけ直すとずれる。
+  - 場所: SKILL.md 手順5 / JUDGE_PROMPT / 挙げた構成: mattpocock ×3
+  - 根拠: 「実行では示せない種類(文書やプロンプトの書き方、外部のサービスの挙動、狙って起こせないタイミングなど)」が、SKILL.md 手順5(:103)と JUDGE_PROMPT(review_loop.py の再現の段落)にほぼ同じ文で入っているのは事実。今は2か所の内容が一致しているので、食い違いは将来どちらか片方だけを直したときに初めて生じる。重複の指摘なので trivial とした。
+- `sk-16/c8` **些末**(実行していない、llm) — SKILL.md の範囲・再現の言い換えに「確かめられなければ差分の内」という既定の扱いが抜けており、JUDGE_PROMPT と食い違いうる。
+  - 場所: skills/review-loop/SKILL.md:86 / 挙げた構成: code-review ×1
+  - 根拠: SKILL.md:86 の範囲の言い換えに、「確かめられなければ差分の内」という既定は確かに書かれていない。ただ、この既定は判定役が範囲を書くときの規則で、JUDGE_PROMPT に入っている。判定(verdict.md)には判定役が決めた範囲の値がそのまま載る。SKILL.md:81 も「形と…定義は JUDGE_PROMPT が正」としている。親が範囲を決め直すとき(:107)は、「PR のベースのコードで同じことが起きるかを確かめて」決め直すと書かれており、確かめずに「差分の外」にする道は開いていない。要約の書き漏らしで、挙動の違いには結び付かない。実行はしていない。
+- ★ `sk-16/c9` **些末**(実行していない、llm) — 新しい欄名「範囲」が、レビューの範囲・--instruct の範囲・再現が確かめた範囲と同じ語で紛らわしい。
+  - 場所: SKILL.md / JUDGE_PROMPT の欄名「範囲」 / 挙げた構成: mattpocock ×2
+  - 根拠: SKILL.md:86,107,126,132,134 と review_loop.py の JUDGE_PROMPT では、新しい欄名「範囲」が「差分の内/差分の外」の意味で使われている。一方、SKILL.md:63,132 では「レビューの範囲」「--instruct で範囲を絞る」、:128 では「再現が確かめた範囲」と、同じ語が別の意味でも使われている。語が重なっているのは事実だが、欄の値は「差分の内 / 差分の外」と決まっていて、文脈で区別できる。命名の問題で、挙動には関わらない。
+- `wn-306/c1` **些末**(実行していない、llm) — selectableOrder が行ごとに isSpawned で全ノードを走査するため O(n²) になり、キー入力や更新のたびに計算し直している。
+  - 場所: src/model/cursor.ts:6 / 挙げた構成: code-review ×2、perspectives ×2
+  - 根拠: src/model/cursor.ts:3,6 を読んだ。isSpawned は全区切りの全ノードを走査するので、selectableOrder の計算量は O(n²) で、指摘の内容は事実。ただし n は一覧の行数(数十程度)で、呼ばれるのは app.ts:262 の更新とキー入力(app.ts:784)だけ。結果は変わらず、利用者が感じる遅れにもならない。効率の好みの問題。
+- `wn-306/c10` **些末**(実行していない、llm) — Down/Up を5回押すループに待ちがなく、途中で (sub) の行に止まったかを検出できない可能性がある。
+  - 場所: test/e2e/deps.test.ts:446-450 / 挙げた構成: perspectives ×1
+  - 根拠: test/e2e/harness.ts:262-268 の keys は、1キーごとに150ms待つ。画面を見るのは 5 回押したあとの最後の1回だけなので、途中で止まった行は確かめていない(指摘のとおり)。ただし、↓1回で other に直に移ることは、直前の waitFor(/^> other/m) が確かめている。挙動ではなくテストの検出力の話なので trivial。
+- `wn-306/c11` **些末**(実行していない、llm) — !selectableOrder(this.lay).includes(this.cursor) の判定が followCursor の中と重複している。
+  - 場所: src/ops/app.ts:262 / 挙げた構成: mattpocock ×1
+  - 根拠: src/ops/app.ts:262 の判定と、src/model/cursor.ts の followCursor の中の ok(sid) は同じ条件で、重複は事実。ただし、結果は同じで挙動に関わらない。
+- `wn-306/c12` **些末**(実行していない、llm) — PRODUCT.md に (sub) の行で Enter と v が効くと読める記述が残っており、選べないという記述と食い違っている。
+  - 場所: docs/PRODUCT.md:296 / 挙げた構成: mattpocock ×2
+  - 根拠: docs/PRODUCT.md:296 は、同じ箇条の冒頭で『起動された行はカーソルで選べない』と言い切っている。続く『効くのは Enter と v だけだが、場所は WHERE の列と起動元の行で分かる』は、選べなくする理由(選べたとしても効くのはこれだけ)の説明として書かれている。書き方に紛らわしさはあるが、挙動の記述そのものは『選べない』で一意で、利用者が挙動を誤る食い違いとまでは言えない。
+- `wn-306/c13` **些末**(実行して確かめた、llm) — シナリオ70が並び順を実行時に判定してキーの向きを切り替えるので、↓ で (sub) を飛ばす動きを確実に検証していない。
+  - 場所: test/e2e/deps.test.ts:442 / 挙げた構成: code-review ×1、perspectives ×1
+  - 根拠: test/e2e/deps.test.ts:442 は、並び順で押すキーを切り替えている(below ? 'Down' : 'Up')。シナリオ 70 の『P で ↓』の向きに固定されていないのは事実。ただし、テストの作りの話で、プロダクトの挙動には関わらない。npx vitest run test/e2e/deps.test.ts -t '70:' は通った(1 passed)。
+- `wn-306/c14` **些末**(実行していない、llm) — (sub) に変わったときにカーソルが隣へ移る振る舞いが PRODUCT.md に書かれておらず、エスカレーションの記録もない。
+  - 場所: docs/DESIGN.md:132 / 挙げた構成: code-review ×1
+  - 根拠: docs/PRODUCT.md:296 に『起動された行はカーソルで選べない……カーソルが自動で移るときも選ばない』とあり、選んでいた行が (sub) に変われば、そこにカーソルを置けないことはこの規則から導ける。DESIGN.md:132 の記述は、その実現方法を書いたものにあたる。食い違いはなく、利用者が誤る記述でもない。
+- `wn-306/c15` **些末**(実行していない、llm) — サイクル9の完了条件のシナリオ番号に 24・69・70・71 が抜けていて、経緯の節と食い違っている。
+  - 場所: docs/PRODUCT.md:652 / 挙げた構成: mattpocock ×1
+  - 根拠: docs/PRODUCT.md:652 の『サイクル9の途中で、2、16、18、33、34、41、68、73 を書き換え』には 24・69・70・71 が無い。:972 の経緯の節は『24、69、70、71 を書き換えた』としており、記録の食い違いは事実。ただし、完了条件そのものは『すべての受け入れシナリオを満たす』で、この並びは経緯の記録にあたる。挙動にも判定にも影響しない。
+- `wn-306/c16` **本物・差分の内**(実行して確かめた、llm) — 選べる行がないときや塊が窓より長いとき、窓の外の (sub) の行をスクロールして見る手段がない。
+  - 場所: src/screen/screen.ts:223 / 挙げた構成: code-review ×2、perspectives ×1
+  - 根拠: 一時ファイルの単体テストで、src/screen/screen.ts の render を呼んで確かめた。(B) トップレベルの (sub) 15行だけ、cursor undefined、height 10 の場合、窓は見出しと w0〜w5 (sub)、'0/0' で固定される(cursorBlock=[0,0] のまま)。(A) 先頭に (sub) が 12 行並び、そのあとに選べる行が続く場合も、窓は先頭に固定される。どちらも w6 以降は表示されない。src/ops/app.ts と src/screen に、ホイールや PageUp など窓だけを動かす操作は無い(grep で確認)。そのため、↑↓ が (sub) を飛ばす今の差分では、これらの行をどの操作でも見られない。main では (sub) の行を ↑↓ で選べ、窓がその行に追従したので、この差分が原因で起きる。
+- `wn-306/c17` **些末**(実行していない、llm) — `trailing` や `rowIndex.length === 1 ? 0 : start` は意図が読み取りにくく、名前の付いた真偽値にするべき。
+  - 場所: src/screen/screen.ts:213 / 挙げた構成: mattpocock ×2
+  - 根拠: src/screen/screen.ts:187-214 を読んだ。`rowIndex` は選べる行だけを積む配列で、選んだ行(選べる行に限られる)を処理する時点で `rowIndex.length === 1` になるのは、その行が最初の選べる行のときだけ。直前の行に「最初の選べる行なら、その上の見出しと起動された行も見せる」というコメントがあり、`trailing` にも宣言の上に意図のコメントがある(190行)。名前と書き方が読みにくいという主張自体は当たっているが、挙動には関わらない。命名と可読性の指摘なので、実行はしていない。
+- `wn-306/c18` **些末**(実行して確かめた、llm) — 判断を decision-log の issue に記録したかを確かめられない。
+  - 場所: CLAUDE.md「学びの捕捉」 / 挙げた構成: mattpocock ×1
+  - 根拠: `gh issue list -R masahirompp/whatnext --search ...` は認証済みの状態で動き、記録を確かめられた。この差分のコミット(459a5fc、2026-10-26 14:30)に対応する issue として、#305「起動された行をカーソルで選べなくした」が spec-change ラベル付きで 2026-10-26T06:19:41Z に起票されている。cycle 9 の層1の判断をまとめた decision-log の #286 と #274 もある。指摘は「確かめられない」という手続きの懸念で、コードの挙動の問題ではない。そのうえ記録も実在するので、class は trivial とした。
+- `wn-306/c2` **些末**(実行していない、llm) — isSpawned が Layout の全区切りの nodes を見て回っており、Feature Envy の疑いがある。
+  - 場所: src/model/cursor.ts:3 / 挙げた構成: mattpocock ×1
+  - 根拠: cursor.ts:3 の isSpawned が Layout.groups[].nodes を直接見ているのは事実。ただ同じ model 層の中の構造の好みで、挙動には関わらない。
+- `wn-306/c3` **些末**(実行していない、llm) — カーソル位置や窓のスクロールの新しい見え方を、実際の描画から取った画面の例で合意したかどうかが確かめられない。
+  - 場所: docs/PRODUCT.md:297 / 挙げた構成: mattpocock ×3
+  - 根拠: CLAUDE.md の『見た目の決定』の手続きを守ったかという、作業の進め方への指摘。差分(docs/PRODUCT.md、screen.ts)は描画の仕様と実装で食い違っておらず、合意の手続きを踏んだかは差分からは確かめられない。挙動の問題ではない。
+- `wn-306/c4` **些末**(実行していない、llm) — CONTEXT.md の『起動された行』の定義に『カーソルで選べない』が入っていない。
+  - 場所: CONTEXT.md / 挙げた構成: mattpocock ×1
+  - 根拠: CONTEXT.md:54 の『起動された行』に、カーソルで選べないことは書かれていない(差分でも CONTEXT.md は変わっていない)。ただ、そこにある『待ち先もメモも付けられない』は今も正しく、記述と食い違う文は無い。カーソルの規則は PRODUCT.md と DESIGN.md に書かれている。用語集に書き足りないだけで、利用者を誤らせる食い違いではない。
+- `wn-306/c5` **誤り**(実行して確かめた、llm) — シナリオ71がキー入力の直後に待たずに否定の判定をしているので、『何もしない』ことを検証できていない。
+  - 場所: test/e2e/deps.test.ts:465 / 挙げた構成: code-review ×1、perspectives ×2
+  - 根拠: harness.ts:262-267 の keys は、キーを1つ送るたびに 150ms 待つので、『待たずに判定』ではない。app.ts で、カーソルが無いときに e で知らせを出すようにわざと壊すと、シナリオ71は失敗した(AssertionError: expected ... not to match /waits for:|can't/)。150ms で描画を捉えられており、指摘の言う原因は起きない。また変更前のコードでは、手前の not.toMatch(/^> /m) で先に失敗する。指摘とは別の弱点として、f を同じように壊しても通った。app.ts:673 で、次のキー e が f の知らせを消すため。ただしこれもテストの弱さで、挙動の問題ではない。
+- `wn-306/c6` **些末**(実行して確かめた、llm) — シナリオ71は e でメモの入力欄が開いても検出できず、openNote の断りを外したことへの歯止めにならない。
+  - 場所: test/e2e/deps.test.ts:465 / 挙げた構成: code-review ×1
+  - 根拠: シナリオ71の正規表現は /waits for:|can't/ なので、メモの入力欄が開いても捉えられない。この点は事実。ただ、このテストではカーソルが無く(実行で、画面に '> ' の行が無いことを確かめた)、listKey は row が無ければ return する(app.ts:813)。e で入力欄が開く経路は無い。歯止めのテストが足りないという指摘で、挙動の問題ではない。
+- `wn-306/c7` **些末**(実行していない、llm) — 選べる行の判定が、画面側は表示の印 marker !== 'sub'、モデル側は node.spawned と2か所に分かれており、ずれるおそれがある。
+  - 場所: src/screen/screen.ts:201 / 挙げた構成: code-review ×2、mattpocock ×4、perspectives ×3
+  - 根拠: app.ts:447 で marker を n.spawned ? 'sub' : ... と、node.spawned だけから決めている。screen.ts:201 の判定 r.marker !== 'sub' は、!spawned と常に一致し、今は食い違わない。判定が2か所にあるのは事実だが、ずれるのは将来の変更があってからで、構造の問題。
+- ★ `wn-306/c8` **些末**(実行していない、llm) — トップレベルの行が別の区切りの起動元の下に入るとカーソルが行を追わないので、仕様として望ましいか利用者に確かめるべきだ。
+  - 場所: src/model/cursor.ts:41-57 / 挙げた構成: perspectives ×1
+  - 根拠: app.ts:262-266 は、選んでいた行が選べなくなると followCursor を呼ぶ。followCursor(cursor.ts:41-57)は、前の並びの区切りの中で次の行、前の行、隣の区切りの行の順に探すので、カーソルは元の区切りに残る。ここまでは指摘のとおり。ただ DESIGN.md の差分には『選んでいた行が更新で起動された行に変わったときも、消えたときと同じに隣の行へ移る』とあり、文書どおりの挙動である。仕様を確かめたほうがよいという提案で、不具合ではない。
+- `wn-306/c9` **些末**(実行して確かめた、llm) — 追加した単体テストは (sub) の行が窓に収まる数しかなく、窓からはみ出す境界の場合を確かめていない。
+  - 場所: test/unit/screen.test.ts:136 / 挙げた構成: perspectives ×3
+  - 根拠: テストが無いという指摘なので trivial。ただし、指摘が触れている境界の不具合そのものは実際に起きる。一時ファイルの単体テストで render を呼んで確かめた。(A) 先頭に (sub) 12行、s0・s1、height 10、cursor s0 の場合、窓には見出しと w0〜w5 (sub) と '1/2' だけが出て、選んだ s0 は見えない。cursorBlock=[0,…] の塊が avail 以上なので start=b0=0 になるため。(C) p の下に (sub) 12行、inline あり、cursor p の場合、b1 が (sub) の末尾まで伸び、『入力欄は最後の行まで』の補正で start=b1-avail になる。そのため p 本人も入力欄も窓から外れ、w5〜w11 だけが見える。不具合は別の指摘として扱う。この項目はテストの不足だけを言っている。
+- `wn-308/c1` **些末**(実行していない、llm) — 作業台のキーの文言が昇格済みの lib に直接書かれており、画面の文言を変えるたびに lib を変えることになる
+  - 場所: lib/tmux/tmux.ts:340 / 挙げた構成: code-review ×1、mattpocock ×2
+  - 根拠: lib/tmux/tmux.ts:340 で status-format[0] に `^Q%% split │ · ...` が直書きされ、claude の画面は src/cli/list.ts:60 の keysHelp(@wn_keys)で渡しているのは事実。ただし、どこに文言を置くかという構造の好みで、いまの挙動(表示)は変わらない。
+- `wn-308/c10` **些末**(実行していない、llm) — CLAUDE.md の「学びの捕捉」に従った %% の件の learning issue が起票されているか確かめられていない
+  - 場所: .claude/skills/working-with-tmux/SKILL.md / 挙げた構成: mattpocock ×2
+  - 根拠: issue の起票という作業の手順についての指摘で、プロダクトの挙動には関わらない。学びそのものは .claude/skills/working-with-tmux/SKILL.md:41 に書き足してある。gh で issue を探すのは外部への問い合わせになるので行っていない。
+- `wn-308/c11` **些末**(実行していない、llm) — strftime で % が消える問題がほかの書式でも起きないか確かめておらず、学びの issue の起票も不明
+  - 場所: .claude/skills/working-with-tmux/SKILL.md:41 / 挙げた構成: code-review ×1
+  - 根拠: 差分で % を含むのは status-format[0] の1か所だけで、そこは %% にしてある(lib/tmux/tmux.ts:340)。e2e(test/e2e/workbench.test.ts:117)が `\^Q% split` を待つので、この箇所で % が出ることはテストで確かめている。ほかの書式で同じことが起きるかは、将来 % を使うときに初めて問題になる話で、今の挙動には関わらない。issue の起票の件は c10 と同じく手順の話。
+- `wn-308/c12` **些末**(実行して確かめた、llm) — 作業台の画面図の最下行が実際の描画から取られず手で書き換えられており、CLAUDE.md の決まりに反する
+  - 場所: docs/PRODUCT.md:442 / 挙げた構成: code-review ×3、mattpocock ×2、perspectives ×1
+  - 根拠: 実行した手順: 入れ子の tmux 3.8 で、同じ書式の作業台を幅34の外側のペインに attach し、capture-pane で取った。出力は `workbench: fix-login  0:zsh*  · ^Q`。docs/PRODUCT.md:442 の図の作業台の側は、先頭の余白の1桁を除くと33桁で、`workbench: fix-login  0:zsh*  · ^` は実際の描画の頭の33桁と一致する。図の中身は正しく、利用者が誤ることはない。手で書いたかという作り方の規約の話なので trivial。
+- `wn-308/c13` **些末**(実行して確かめた、llm) — 典型の幅の作業台ではキーの説明が右から切れて ^Q% が見えず、キーを出す目的を果たさない
+  - 場所: docs/PRODUCT.md:442 / 挙げた構成: code-review ×1、mattpocock ×1
+  - 根拠: 幅34で実際に描くと `workbench: fix-login  0:zsh*  · ^Q` になり、`^Q%` の % は切れる。この点は事実。ただし docs/PRODUCT.md:557 が言っているのは「右から欠けるので、3つのキーのうち ^Q% が最後まで残る」という並びの順の話で、どの幅でも見えるとは言っていない。図と説明が合わないという主張は当たらない。狭い幅でキーが見えないのは、仕様の選び方の良し悪しであって不具合ではない(幅60なら `^Q% split │ · ^Q" split ─ ·` まで見えた)。
+- `wn-308/c14` **些末**(実行して確かめた、llm) — 採らなかった形は幅60の画面で示しているのに、採った形の幅60の画面が無く比較できない
+  - 場所: docs/PRODUCT.md:558 / 挙げた構成: code-review ×1、mattpocock ×3
+  - 根拠: docs の見せ方についての指摘で、挙動には関わらない。採った形を幅60で描いた画面は `workbench: fix-login  0:zsh*  · ^Q% split │ · ^Q" split ─ ·` で、比べる材料としては足せる。ただ、無いことで利用者が誤った挙動を受け取ることはない。
+- `wn-308/c15` **些末**(実行して確かめた、llm) — 「採らなかった形」の例が実際の描画から取ったものか不明
+  - 場所: docs/PRODUCT.md:557-562 / 挙げた構成: perspectives ×1
+  - 根拠: 右寄せの書式 '...#{W:...}#[align=right]^Q%% split │ · ...' を、ウィンドウ2つ・幅60で実際に描いた。出力は `workbench: fix-login  0:zsh* 1:zsh  ^Q" split ─ · ^Qc window` で、docs/PRODUCT.md:561 の例と1字も違わない。例は実際の描画と一致しており、作り方が分からないというだけの指摘。
+- ★ `wn-308/c16` **未確定**(実行していない、llm) — East Asian Width が Ambiguous の │ ─ · をステータス行に足したため、曖昧幅を全角で描く端末では幅がずれる
+  - 場所: lib/tmux/tmux.ts:340 / 挙げた構成: code-review ×2、perspectives ×1
+  - 根拠: │(U+2502)と ─(U+2500)が East Asian Width で Ambiguous なのは事実。lib/tmux/tmux.ts:340 で、これらをステータス行に足している。ただし、ずれが起きるのは曖昧な幅を全角で描く設定の端末だけで、手元にその環境が無く再現していない。なお、そうした端末では、tmux がペインの境目に引く │ ─ も同じように崩れる。また · はすでに main の claude の画面のキーの説明で使っている(`^Q^L back · ^Q^W workbench`)。
+- `wn-308/c17` **些末**(実行していない、llm) — 2つの書式で同じ先頭部分を重複して書いており、片方だけ直して見た目がずれやすい
+  - 場所: lib/tmux/tmux.ts:338 / 挙げた構成: code-review ×1
+  - 根拠: lib/tmux/tmux.ts:338-340 で、GUIDE の書式と作業台の書式が同じ先頭 '#[align=left,fg=colour8]workbench: #{@wn_name}' を持つのは事実。ただし今の2つの書式は先頭が一致していて、見た目の違いは起きていない。ずれるのは将来片方だけを直したときなので、重複と保守性の指摘にあたる。
+- `wn-308/c18` **些末**(実行していない、llm) — split-window/new-window が worktree の根で開くことが案内から読み取れず、どちらが望ましいか確認すべき
+  - 場所: lib/tmux/tmux.ts:340 / 挙げた構成: perspectives ×1
+  - 根拠: tmux の既定の split-window と new-window は、-c が無いとセッションの作業ディレクトリ(new-session -c cwd、tmux.ts の createWorkbench)で開く。これは tmux 本来の挙動で、この差分は変えていない(差分が足したのはステータス行の案内の文字列だけ)。誤った結果を生む欠陥ではなく、利用者に好みを確かめるべきだという提案なので trivial とした。
+- `wn-308/c19` **些末**(実行していない、llm) — ^Q^L と ^Qc で2打目の ctrl の有無が違い、^Q^C と読み違える余地がある
+  - 場所:  / 挙げた構成: perspectives ×1
+  - 根拠: claude の画面のキーは ^Q^L(src/ops/keys.ts は ctrl 付きで、bare:false)で、作業台のキーは tmux の既定の prefix c(^Qc)。表記はどちらも打つキーと合っている。読み違えるかもしれないという表示の好みの問題で、挙動は変わらない。
+- `wn-308/c2` **些末**(実行していない、llm) — 表示の ^Q が prefix の C-q から作られず別々に直書きされており、prefix を変えると案内と実際のキーがずれる
+  - 場所: lib/tmux/tmux.ts:324, :340 / 挙げた構成: code-review ×1、mattpocock ×1、perspectives ×3
+  - 根拠: prefix 'C-q'(tmux.ts:324)と表示の `^Q`、tmux の既定のキーと表示の文字が別々に書かれているのは事実。ただし、src/ops/keys.ts:16-22 で bare:true なのは v と e だけで、prefix の表の c・%・" は上書きされていない(tmux.ts:133)。prefix を変えるか、c などを割り当てる将来の変更があって初めてずれる。
+- `wn-308/c20` **些末**(実行して確かめた、llm) — 441行の表示幅が77で他の行の75と2桁ずれている(既存の問題)
+  - 場所: docs/PRODUCT.md:441 / 挙げた構成: mattpocock ×1
+  - 根拠: main と HEAD の docs/PRODUCT.md 436-443行の表示幅を node で計算した(全角を2とした)。'fix-login · ログインの不具合を直して' の行は、main と HEAD のどちらでも 77 で、ほかの行は 75(1行だけ 76)。差分が変えたのは次の行で、こちらは 75 のまま。図の字下げがずれているのは事実だが、docs の図の見た目だけで挙動には関わらない。
+- `wn-308/c21` **誤り**(実行して確かめた、llm) — ^Qc でウィンドウを作らせるのに移動キーも range=window の印も無く、元のウィンドウに戻れない
+  - 場所: lib/tmux/tmux.ts:340 / 挙げた構成: code-review ×1
+  - 根拠: tmux 3.8 で、本番と同じ設定を再現して確かめた(global の prefix None、bind -n C-q switch-client -T wnq、セッションの prefix C-q、mouse on)。外側の tmux から作業台に attach し、send-keys -K で C-q c を送るとウィンドウ 1 ができて、そちらが有効になった。続けて C-q n を送るとウィンドウ 0 に、C-q p を送るとウィンドウ 1 に戻った。セッションの prefix のほうが root の C-q より先に効き、tmux の既定の n、p、数字のキーも生きている(tmux.ts:125-133 が prefix の表から外すのは C-j と j と whatnext のキーだけで、n は ctrl 付きのみ)。range=window が無いのでクリックで移れないのは事実だが、元のウィンドウに戻れないという主張はキー操作で覆る。
+- `wn-308/c22` **些末**(実行していない、llm) — 長いステータス行を #{=/N/…:} で切っておらず、狭い画面ではキーの途中で切れて「· ^」が残る
+  - 場所: lib/tmux/tmux.ts:340 / 挙げた構成: code-review ×1
+  - 根拠: tmux はステータス行をクライアントの幅で切る。そのため狭い画面では、キーの途中で切れて '· ^' が残る。これは docs/PRODUCT.md の図(442行)にもそのまま描かれていて、docs の「続けると右から欠けるので、^Q% が最後まで残る」という狙いどおりの挙動。切れ方の見栄えの問題で、キーが効かなくなるわけではない。
+- `wn-308/c23` **些末**(実行していない、llm) — @wn_name に長さの上限が無く、名前が長いと ^Q% も含めキーが全部消えるのに docs はウィンドウ数にしか触れていない
+  - 場所: docs/PRODUCT.md:555-556 / 挙げた構成: perspectives ×1
+  - 根拠: tmux.ts:331 は escapeFormat(name) を入れるだけで、長さの上限は無い。だから名前が長いとキーは右へ押し出されて消えうる。docs/PRODUCT.md:556 が挙げているのはウィンドウの数だけだが、「^Q% が最後まで残る」は3つのキーの中での順序の話で、誤りではない。押し出す要因の列挙が足りないという程度で、利用者が誤った操作をする食い違いではない。
+- `wn-308/c24` **些末**(実行していない、llm) — 契約 docs でキーの注記が workbenchOptions でなく createWorkbench 側に置かれ、GUIDE のときキーを出さない分岐も書かれていない
+  - 場所: docs/lib/tmux.md:31 / 挙げた構成: code-review ×1、mattpocock ×2
+  - 根拠: docs/lib/tmux.md:31 では、キーの注記が createWorkbench の括弧の中にある(「作業台では窓の一覧のあとに…キーを続ける」)。workbenchOptions は名前を挙げるだけで、GUIDE のときにキーを出さない分かれ目は明記されていない。指摘の内容は事実だが、「作業台では」で案内のセッションとの区別はほのめかしている。契約 docs のどこに書くかの問題で、プログラムの挙動とは関わらない。
+- `wn-308/c3` **些末**(実行していない、llm) — tmux のウィンドウを「窓」と呼んでおり、スクロールの範囲を指す既存の「窓」や「ウィンドウ」と用語が揺れている
+  - 場所: docs/PRODUCT.md:557, docs/lib/tmux.md:31 / 挙げた構成: code-review ×2、mattpocock ×3
+  - 根拠: PRODUCT.md:161,297,354 は「窓」をスクロールで見える範囲の意味で使い、557 と docs/lib/tmux.md:31 は tmux のウィンドウの一覧を「窓の一覧」と書いている。同じ節の 552 と 49 は「ウィンドウの一覧」なので、用語が揺れているのは事実。ただし、文脈で区別でき、利用者が操作を誤るものではない。文書の書き方の問題。
+- `wn-308/c4` **些末**(実行していない、llm) — lib/tmux/tmux.test.ts に workbenchOptions の status-format(%% の逃がし)を確かめる単体テストが無く、使い捨ての e2e にしかない
+  - 場所: lib/tmux/tmux.test.ts / 挙げた構成: code-review ×2、mattpocock ×1
+  - 根拠: grep の結果、lib/tmux/tmux.test.ts に workbenchOptions と status-format のテストは無く、`%%` を確かめているのは test/e2e/workbench.test.ts:117 だけ。テストが無いという指摘なので、挙動には関わらない。
+- `wn-308/c5` **些末**(実行していない、llm) — キーの表記が `^Q l` と `^Qc` とで空白の有無が揺れている
+  - 場所: docs/PRODUCT.md:516 / 挙げた構成: mattpocock ×1
+  - 根拠: PRODUCT.md:516 は、ADR-0013 の理由として文字数を比べる仮の例に `^Q l` と書いている。今回の `^Qc` は実際の表示の文字列。空白の有無が揺れているのは事実だが、表記の問題で挙動には関わらない。
+- `wn-308/c6` **些末**(実行していない、llm) — e2e テストがウィンドウが1つの場合しか確かめず、複数のときキーが一覧のあとに続くことを検証していない
+  - 場所: test/e2e/workbench.test.ts:117 / 挙げた構成: perspectives ×2
+  - 根拠: test/e2e/workbench.test.ts:117 が確かめているのは、ウィンドウが1つ(`0:\S+\*`)のときだけ。ただし status-format の #{W:...} のあとに続けて書いているので、作りの上ではウィンドウが複数でもキーはそのあとに続く。テストが無いという指摘。
+- `wn-308/c7` **些末**(実行していない、llm) — e2e テストが、案内でキーが出ないこと・複数ウィンドウ時の間隔・狭い幅での欠け方をまとめて確かめていない
+  - 場所: test/e2e/workbench.test.ts / 挙げた構成: mattpocock ×1
+  - 根拠: 案内(GUIDE)のとき、キーの無い書式を使う分岐は tmux.ts:337-338 にあり、e2e ではそれを確かめていない。複数ウィンドウや狭い幅も同じで、テストが無いという指摘にとどまる。
+- `wn-308/c8` **些末**(実行していない、llm) — 狭い幅で右から欠けても ^Q% が残ることを確かめるテストが無い
+  - 場所: test/e2e/workbench.test.ts:117 / 挙げた構成: mattpocock ×1、perspectives ×2
+  - 根拠: 幅を指定して `^Q%` が残ることを確かめるテストは test/e2e/workbench.test.ts に無い。書式は左寄せで続けて書く形(tmux.ts:340)なので、右から欠けるのは作りどおり。テストが無いという指摘。
+- ★ `wn-308/c9` **些末**(実行していない、llm) — 案内のセッション(作業台なし)でキーが出ないことを確かめる否定のテストが無い
+  - 場所: test/e2e/workbench.test.ts:25 / 挙げた構成: mattpocock ×2
+  - 根拠: テストが無いという指摘。lib/tmux/tmux.ts:337-338 では、session === GUIDE のときの書式は '#[align=left,fg=colour8]workbench: #{@wn_name}' のままで、差分はこちらを変えていない。案内のセッションにキーが混ざる経路は今のコードには無く、挙動の問題ではない。
+- `wn-313/c1` **些末**(実行していない、llm) — 頼みごとを書いて SIGUSR2 で一覧に知らせる処理が複数か所に重複していて、変更したときにずれるおそれがある。
+  - 場所: src/cli/workbench.ts:43 / 挙げた構成: code-review ×3、mattpocock ×2、perspectives ×2
+  - 根拠: 指摘のとおり重複はある。src/cli/workbench.ts:43-51 の askListToRefreshGuide と src/cli/guide.ts:74-80 は、どちらも `@wn_req_<秒>_<pid>` に書いてから @wn_pid に SIGUSR2 を送っており、lib/tmux/tmux.ts:26-27 の @wn_req_sh も同じ形で書く。ただ、今の3か所は同じ形で、App 側の読み取り(tmux.ts:250 の `@wn_req_` 接頭辞)とも合っているので、頼みごとが取りこぼされる経路はない。問題になるのは将来どこか1か所だけを変えたときで、重複と構造の指摘にあたる。
+- `wn-313/c10` **些末**(実行していない、llm) — pane-died のテストが sh の本文の文字列を見るだけで、壊れやすく、実際の動き(回数が戻らないことなど)を検出できない。
+  - 場所: lib/tmux/tmux.test.ts:75-81 / 挙げた構成: mattpocock ×3、perspectives ×2
+  - 根拠: lib/tmux/tmux.test.ts:75-81 が sh の本文に対して toContain で調べているのは事実。ただしテストの作りの好みと壊れやすさの指摘で、製品の挙動には関わらない。同じファイルの sh -n で文法を確かめるテストは別にある。
+- `wn-313/c11` **些末**(実行していない、llm) — 同時に作り直すと、'exists' を返した側がオプションの入る前のセッションに attach しうる。
+  - 場所: src/cli/guide.ts:17-23 / 挙げた構成: perspectives ×2
+  - 根拠: src/cli/guide.ts の ensureGuide で、負けた側は hasSession が真なら 'exists' を返してすぐ attach する。このため、勝った側が workbenchOptions を入れる前につながる並びは、確かにありうる。ただし workbenchOptionArgs(lib/tmux/tmux.ts:123-134)で入れるのは prefix、mouse、status、set-titles などのセッションのオプションだけで、どれも入れた時点でつながっているクライアントにも効く。勝った側は数ミリ秒のうちに入れ終えるので、既定のままになるのはその間だけで、あとは元に戻る。利用者が気づく誤りにはならない。
+- `wn-313/c12` **誤り**(実行していない、llm) — 同時に作り直すと 'exists' が返って askListToRefreshGuide が呼ばれず、@wn_name が入らないままになる。
+  - 場所: ensureGuide / 挙げた構成: mattpocock ×1
+  - 根拠: 同時に作り直したとき 'exists' を返すのは負けた側だけで、勝った側は 'created' を返す。勝った側は src/cli/workbench.ts で askListToRefreshGuide を呼び、頼みごと guide を置いて SIGUSR2 を送る。一覧はそれを受けて src/ops/app.ts:1156-1160 で lastGuide を消して follow し、1490 行の setSessionName で @wn_name を入れる。頼みごとは workbenchOptions(@wn_name を '' にする)のあとに出るので、上書きされる順にもならない。名前が入らないまま残る経路はない。
+- `wn-313/c13` **些末**(実行していない、llm) — 観測できる振る舞いの変更を DESIGN.md にだけ書き、PRODUCT.md を直していない。
+  - 場所: docs/DESIGN.md:229 / 挙げた構成: code-review ×2
+  - 根拠: 差分で docs/ が変わったのは DESIGN.md と docs/lib/tmux.md だけで、PRODUCT.md は変わっていない。これは事実。ただし DESIGN.md:227-230 に書いたことの中心は不具合の直し(案内のプログラムが落ちてもセッションが残る、exec が重なる)で、PRODUCT.md がすでに求めている『作業台の画面が開ける』を満たすためのもの。PRODUCT.md の記述と食い違って利用者を誤らせる箇所は見当たらない。文書をどこに置くかの手順の指摘にとどまる。
+- `wn-313/c14` **些末**(実行して確かめた、llm) — 新しいエラー文言と分割で失敗したときのキー待ちの挙動が PRODUCT.md に書かれていない。
+  - 場所: docs/PRODUCT.md / 挙げた構成: mattpocock ×3
+  - 根拠: 実行して確かめた: WHATNEXT_WORKBENCH_SPLIT=1 を付けて TTY の下で起動すると、'whatnext is not running. Start whatnext first.' のあとに 'Press any key to close.' が出て、キーを押すと exit=1 で終わった。新しい文言とキー待ちが PRODUCT.md に書かれていないのは事実。PRODUCT.md:478 の『whatnext が作った分割は、作業台の画面が終わると閉じる』は、キーのあと作業台の画面が終われば分割が閉じるので、今も成り立っている。画面に『Press any key to close.』が出るので、利用者が誤ることもない。層2で利用者に聞くべきだったかという手順の問題で、挙動の誤りではない。
+- `wn-313/c15` **些末**(実行していない、llm) — 起動し直しが上限を超えると案内を畳み、作業台の画面が離れる挙動が PRODUCT.md に書かれていない。
+  - 場所: docs/PRODUCT.md / 挙げた構成: mattpocock ×1
+  - 根拠: lib/tmux/tmux.ts の GUIDE) の分岐は、5回を超えると kill-pane する。detach-on-destroy on なので、作業台の画面は離れる。PRODUCT.md にこの記述がないのは事実。ただし、これは案内のプログラムがすぐ落ち続ける異常時の歯止めで、次に開くときは ensureGuide が作り直す。PRODUCT.md の記述と食い違う箇所はなく、置き場所の指摘にとどまる。
+- `wn-313/c16` **些末**(実行して確かめた、llm) — not running の経路も fail() を通るので、分割の中ではキーを押すまで終わらず、PRODUCT とシナリオの「示して終了する」と食い違う。
+  - 場所: src/cli/workbench.ts:14 / 挙げた構成: mattpocock ×1
+  - 根拠: 実行: env -u TMUX -u WHATNEXT_ROLE WHATNEXT_TMUX_SOCKET=<空のソケット> の下で、script を使い TTY で node dist/src/cli.js workbench を動かした。手で打った場合は 'whatnext is not running. Start whatnext first.' を出してすぐ exit=1 で終わり、PRODUCT.md:490 とシナリオ 59 のとおりだった。WHATNEXT_WORKBENCH_SPLIT=1 のときだけ 'Press any key to close.' を出してキーを待つ。not running の経路が fail() を通るのは事実。ただし WHATNEXT_WORKBENCH_SPLIT は、動いている一覧が Ghostty の分割を作るとき(src/ops/app.ts:1443)にだけ付く。分割の中で not running になるのは、分割を作ってから起動するまでの間に whatnext が終わったときだけ。そのときも文言を出し、終了コード 1 で終わる。シナリオが想定している手で打つ場合とは食い違わない。
+- `wn-313/c17` **些末**(実行していない、llm) — GUIDE_REFRESH がセッション名 GUIDE と紛らわしく、fail() の名前からキー待ちの副作用が読めない。
+  - 場所: src/cli/workbench.ts GUIDE_REFRESH / fail() / 挙げた構成: mattpocock ×1
+  - 根拠: src/ops/names.ts:12 `GUIDE_REFRESH = 'guide'`、src/cli/workbench.ts の fail()。命名とログの読みやすさの指摘で、動きは変わらない。app.ts:1156 で parts[0] === GUIDE_REFRESH として正しく振り分けられ、fail() のキー待ちは WHATNEXT_WORKBENCH_SPLIT=1 のときだけ働く(DESIGN.md に書いてある)。
+- `wn-313/c18` **些末**(実行していない、llm) — GUIDE_REFRESH という名前がセッション名の GUIDE と紛らわしい。
+  - 場所: GUIDE_REFRESH / 挙げた構成: mattpocock ×1
+  - 根拠: c17 と同じ。GUIDE(セッション名の定数)と GUIDE_REFRESH(頼みごとの語)は別の定数で、別々の場所で使われる。紛らわしいかは命名の問題で、挙動に関わらない。
+- `wn-313/c19` **些末**(実行していない、llm) — GUIDE_REFRESH の値が 'guide' だけで、入れ直すという意味が値から読めない。
+  - 場所: GUIDE_REFRESH / 挙げた構成: mattpocock ×1
+  - 根拠: 値の 'guide' が何を表すかの指摘。app.ts の request() は先頭の語を比べるだけで、値の意味は動きに関わらない。命名の好み。
+- `wn-313/c2` **些末**(実行していない、llm) — 頼みごとの送り方を src の側で組み直しているので、Tmux にまとめるほうが自然だ(Feature Envy)。
+  - 場所: src/cli/workbench.ts askListToRefreshGuide / 挙げた構成: mattpocock ×1
+  - 根拠: 送る処理を Tmux にまとめるべきという設計の好み(Feature Envy)の指摘。workbench.ts:43-51 は正しく動く(書いてから知らせる順序は guide.ts と同じ)。挙動には関わらない。
+- `wn-313/c20` **些末**(実行して確かめた、llm) — 頼みごとの名前 'guide' が一般的すぎて、将来ほかの頼みごととぶつかりうる。
+  - 場所: src/ops/names.ts:12 / 挙げた構成: perspectives ×1
+  - 根拠: grep で頼みごとの送り手を調べた: workbench.ts:44(GUIDE_REFRESH)、guide.ts:74(`key ...`)、tmux.ts の @wn_req_sh(key/focus/agentview)。app.ts の分岐は guide/agentview/focus/key の4つで、'guide' とぶつかる頼みごとは今は無い。将来ほかの頼みごとを足したときに初めて問題になるので trivial。
+- `wn-313/c21` **些末**(実行して確かめた、llm) — 案内が終わる原因が分からないまま起動し直しで症状を抑えており、原因を追う issue や例外のログが含まれていない。
+  - 場所: lib/tmux/tmux.ts:48 / 挙げた構成: code-review ×1
+  - 根拠: `gh issue view 311`: bug の issue #311(cycle-9)に「案内のプログラムがなぜ終わったかは未特定。@wn_guide_died に残す」とあり、原因を追う issue が無いという主張は誤り。grep で見ると、uncaughtException/unhandledRejection のログは src/cli/list.ts:117-118 にだけあり、案内のプログラム(guide.ts)には無い。これは事実だが、調べやすさを高める提案で、挙動の不具合ではない。
+- `wn-313/c22` **誤り**(実行して確かめた、llm) — 案内が終わる原因が未解明なことなどを、bug/learning の issue に起票していない。
+  - 場所: docs/DESIGN.md / 挙げた構成: mattpocock ×2
+  - 根拠: `gh issue list --search 案内`: #311「作業台の画面が開いた直後に閉じる(案内のセッション wbguide が消える、exec の重複)」が bug ラベル・cycle-9 マイルストーンで起票済み。本文に、原因が未特定のことと exec の重複(原因3)が書かれている。起票していないという主張は事実と食い違う。
+- `wn-313/c23` **誤り**(実行して確かめた、llm) — 起動し直しと作り直しの判断について、decision-log の issue がない。
+  - 場所: decision-log / 挙げた構成: mattpocock ×1
+  - 根拠: `gh issue view 314`: decision-log の #314「案内のペインの起動し直しの上限を『60秒以内に続けて5回』にした」があり、#311 での層1の判断として起動し直しの方式と、畳まない理由を記録している。作り直し(ensureGuide)を一覧側でなく workbench 側で行う理由は DESIGN.md の差分に書かれている。decision-log の issue が無いという主張は誤り。
+- `wn-313/c24` **些末**(実行して確かめた、llm) — '@wn_pid' や 'agentview' を素の文字列で書いており、定数の GUIDE_REFRESH とそろっていない。
+  - 場所: src/cli/workbench.ts / 挙げた構成: mattpocock ×1
+  - 根拠: grep: '@wn_pid' は workbench.ts:45 と guide.ts:75 に、'agentview' は app.ts:1162 に素の文字列で書かれている。どちらもこの差分より前からある書き方で、定数にそろえるかは書き方の好み。挙動に関わらない。
+- `wn-313/c25` **些末**(実行して確かめた、llm) — 単体テストが zsh の存在を前提にしていて、zsh のない環境では ENOENT で失敗する。
+  - 場所: test/unit/cli.test.ts:26 / 挙げた構成: code-review ×2、perspectives ×1
+  - 根拠: test/unit/cli.test.ts:26 は `execFileSync(shell, ...)` で bash/zsh/sh を起こしており、`npm test`(vitest run lib test/unit)に含まれる。存在しないシェル名で execFileSync を呼ぶと e.code=ENOENT になることを node で確かめた。この環境(macOS、zsh あり)では `npx vitest run test/unit/cli.test.ts` は 4 件とも通る。リポジトリには .github/workflows が無く、Ghostty と macOS を前提にしたプロジェクトなので、zsh の無い環境で回す経路は今は無い。製品の挙動ではなく、テストの環境依存の話なので trivial。
+- `wn-313/c26` **些末**(実行していない、llm) — 案内の名前をセッションのオプションに置く非対称が根の原因で、新しい頼みごとで補う設計は場当たり的だ。
+  - 場所: src/ops/app.ts:1156 / 挙げた構成: code-review ×2
+  - 根拠: `@wn_name` はセッションのオプション(lib/tmux/tmux.ts:408 setSessionName、361 workbenchOptions)で、`@wn_guide` はサーバ全体のオプションなのは事実。ただ、指摘は設計の好み(頼みごと guide で補う形)についてのもの。名前が空になる時間については c27 で追った。ふつうは WB_TTY が先に入っているので、すぐに書き直される。挙動の不具合ではない。
+- `wn-313/c27` **誤り**(実行していない、llm) — doFollow が早めに return するため頼みごと guide が効かず、作り直した案内の @wn_name が空のまま残りうる。
+  - 場所: src/ops/app.ts:1156 / 挙げた構成: code-review ×1、mattpocock ×1、perspectives ×1
+  - 根拠: src/cli/workbench.ts:17-19 は、ensureGuide と askListToRefreshGuide より前に WB_TTY を入れる。一覧の onSignal(app.ts:1110-)は WB_TTY を読んで this.wbTty に入れてから、頼みごと guide を処理する(afterSignal 1142-1147)。なので doFollow の `if (!wb) return` では抜けない(抜けるのは tty が取れない特殊な場合だけ)。main 画面が trust-xxx のときは `else return` で抜けるが、lastGuide は undefined のまま残る。trust の画面から戻ったあとの follow(refresh の finally で必ず呼ぶ。app.ts:192、REFRESH_MS=60s。ほかにカーソルの移動や attach でも呼ぶ)で、名前と中身を書き直す。『次に中身が変わるまで空のまま』は起きない。空になるのは、trust の画面の間だけの一時的なもの。
+- `wn-313/c28` **些末**(実行していない、llm) — 案内のプログラムの guide.ts が、セッションを作る役(ensureGuide)まで持つようになった。
+  - 場所: src/cli/guide.ts / 挙げた構成: mattpocock ×1
+  - 根拠: src/cli/guide.ts:17-24 に ensureGuide が加わったのは事実。モジュールの置き場所の好みで、挙動には関わらない。
+- `wn-313/c29` **些末**(実行していない、llm) — workbenchOptions(GUIDE, '') を ensureGuide と list.ts の両方で呼んでおり、二重に走って責任の置き場所もはっきりしない。
+  - 場所: src/cli/list.ts:67 / 挙げた構成: code-review ×3、mattpocock ×3、perspectives ×3
+  - 根拠: guide.ts:22 は作ったときに workbenchOptions(GUIDE,'') を呼び、list.ts:66-67 はその直後にもう一度呼ぶ。作ったときに2回走るのは事実。workbenchOptions(lib/tmux/tmux.ts:361-367)は set を並べるだけで冪等なので、挙動は変わらない。重複と責任の置き場所の話。
+- `wn-313/c3` **些末**(実行していない、llm) — 頼みごとを文字列で組み立てている(Primitive Obsession)。
+  - 場所:  / 挙げた構成: mattpocock ×1
+  - 根拠: 頼みごとを文字列で組み立てていること(GUIDE_REFRESH='guide'、app.ts:1156 の parts[0] との比較)は事実だが、送る側と受ける側が同じ定数を使っていて一致する。型の好みの指摘で、挙動には関わらない。
+- `wn-313/c30` **些末**(実行して確かめた、llm) — /signal=kill/ のアサーションが OS ごとの signal 名の表記に依存している。
+  - 場所: test/e2e/workbench.test.ts:255 / 挙げた構成: code-review ×1
+  - 根拠: tmux 3.8(macOS)で remain-on-exit on のペインを kill -9 し、`display -p 'signal=#{pane_dead_signal}'` を取ると `signal=kill` だった。tmux の sig2name は sys_signame がある OS では名前を、無い OS(glibc の Linux)では数字を返すので、Linux ではテストの /signal=kill/ が落ちうる(Linux では実行していない)。対象は e2e テストのアサーションだけで、製品は値を記録するだけ。プロジェクトは macOS と Ghostty が前提で、CI も無い。テストの環境依存なので trivial。
+- `wn-313/c31` **些末**(実行していない、llm) — ensureGuide の失敗時の早期 return が WB_TTY の書き換えより後にあり、tty の記録だけが書き換わる。
+  - 場所: src/cli/workbench.ts:22 / 挙げた構成: code-review ×1
+  - 根拠: workbench.ts:16-25 で、WB_TTY の書き換え(と MAIN_TTY の解除)が ensureGuide の失敗の早期 return より前にあるのは事実。ただ、attach が失敗したときの順序は main でも同じで、新しい失敗の経路もそれに揃っているだけ。tty の記録が残っても、一覧は wbOpen を clients と突き合わせて判断する(app.ts:1436)。古い作業台の画面が detach される(1121)のは、2つ目の workbench が成功したときと同じ結果。ensureGuide が 'failed' になるのは、一覧があるのに new-session が失敗し、しかも GUIDE も無いときに限られ、狙っては起こせない。利用者が誤る挙動にはならないので trivial。
+- `wn-313/c32` **本物・差分の内**(実行していない、llm) — 契約 docs の splitWorkbench に exec の付与が書かれておらず、src がそれに頼っている。
+  - 場所: docs/lib/tmux.md:43 / 挙げた構成: code-review ×1、mattpocock ×1
+  - 根拠: docs/lib/tmux.md:43 は『`command` を打ち込む』としか書いておらず、lib/tmux/ghostty.ts:41 が先頭に ` exec ` を付け、末尾に `\n` を足すことが契約に無い。CLAUDE.md の約束で、実装セッションは昇格モジュールを契約 docs 経由で使い、中身を読まない。契約だけを読むと src の側で exec を付けるのが自然で、0.20.2 の ` exec exec` の不具合(bash で exec: not found)はまさにそれで起きた。差分は src の側から exec を外し、DESIGN.md には書いたが、契約 docs は直していない。差分の目的(exec の重複を直す)の直し残しなので in。
+- `wn-313/c33` **些末**(実行していない、llm) — @wn_guide_died に画面の末尾が入り、セッション名やパスがサーバ全体のオプションに残る。
+  - 場所: lib/tmux/tmux.ts:51 / 挙げた構成: perspectives ×1
+  - 根拠: lib/tmux/tmux.ts:51 では、`set -g @wn_guide_died` に capture-pane の空でない末尾5行を入れている。指摘どおり、案内の画面の文言(セッション名、`~/...` の場所)がサーバ全体のオプションに残る。ただし、置き場所は利用者が自分の端末で動かす専用の tmux サーバ(`-L <socket>`)のオプションで、外へは出ない。同じ名前と場所は `@wn_guide`(サーバ全体のオプション)にも元から入っている。誤った結果や漏えいにはつながらないので、挙動の問題ではない。
+- `wn-313/c34` **些末**(実行していない、llm) — @wn_guide_died が上書きされるので最後の1回しか残らない。
+  - 場所: lib/tmux/tmux.ts:51 / 挙げた構成: perspectives ×1
+  - 根拠: tmux.ts:51 は `set -g` で毎回上書きするので、残るのは最後の1回だけ。ここまでは事実。ただ、これは調べるための手がかりの量の問題で、作り直しやセッションの扱いといった利用者に見える挙動は変わらない。手がかりとしての設計の好みにとどまる。
+- `wn-313/c35` **本物・差分の内**(実行して確かめた、llm) — @wn_guide_died に最後の5行しか残さないので、Node の例外のエラー文が残らない。
+  - 場所: lib/tmux/tmux.ts:51 / 挙げた構成: code-review ×1
+  - 根拠: `remain-on-exit on` の tmux で、`null.x` を投げる Node のスクリプト(スタック4段)を動かし、フックと同じ `capture-pane -p | grep -v '^$' | tail -5` を取った。結果は『at Timeout._onTimeout… / at listOnTimeout… / at process.processTimers… / Node.js v24.16.0 / Pane is dead (status 1, …)』で、`TypeError: Cannot read properties of null` の行が入らなかった。スタックがこれより浅くても、`Node.js vXX` の行と tmux の `Pane is dead` の行で2行を使うため、エラー文はまず残らない。DESIGN.md の追加部分は『案内のプログラムがなぜ終わったかは、まだ分かっていない(`@wn_guide_died` はその手がかりを残すため)』と、差分の目的をこの記録に置いている。その目的を満たさないので、差分の中の問題とした。
+- `wn-313/c36` **些末**(実行していない、llm) — 契約の名前の約束に、@wn_respawned と頼みごとの形 guide が載っていない。
+  - 場所: docs/lib/tmux.md / 挙げた構成: mattpocock ×2
+  - 根拠: docs/lib/tmux.md の『名前の約束』は、頼みごとの形を key/focus/agentview と書いていて、`guide` と `@wn_respawned` は載っていない。ここまでは事実。ただ、`guide` を書くのは src/cli/workbench.ts、受けるのは src/ops/app.ts で、どちらも lib の外にある。lib のキーとフックが書く形ではないので、lib の契約に載っていなくても食い違いではない。`@wn_respawned` は、lib の sh の中だけで使う回数の印。使う側が触る名前ではないので、載っていなくても誤った使い方にはつながらない。文書をどこまで書き込むかの問題にとどまる。
+- `wn-313/c37` **些末**(実行していない、llm) — 新しい e2e 2つにシナリオ番号がなく、DESIGN の対応表にも行がない。
+  - 場所: e2e / DESIGN「確かめ方」 / 挙げた構成: mattpocock ×1
+  - 根拠: test/e2e/workbench.test.ts に足した2つの it は、名前にシナリオ番号がない(ほかは『25・57:』などで始まる)。ここまでは事実。ただ、これはテストと文書の対応の整理で、プログラムの挙動には関わらない。
+- `wn-313/c38` **些末**(実行していない、llm) — fail() が環境変数を直接読んでおり、readEnv/Env を通すほかとそろっていない。
+  - 場所: src/cli/workbench.ts の fail() / 挙げた構成: mattpocock ×1
+  - 根拠: src/cli/workbench.ts の fail() は、`process.env.WHATNEXT_WORKBENCH_SPLIT` を直接読んでいる。ここまでは事実。値は app.ts が splitWorkbench の env で '1' を渡していて、読み方が違っても結果は同じ。書き方がそろっていないという好みの問題にとどまる。
+- `wn-313/c39` **本物・差分の内**(実行して確かめた、llm) — SIGUSR2 を attach の前に送るので、後の client-attached で follow が走らず作業台の画面が案内に残りうる。
+  - 場所: src/cli/workbench.ts:27 / 挙げた構成: code-review ×1
+  - 根拠: コードの経路: workbench.ts は attach の前に WB_TTY を入れ、案内を作ったときは SIGUSR2 を送る。app.ts の afterSignal では wbChanged が true になり、this.wbTty が更新され、request('guide') が follow() を呼ぶ。doFollow は 60ms 後に clients() で wb の tty を探すが、attach がまだなら見つからず、switchClient を飛ばす。あとから client-attached の知らせが来ても、wbTty は同じなので wbChanged は false になり、closed も空なので follow は走らない。e2e で確かめた手順は、作業台 sh-a0000000 を作る → 作業台の画面を閉じる → wbguide を kill → startWorkbench。手を加えないままでは4回とも sh-a0000000 に切り替わり、再現しなかった(attach のほうが早い)。workbench.ts で、知らせを送ったあと attach の前に 500ms 待たせると、3秒後もクライアントは『wbguide』のままで、期待した sh-a0000000 と食い違った(Expected sh-a0000000 / Received wbguide)。attach が follow の処理より遅れたときに起きる競合で、案内を作り直したとき(差分で足した経路)にしか起きないので、差分の中の問題とした。実際に起きる頻度は低い。待ちを入れたコードとテストは元に戻した。
+- `wn-313/c4` **些末**(実行していない、llm) — workbench から作り直した案内が workbench のプロセスの node/cli/env で動くため、一覧と版や環境が食い違いうる。
+  - 場所: src/cli/guide.ts:19 / 挙げた構成: code-review ×3、mattpocock ×2、perspectives ×3
+  - 根拠: 事実の部分は正しい。ensureGuide(src/cli/guide.ts:17-24)は paneCommand(env,'guide') を使い、src/cli/env.ts:87-105 を見ると node/cli と PATH などは呼んだプロセス(workbench)のものになる。ただ、Ghostty の分割からの起動では、一覧が渡す workbenchCommand(env) を使うので一覧と同じ node/cli.js になる。食い違うのは、利用者が手で、別に入れた whatnext を打った場合に限られる。また案内のプログラム(guide.ts:41-)が読むのは tmux のオプション @wn_guide と @wn_pid、ソケットだけで、CLAUDE_CONFIG_DIR は使わない。誤った結果が出るのは、版の間で @wn_guide の形や頼みごとの形が変わったときだけで、今の時点で起きる具体的な誤りは無い。将来の変更があって初めて問題になるものにあたる。
+- `wn-313/c40` **些末**(実行していない、llm) — exec が1つだけ付くことを守る lib のテストが、cycle-end で消える test/unit/ に置かれている。
+  - 場所: test/unit/cli.test.ts / 挙げた構成: mattpocock ×1
+  - 根拠: test/unit/cli.test.ts は、lib の splitWorkbench と src の workbenchCommand を組み合わせて確かめていて、lib/tmux/ に exec を確かめるテストはない(lib/tmux/ghostty.ts:41 が ` exec ${command}` を付ける)。cycle-end で test/ を消すと、この確かめも消える。ここまでは事実。ただ、これはテストの置き場所の問題で、今の挙動は正しい(テストは通る)。分類の基準の『テストが無いという指摘、将来の変更があって初めて問題になるもの』に当たる。
+- `wn-313/c41` **些末**(実行して確かめた、llm) — 端末が切れたあとに fail() が setRawMode(true) を呼ぶと EIO で投げて落ちうる。
+  - 場所: src/cli/workbench.ts:58-60 / 挙げた構成: perspectives ×1
+  - 根拠: `node -e` で Node v24.16.0 の tty.ReadStream.prototype.setRawMode の中身を出して確かめた。失敗しても投げずに `this.emit('error', new ErrnoException(err,'setRawMode'))` を出す。stdin に 'error' の受け手はないので、結局は捕まらない例外として終わり、終了コードは 1 になる。fail() がもともと返す値も 1 で、違いは捕まらない例外のスタックが stderr に出るかどうかだけ。その stderr も、端末が切れたという前提では誰も読めない。さらに、この前提にたどり着く経路自体が細い。workbench.ts には SIGHUP の受け手がない(grep で調べると、SIGHUP を受けているのは src/cli/list.ts:116 だけ)。端末が切れると、exec で起動した node は SIGHUP の既定の動作で終わるので、spawnSync が戻って fail() の setRawMode に着くことはふつうない。fail() が足されたこと自体は差分によるものだが、利用者に見える挙動(画面、終了コード、データ)は変わらない。pty を実際に切って再現することはしていない。
+- `wn-313/c5` **些末**(実行して確かめた、llm) — サーバごと閉じたときの終了コードが tmux の値から 0 に変わったのに、仕様に書かれていない。
+  - 場所: src/cli/workbench.ts / 挙げた構成: mattpocock ×1
+  - 根拠: /tmp/wnchk/t.sh で tmux 3.8 を実測した。attach 中に kill-server すると rc=1 で `[server exited]` になる。main の workbench.ts は `return res.status ?? 0` なので 1 を返し、差分では `return 0` になる。変わったのは事実。ただし PRODUCT.md と DESIGN.md には、この場合の終了コードの定めがない(定めがあるのは、whatnext が動いていないときの 1 だけで、PRODUCT.md:490 と 771 に書かれ、差分でも 1 のまま)。Ghostty の分割は exec で動いて閉じるので、終了コードを見るものもない。文書と食い違って利用者が誤る状況はなく、挙動の欠陥ではない。
+- `wn-313/c6` **本物・差分の外**(実行して確かめた、llm) — wbguide が畳まれて画面が閉じても tmux が 0 で終わるため、理由が出ず、キーも待たずに 0 で終わる。
+  - 場所: src/cli/workbench.ts の attach 結果の判定 / 挙げた構成: prove ×1
+  - 根拠: tmux 3.8、detach-on-destroy on、ほかのセッションが残る状態で実測した。attach 中のセッションを kill-session すると rc=0 で `[exited]`、存在しないセッションへの attach は rc=1 だった。lib/tmux/tmux.ts の pane-died で、案内のセッションは5回を超えると kill-pane する。するとセッションが消えて作業台の画面のクライアントが離れ、tmux は 0 で終わる。src/cli/workbench.ts の `res.error || (res.status !== 0 && 一覧がある)` は偽になるので、`[exited]` の行を消して 0 を返す。理由は出ず、fail() のキー待ちもなく、Ghostty の分割はそのまま閉じる。経路を最後まで追えた。main でも、案内のプログラムが1回終わった時点で kill-pane し、同じように黙って閉じる(main は res.status=0 を返し、行も消す)。この差分は畳むまでの回数を増やしただけで、黙って閉じる挙動そのものは main からある。差分の『つなげなかったときに理由を出す』は attach の失敗だけを対象にしている(DESIGN.md の追記)。
+- `wn-313/c7` **些末**(実行していない、llm) — attach の失敗、fail() のキー待ち、5回を超えたら畳む挙動に、動かして確かめるテストがない。
+  - 場所: テスト / 挙げた構成: mattpocock ×2
+  - 根拠: テストが無いという指摘。lib/tmux/tmux.test.ts の追加テストは、スクリプトの本文に 'respawn-pane'、'-lt 5'、'kill-pane' が含まれるかを見るだけで、test/e2e には attach の失敗や fail() のキー待ちを確かめるテストが無い。どちらも事実だが、挙動の欠陥ではない。
+- `wn-313/c8` **些末**(実行していない、llm) — fail() の、メッセージを出してキーを待つ経路にテストがない。
+  - 場所: src/cli/workbench.ts fail() / 挙げた構成: perspectives ×1
+  - 根拠: テストが無いという指摘。src/cli/workbench.ts の fail() で、WHATNEXT_WORKBENCH_SPLIT=1 かつ TTY のときにキーを待つ経路は、test/unit/cli.test.ts にも test/e2e/workbench.test.ts にも無い。事実だが、挙動の欠陥ではない。
+- `wn-313/c9` **些末**(実行していない、llm) — 起動し直しの上限を超えて案内が畳まれる経路を、通しで確かめる e2e テストがない。
+  - 場所: test/e2e/workbench.test.ts:242-256 / 挙げた構成: perspectives ×3
+  - 根拠: 指摘のとおり、test/e2e/workbench.test.ts:242-256 は SIGKILL を1回送るだけで、6回目に畳む経路は通しで確かめていない。ただしこれは『テストが無い』という指摘で、挙動の誤りを示していない。lib/tmux/tmux.ts の GUIDE) の分岐は、@wn_respawned をペインのオプションに数え、respawn-pane のあとも同じペインなので数は残り、5 で kill-pane に移る。読んだかぎり、正しく動く。

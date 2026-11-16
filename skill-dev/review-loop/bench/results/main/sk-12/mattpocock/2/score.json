@@ -1,0 +1,119 @@
+{
+ "cost_usd": 0.1091536,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "source で止める・止めないを分けていることは挙げているが、reason_type を見ていないために分類器の拒否まで通る点は指摘せず、むしろ妥当と結論している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "detected",
+   "quote": "すると、既に処理したものの集合 `seen` に `None` が入ります(`review_loop.py:249`)。その結果、result の `permission_denials` にある id のない拒否は、出どころが config 以外でも飛ばされ、試行が止まりません。",
+   "reason": "tool_use_id のない拒否が None をキーに config_denied へ入り、seen によって id のない permission_denials が除かれて止まらない、という原因と場所が正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "判定役の出力で result の行を全てつなぐため、判定が混ざる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "連結のときに is_error の行を除いていない点の指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "run_reviews で途中の例外によって抜けるとき、ほかの子の止めない拒否の記録が漏れる点の指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "child_error の詳細がつないだテキストの先頭500字になり、エラーの内容が出ない点の指摘がない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "run_judge / fakes/claude",
+   "summary": "判定役が拒否で途中で止まる経路とタイムアウトする経路を確かめるテストがない。",
+   "quote": "そのため、判定役が拒否で途中で止まる経路と、タイムアウトする経路は確かめられていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "run_reviews / run_judge",
+   "summary": "子が終わったあとの手順が2か所に重複しており、一方だけ直す恐れがある。",
+   "quote": "子が終わったあとの手順が `run_reviews` と `run_judge` の2か所で同じです。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "check_result",
+   "summary": "check_result が tail の内部データを直接読んで拒否の一覧を組み立てており、StreamTail のメソッドに移すべきだ。",
+   "quote": "`check_result` は `tail.denial`、`tail.config_denied`、`tail.tool_inputs` を直接読んで、拒否の一覧を組み立てています。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "StreamTail.summary / self.reported",
+   "summary": "summary や reported という名前では中身が分からない。",
+   "quote": "`StreamTail.summary(self, d)` は、旧名の `denial_summary` にあった「拒否の」という意味が落ちています。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "fakes/claude",
+   "summary": "拒否されるコマンドの文字列が2か所に手書きされて重複している。",
+   "quote": "`fakes/claude` の中で、拒否されるコマンドの文字列 `\"gh pr diff 7; grep -n KEY .env\"` が2か所に手書きされています。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "SKILL.md",
+   "summary": "config でも空でもない source の拒否で止まることが文書に書かれていない。",
+   "quote": "一方 `SKILL.md` には「`source` がなければ止める」としか書かれていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "review_loop.py:243",
+   "summary": "各行を strip してからつなぐため、本文の先頭の字下げが消える。",
+   "quote": "各行を strip してからつなぐので、本文の頭が字下げやインデントしたコードブロックだと、先頭の空白が消えます(`review_loop.py:243`)。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "テスト",
+   "summary": "config でも空でもない source の拒否の場合を確かめるテストがない。",
+   "quote": "直すなら、文書を「config 以外は止める」に揃えます。この場合のテストもまだありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "テスト",
+   "summary": "tool_use_id のない拒否の場合を確かめるテストがない。",
+   "quote": "上の指摘1と指摘2の場合を確かめるテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "テスト",
+   "summary": "1つの子で config の拒否と config 以外の拒否が混ざったとき、止まることを確かめるテストがない。",
+   "quote": "1つの子の中で config の拒否と config 以外の拒否が混ざったとき、config 以外の側で止まることを確かめるテストもありません。",
+   "quote_ok": true
+  }
+ ]
+}

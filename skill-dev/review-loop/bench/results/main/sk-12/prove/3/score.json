@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.0691496,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "拒否の振り分けは「調べたが指摘にしなかったもの」に入っているだけで、reason_type を見ていない点は指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "tool_use_id で重複なく数える処理には触れているが、指摘にはしておらず、id の欠けや None キーの問題も述べていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "detected",
+   "quote": "判定役の `result` の行をすべてつなぐようにしたことで、判定(`verdict.md` と標準出力)に判定でない文や古い判定が混ざります。",
+   "reason": "run_judge が result の行をすべてつないだテキストを判定に使うため、後ろの短い文や出し直す前の判定が混ざると、場所も原因も正解どおりに指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "is_error の行を除かずにつないでいる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "run_reviews のループを抜けるときに、止めない拒否の記録が漏れる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "child_error の詳細につないだ本文の先頭が載る点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

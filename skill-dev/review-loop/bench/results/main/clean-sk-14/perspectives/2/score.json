@@ -1,0 +1,69 @@
+{
+ "cost_usd": 0.0769456,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/scripts/lib.sh:96",
+   "summary": "lsof の自己チェックは自プロセスが見えるかしか確かめないため、同じサンドボックス内のプロセスしか見えない環境では外部プロセスの cwd を検出できず、使用中の worktree を delete と判定してしまう(fail-open)。",
+   "quote": "この自己チェックで分かるのは「lsof がまったく機能しない」場合だけです。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/scripts/lib.sh:45-47",
+   "summary": "hk_protect_patterns の set -f が外に漏れないことは呼び出し元の書き方頼みで、直接呼ばれると呼び出し元のシェルに set -f が残る。",
+   "quote": "将来だれかが直接呼べば、呼び出し元のシェルに `set -f` が残ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/scripts/lib.sh:81",
+   "summary": "hk_parse_action が、呼び出し経路では出てこない prune も正しい値として受け入れており、受け入れる値を必要な分だけに絞るべき。",
+   "quote": "`skills/housekeeping/scripts/lib.sh:81` `hk_parse_action` が `prune` も正しい値として通す",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/scripts/scan.sh:49-54",
+   "summary": "parse_pr_info が想定外の形の入力を黙って受け入れ、空白を含まない文字列では num と oid に同じ値が入る。",
+   "quote": "空白を含まない文字列が来ると、`num` と `oid` に同じ値が入ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/scripts/scan.sh:120-133",
+   "summary": "reflog のパイプで -q を避けた理由を説明するコメントが不正確。",
+   "quote": "reflog のパイプで `-q` を避けた理由のコメントは、少し不正確です。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skills/housekeeping/SKILL.md:20, :61",
+   "summary": "TMPDIR が未設定だと /tmp 直下の予測できる固定パスに TSV を置くことになり、他のユーザーによる先回りの作成、内容の読み取り、削除対象の差し替えを許してしまう。",
+   "quote": "`${TMPDIR:-/tmp}/housekeeping-scan.tsv` は、`TMPDIR` が未設定の環境(主に Linux)では、だれでも書ける `/tmp` 直下の固定名になります。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skills/housekeeping/SKILL.md:73",
+   "summary": "エージェントが組み立てた awk の条件を、ユーザーにサンドボックスの外で apply.sh に流させる案内になっており、条件を読み違えると承認していない行まで削除される。",
+   "quote": "awk の条件を読み違えると、承認していない行まで流れます。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "skill-dev/housekeeping/test.sh",
+   "summary": "ヒアドキュメントを禁止する検査は grep で << を探すだけなので、算術シフトを誤って検出する一方、別の一時ファイル利用は見逃し、判定の経路もテストしていない。",
+   "quote": "grep で `<<` を探す方式なので、算術のシフト `$((a << 1))` も誤って検出します。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "skill-dev/housekeeping/test.sh",
+   "summary": "fake lsof のテストが、自プロセスしか見えないケースを再現していない。",
+   "quote": "最初の指摘(自分しか見えない)の再現がありません。",
+   "quote_ok": true
+  }
+ ]
+}

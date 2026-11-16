@@ -1,0 +1,13 @@
+{
+ "cost_usd": 0.074864,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/scripts/lib.sh の hk_process_cwds",
+   "summary": "自分自身($$)が lsof に見えるかどうかで、ほかのプロセスも見えると判定している。そのため、同じサンドボックス内のプロセスしか見えない環境では、外のプロセスが使っている worktree を delete と判定し、apply.sh が実際に削除してしまう。",
+   "quote": "lsof に自分のプロセスだけが見えるサンドボックスでは、使用中の worktree を delete と判定し、apply.sh で実際に消してしまう",
+   "quote_ok": true
+  }
+ ]
+}

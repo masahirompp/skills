@@ -1,0 +1,1068 @@
+{
+ "case": "wn-313",
+ "cost_usd": 0.1619894,
+ "clusters": [
+  {
+   "title": "頼みごとを書いて SIGUSR2 で一覧に知らせる処理が複数か所に重複していて、変更したときにずれるおそれがある。",
+   "location": "src/cli/workbench.ts:43",
+   "members": [
+    "e2",
+    "e4",
+    "e17",
+    "e25",
+    "e50",
+    "e55",
+    "e78"
+   ],
+   "id": "wn-313/c1",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "指摘のとおり重複はある。src/cli/workbench.ts:43-51 の askListToRefreshGuide と src/cli/guide.ts:74-80 は、どちらも `@wn_req_<秒>_<pid>` に書いてから @wn_pid に SIGUSR2 を送っており、lib/tmux/tmux.ts:26-27 の @wn_req_sh も同じ形で書く。ただ、今の3か所は同じ形で、App 側の読み取り(tmux.ts:250 の `@wn_req_` 接頭辞)とも合っているので、頼みごとが取りこぼされる経路はない。問題になるのは将来どこか1か所だけを変えたときで、重複と構造の指摘にあたる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "頼みごとの送り方を src の側で組み直しているので、Tmux にまとめるほうが自然だ(Feature Envy)。",
+   "location": "src/cli/workbench.ts askListToRefreshGuide",
+   "members": [
+    "e9"
+   ],
+   "id": "wn-313/c2",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "送る処理を Tmux にまとめるべきという設計の好み(Feature Envy)の指摘。workbench.ts:43-51 は正しく動く(書いてから知らせる順序は guide.ts と同じ)。挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "頼みごとを文字列で組み立てている(Primitive Obsession)。",
+   "location": "",
+   "members": [
+    "e47"
+   ],
+   "id": "wn-313/c3",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "頼みごとを文字列で組み立てていること(GUIDE_REFRESH='guide'、app.ts:1156 の parts[0] との比較)は事実だが、送る側と受ける側が同じ定数を使っていて一致する。型の好みの指摘で、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "workbench から作り直した案内が workbench のプロセスの node/cli/env で動くため、一覧と版や環境が食い違いうる。",
+   "location": "src/cli/guide.ts:19",
+   "members": [
+    "e3",
+    "e6",
+    "e10",
+    "e12",
+    "e16",
+    "e65",
+    "e69",
+    "e74"
+   ],
+   "id": "wn-313/c4",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "事実の部分は正しい。ensureGuide(src/cli/guide.ts:17-24)は paneCommand(env,'guide') を使い、src/cli/env.ts:87-105 を見ると node/cli と PATH などは呼んだプロセス(workbench)のものになる。ただ、Ghostty の分割からの起動では、一覧が渡す workbenchCommand(env) を使うので一覧と同じ node/cli.js になる。食い違うのは、利用者が手で、別に入れた whatnext を打った場合に限られる。また案内のプログラム(guide.ts:41-)が読むのは tmux のオプション @wn_guide と @wn_pid、ソケットだけで、CLAUDE_CONFIG_DIR は使わない。誤った結果が出るのは、版の間で @wn_guide の形や頼みごとの形が変わったときだけで、今の時点で起きる具体的な誤りは無い。将来の変更があって初めて問題になるものにあたる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "サーバごと閉じたときの終了コードが tmux の値から 0 に変わったのに、仕様に書かれていない。",
+   "location": "src/cli/workbench.ts",
+   "members": [
+    "e5"
+   ],
+   "id": "wn-313/c5",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "/tmp/wnchk/t.sh で tmux 3.8 を実測した。attach 中に kill-server すると rc=1 で `[server exited]` になる。main の workbench.ts は `return res.status ?? 0` なので 1 を返し、差分では `return 0` になる。変わったのは事実。ただし PRODUCT.md と DESIGN.md には、この場合の終了コードの定めがない(定めがあるのは、whatnext が動いていないときの 1 だけで、PRODUCT.md:490 と 771 に書かれ、差分でも 1 のまま)。Ghostty の分割は exec で動いて閉じるので、終了コードを見るものもない。文書と食い違って利用者が誤る状況はなく、挙動の欠陥ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "wbguide が畳まれて画面が閉じても tmux が 0 で終わるため、理由が出ず、キーも待たずに 0 で終わる。",
+   "location": "src/cli/workbench.ts の attach 結果の判定",
+   "members": [
+    "e19"
+   ],
+   "id": "wn-313/c6",
+   "class": "real",
+   "scope": "out",
+   "ran": true,
+   "evidence": "tmux 3.8、detach-on-destroy on、ほかのセッションが残る状態で実測した。attach 中のセッションを kill-session すると rc=0 で `[exited]`、存在しないセッションへの attach は rc=1 だった。lib/tmux/tmux.ts の pane-died で、案内のセッションは5回を超えると kill-pane する。するとセッションが消えて作業台の画面のクライアントが離れ、tmux は 0 で終わる。src/cli/workbench.ts の `res.error || (res.status !== 0 && 一覧がある)` は偽になるので、`[exited]` の行を消して 0 を返す。理由は出ず、fail() のキー待ちもなく、Ghostty の分割はそのまま閉じる。経路を最後まで追えた。main でも、案内のプログラムが1回終わった時点で kill-pane し、同じように黙って閉じる(main は res.status=0 を返し、行も消す)。この差分は畳むまでの回数を増やしただけで、黙って閉じる挙動そのものは main からある。差分の『つなげなかったときに理由を出す』は attach の失敗だけを対象にしている(DESIGN.md の追記)。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "attach の失敗、fail() のキー待ち、5回を超えたら畳む挙動に、動かして確かめるテストがない。",
+   "location": "テスト",
+   "members": [
+    "e1",
+    "e72"
+   ],
+   "id": "wn-313/c7",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "テストが無いという指摘。lib/tmux/tmux.test.ts の追加テストは、スクリプトの本文に 'respawn-pane'、'-lt 5'、'kill-pane' が含まれるかを見るだけで、test/e2e には attach の失敗や fail() のキー待ちを確かめるテストが無い。どちらも事実だが、挙動の欠陥ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "fail() の、メッセージを出してキーを待つ経路にテストがない。",
+   "location": "src/cli/workbench.ts fail()",
+   "members": [
+    "e23"
+   ],
+   "id": "wn-313/c8",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "テストが無いという指摘。src/cli/workbench.ts の fail() で、WHATNEXT_WORKBENCH_SPLIT=1 かつ TTY のときにキーを待つ経路は、test/unit/cli.test.ts にも test/e2e/workbench.test.ts にも無い。事実だが、挙動の欠陥ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "起動し直しの上限を超えて案内が畳まれる経路を、通しで確かめる e2e テストがない。",
+   "location": "test/e2e/workbench.test.ts:242-256",
+   "members": [
+    "e28",
+    "e59",
+    "e60"
+   ],
+   "id": "wn-313/c9",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "指摘のとおり、test/e2e/workbench.test.ts:242-256 は SIGKILL を1回送るだけで、6回目に畳む経路は通しで確かめていない。ただしこれは『テストが無い』という指摘で、挙動の誤りを示していない。lib/tmux/tmux.ts の GUIDE) の分岐は、@wn_respawned をペインのオプションに数え、respawn-pane のあとも同じペインなので数は残り、5 で kill-pane に移る。読んだかぎり、正しく動く。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "pane-died のテストが sh の本文の文字列を見るだけで、壊れやすく、実際の動き(回数が戻らないことなど)を検出できない。",
+   "location": "lib/tmux/tmux.test.ts:75-81",
+   "members": [
+    "e7",
+    "e33",
+    "e37",
+    "e49",
+    "e62"
+   ],
+   "id": "wn-313/c10",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "lib/tmux/tmux.test.ts:75-81 が sh の本文に対して toContain で調べているのは事実。ただしテストの作りの好みと壊れやすさの指摘で、製品の挙動には関わらない。同じファイルの sh -n で文法を確かめるテストは別にある。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "同時に作り直すと、'exists' を返した側がオプションの入る前のセッションに attach しうる。",
+   "location": "src/cli/guide.ts:17-23",
+   "members": [
+    "e8",
+    "e52"
+   ],
+   "id": "wn-313/c11",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/cli/guide.ts の ensureGuide で、負けた側は hasSession が真なら 'exists' を返してすぐ attach する。このため、勝った側が workbenchOptions を入れる前につながる並びは、確かにありうる。ただし workbenchOptionArgs(lib/tmux/tmux.ts:123-134)で入れるのは prefix、mouse、status、set-titles などのセッションのオプションだけで、どれも入れた時点でつながっているクライアントにも効く。勝った側は数ミリ秒のうちに入れ終えるので、既定のままになるのはその間だけで、あとは元に戻る。利用者が気づく誤りにはならない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "同時に作り直すと 'exists' が返って askListToRefreshGuide が呼ばれず、@wn_name が入らないままになる。",
+   "location": "ensureGuide",
+   "members": [
+    "e39"
+   ],
+   "id": "wn-313/c12",
+   "class": "wrong",
+   "scope": "na",
+   "ran": false,
+   "evidence": "同時に作り直したとき 'exists' を返すのは負けた側だけで、勝った側は 'created' を返す。勝った側は src/cli/workbench.ts で askListToRefreshGuide を呼び、頼みごと guide を置いて SIGUSR2 を送る。一覧はそれを受けて src/ops/app.ts:1156-1160 で lastGuide を消して follow し、1490 行の setSessionName で @wn_name を入れる。頼みごとは workbenchOptions(@wn_name を '' にする)のあとに出るので、上書きされる順にもならない。名前が入らないまま残る経路はない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "観測できる振る舞いの変更を DESIGN.md にだけ書き、PRODUCT.md を直していない。",
+   "location": "docs/DESIGN.md:229",
+   "members": [
+    "e11",
+    "e51"
+   ],
+   "id": "wn-313/c13",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "差分で docs/ が変わったのは DESIGN.md と docs/lib/tmux.md だけで、PRODUCT.md は変わっていない。これは事実。ただし DESIGN.md:227-230 に書いたことの中心は不具合の直し(案内のプログラムが落ちてもセッションが残る、exec が重なる)で、PRODUCT.md がすでに求めている『作業台の画面が開ける』を満たすためのもの。PRODUCT.md の記述と食い違って利用者を誤らせる箇所は見当たらない。文書をどこに置くかの手順の指摘にとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "新しいエラー文言と分割で失敗したときのキー待ちの挙動が PRODUCT.md に書かれていない。",
+   "location": "docs/PRODUCT.md",
+   "members": [
+    "e20",
+    "e57",
+    "e70"
+   ],
+   "id": "wn-313/c14",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "実行して確かめた: WHATNEXT_WORKBENCH_SPLIT=1 を付けて TTY の下で起動すると、'whatnext is not running. Start whatnext first.' のあとに 'Press any key to close.' が出て、キーを押すと exit=1 で終わった。新しい文言とキー待ちが PRODUCT.md に書かれていないのは事実。PRODUCT.md:478 の『whatnext が作った分割は、作業台の画面が終わると閉じる』は、キーのあと作業台の画面が終われば分割が閉じるので、今も成り立っている。画面に『Press any key to close.』が出るので、利用者が誤ることもない。層2で利用者に聞くべきだったかという手順の問題で、挙動の誤りではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "起動し直しが上限を超えると案内を畳み、作業台の画面が離れる挙動が PRODUCT.md に書かれていない。",
+   "location": "docs/PRODUCT.md",
+   "members": [
+    "e71"
+   ],
+   "id": "wn-313/c15",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "lib/tmux/tmux.ts の GUIDE) の分岐は、5回を超えると kill-pane する。detach-on-destroy on なので、作業台の画面は離れる。PRODUCT.md にこの記述がないのは事実。ただし、これは案内のプログラムがすぐ落ち続ける異常時の歯止めで、次に開くときは ensureGuide が作り直す。PRODUCT.md の記述と食い違う箇所はなく、置き場所の指摘にとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "not running の経路も fail() を通るので、分割の中ではキーを押すまで終わらず、PRODUCT とシナリオの「示して終了する」と食い違う。",
+   "location": "src/cli/workbench.ts:14",
+   "members": [
+    "e75"
+   ],
+   "id": "wn-313/c16",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "実行: env -u TMUX -u WHATNEXT_ROLE WHATNEXT_TMUX_SOCKET=<空のソケット> の下で、script を使い TTY で node dist/src/cli.js workbench を動かした。手で打った場合は 'whatnext is not running. Start whatnext first.' を出してすぐ exit=1 で終わり、PRODUCT.md:490 とシナリオ 59 のとおりだった。WHATNEXT_WORKBENCH_SPLIT=1 のときだけ 'Press any key to close.' を出してキーを待つ。not running の経路が fail() を通るのは事実。ただし WHATNEXT_WORKBENCH_SPLIT は、動いている一覧が Ghostty の分割を作るとき(src/ops/app.ts:1443)にだけ付く。分割の中で not running になるのは、分割を作ってから起動するまでの間に whatnext が終わったときだけ。そのときも文言を出し、終了コード 1 で終わる。シナリオが想定している手で打つ場合とは食い違わない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "GUIDE_REFRESH がセッション名 GUIDE と紛らわしく、fail() の名前からキー待ちの副作用が読めない。",
+   "location": "src/cli/workbench.ts GUIDE_REFRESH / fail()",
+   "members": [
+    "e13"
+   ],
+   "id": "wn-313/c17",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/ops/names.ts:12 `GUIDE_REFRESH = 'guide'`、src/cli/workbench.ts の fail()。命名とログの読みやすさの指摘で、動きは変わらない。app.ts:1156 で parts[0] === GUIDE_REFRESH として正しく振り分けられ、fail() のキー待ちは WHATNEXT_WORKBENCH_SPLIT=1 のときだけ働く(DESIGN.md に書いてある)。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "GUIDE_REFRESH という名前がセッション名の GUIDE と紛らわしい。",
+   "location": "GUIDE_REFRESH",
+   "members": [
+    "e48"
+   ],
+   "id": "wn-313/c18",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "c17 と同じ。GUIDE(セッション名の定数)と GUIDE_REFRESH(頼みごとの語)は別の定数で、別々の場所で使われる。紛らわしいかは命名の問題で、挙動に関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "GUIDE_REFRESH の値が 'guide' だけで、入れ直すという意味が値から読めない。",
+   "location": "GUIDE_REFRESH",
+   "members": [
+    "e67"
+   ],
+   "id": "wn-313/c19",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "値の 'guide' が何を表すかの指摘。app.ts の request() は先頭の語を比べるだけで、値の意味は動きに関わらない。命名の好み。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "頼みごとの名前 'guide' が一般的すぎて、将来ほかの頼みごととぶつかりうる。",
+   "location": "src/ops/names.ts:12",
+   "members": [
+    "e27"
+   ],
+   "id": "wn-313/c20",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "grep で頼みごとの送り手を調べた: workbench.ts:44(GUIDE_REFRESH)、guide.ts:74(`key ...`)、tmux.ts の @wn_req_sh(key/focus/agentview)。app.ts の分岐は guide/agentview/focus/key の4つで、'guide' とぶつかる頼みごとは今は無い。将来ほかの頼みごとを足したときに初めて問題になるので trivial。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "案内が終わる原因が分からないまま起動し直しで症状を抑えており、原因を追う issue や例外のログが含まれていない。",
+   "location": "lib/tmux/tmux.ts:48",
+   "members": [
+    "e14"
+   ],
+   "id": "wn-313/c21",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "`gh issue view 311`: bug の issue #311(cycle-9)に「案内のプログラムがなぜ終わったかは未特定。@wn_guide_died に残す」とあり、原因を追う issue が無いという主張は誤り。grep で見ると、uncaughtException/unhandledRejection のログは src/cli/list.ts:117-118 にだけあり、案内のプログラム(guide.ts)には無い。これは事実だが、調べやすさを高める提案で、挙動の不具合ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "案内が終わる原因が未解明なことなどを、bug/learning の issue に起票していない。",
+   "location": "docs/DESIGN.md",
+   "members": [
+    "e64",
+    "e66"
+   ],
+   "id": "wn-313/c22",
+   "class": "wrong",
+   "scope": "na",
+   "ran": true,
+   "evidence": "`gh issue list --search 案内`: #311「作業台の画面が開いた直後に閉じる(案内のセッション wbguide が消える、exec の重複)」が bug ラベル・cycle-9 マイルストーンで起票済み。本文に、原因が未特定のことと exec の重複(原因3)が書かれている。起票していないという主張は事実と食い違う。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "起動し直しと作り直しの判断について、decision-log の issue がない。",
+   "location": "decision-log",
+   "members": [
+    "e26"
+   ],
+   "id": "wn-313/c23",
+   "class": "wrong",
+   "scope": "na",
+   "ran": true,
+   "evidence": "`gh issue view 314`: decision-log の #314「案内のペインの起動し直しの上限を『60秒以内に続けて5回』にした」があり、#311 での層1の判断として起動し直しの方式と、畳まない理由を記録している。作り直し(ensureGuide)を一覧側でなく workbench 側で行う理由は DESIGN.md の差分に書かれている。decision-log の issue が無いという主張は誤り。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "'@wn_pid' や 'agentview' を素の文字列で書いており、定数の GUIDE_REFRESH とそろっていない。",
+   "location": "src/cli/workbench.ts",
+   "members": [
+    "e15"
+   ],
+   "id": "wn-313/c24",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "grep: '@wn_pid' は workbench.ts:45 と guide.ts:75 に、'agentview' は app.ts:1162 に素の文字列で書かれている。どちらもこの差分より前からある書き方で、定数にそろえるかは書き方の好み。挙動に関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "単体テストが zsh の存在を前提にしていて、zsh のない環境では ENOENT で失敗する。",
+   "location": "test/unit/cli.test.ts:26",
+   "members": [
+    "e18",
+    "e22",
+    "e42"
+   ],
+   "id": "wn-313/c25",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "test/unit/cli.test.ts:26 は `execFileSync(shell, ...)` で bash/zsh/sh を起こしており、`npm test`(vitest run lib test/unit)に含まれる。存在しないシェル名で execFileSync を呼ぶと e.code=ENOENT になることを node で確かめた。この環境(macOS、zsh あり)では `npx vitest run test/unit/cli.test.ts` は 4 件とも通る。リポジトリには .github/workflows が無く、Ghostty と macOS を前提にしたプロジェクトなので、zsh の無い環境で回す経路は今は無い。製品の挙動ではなく、テストの環境依存の話なので trivial。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "案内の名前をセッションのオプションに置く非対称が根の原因で、新しい頼みごとで補う設計は場当たり的だ。",
+   "location": "src/ops/app.ts:1156",
+   "members": [
+    "e21",
+    "e32"
+   ],
+   "id": "wn-313/c26",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "`@wn_name` はセッションのオプション(lib/tmux/tmux.ts:408 setSessionName、361 workbenchOptions)で、`@wn_guide` はサーバ全体のオプションなのは事実。ただ、指摘は設計の好み(頼みごと guide で補う形)についてのもの。名前が空になる時間については c27 で追った。ふつうは WB_TTY が先に入っているので、すぐに書き直される。挙動の不具合ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "doFollow が早めに return するため頼みごと guide が効かず、作り直した案内の @wn_name が空のまま残りうる。",
+   "location": "src/ops/app.ts:1156",
+   "members": [
+    "e41",
+    "e58",
+    "e80"
+   ],
+   "id": "wn-313/c27",
+   "class": "wrong",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/cli/workbench.ts:17-19 は、ensureGuide と askListToRefreshGuide より前に WB_TTY を入れる。一覧の onSignal(app.ts:1110-)は WB_TTY を読んで this.wbTty に入れてから、頼みごと guide を処理する(afterSignal 1142-1147)。なので doFollow の `if (!wb) return` では抜けない(抜けるのは tty が取れない特殊な場合だけ)。main 画面が trust-xxx のときは `else return` で抜けるが、lastGuide は undefined のまま残る。trust の画面から戻ったあとの follow(refresh の finally で必ず呼ぶ。app.ts:192、REFRESH_MS=60s。ほかにカーソルの移動や attach でも呼ぶ)で、名前と中身を書き直す。『次に中身が変わるまで空のまま』は起きない。空になるのは、trust の画面の間だけの一時的なもの。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "案内のプログラムの guide.ts が、セッションを作る役(ensureGuide)まで持つようになった。",
+   "location": "src/cli/guide.ts",
+   "members": [
+    "e24"
+   ],
+   "id": "wn-313/c28",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/cli/guide.ts:17-24 に ensureGuide が加わったのは事実。モジュールの置き場所の好みで、挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "workbenchOptions(GUIDE, '') を ensureGuide と list.ts の両方で呼んでおり、二重に走って責任の置き場所もはっきりしない。",
+   "location": "src/cli/list.ts:67",
+   "members": [
+    "e29",
+    "e34",
+    "e43",
+    "e46",
+    "e53",
+    "e56",
+    "e61",
+    "e68",
+    "e81"
+   ],
+   "id": "wn-313/c29",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "guide.ts:22 は作ったときに workbenchOptions(GUIDE,'') を呼び、list.ts:66-67 はその直後にもう一度呼ぶ。作ったときに2回走るのは事実。workbenchOptions(lib/tmux/tmux.ts:361-367)は set を並べるだけで冪等なので、挙動は変わらない。重複と責任の置き場所の話。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "/signal=kill/ のアサーションが OS ごとの signal 名の表記に依存している。",
+   "location": "test/e2e/workbench.test.ts:255",
+   "members": [
+    "e30"
+   ],
+   "id": "wn-313/c30",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "tmux 3.8(macOS)で remain-on-exit on のペインを kill -9 し、`display -p 'signal=#{pane_dead_signal}'` を取ると `signal=kill` だった。tmux の sig2name は sys_signame がある OS では名前を、無い OS(glibc の Linux)では数字を返すので、Linux ではテストの /signal=kill/ が落ちうる(Linux では実行していない)。対象は e2e テストのアサーションだけで、製品は値を記録するだけ。プロジェクトは macOS と Ghostty が前提で、CI も無い。テストの環境依存なので trivial。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "ensureGuide の失敗時の早期 return が WB_TTY の書き換えより後にあり、tty の記録だけが書き換わる。",
+   "location": "src/cli/workbench.ts:22",
+   "members": [
+    "e31"
+   ],
+   "id": "wn-313/c31",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "workbench.ts:16-25 で、WB_TTY の書き換え(と MAIN_TTY の解除)が ensureGuide の失敗の早期 return より前にあるのは事実。ただ、attach が失敗したときの順序は main でも同じで、新しい失敗の経路もそれに揃っているだけ。tty の記録が残っても、一覧は wbOpen を clients と突き合わせて判断する(app.ts:1436)。古い作業台の画面が detach される(1121)のは、2つ目の workbench が成功したときと同じ結果。ensureGuide が 'failed' になるのは、一覧があるのに new-session が失敗し、しかも GUIDE も無いときに限られ、狙っては起こせない。利用者が誤る挙動にはならないので trivial。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "契約 docs の splitWorkbench に exec の付与が書かれておらず、src がそれに頼っている。",
+   "location": "docs/lib/tmux.md:43",
+   "members": [
+    "e35",
+    "e79"
+   ],
+   "id": "wn-313/c32",
+   "class": "real",
+   "scope": "in",
+   "ran": false,
+   "evidence": "docs/lib/tmux.md:43 は『`command` を打ち込む』としか書いておらず、lib/tmux/ghostty.ts:41 が先頭に ` exec ` を付け、末尾に `\\n` を足すことが契約に無い。CLAUDE.md の約束で、実装セッションは昇格モジュールを契約 docs 経由で使い、中身を読まない。契約だけを読むと src の側で exec を付けるのが自然で、0.20.2 の ` exec exec` の不具合(bash で exec: not found)はまさにそれで起きた。差分は src の側から exec を外し、DESIGN.md には書いたが、契約 docs は直していない。差分の目的(exec の重複を直す)の直し残しなので in。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "@wn_guide_died に画面の末尾が入り、セッション名やパスがサーバ全体のオプションに残る。",
+   "location": "lib/tmux/tmux.ts:51",
+   "members": [
+    "e36"
+   ],
+   "id": "wn-313/c33",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "lib/tmux/tmux.ts:51 では、`set -g @wn_guide_died` に capture-pane の空でない末尾5行を入れている。指摘どおり、案内の画面の文言(セッション名、`~/...` の場所)がサーバ全体のオプションに残る。ただし、置き場所は利用者が自分の端末で動かす専用の tmux サーバ(`-L <socket>`)のオプションで、外へは出ない。同じ名前と場所は `@wn_guide`(サーバ全体のオプション)にも元から入っている。誤った結果や漏えいにはつながらないので、挙動の問題ではない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "@wn_guide_died が上書きされるので最後の1回しか残らない。",
+   "location": "lib/tmux/tmux.ts:51",
+   "members": [
+    "e38"
+   ],
+   "id": "wn-313/c34",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "tmux.ts:51 は `set -g` で毎回上書きするので、残るのは最後の1回だけ。ここまでは事実。ただ、これは調べるための手がかりの量の問題で、作り直しやセッションの扱いといった利用者に見える挙動は変わらない。手がかりとしての設計の好みにとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "@wn_guide_died に最後の5行しか残さないので、Node の例外のエラー文が残らない。",
+   "location": "lib/tmux/tmux.ts:51",
+   "members": [
+    "e44"
+   ],
+   "id": "wn-313/c35",
+   "class": "real",
+   "scope": "in",
+   "ran": true,
+   "evidence": "`remain-on-exit on` の tmux で、`null.x` を投げる Node のスクリプト(スタック4段)を動かし、フックと同じ `capture-pane -p | grep -v '^$' | tail -5` を取った。結果は『at Timeout._onTimeout… / at listOnTimeout… / at process.processTimers… / Node.js v24.16.0 / Pane is dead (status 1, …)』で、`TypeError: Cannot read properties of null` の行が入らなかった。スタックがこれより浅くても、`Node.js vXX` の行と tmux の `Pane is dead` の行で2行を使うため、エラー文はまず残らない。DESIGN.md の追加部分は『案内のプログラムがなぜ終わったかは、まだ分かっていない(`@wn_guide_died` はその手がかりを残すため)』と、差分の目的をこの記録に置いている。その目的を満たさないので、差分の中の問題とした。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "契約の名前の約束に、@wn_respawned と頼みごとの形 guide が載っていない。",
+   "location": "docs/lib/tmux.md",
+   "members": [
+    "e40",
+    "e63"
+   ],
+   "id": "wn-313/c36",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "docs/lib/tmux.md の『名前の約束』は、頼みごとの形を key/focus/agentview と書いていて、`guide` と `@wn_respawned` は載っていない。ここまでは事実。ただ、`guide` を書くのは src/cli/workbench.ts、受けるのは src/ops/app.ts で、どちらも lib の外にある。lib のキーとフックが書く形ではないので、lib の契約に載っていなくても食い違いではない。`@wn_respawned` は、lib の sh の中だけで使う回数の印。使う側が触る名前ではないので、載っていなくても誤った使い方にはつながらない。文書をどこまで書き込むかの問題にとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "新しい e2e 2つにシナリオ番号がなく、DESIGN の対応表にも行がない。",
+   "location": "e2e / DESIGN「確かめ方」",
+   "members": [
+    "e45"
+   ],
+   "id": "wn-313/c37",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "test/e2e/workbench.test.ts に足した2つの it は、名前にシナリオ番号がない(ほかは『25・57:』などで始まる)。ここまでは事実。ただ、これはテストと文書の対応の整理で、プログラムの挙動には関わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "fail() が環境変数を直接読んでおり、readEnv/Env を通すほかとそろっていない。",
+   "location": "src/cli/workbench.ts の fail()",
+   "members": [
+    "e54"
+   ],
+   "id": "wn-313/c38",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/cli/workbench.ts の fail() は、`process.env.WHATNEXT_WORKBENCH_SPLIT` を直接読んでいる。ここまでは事実。値は app.ts が splitWorkbench の env で '1' を渡していて、読み方が違っても結果は同じ。書き方がそろっていないという好みの問題にとどまる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "SIGUSR2 を attach の前に送るので、後の client-attached で follow が走らず作業台の画面が案内に残りうる。",
+   "location": "src/cli/workbench.ts:27",
+   "members": [
+    "e73"
+   ],
+   "id": "wn-313/c39",
+   "class": "real",
+   "scope": "in",
+   "ran": true,
+   "evidence": "コードの経路: workbench.ts は attach の前に WB_TTY を入れ、案内を作ったときは SIGUSR2 を送る。app.ts の afterSignal では wbChanged が true になり、this.wbTty が更新され、request('guide') が follow() を呼ぶ。doFollow は 60ms 後に clients() で wb の tty を探すが、attach がまだなら見つからず、switchClient を飛ばす。あとから client-attached の知らせが来ても、wbTty は同じなので wbChanged は false になり、closed も空なので follow は走らない。e2e で確かめた手順は、作業台 sh-a0000000 を作る → 作業台の画面を閉じる → wbguide を kill → startWorkbench。手を加えないままでは4回とも sh-a0000000 に切り替わり、再現しなかった(attach のほうが早い)。workbench.ts で、知らせを送ったあと attach の前に 500ms 待たせると、3秒後もクライアントは『wbguide』のままで、期待した sh-a0000000 と食い違った(Expected sh-a0000000 / Received wbguide)。attach が follow の処理より遅れたときに起きる競合で、案内を作り直したとき(差分で足した経路)にしか起きないので、差分の中の問題とした。実際に起きる頻度は低い。待ちを入れたコードとテストは元に戻した。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "exec が1つだけ付くことを守る lib のテストが、cycle-end で消える test/unit/ に置かれている。",
+   "location": "test/unit/cli.test.ts",
+   "members": [
+    "e76"
+   ],
+   "id": "wn-313/c40",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "test/unit/cli.test.ts は、lib の splitWorkbench と src の workbenchCommand を組み合わせて確かめていて、lib/tmux/ に exec を確かめるテストはない(lib/tmux/ghostty.ts:41 が ` exec ${command}` を付ける)。cycle-end で test/ を消すと、この確かめも消える。ここまでは事実。ただ、これはテストの置き場所の問題で、今の挙動は正しい(テストは通る)。分類の基準の『テストが無いという指摘、将来の変更があって初めて問題になるもの』に当たる。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "端末が切れたあとに fail() が setRawMode(true) を呼ぶと EIO で投げて落ちうる。",
+   "location": "src/cli/workbench.ts:58-60",
+   "members": [
+    "e77"
+   ],
+   "id": "wn-313/c41",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "`node -e` で Node v24.16.0 の tty.ReadStream.prototype.setRawMode の中身を出して確かめた。失敗しても投げずに `this.emit('error', new ErrnoException(err,'setRawMode'))` を出す。stdin に 'error' の受け手はないので、結局は捕まらない例外として終わり、終了コードは 1 になる。fail() がもともと返す値も 1 で、違いは捕まらない例外のスタックが stderr に出るかどうかだけ。その stderr も、端末が切れたという前提では誰も読めない。さらに、この前提にたどり着く経路自体が細い。workbench.ts には SIGHUP の受け手がない(grep で調べると、SIGHUP を受けているのは src/cli/list.ts:116 だけ)。端末が切れると、exec で起動した node は SIGHUP の既定の動作で終わるので、spawnSync が戻って fail() の setRawMode に着くことはふつうない。fail() が足されたこと自体は差分によるものだが、利用者に見える挙動(画面、終了コード、データ)は変わらない。pty を実際に切って再現することはしていない。",
+   "classified_by": "llm"
+  }
+ ],
+ "members": {
+  "e1": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 14
+  },
+  "e2": {
+   "dir": "wn-313/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 3
+  },
+  "e3": {
+   "dir": "wn-313/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 8
+  },
+  "e4": {
+   "dir": "wn-313/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 4
+  },
+  "e5": {
+   "dir": "wn-313/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 7
+  },
+  "e6": {
+   "dir": "wn-313/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 4
+  },
+  "e7": {
+   "dir": "wn-313/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 1
+  },
+  "e8": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 1
+  },
+  "e9": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 6
+  },
+  "e10": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 3
+  },
+  "e11": {
+   "dir": "wn-313/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 7
+  },
+  "e12": {
+   "dir": "wn-313/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 11
+  },
+  "e13": {
+   "dir": "wn-313/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 5
+  },
+  "e14": {
+   "dir": "wn-313/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 5
+  },
+  "e15": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 7
+  },
+  "e16": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 2
+  },
+  "e17": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 5
+  },
+  "e18": {
+   "dir": "wn-313/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 7
+  },
+  "e19": {
+   "dir": "wn-313/prove/1",
+   "config": "prove",
+   "trial": 1,
+   "n": 1
+  },
+  "e20": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 11
+  },
+  "e21": {
+   "dir": "wn-313/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 6
+  },
+  "e22": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 4
+  },
+  "e23": {
+   "dir": "wn-313/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 8
+  },
+  "e24": {
+   "dir": "wn-313/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 8
+  },
+  "e25": {
+   "dir": "wn-313/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 4
+  },
+  "e26": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 12
+  },
+  "e27": {
+   "dir": "wn-313/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 6
+  },
+  "e28": {
+   "dir": "wn-313/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 8
+  },
+  "e29": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 3
+  },
+  "e30": {
+   "dir": "wn-313/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 8
+  },
+  "e31": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 2
+  },
+  "e32": {
+   "dir": "wn-313/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 4
+  },
+  "e33": {
+   "dir": "wn-313/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 5
+  },
+  "e34": {
+   "dir": "wn-313/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 7
+  },
+  "e35": {
+   "dir": "wn-313/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 1
+  },
+  "e36": {
+   "dir": "wn-313/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 5
+  },
+  "e37": {
+   "dir": "wn-313/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 7
+  },
+  "e38": {
+   "dir": "wn-313/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 2
+  },
+  "e39": {
+   "dir": "wn-313/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 12
+  },
+  "e40": {
+   "dir": "wn-313/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 1
+  },
+  "e41": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e42": {
+   "dir": "wn-313/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 6
+  },
+  "e43": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 5
+  },
+  "e44": {
+   "dir": "wn-313/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 1
+  },
+  "e45": {
+   "dir": "wn-313/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 13
+  },
+  "e46": {
+   "dir": "wn-313/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 5
+  },
+  "e47": {
+   "dir": "wn-313/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 10
+  },
+  "e48": {
+   "dir": "wn-313/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 9
+  },
+  "e49": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 5
+  },
+  "e50": {
+   "dir": "wn-313/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 5
+  },
+  "e51": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 7
+  },
+  "e52": {
+   "dir": "wn-313/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 2
+  },
+  "e53": {
+   "dir": "wn-313/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 4
+  },
+  "e54": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 9
+  },
+  "e55": {
+   "dir": "wn-313/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 3
+  },
+  "e56": {
+   "dir": "wn-313/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 3
+  },
+  "e57": {
+   "dir": "wn-313/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 6
+  },
+  "e58": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 13
+  },
+  "e59": {
+   "dir": "wn-313/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 7
+  },
+  "e60": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 6
+  },
+  "e61": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 6
+  },
+  "e62": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 10
+  },
+  "e63": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 3
+  },
+  "e64": {
+   "dir": "wn-313/mattpocock/3",
+   "config": "mattpocock",
+   "trial": 3,
+   "n": 2
+  },
+  "e65": {
+   "dir": "wn-313/perspectives/3",
+   "config": "perspectives",
+   "trial": 3,
+   "n": 1
+  },
+  "e66": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 4
+  },
+  "e67": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 8
+  },
+  "e68": {
+   "dir": "wn-313/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 3
+  },
+  "e69": {
+   "dir": "wn-313/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 3
+  },
+  "e70": {
+   "dir": "wn-313/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 2
+  },
+  "e71": {
+   "dir": "wn-313/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 4
+  },
+  "e72": {
+   "dir": "wn-313/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 14
+  },
+  "e73": {
+   "dir": "wn-313/code-review/3",
+   "config": "code-review",
+   "trial": 3,
+   "n": 2
+  },
+  "e74": {
+   "dir": "wn-313/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 2
+  },
+  "e75": {
+   "dir": "wn-313/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 3
+  },
+  "e76": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 2
+  },
+  "e77": {
+   "dir": "wn-313/perspectives/2",
+   "config": "perspectives",
+   "trial": 2,
+   "n": 1
+  },
+  "e78": {
+   "dir": "wn-313/mattpocock/2",
+   "config": "mattpocock",
+   "trial": 2,
+   "n": 6
+  },
+  "e79": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 1
+  },
+  "e80": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 4
+  },
+  "e81": {
+   "dir": "wn-313/code-review/2",
+   "config": "code-review",
+   "trial": 2,
+   "n": 6
+  }
+ },
+ "classify_cost_usd": 3.2127474000000005
+}

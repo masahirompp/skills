@@ -1,0 +1,49 @@
+{
+ "cost_usd": 0.059278,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは cleanupLeftovers の引き継ぎ(Y)の分岐に触れておらず、引き継いだ作業台に status-format を入れ直さない問題をどこにも指摘していない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md:442 / docs/PRODUCT.md:557",
+   "summary": "狭い画面ではセッション名や窓の一覧が先に幅を使うため、足したキーが1つも読めず、退けた案との比較も右寄せの1案だけになっている。",
+   "quote": "狭い画面ではキーが1つも読めません。退けた案との比べ方が片側だけです。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "lib/tmux/tmux.ts:340 / test/e2e/workbench.test.ts:117",
+   "summary": "昇格済みの lib の挙動(workbenchOptions)を確かめるテストが、cycle-end で消える e2e 層にしかなく、単体テストが無い。",
+   "quote": "昇格済みモジュールの挙動を確かめるテストが、使い捨て層にしかありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "prefix の設定 C-q と表示の ^Q を別々に手で書いており、キーの表示を1か所の表から作る方針から外れている。",
+   "quote": "`^Q` を2か所に手で書いています。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "docs/lib/tmux.md:31",
+   "summary": "lib の契約が「分割とウィンドウのキーを続ける」とだけあり、どのキーをどの字面で出すかが書かれていない。",
+   "quote": "契約の書き方がぼんやりしています。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test/e2e/workbench.test.ts:117",
+   "summary": "案内のセッション(GUIDE)でキーが出ないことを確かめるテストが無い。",
+   "quote": "案内のセッションでキーが出ないことを確かめていません。",
+   "quote_ok": true
+  }
+ ]
+}

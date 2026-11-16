@@ -1,0 +1,98 @@
+{
+ "cost_usd": 0.1029216,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "detected",
+   "quote": "作り直し(ensureGuide)は `whatnext workbench` の起動時だけで、作業台の最後のシェルが終わるときの `switch-client -t =wbguide` と App.killSafely の `switchClient(c.tty, GUIDE)` は、案内のセッションがあることを前提にしたまま。",
+   "reason": "作り直しが起動時だけで、作業台の画面がつながったまま wbguide が消えると pane-died や killSafely の切り替えが失敗してクライアントが離れると指摘しており、detect_criteria を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "`@wn_respawned` には「短い間に続けて落ちた」という条件がなく、リセットもされないので、上限の5回は「起動してすぐ終わるとき」ではなく、ペインが生きている間の通算の回数として効く。",
+   "reason": "@wn_respawned が通算で数えられ、数え直されないため、まれに落ちるだけでもいずれ上限に達して案内が畳まれると指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "attach の結果判定で、シグナルで終わった場合(status が null)を失敗と誤判定する点への指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐が、利用者が分割したペインと案内のペインを区別しない点への指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなった点への指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定し、案内のペインが無い状態を見逃す点への指摘がない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/ops/app.ts:1156",
+   "summary": "頼みごと guide に対して doFollow が wbTty 無しや trust 画面のときに何もせずに戻るので、作り直した案内に @wn_name が入らないことがある。",
+   "quote": "頼みごと `guide` は lastGuide を消して follow() を呼ぶだけで、doFollow は `!this.wbTty` のときと、mainSession が claude の画面でも list でもないとき(trust-xxx など)に何も書かずに戻る。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/cli/workbench.ts:22",
+   "summary": "ensureGuide が失敗したときの早期 return が WB_TTY の書き換えより後にあるので、つなげなかったのに tty の記録だけが書き換わる。",
+   "quote": "ensureGuide が失敗したときの早期 return は、WB_TTY をこの端末に書き換え、MAIN_TTY を外したあとにある。つなげないまま、作業台の画面の tty の記録だけが書き換わる。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/cli/guide.ts:19",
+   "summary": "workbench 側で案内を作り直すと、一覧とは別の版の node/cli.js で案内が動き、版が食い違うおそれがある。",
+   "quote": "`whatnext workbench` の側で案内のセッションを作り直すと、案内のペインのコマンドは一覧の版ではなく workbench を起動した版の node と cli.js(env.node / env.cli)になる。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test/unit/cli.test.ts:27",
+   "summary": "単体テストが zsh の存在を前提にしているので、zsh のない環境では npm test が失敗する。",
+   "quote": "`it.each(['bash', 'zsh', 'sh'])` は zsh が入っていることを前提にしていて、`npm test`(vitest run lib test/unit)の単体テストに含まれる。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "src/cli/workbench.ts:43",
+   "summary": "頼みごとを送る処理が guide.ts から写されていて重複しているので、共通のメソッドにまとめるべき。",
+   "quote": "askListToRefreshGuide は、`@wn_req_<秒>_<pid>` に書いて @wn_pid に SIGUSR2 を送る処理を、guide.ts の 74〜80 行目(Enter の頼みごと)から写していて、同じ処理が3か所目になる",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "src/cli/list.ts:67",
+   "summary": "ensureGuide と list.ts の両方が workbenchOptions を呼んでいて、オプション設定が重複し、責任が分かれている。",
+   "quote": "ensureGuide は案内を作ったときに workbenchOptions(GUIDE, '') を呼ぶが、list.ts はその直後に同じ呼び出しを無条件で繰り返す。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "src/cli/workbench.ts:57",
+   "summary": "観測できる挙動の変更が DESIGN.md にだけ書かれていて、PRODUCT.md が更新されていない。",
+   "quote": "観測できる挙動の変更が DESIGN.md にだけ書かれ、PRODUCT.md は直されていない",
+   "quote_ok": true
+  }
+ ]
+}

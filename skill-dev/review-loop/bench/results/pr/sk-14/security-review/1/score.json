@@ -1,0 +1,27 @@
+{
+ "cost_usd": 0.0583336,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは一時ファイルを使わなくなったことを安全性の向上と評価しており、判定側がヒアドキュメントで一時ファイルに依存し fail-open になる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "scan.sh で一時ディレクトリの作成が git fetch --prune より後にあり、止まる前に副作用が起きるという指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い、またはプロセスを見られないときに、空の一覧を『使用中でない』と扱う問題には言及していない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

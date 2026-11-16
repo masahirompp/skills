@@ -1,0 +1,112 @@
+{
+ "cost_usd": 0.10539360000000002,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--perspective の値を正規化しないまま起動プロンプトを作る点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "`run_judge` は judge-input.md に「観点 X に利用者が与えた追加の指示」のブロックを書くだけで、`JUDGE_PROMPT` は変わっていません",
+   "reason": "JUDGE_PROMPT が指示ブロックを説明していないため、判定役が誤読するか、外した範囲を観点の欠落と扱う、と場所と原因の両方を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "`names != [skill_name(s) for s in PERSPECTIVES]` は順序も含めて比べています。そのため、既定を並べ替えて渡しただけで表に名前が載ります。",
+   "reason": "並び順を比べることと、引数だけ変えた観点が記録されないことの両方を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が、外した観点に --instruct を渡して終了コード2になる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "detected",
+   "quote": "`valid_state` は、`perspectives` がリストかどうかを確かめていません。値が文字列 `\"abc\"` でも検査を通り、表に「a, b, c」と出ます。",
+   "reason": "valid_state がリストかを確かめず、文字列が検査を通ると指摘しており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt で渡した指示がサブエージェントに届かない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "指示ブロックとレビュー出力が同じ区切りで混ざり、偽装されうる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭の `/` を取り除かないために照合で失敗する点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "review_loop.py review_config ほか",
+   "summary": "`[skill_name(s) for s in ...]` が4か所で重複し、ループの中で毎回作り直している。",
+   "quote": "`[skill_name(s) for s in ...]` が4か所にあります。`review_config` の中だけで2回あり、しかもループの中で毎回作り直しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "review_loop.py run_reviews / run_judge / iterate",
+   "summary": "perspectives と instructions が常に組で渡され、run_reviews の引数が8個に増えている(Data Clumps)。",
+   "quote": "`perspectives` と `instructions` は、`review_config` から `iterate`、`run_reviews`、`run_judge` へ常に組で渡っています。`run_reviews` の引数は8個になりました。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "review_loop.py review_constraint",
+   "summary": "関数 review_constraint は定数 REVIEW_CONSTRAINT と同じ名前なのに、指示を足したシステムプロンプトを返すので、名前が紛らわしい。",
+   "quote": "関数 `review_constraint(instruction)` は、定数 `REVIEW_CONSTRAINT` と同じ名前なのに、指示を足したシステムプロンプトを返します。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "review_loop.py instructs",
+   "summary": "変数名 instructs が動詞に見え、生の引数の値だと分かりにくい。",
+   "quote": "`instructs` は動詞に見えます。生の引数の値だと分かるよう、`instruct_args` などが候補です。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "review_loop.py iterate",
+   "summary": "iterate の specs=None, instructs=None という既定値はどこからも使われていない。",
+   "quote": "`iterate(..., specs=None, instructs=None)` の既定値は使われていません。呼ぶのは `main` だけで、常に両方を渡しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "skill-dev/review-loop/test.py",
+   "summary": "--perspective が重複したときに終了コード2になることを確かめるテストがない。",
+   "quote": "`--perspective` の重複も既存の検査で終了コード2になりますが、これを確かめるテストはありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "review_loop.py レビュー役のシステムプロンプト",
+   "summary": "「スキルの手順と食い違うときは指示を優先」という仕様にない一文を足しており、指示が観点の検査を緩める方向に効く。",
+   "quote": "レビュー役のシステムプロンプトに「スキルの手順と食い違うときは、この指示を優先」と書き足しています。仕様は「指示を足す」だけです。この一文があると、指示は観点の検査を緩める方向に効きます。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,119 @@
+{
+ "cost_usd": 0.12338199999999999,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "作業台(sh-<id>)を映している間に wbguide が消えても一覧の側では作り直されない点には触れておらず、むしろ「次に whatnext workbench を開けば ensureGuide で直ります」と述べている。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "`@wn_respawned` はペインのオプションです。`respawn-pane` してもペインは同じなので、値は減りません。数日のあいだにまばらに5回落ちると、6回目で `kill-pane` が走ります。",
+   "reason": "pane-died の案内の分岐で回数を通算で数え、時間で数え直さないため、いずれ上限に達して案内が畳まれると指摘しており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "detected",
+   "quote": "シグナルで終わると `res.status` は `null` になり、`null !== 0` が真になります。一覧が残っていれば、誤ったメッセージを出して `fail()` に入ります。",
+   "reason": "workbench() の attach の判定で、status が null になるシグナル終了も「つなげなかった」と扱ってしまうと指摘しており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide の分岐がセッション名だけで判定しているため、利用者が分割したペインまで起動し直してしまう点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道で早く return するため、タイトルを消す OSC 2 が出なくなった点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定するため、案内のペインがないのに作り直さない点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib/tmux/tmux.ts:51",
+   "summary": "@wn_guide_died が毎回上書きされ、しかも末尾5行しか残さないので、最初に落ちたときの手がかりやエラーの1行目が失われる。",
+   "quote": "**`lib/tmux/tmux.ts:51` の `@wn_guide_died` は毎回上書きされ、最初の手がかりが消える**",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/cli/guide.ts",
+   "summary": "案内には uncaughtException と unhandledRejection の受け手がなく、落ちた原因が記録されない。",
+   "quote": "`src/cli/guide.ts` には `uncaughtException` と `unhandledRejection` の受け手がありません。一覧には `list.ts:117-118` にあります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "test/e2e/workbench.test.ts:255",
+   "summary": "`signal=kill` を期待するテストは、Linux の tmux では `signal=9` になって通らない見込みが高い。",
+   "quote": "**`test/e2e/workbench.test.ts:255` の `signal=kill` は macOS の tmux でしか通らない見込みが高い**",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/cli/workbench.ts:42-51",
+   "summary": "頼みごとを一覧に渡す手順が3か所に重複していて、名前の付け方が食い違う恐れがあり、同じプロセスが1秒に2回頼むと前の頼みを上書きする。",
+   "quote": "名前は秒と pid だけでできているので、同じプロセスが1秒に2回頼むと前のものを上書きします。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "src/ops/app.ts:1156-1160",
+   "summary": "wbTty がないと guide の頼みごとが効かずに終わり、ひとりでには直らない。",
+   "quote": "**`src/ops/app.ts:1156-1160` の `guide` の頼みごとが、`wbTty` がまだないと効かずに終わることがある**",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "src/cli/workbench.ts:22",
+   "summary": "workbench の側で作る案内は workbench のプロセスの環境と版で動くので、一覧とは版の違う案内が動きうる。",
+   "quote": "利用者が別に入れた whatnext(`npx` など)で `whatnext workbench` を打つと、一覧と版の違う案内が動きえます。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "src/cli/list.ts:66-67",
+   "summary": "案内を作ったときに workbenchOptions(GUIDE, '') が2回呼ばれ、意図が読み取れない。",
+   "quote": "**`src/cli/list.ts:66-67` で、作ったときに `workbenchOptions(GUIDE, '')` が2回走る**",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "lib/tmux/tmux.test.ts:75-81",
+   "summary": "テストは文字列が含まれるかを見ているだけで、5回を超えたら畳むという上限の動きを実際には確かめていない。",
+   "quote": "5回を超えたら畳むという肝心の動きを、実際には動かしていません。`-lt 5` を `-le 5` に変えても通ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "PR 本文",
+   "summary": "Ghostty と bash の実機での確認をしておらず、initial input の渡し方そのものは確かめられていない。",
+   "quote": "**PR の本文「確かめたこと」によると、Ghostty と bash の実機は流していない**",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "lib/tmux/tmux.ts:399-406",
+   "summary": "signalGuide が読む @wn_guide_pid を書くコードがどこにもなく、一覧からの知らせは常に何もしない。",
+   "quote": "`lib/tmux/tmux.ts:399-406` の `signalGuide` が読む `@wn_guide_pid` を、書いているコードがリポジトリのどこにもありません(grep で確かめました)。",
+   "quote_ok": true
+  }
+ ]
+}

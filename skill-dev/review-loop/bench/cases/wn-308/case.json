@@ -1,0 +1,25 @@
+{
+  "id": "wn-308",
+  "kind": "ts",
+  "repo_name": "whatnext",
+  "branch": "workbench-split-keys",
+  "source": {
+    "type": "repo",
+    "path": "~/ghq/github.com/masahirompp/whatnext",
+    "base": "3631a98",
+    "head": "71d31d0"
+  },
+  "setup": [
+    [
+      "npm",
+      "ci",
+      "--silent",
+      "--no-audit",
+      "--no-fund"
+    ]
+  ],
+  "pr": {
+    "repo": "masahirompp/whatnext",
+    "number": 308
+  }
+}

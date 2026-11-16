@@ -1,0 +1,84 @@
+{
+ "cost_usd": 0.101986,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "前後の空白を整えずに起動プロンプトを作るため、照合と実際のプロンプトが食い違う、という指摘は無い(空白についてはテストの漏れとして触れているだけ)。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "しかし `JUDGE_PROMPT` には、追加の指示のブロックがあること自体も、その範囲を欠落と扱わないことも書かれていません。",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いが無いため、指示で外した範囲を観点の欠落と扱いうる、と指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "既定と同じかどうかはスキル名だけで比べています。そのため `--perspective 'code-review low {pr}'` のように引数だけ変えた場合",
+   "reason": "比較がスキル名だけで、引数だけを変えた観点が既定と区別されない、と指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が外した観点に --instruct を渡していて終了コード2になる、という指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "detected",
+   "quote": "`all(isinstance(n, str) for n in a.get(\"perspectives\") or [])` は、値が文字列(例: `\"abc\"`)でも通ります。",
+   "reason": "リストかどうかを確かめないので文字列が検査を通る、と指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt で渡した指示がサブエージェントに届かない、という指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "判定役が指示ブロックを観点の出力と取り違える点には触れているが、レビューの出力が同じ区切りの行を含んで指示を偽装しうる、という指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "detected",
+   "quote": "`--perspective '/code-review high {pr}'` のように書くと、プロンプトは `//code-review …` になります。実害は事前確認(preflight)の「スキルが見つからない」で止まるまで出ず",
+   "reason": "先頭の `/` を取り除かないので、事前確認で失敗する、と指摘している。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/scripts/review_loop.py:962-964",
+   "summary": "--instruct の有無や内容が状態コメントに記録されず、範囲を絞った試行を表から見分けられない。",
+   "quote": "`--instruct` は状態に一切残りません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/scripts/review_loop.py:747-749",
+   "summary": "追加の指示を「優先する」と書いているため、作業ツリーを変えないという制約よりも利用者の指示が優先されると読める。",
+   "quote": "このままだと、指示が上の変更禁止の制約より優先されるとも読めます。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skill-dev/review-loop/test.py:577-584",
+   "summary": "誤りのケースのテストに、--perspective の重複、本文に = を含む --instruct、前後に空白があるスキル名の3つが入っていない。",
+   "quote": "誤りのケースのテストに漏れがあります。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,140 @@
+{
+ "cost_usd": 0.2695056,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "作業台の画面がつながったまま wbguide が消えたときに誰も作り直さない点(doFollow・killSafely・pane-died の sh-* 分岐)への指摘がなく、「次の whatnext workbench で作り直せる」と述べるにとどまる。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "`@wn_respawned` は増えるだけで戻りません。",
+   "reason": "lib/tmux/tmux.ts の案内の分岐で回数が通算で数えられ、何日あいても6回目で畳まれると、場所も原因も正解どおりに指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "attach の結果の判定がシグナル終了(status が null)を「つなげなかった」と扱う点への指摘がなく、終了コードが 0 になるという別の話(Spec 6)しかない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "detected",
+   "quote": "分岐はセッション名 `wbguide` だけで決まり、案内のプログラムのペインかどうかは見ていません。",
+   "reason": "pane-died の wbguide の分岐が利用者の分割したペインを区別せず、起動し直して @wn_guide_died も上書きすると、正解と同じ場所と原因で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "attach が失敗と判定された道でタイトルを消す OSC 2 が出なくなった点への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定し、案内のペインがないセッションを作り直さない点への指摘がなく、ensureGuide は正しく実装されていると評価している。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/cli/workbench.ts:23-36, 56-64",
+   "summary": "標準エラーの文言、キー待ち、終了コードという観測できる挙動が変わったのに docs/PRODUCT.md が更新されておらず、エスカレーションの有無も分からない。",
+   "quote": "観測できる挙動が変わったのに `docs/PRODUCT.md` が未更新(硬い違反寄り)",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "docs/lib/tmux.md:10",
+   "summary": "契約の文書の頼みごとの列挙に新しい形 guide が載っていない。",
+   "quote": "列挙は `key`/`focus`/`agentview` のままで、新しい形は `src/ops/names.ts:12` と DESIGN.md にだけあります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "lib/tmux/tmux.ts:52",
+   "summary": "ペインのオプション @wn_respawned が契約の文書に名前として載っていない。",
+   "quote": "ペインのオプション `@wn_respawned`(`lib/tmux/tmux.ts:52`)も契約に名前がありません(軽微)。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "lib/tmux/tmux.test.ts:77-81",
+   "summary": "テストが sh の本文を toContain で照合しており、外から観測できる振る舞いだけを対象にするという規約に沿わない。",
+   "quote": "`lib/tmux/tmux.test.ts:77-81` が sh の本文を `toContain` で照合している(判断)",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "src/cli/workbench.ts:43-50",
+   "summary": "askListToRefreshGuide が src/cli/guide.ts:74-80 と同じ形の重複で、1つの関数にまとめられる。",
+   "quote": "`src/cli/workbench.ts:43-50` の `askListToRefreshGuide` は、`src/cli/guide.ts:74-80` と同じ形です",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "src/cli/list.ts:66-67",
+   "summary": "ensureGuide が作成時に済ませた workbenchOptions(GUIDE, '') を直後にもう一度呼んでいる。",
+   "quote": "`src/cli/list.ts:66-67` は、`ensureGuide` が作ったときに済ませた `workbenchOptions(GUIDE, '')` を直後にもう一度呼びます。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "src/ops/app.ts:1444, src/cli/workbench.ts:57",
+   "summary": "'WHATNEXT_WORKBENCH_SPLIT' が生の文字列で2か所にあり、共有する名前の置き場所 src/ops/names.ts に置かれていない。",
+   "quote": "`'WHATNEXT_WORKBENCH_SPLIT'` が `src/ops/app.ts:1444` と `src/cli/workbench.ts:57` に生の文字列で2か所あります。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "src/cli/workbench.ts:56",
+   "summary": "fail() という名前に、キーを待つ副作用が表れていない。",
+   "quote": "`fail()`(`src/cli/workbench.ts:56`)は、キーを待つ副作用が名前に出ていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "src/cli/guide.ts:17",
+   "summary": "ensureGuide が案内のプログラムのファイルにあり、list.ts と workbench.ts が案内の描画ごと import することになる。",
+   "quote": "`ensureGuide` が案内のプログラムのファイル `src/cli/guide.ts:17` にあり、`list.ts` と `workbench.ts` が案内の描画ごと import します。",
+   "quote_ok": true
+  },
+  {
+   "n": 10,
+   "location": "",
+   "summary": "attach 失敗時の文言・行を消さないこと・キー待ちのテストがなく、上限のテストも文字列 -lt 5 を含むかを見るだけである。",
+   "quote": "attach 失敗時の文言、行を消さないこと、キー待ちを確かめるテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 11,
+   "location": "src/cli/workbench.ts:14",
+   "summary": "PRODUCT.md 490行の「whatnext is not running と示して終了する」挙動に、Ghostty の分割ではキー待ちが挟まるようになり、記述と合わない。",
+   "quote": "Ghostty の分割ではキー待ちが挟まります(`src/cli/workbench.ts:14`)。",
+   "quote_ok": true
+  },
+  {
+   "n": 12,
+   "location": "src/cli/workbench.ts:40",
+   "summary": "以前は res.status をそのまま返していたが、whatnext の終了でサーバごと閉じたときに 0 を返すようになり、コミットメッセージにも docs にも書かれていない。",
+   "quote": "以前は `res.status` をそのまま返していましたが、今は whatnext の終了でサーバごと閉じたときに 0 を返します。コミットメッセージにも docs にもありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 13,
+   "location": "docs/lib/tmux.md:43",
+   "summary": "splitWorkbench の契約の記述が「command を打ち込む」のままで、先頭に exec を付けることが書かれておらず、exec の重複が再発しうる。",
+   "quote": "先頭に ` exec ` を付けることは DESIGN.md にしか書かれていません。",
+   "quote_ok": true
+  }
+ ]
+}

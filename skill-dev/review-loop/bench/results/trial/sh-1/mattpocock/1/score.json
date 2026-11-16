@@ -1,0 +1,56 @@
+{
+ "cost_usd": 0.2060204,
+ "bugs": [
+  {
+   "id": "B1",
+   "verdict": "detected",
+   "quote": "2 つの ref のどちらかが無いと rev-list は失敗して何も出さないが、リダイレクトで空の `$tmp/first-parent` は作られる。そのため `grep -qxF` は 2 ではなく 1 を返す。",
+   "reason": "ref が無いと rev-list が失敗して first-parent が空になること、存在確認とエラー終了が消えたこと、その結果 delete に判定されることまで同じ場所で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "B2",
+   "verdict": "detected",
+   "quote": "変更前は `--is-ancestor \"$sha\" \"$oid\"`、変更後は `is_ancestor \"$oid\" \"$sha\"` で、引数の向きが逆。",
+   "reason": "verify_pr_merged の祖先判定の引数の向きが逆になったことを指摘し、追加コミットのあるブランチが delete になることにも触れている。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "73〜74 行 `is_ancestor <a> <b>`",
+   "summary": "is_ancestor は同じ型の位置引数が 2 つあり、名前から引数の向きが読めない(Mysterious Name)。",
+   "quote": "同じ型の位置引数が 2 つで、名前から向きが読めない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "85 行 `on_first_parent`",
+   "summary": "on_first_parent は呼び出しが 1 箇所だけの 1 行の包みで、終了コードの説明が使う場所から離れた(Middle Man)。",
+   "quote": "呼び出しが 1 箇所の 1 行の包みで、3 値の終了コードの説明が使う場所(118〜119 行)から離れた。軽微。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "verify_pr_merged",
+   "summary": "is-ancestor の呼び出しに 2>/dev/null が付き、stderr が出なくなったのは求められていない変更である。",
+   "quote": "`verify_pr_merged` の is-ancestor に `2>/dev/null` が付いた(変更前は stderr が出ていた)。実害は小さい。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test.sh",
+   "summary": "MERGED の PR は全て headRefOid がローカルの先端と同じなので、テストでは引数の向きの逆転を検出できない。",
+   "quote": "MERGED の PR はすべて `headRefOid` がローカルの先端と同じで、引数の順序が効かない。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test.sh",
+   "summary": "テストでは常に origin/main とローカル main の両方があり、既定ブランチの ref が片方だけのケースを検出できない。",
+   "quote": "常に `origin/main` とローカル `main` の両方がある。",
+   "quote_ok": true
+  }
+ ]
+}

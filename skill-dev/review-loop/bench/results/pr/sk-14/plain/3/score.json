@@ -1,0 +1,56 @@
+{
+ "cost_usd": 0.074982,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューはヒアドキュメントが一時ファイルを必要とするかを確かめ、「この経路では失敗しません」と問題なしと結論しており、fail-open を指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "detected",
+   "quote": "`scan.sh` は、一時ディレクトリを作る前(`scan.sh:22`)に `git fetch --prune` を実行します。そのため、一時ディレクトリを作れずに止まる時点で、リモート追跡ブランチの prune はもう終わっています。",
+   "reason": "一時ディレクトリの作成が fetch --prune より後にあり、SKILL.md の「何もせずに止まる」と食い違うことを、正解と同じ場所と原因で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無い、またはプロセスを見られないときに使用中でないと判定してしまう点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh:175",
+   "summary": "片付けのテストは hk-tmp が空であることしか確かめておらず、一時ディレクトリが HOUSEKEEPING_TMPDIR の下に作られたかを検証できていない。",
+   "quote": "確かめているのは「`$root/hk-tmp` が空であること」だけです。一時ディレクトリが別の場所に作られても、そもそも作られなくても、このテストは通ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skill-dev/housekeeping/test.sh:186",
+   "summary": "macOS の mktemp はテンプレートなしだと TMPDIR を無視するため、TMPDIR=no-such-dir のテストは修正の前後を区別できない。",
+   "quote": "そのため `TMPDIR=no-such-dir` を渡しても変更前のコードは成功し、このテストは修正の前後を区別できません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/scripts/scan.sh:31",
+   "summary": "一時ディレクトリの既定値を決める式が lib.sh:18 と重複しており、片方だけ変えるとエラーメッセージに出る場所と実際に試した場所がずれる。",
+   "quote": "`${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}}` と同じ式が `lib.sh:18` にもあります。片方だけ変えると、エラーメッセージに出る場所と実際に試した場所がずれます。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "apply.sh の `!` 実行の案内が「同じように」だけで曖昧なため、標準入力なしで実行するよう案内してしまう。",
+   "quote": "scan.sh と同じ形を当てはめると、入力のない状態で実行するよう案内してしまいます。",
+   "quote_ok": true
+  }
+ ]
+}

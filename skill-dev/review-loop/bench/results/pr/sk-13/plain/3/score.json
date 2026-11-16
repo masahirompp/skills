@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.113418,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--perspective の前後の空白やタブを整えないまま起動プロンプトを作り、照合した名前と食い違うという指摘がありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "しかし `JUDGE_PROMPT` には、このブロックの意味も、欠落の判定から外せという規則もありません。判定役が察してくれることに頼っています。",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いが書かれておらず、指示で外した範囲を観点の欠落と扱いうると指摘しており、detect_criteria を満たします。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "`names != [skill_name(s) for s in PERSPECTIVES]` はスキル名の並びだけを比べています。`--perspective 'code-review low {pr}'` と既定の残り2つを渡すと深さが変わりますが、名前の並びは既定と同じなので `perspectives` が記録されず",
+   "reason": "比較がスキル名だけで行われるため引数違いの観点が記録されない点と、並び順で誤って差とみなす点の両方を指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が外した security-review に --instruct を渡しており、終了コード2で止まるという指摘がありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "detected",
+   "quote": "`all(isinstance(n, str) for n in a.get(\"perspectives\") or [])` は、値が文字列 `\"abc\"` でも一文字ずつ見て通してしまいます。",
+   "reason": "valid_state が perspectives をリストか確かめないため文字列が検査を通る、と原因と場所を正しく指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt で渡した指示がサブエージェントに届かないという指摘はありません。レビューはむしろこの設計を妥当と評価しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "partial",
+   "quote": "さらに、ブロックの見出しが `===== 観点 X に…` で、レビュー出力の区切り `===== 観点: X =====` と形が近く、取り違える余地があります。",
+   "reason": "区切りが似ていて混同しうる点は指摘していますが、信頼できないレビュー出力が同じ見出し行を含み、本物の指示と偽装・混同されるという原因までは述べていません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "detected",
+   "quote": "`--perspective` に `/code-review …` のように `/` を付けて渡したとき、事前確認で終了コード2になるか。今は preflight が「見つからない: /code-review」で止まるはずです。",
+   "reason": "--perspective の先頭の `/` が取り除かれず、事前確認で失敗すると指摘しています。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/scripts/review_loop.py:963 付近と skills/review-loop/SKILL.md:57,111",
+   "summary": "--instruct の指示が状態コメントにも表にも記録されず、反復をまたいで設定が混ざっても気づけない。",
+   "quote": "記録されるのは観点の名前だけで、追加の指示は状態コメントにも表にも残りません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/scripts/review_loop.py:749",
+   "summary": "利用者の指示と、作業ツリーを変えない制約(REVIEW_CONSTRAINT)がぶつかったときに、どちらを優先するかが書かれていない。",
+   "quote": "このため、指示が `REVIEW_CONSTRAINT`(作業ツリーを変えない)とぶつかったときに、どちらを採るかが書かれていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skill-dev/review-loop/test.py:576 付近",
+   "summary": "引数だけ違う --perspective が記録されるかを確かめるテストがない。",
+   "quote": "引数だけ違う `--perspective` が記録されるか(1つ目の指摘が直ったことの確認)",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skill-dev/review-loop/test.py:576 付近",
+   "summary": "既定の観点のまま --instruct だけを付けた場合に、システムプロンプトへの反映と状態を確かめるテストがない。",
+   "quote": "既定の観点のまま `--instruct` だけを付けた試行で、レビュー役のシステムプロンプトに指示が入り、状態がどうなるか",
+   "quote_ok": true
+  }
+ ]
+}

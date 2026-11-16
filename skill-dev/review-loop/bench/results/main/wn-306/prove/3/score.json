@@ -1,0 +1,55 @@
+{
+ "cost_usd": 0.0844736,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "`src/screen/screen.ts` の `cursorBlock = [rowIndex.length === 1 ? 0 : start, body.length]` は、選んだ行が選べる最初の行のとき、窓の起点を一覧の先頭(0)にします。その塊が窓より大きいと `start = b0`(= 0)になり、選んだ行が窓の外に押し出されます。",
+   "reason": "render で、頭の (sub) を含めた cursorBlock が窓より長いと start = b0 で選んだ行が窓から外れる、と原因と場所を正しく示している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "次の区切りの (sub) まで塊が伸びる挙動を調べたが、レビュー自身が指摘に含めないと結論している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "選べる行がないときに通し番号が 0/0 になる問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "guard の文言『left the list』が事実と食い違う問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に対象の行が (sub) に変わっても入力が閉じない問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "作業台のキーの経路を調べたが、カーソルを (sub) の行に乗せられないと結論しており、正解と逆の判断になっている。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の記述と実装の食い違いには触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

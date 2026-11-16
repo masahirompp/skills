@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.0746496,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "source == \"config\" だけで止めない拒否とみなし、reason_type(分類器による拒否)を見ていない点にはどこも触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "detected",
+   "quote": "実際は、`seen` に入った `None` と一致して読み飛ばされ、成功しています。",
+   "reason": "tool_use_id のない拒否で config_denied のキーが None になり、それが seen に入るため、result にある id なしの拒否まで除外されて成功になる、と原因と結果を正解どおりに示している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "detected",
+   "quote": "実際には、見出しの切り出しが最初に見つかった `## 指摘` から始まります。そのため、取り消されたはずの `F1` と、見出しが2組ある判定が verdict.md と stdout に出ます。",
+   "reason": "判定役の複数の result の行がつながって判定になり、下書きと確定版や、後に出た短い文が verdict.md に混ざる、と run_judge の問題として指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "is_error の result の行をつなぐ対象から除いていない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "run_reviews が途中で抜けたとき、ほかの子の止めない拒否が記録から漏れる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "child_error の詳細に、エラーになった最後の行ではなく、つないだ本文の先頭500字が載る点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

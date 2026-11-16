@@ -1,0 +1,76 @@
+{
+ "cost_usd": 0.141368,
+ "bugs": [
+  {
+   "id": "S16-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは指摘を出しておらず、範囲の定義が PR の目的の直し残しを差分の外にしてしまうことに触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再現したら直すという手順と、差分の外は直さないという規則の食い違いに触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再現を行う場所が限られていないために、破壊的な操作を実行しうる危険に触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "issue の本文に起きる操作の順を書くと、セキュリティの指摘では悪用の手順を公開することになる点に触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再レビューを省く条件が、テストの無いプロジェクトでも空のまま満たされる点に触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "差分の外になる横展開の候補の行き先が定まっていない点に触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "前提の環境を作れないまま試して起きなかった場合が「採らない」に入りうる点に触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "判定役が読んだだけで付けた差分の外の判断を、確かめずに受け入れられる非対称に触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-9",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再レビューを省けない例外が修正の大きさに結び付いている点に触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-10",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再現したら採用するという手順が、PR が意図して変えた挙動を戻しうる点に触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

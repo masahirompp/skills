@@ -1,0 +1,28 @@
+{
+ "cost_usd": 0.08121199999999999,
+ "bugs": [
+  {
+   "id": "B1",
+   "verdict": "detected",
+   "quote": "変更後は 2 つの ref を無条件に渡すので、片方が無いだけで `rev-list` が失敗し、空のファイルができます。さらに `exit 1` で止まる処理も消えています(`scan.sh:82`)。",
+   "reason": "存在しない ref を渡すと rev-list が失敗して first-parent が空になること、空の検査が消えたこと、その結果ブランチが merge コミットで取り込み済みの delete になることを、すべて指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "B2",
+   "verdict": "detected",
+   "quote": "`git merge-base --is-ancestor \"$sha\" \"$oid\"` が `is_ancestor \"$oid\" \"$sha\"` に置き換わり、引数の順が入れ替わっています(`scan.sh:93`)。",
+   "reason": "verify_pr_merged の祖先判定で引数の向きが逆になったことを指摘し、追加コミットのあるブランチが delete になることにも触れている。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh",
+   "summary": "既存のテストでは2つの後退をどちらも検出できないので、再現ケースをテストに加えるべきだという指摘。",
+   "quote": "どちらの再現ケースも既存テストには含まれていないので、`test.sh` に加えておくと同じ後退を防げます。",
+   "quote_ok": true
+  }
+ ]
+}

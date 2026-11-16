@@ -1,0 +1,358 @@
+{
+ "case": "wn-313",
+ "cost_usd": 0.15847300000000003,
+ "clusters": [
+  {
+   "title": "docs/lib/tmux.md の splitWorkbench の契約に、command の先頭に exec を付けることが書かれていない。",
+   "location": "docs/lib/tmux.md:43",
+   "members": [
+    "e1"
+   ],
+   "id": "wn-313/c1"
+  },
+  {
+   "title": "askListToRefreshGuide が guide.ts の頼みごとの書き込みと SIGUSR2 の処理と重複している。",
+   "location": "src/cli/workbench.ts:43-50",
+   "members": [
+    "e2",
+    "e5"
+   ],
+   "id": "wn-313/c2"
+  },
+  {
+   "title": "ensureGuide が作成時に済ませた workbenchOptions(GUIDE, '') を list.ts で直後にもう一度呼んでいる。",
+   "location": "src/cli/list.ts:66-67",
+   "members": [
+    "e3",
+    "e13",
+    "e25"
+   ],
+   "id": "wn-313/c3"
+  },
+  {
+   "title": "追加したテストが `signal=kill` という macOS/BSD のシグナル名の表記に依存しており、Linux で落ちる。",
+   "location": "test/e2e/workbench.test.ts:255",
+   "members": [
+    "e4"
+   ],
+   "id": "wn-313/c4"
+  },
+  {
+   "title": "案内のセッションが消えて attach が 0 で終わると成功扱いになり、エラー表示もキー待ちもなく分割が無言で閉じる。",
+   "location": "src/cli/workbench.ts:33",
+   "members": [
+    "e6",
+    "e16"
+   ],
+   "id": "wn-313/c5"
+  },
+  {
+   "title": "whatnext を終了直後に起動し直すと、attach が 1 で返った時点で新しい list があり、誤って「could not open」と出てキー待ちになる。",
+   "location": "src/cli/workbench.ts:33",
+   "members": [
+    "e7"
+   ],
+   "id": "wn-313/c6"
+  },
+  {
+   "title": "ensureGuide が案内のプログラムのファイルにあり、list.ts と workbench.ts が案内の描画ごと import することになる。",
+   "location": "src/cli/guide.ts:17",
+   "members": [
+    "e8"
+   ],
+   "id": "wn-313/c7"
+  },
+  {
+   "title": "ensureGuide の 'failed' の戻り値を捨てており、new-session の失敗が記録に残らない。",
+   "location": "src/cli/list.ts:67",
+   "members": [
+    "e9"
+   ],
+   "id": "wn-313/c8"
+  },
+  {
+   "title": "guide の SIGUSR2 を attach より前に送るので、一覧の follow() が接続前に使われ、作業台が古い案内を映し続けることがある。",
+   "location": "src/cli/workbench.ts:27",
+   "members": [
+    "e10"
+   ],
+   "id": "wn-313/c9"
+  },
+  {
+   "title": "ペインのオプション @wn_respawned が契約の文書に載っていない。",
+   "location": "lib/tmux/tmux.ts:52",
+   "members": [
+    "e11"
+   ],
+   "id": "wn-313/c10"
+  },
+  {
+   "title": "attach 失敗時の文言・行を消さないこと・キー待ちのテストがない。",
+   "location": "src/cli/workbench.ts:33-39",
+   "members": [
+    "e12"
+   ],
+   "id": "wn-313/c11"
+  },
+  {
+   "title": "利用者に見える挙動の変更(エラー文言、キー待ち、終了コード、案内の作り直し)が docs/PRODUCT.md に反映されておらず、記述と実際が食い違う。",
+   "location": "src/cli/workbench.ts:56-64",
+   "members": [
+    "e14",
+    "e21",
+    "e27"
+   ],
+   "id": "wn-313/c12"
+  },
+  {
+   "title": "it.each(['bash', 'zsh', 'sh']) のテストが zsh のない環境では ENOENT で落ちる。",
+   "location": "test/unit/cli.test.ts:26",
+   "members": [
+    "e15"
+   ],
+   "id": "wn-313/c13"
+  },
+  {
+   "title": "サーバごと閉じたときに res.status ではなく 0 を返すようになった変更が、コミットメッセージにも docs にも書かれていない。",
+   "location": "src/cli/workbench.ts:40",
+   "members": [
+    "e17"
+   ],
+   "id": "wn-313/c14"
+  },
+  {
+   "title": "起動し直しの上限のテストが sh の本文を toContain で照合するだけで、観測できる振る舞い(5回超で畳む、作り直し)を確かめていない。",
+   "location": "lib/tmux/tmux.test.ts:75-81",
+   "members": [
+    "e18",
+    "e19"
+   ],
+   "id": "wn-313/c15"
+  },
+  {
+   "title": "原因が未解明のまま起動し直しで症状を覆っており、@wn_guide_died は情報を落としやすく原因の調査に使いにくい。",
+   "location": "lib/tmux/tmux.ts:51",
+   "members": [
+    "e20"
+   ],
+   "id": "wn-313/c16"
+  },
+  {
+   "title": "作り直した案内が、動いている一覧の版ではなく whatnext workbench を実行した側の版で動き、版がずれる。",
+   "location": "src/cli/workbench.ts:22",
+   "members": [
+    "e22"
+   ],
+   "id": "wn-313/c17",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "事実としては指摘どおり。src/cli/guide.ts:19 の ensureGuide は paneCommand(env,'guide') で案内のセッションを作り、src/cli/env.ts:22-29 の readEnv は node=process.execPath、cli=自分の cli.js、env.ts:88-104 の paneCommand は PATH を実行した側の process.env から取る。したがって `whatnext workbench` が作り直した案内は、実行した側の版で動く。ただし、これで起きる誤った結果を指摘は示しておらず、コードからも追えなかった。案内と一覧のやり取りは `@wn_guide` の JSON(GuideState)と頼みごと `key <GUIDE_CREATE> wbguide -` だけで、版の間でこの形が変わって初めて食い違う(将来の変更があって初めて問題になる)。また `whatnext workbench` 自身は main の時点でも実行した側の版で動き、WB_TTY などを書いている。版をまたぐ状況(npm 更新後に古い一覧が動く)はこの複製では作れず、実行していない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "fail() という名前に、キーを待つ副作用が表れていない。",
+   "location": "src/cli/workbench.ts:56",
+   "members": [
+    "e23"
+   ],
+   "id": "wn-313/c18",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "src/cli/workbench.ts:53-64 の fail() は、WHATNEXT_WORKBENCH_SPLIT=1 かつ stdin が TTY のときにキーを待ってから 1 を返す。名前に待つことが出ていないのは事実だが、直前の doc コメント(53-55行)に書かれており、命名の好みで挙動には関わらない。実行で確かめる対象がない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "契約の文書の頼みごとの列挙に新しい形 guide が載っていない。",
+   "location": "docs/lib/tmux.md:10",
+   "members": [
+    "e24"
+   ],
+   "id": "wn-313/c19",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "`grep -n 'guide\\b\\|GUIDE_REFRESH' docs/lib/tmux.md` は7行目(GUIDE の名前)だけで、10行目の頼みごとの列挙は `key …`、`focus …`、`agentview …` のまま。新しい形 `guide` は src/ops/names.ts:12 と docs/DESIGN.md にある。指摘は事実。ただし `guide` を書くのは src/cli/workbench.ts:44、読むのは src/ops/app.ts:1156 で、どちらも使い捨て層。lib/tmux の takeRequests は頼みごとの中身を解釈せずに渡すだけなので、契約の部品の挙動とは食い違っていない。文書の書き漏らしで、利用者が誤る挙動にはつながらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "'WHATNEXT_WORKBENCH_SPLIT' が生の文字列で2か所にあり、src/ops/names.ts に置かれていない。",
+   "location": "src/ops/app.ts:1444",
+   "members": [
+    "e26"
+   ],
+   "id": "wn-313/c20",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "`grep -rn WHATNEXT_WORKBENCH_SPLIT src lib docs test` の結果は src/cli/workbench.ts:57(読む側)、src/ops/app.ts:1444(渡す側)、docs/DESIGN.md:229 の3件で、src/ops/names.ts には無い。指摘は事実だが、2か所の文字列は一致していて今の挙動は正しい。重複と置き場所の指摘で、片方だけ書き換える将来の変更があって初めて問題になる。",
+   "classified_by": "llm"
+  }
+ ],
+ "members": {
+  "e1": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 13
+  },
+  "e2": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 5
+  },
+  "e3": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 4
+  },
+  "e4": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 8
+  },
+  "e5": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 5
+  },
+  "e6": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e7": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 2
+  },
+  "e8": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 9
+  },
+  "e9": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 7
+  },
+  "e10": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 2
+  },
+  "e11": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 3
+  },
+  "e12": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 10
+  },
+  "e13": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 6
+  },
+  "e14": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 11
+  },
+  "e15": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 9
+  },
+  "e16": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 1
+  },
+  "e17": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 12
+  },
+  "e18": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 4
+  },
+  "e19": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 5
+  },
+  "e20": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 3
+  },
+  "e21": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 1
+  },
+  "e22": {
+   "dir": "wn-313/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 3
+  },
+  "e23": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 8
+  },
+  "e24": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 2
+  },
+  "e25": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 6
+  },
+  "e26": {
+   "dir": "wn-313/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 7
+  },
+  "e27": {
+   "dir": "wn-313/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 4
+  }
+ },
+ "classify_cost_usd": 0.7603604
+}

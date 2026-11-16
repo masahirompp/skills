@@ -1,0 +1,13 @@
+{
+ "cost_usd": 0.0320336,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューはセキュリティの観点で定数の文字列を足したことを確認しただけで、cleanupLeftovers で引き継いだ作業台に status-format を入れ直していない点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

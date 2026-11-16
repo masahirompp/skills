@@ -1,0 +1,84 @@
+{
+ "cost_usd": 0.1014816,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "detected",
+   "quote": "一覧の先頭から見せるために塊の先頭を 0 にし(`screen.ts:213`)、塊が窓より大きいときは塊の先頭(=0)から窓を出します(`:227`)。",
+   "reason": "cursorBlock の頭を 0 にしたことと、塊が窓より大きいときの start = b0 によって、選んだ行が窓から外れることを、原因まで含めて指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "detected",
+   "quote": "`trailing` は区切りの境目で戻らないので、空行と見出しを挟んで、次の区切りの先頭にあるトップレベルの (sub) の行まで塊に入ります。",
+   "reason": "trailing が区切りの境目で戻らず、次の区切りの (sub) の行まで塊に入ることを、正解と同じ仕組みで指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "detected",
+   "quote": "このときの `<通し番号>/<総数>` が仕様に書かれていません。実装では `0/0` になります(`screen.ts:222-223`)。",
+   "reason": "選べる行がないとき、通し番号が 0/0 と出ることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "detected",
+   "quote": "`app.ts:262-265` は、一覧に残っている行でも `goneName` を立てます。そのため `<名前> left the list and the selection moved.` と示されます。",
+   "reason": "行が一覧に残ったまま (sub) に変わったときも guard が立ち、『left the list』という事実と違う文言が出ることを指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に対象の行が (sub) に変わっても入力欄が閉じない問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "openNote から判定を消したことや、attachKey と作業台の案内を経由して (sub) の行が選ばれる経路には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "detected",
+   "quote": "`README.md:45` に「Both can be selected but not attached.」とあり、(sub) の行も選べると書いたままです。",
+   "reason": "README の『選べる』という記述が、選べなくした実装と食い違うことを指摘している。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md:297、src/screen/screen.ts:213",
+   "summary": "新しい見え方を、CLAUDE.md の決まりどおり実際の描画から取った画面の例で合意したかどうか、差分から確かめられない。",
+   "quote": "CLAUDE.md の「見た目の決定」では、実際の描画から取った画面の例で合意することになっています。差分とコミットからは、それをしたかどうか分かりません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/screen/screen.ts:201",
+   "summary": "選べるかどうかを、画面側は marker の文字列で、cursor.ts は n.spawned で、別々に判定しているので、両者が食い違うおそれがある。",
+   "quote": "画面側は表示用の文字列で `r.marker !== 'sub'` と判定し、`src/model/cursor.ts` は `n.spawned` で判定しています。marker の規則(`app.ts:447`)が変わると、通し番号とカーソルの並びが食い違いえます。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "screen.ts:192, 213",
+   "summary": "`trailing` や `rowIndex.length === 1 ? 0 : start` は、名前や書き方から意図が読み取れない。",
+   "quote": "**名前から意図が読めない(Mysterious Name の疑い、`screen.ts:192, 213`)**: `trailing` と `rowIndex.length === 1 ? 0 : start` です。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "cursor.ts:3, 6",
+   "summary": "isSpawned が行ごとに Layout の全区切りの nodes を見て回っており、Feature Envy の疑いがある。",
+   "quote": "**`isSpawned` が Layout の中身を探っている(Feature Envy の疑い、`cursor.ts:3, 6`)**: 行ごとに全区切りの nodes を見て回っています。",
+   "quote_ok": true
+  }
+ ]
+}

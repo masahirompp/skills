@@ -1,0 +1,91 @@
+{
+ "cost_usd": 0.10335760000000001,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "detected",
+   "quote": "--perspective の値の前後の空白を除いていない。skill_name は split()[0] で空白を飛ばして事前確認を通すが、expand はそのまま `/` を前に付けるので、プロンプトが `/ code-review high 7` になる。",
+   "reason": "正規化しないために skill_name での照合・事前確認と実際のプロンプトが食い違う、という原因を正しく指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "judge-input.md の先頭に「追加の指示」の区画を足したのに、JUDGE_PROMPT にはこの区画の意味も扱い方も書いていない。",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いがなく、指示で外した範囲を観点の欠落としないことがプロンプトで保証されていない、と指摘しており条件を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "引数を変えたこと(code-review の low など)も記録されない。逆に、同じ観点を順番だけ変えて渡すと「既定と違う」と記録される。",
+   "reason": "スキル名だけで比べるため引数違いが記録されないことと、並び順の誤検出の両方を指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が外した観点へ --instruct を渡して終了コード2になる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "detected",
+   "quote": "valid_state は perspectives の要素が str かどうかしか確かめないので、手で編集されて文字列そのものになった perspectives を受け入れてしまい、render で1文字ずつ区切って描く。",
+   "reason": "リストかどうかを確かめないため文字列が検査を通る、と指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "detected",
+   "quote": "--instruct は親の claude の --append-system-prompt にだけ足すので、観点スキルがサブエージェントに作業を任せると、サブエージェントには届かない。",
+   "reason": "--append-system-prompt だけで渡すためサブエージェントに届かない、という原因と一致している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビュー出力が指示ブロックの見出しを偽装・混同させうる、という信頼境界の問題は指摘していない(指摘3は判定役による読み違えの話にとどまる)。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "先頭の `/` を取り除かないために照合が失敗する点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/review-loop/scripts/review_loop.py:1073",
+   "summary": "--perspective と --instruct を反復をまたいで状態に保存しないので、付け忘れると黙って既定に戻り、後から気づけない。",
+   "quote": "--perspective と --instruct は反復をまたいで覚えず、毎回付け直すことを親の記憶に頼っている。付け忘れると黙って既定に戻り、--instruct は状態にも残らないので後から気づけない",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/review-loop/scripts/review_loop.py:412",
+   "summary": "--instruct の指示の中の {pr} を置き換えないので、レビュー役には文字どおりの `{pr}` が渡る。",
+   "quote": "--perspective の引数の {pr} は置き換えるのに、--instruct の指示の中の {pr} は置き換えないので、レビュー役には `{pr}` がそのまま渡る。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skill-dev/review-loop/test.py:558",
+   "summary": "テストで --new-run を2回続けて実行しており、重複していて時間を無駄にしている。",
+   "quote": "551行目で --new-run を実行した直後に、新しい区画の先頭でもう一度 --new-run を実行している。重複していて、テストに1反復分の時間がよけいにかかる。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/review-loop/scripts/review_loop.py:409",
+   "summary": "観点名のリストを3か所で別々に作り直しており、比較の規則を変えるときに直し漏れが起きるおそれがある。",
+   "quote": "観点の名前のリスト `[skill_name(s) for s in perspectives]` を、--instruct 1件ごとの照合と、エラーメッセージと、iterate の 962〜963行目とで作り直している。",
+   "quote_ok": true
+  }
+ ]
+}

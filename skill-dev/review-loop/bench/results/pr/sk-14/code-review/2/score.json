@@ -1,0 +1,56 @@
+{
+ "cost_usd": 0.078014,
+ "bugs": [
+  {
+   "id": "S14-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "hk_is_protected や hk_path_in_use がヒアドキュメント経由で一時ファイルに依存し、作れないと fail-open になるという指摘はレビューにありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-2",
+   "verdict": "detected",
+   "quote": "一時ディレクトリの作成が `git fetch --prune` の後にあるため、SKILL.md の「作れなければ何もせずに止まる」と食い違い",
+   "reason": "scan.sh で一時ディレクトリの作成が fetch --prune より後にあり、prune の副作用が起きてから止まるので SKILL.md の記述と合わない、と正しく指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S14-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "lsof が無いときやプロセスを見られないときに、使用中の worktree を使用中でないと誤って判定する問題には触れていません。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skill-dev/housekeeping/test.sh:174",
+   "summary": "後片付けのテストは HOUSEKEEPING_TMPDIR の下が空かどうかしか見ておらず、作られる場所を検証していません。TMPDIR に戻る経路のテストもありません。",
+   "quote": "後片付けのテストは HOUSEKEEPING_TMPDIR の下が空かどうかしか見ていない。scan.sh が HOUSEKEEPING_TMPDIR を無視して別の場所に作っても通ってしまい",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/scripts/scan.sh:31",
+   "summary": "一時ディレクトリの場所を決める式が lib.sh とエラーメッセージの2か所に重複しており、片方だけ変えるとエラーメッセージに実際と違うパスが出ます。",
+   "quote": "一時ディレクトリの場所を決める式 `${HOUSEKEEPING_TMPDIR:-${TMPDIR:-/tmp}}` が、lib.sh の hk_mktemp_dir とエラーメッセージの2か所に重複している。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/scripts/lib.sh:18",
+   "summary": "HOUSEKEEPING_TMPDIR はスクリプト自身にしか効かず、子プロセス(gh、jq、git)は書き込めない TMPDIR を引き継ぐので失敗し得ます。",
+   "quote": "HOUSEKEEPING_TMPDIR で直るのはスクリプト自身の一時ディレクトリだけで、子プロセス(gh、jq、git)は書き込めない TMPDIR をそのまま引き継ぐ。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/SKILL.md:35",
+   "summary": "apply.sh を `!` で実行する場合の案内に、標準入力に承認済みの行を流す形や実行場所が書かれておらず、標準入力待ちで止まったり、承認していない行まで流したりするおそれがあります。",
+   "quote": "apply.sh を `!` で実行してもらう場合の案内が「同じように」だけで、標準入力に承認済みの行を流す形や、実行する場所(対象リポジトリ)が書かれていない。",
+   "quote_ok": true
+  }
+ ]
+}

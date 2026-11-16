@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.0491696,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/ops/app.ts:853",
+   "summary": "リストの `n` がカーソル行の root を最初の候補として選択するが、worktree が削除されるなどで場所を解決できないと、存在しない cwd が検証されないまま先頭に置かれ、claude --bg の起動に失敗する。",
+   "quote": "If the row's location can't be resolved, for example because its worktree was deleted, that root is the raw `cwd`, which may no longer exist, and it is still placed first and selected.",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/ops/app.ts:1260",
+   "summary": "`--json` がエラーの間も `ctrl+q ctrl+n` がセッションの repo を先頭に保つという仕様に、テストが無い。",
+   "quote": "PRODUCT.md now says `ctrl+q ctrl+n` keeps the session's repo first even while `--json` is erroring, but no test covers this.",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/ops/app.ts:853",
+   "summary": "エラー中は非表示の行を使わないという規則を、一か所にまとめず呼び出し箇所ごとに実装しているため、新しいキーを追加したときにチェックが漏れやすい。",
+   "quote": "The rule 'don't use hidden rows while erroring' is enforced at each call site (the `listKey` early return, then a separate ternary for `n`) instead of once",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/ops/app.ts:952",
+   "summary": "エラー中でも、非表示の古い行の repo が全て候補に追加される。先頭の候補しか守られておらず、仕様に書かれた理由と矛盾する。",
+   "quote": "While `--json` is erroring, `n` still adds every stale (hidden) row's repo from `this.rows` to the candidate list. Only the first candidate is guarded",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "docs/PRODUCT.md:591",
+   "summary": "根拠として書かれた判断の日付 2026-11-02 が、変更コミットの日付 11-15 と合わず、誤っているように見える。",
+   "quote": "The rationale is dated '2026-11-02、利用者の判断', but the commit that makes this change is dated 2026-11-15",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "src/ops/app.ts:944",
+   "summary": "候補の重複除去が文字列の完全一致だけで行われる。カーソル行の root は realpath で正規化されるが launchDir は正規化されないため、シンボリックリンク経由の同じディレクトリが2回出る。",
+   "quote": "Candidates are deduped by exact string only. The cursor row's root for a non-git `cwd` is `realpathSync(cwd)`, while `launchDir` and the other row `cwd`s are not normalized",
+   "quote_ok": true
+  }
+ ]
+}

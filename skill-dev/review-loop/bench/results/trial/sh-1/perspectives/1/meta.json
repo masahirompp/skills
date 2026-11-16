@@ -1,0 +1,24 @@
+{
+ "case": "sh-1",
+ "kind": "shell",
+ "config": "perspectives",
+ "trial": 1,
+ "status": "ok",
+ "tokens": {
+  "input": 138263,
+  "cache_read": 109160,
+  "output": 4107
+ },
+ "cost_usd": 0.651696,
+ "started_at": "2026-11-15T00:07:25",
+ "duration_s": 46,
+ "num_turns": 4,
+ "models": [
+  "claude-fable-5-2"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [],
+ "head_changed": false
+}

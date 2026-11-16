@@ -1,0 +1,69 @@
+{
+ "cost_usd": 0.0764776,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "SKILL.md:86, SKILL.md:101, JUDGE_PROMPT",
+   "summary": "SKILL.md は「範囲、再現の定義は JUDGE_PROMPT が正」としているのに、範囲・再現の定義や隔離して再現する規則を JUDGE_PROMPT からほぼそのまま写しており、同じ定義が2か所にある。",
+   "quote": "SKILL.md 自身が「範囲、再現の定義は `JUDGE_PROMPT` が正」と書いています。それなのに、手順4の箇条(SKILL.md:86)と手順5の文が、`JUDGE_PROMPT` の文をほぼそのまま写しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "SKILL.md 手順5、終了時の issue 作成の段落、継続の判断の箇条",
+   "summary": "再現の進め方、issue 作成の段落、継続の判断の箇条が長くなっており、簡潔さの指針に反している。",
+   "quote": "**簡潔さ**(skill-authoring best practices): 長くなった箇所が3つあります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "SKILL.md 終了時の報告、JUDGE_PROMPT:850, 894",
+   "summary": "新しい「範囲」(差分の内か外か)が、既存の「範囲」(--instruct で絞る範囲)と用語として衝突している。",
+   "quote": "**Mysterious Name の疑い(用語の衝突)**: 新しい「範囲」は差分の内か外かの意味です。一方、既存の「範囲」は `--instruct` で範囲を絞る意味で使われています",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "コミット dc3a218",
+   "summary": "「再現で確かめてから直す」というコミットに、差分の外の扱い、gh issue create の手順、悪用手順の扱いまで混ざっており、分割の余地がある。",
+   "quote": "**Divergent Change の疑い**: コミットの題は「再現で確かめてから直す」です。そこに、差分の外の扱い、`gh issue create` の手順、公開リポジトリでの悪用手順の扱いまで入っています。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "fakes/claude",
+   "summary": "fakes/claude に足した範囲と再現の欄は test.py も review_loop.py も読まず、さらに分類の欄が無いのに「再現: 対象外」だけを足しており形が揃っていない。",
+   "quote": "`fakes/claude` に範囲と再現の欄を足しましたが、test.py も review_loop.py もこの欄を読みません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "SKILL.md:131",
+   "summary": "継続の理由にならない指摘を任意で直し、それを実行で確かめていない場合に回すかどうかが読み取れない。",
+   "quote": "継続の理由にならない指摘を任意で直し、それを実行で確かめていないときに回すのかが読み取れません。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "SKILL.md:99, 101, 103, 116, 136, JUDGE_PROMPT:863",
+   "summary": "悪用手順の扱い、issue 作成の細則、PR 目的の例外など、仕様に無い振る舞いが追加されており、コミットの「変更」節に書かれていない。",
+   "quote": "どれも妥当そうですが、コミットの「変更」節に書かれていません。残すなら本文に書き足すべきです。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "SKILL.md:131",
+   "summary": "仕様の「修正が大きく、再現が確かめた範囲を超えて挙動を変えているなら回す」に対し、SKILL.md は「修正の大きさに関係なく回す」としており、条件が落ちて回す範囲が広がっている。",
+   "quote": "SKILL.md:131 は「修正の大きさに関係なく回す」で、「大きく」の条件を落としています。仕様より回す範囲が広がります。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "",
+   "summary": "再現が必須なのは defect だけなので、test_gap や other で影響が高の指摘は未検証の仮説のまま継続の理由になり、反復を減らす目的に効かない。",
+   "quote": "test_gap や other で影響が高の指摘は、読んだだけの仮説のまま継続の理由になります。",
+   "quote_ok": true
+  }
+ ]
+}

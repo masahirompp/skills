@@ -1,0 +1,63 @@
+{
+ "cost_usd": 0.0734296,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "partial",
+   "quote": "異常終了(abnormalExit)で、コマンドが動いている作業台だけが残る。その tmux サーバに新しい版の whatnext をつなぐと、sourceConfig と GUIDE の書式は入り直す。一方、生き残った sh-<id> の status-format[0] は古い版のままなので",
+   "reason": "異常終了のあとに残った作業台へ workbenchOptions を入れ直していない、という原因は合っている。ただし指摘の場所は src/cli/list.ts で、cleanupLeftovers の Y 分岐を指していない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "長いステータス行を #{=/N/…:} で切っていないため、狭い作業台の画面ではキーの途中で切れて「· ^」が残る。",
+   "quote": "長いステータス行を `#{=/N/…:}` で切っていない。作業台の画面が狭いと、キーの途中で生のまま切れる(図の `· ^` がそれ)。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "test/e2e/workbench.test.ts:117",
+   "summary": "status-format で % を %% と書く振る舞いを確かめるのが使い捨ての e2e テストだけで、lib/tmux/tmux.test.ts には workbenchOptions の書式のテストがない。",
+   "quote": "lib/tmux/tmux.test.ts には workbenchOptions の書式のテストがない。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "docs/PRODUCT.md:442",
+   "summary": "作業台の図のステータス行が手で書き換えられたように見え、実際の描画から取るという決まりに反するおそれがある。",
+   "quote": "作業台の図のステータス行(`workbench: fix-login  0:zsh*  · ^│`)を手で書き換えたように見える。実際の描画から取ったものとは確かめられない。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "docs/PRODUCT.md:557",
+   "summary": "同じものを「窓の一覧」と「ウィンドウの一覧」の2つの言葉で呼んでおり、用語が揃っていない。",
+   "quote": "同じものを「窓の一覧」と「ウィンドウの一覧」の2つの言葉で呼んでいる。直前の行(552)と、シナリオ49は「ウィンドウの一覧」である。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "ステータス行に東アジアの曖昧幅の文字(│ ─ ·)を足したため、曖昧幅を全角で描く端末では幅がずれて描画が崩れうる。",
+   "quote": "ステータス行に、東アジアの曖昧幅の文字(`│` U+2502、`─` U+2500、`·` U+00B7)を新しく足した。tmux は幅1として数えるが、曖昧幅を全角で描く端末では幅2になる。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "docs/lib/tmux.md:31",
+   "summary": "契約 docs に、workbenchOptions が GUIDE のときはキーを出さないという分かれ目が書かれておらず、キーの記述も createWorkbench の注記に置かれている。",
+   "quote": "契約 docs に、workbenchOptions の振る舞いの分かれ目が書かれていない。案内のセッション(GUIDE)ではキーを出さず名前だけを出すことが抜けている。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "lib/tmux/tmux.ts:338",
+   "summary": "2つの書式で同じ先頭部分を重ねて書いているため、片方だけを直して見た目がずれやすい。",
+   "quote": "2つの書式で、先頭の `'#[align=left,fg=colour8]workbench: #{@wn_name}'` を重ねて書いている。",
+   "quote_ok": true
+  }
+ ]
+}

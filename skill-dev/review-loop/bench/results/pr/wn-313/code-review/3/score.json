@@ -1,0 +1,84 @@
+{
+ "cost_usd": 0.12057399999999999,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "detected",
+   "quote": "作業台の画面がつながっている間に案内が消えると、doFollow と、pane-died の sh-* の分岐の switch-client -t =wbguide は、何も言わずに失敗する。",
+   "reason": "指摘2は、ensureGuide を呼ぶのが attach の前だけなので、作業台の画面がつながったまま案内が消えると doFollow と pane-died の切り替えが失敗し、作業台の画面ごと離れると述べており、正解の原因と場所の両方に合っている。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "起動し直した回数 @wn_respawned は、ペインの寿命の間ずっと増えるだけで戻らない。",
+   "reason": "指摘3は、@wn_respawned が通算で数えられて数え直されないため、続けて落ちていなくても上限に達して案内が畳まれると述べており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "detected",
+   "quote": "加えて、attach が成功したあとに 0 以外で終わった場合も、「つなげなかった」と誤った理由を出す。",
+   "reason": "指摘4は、つながったあとにクライアントがシグナルなどで終わった場合も「つなげなかった」と誤って扱い、'could not open the workbench screen' を出して 1 で終わると述べており、正解の条件を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "pane-died の wbguide の分岐が、利用者が分割したペインと案内のペインを区別しない点を述べた指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "detected",
+   "quote": "いまは失敗の分岐が先に return するので、tmux が 0 以外で終わり、一覧が残っているときはタイトルが消えない。",
+   "reason": "指摘4は、以前は必ず出していた OSC 2 が、失敗の道では早い return によって出なくなったと述べており、正解と一致する。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで案内の有無を判定するため、案内のペインが無い場合に作り直されない点を述べた指摘は無い。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "src/cli/workbench.ts:27",
+   "summary": "attach の前に頼みごと guide で一覧に知らせるため、クライアントがつながる前に一覧が wbChanged を使い切って follow も済ませてしまい、作業台の画面が sh-<id> に切り替わらない競合が起きる。",
+   "quote": "案内を作り直したときだけ、attach の前に頼みごと guide で一覧に知らせている。このため、作業台の画面のクライアントがつながる前に、一覧が wbChanged を使い切り、follow も済ませてしまう。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "src/cli/guide.ts:19",
+   "summary": "workbench が作り直す案内のペインは workbench のプロセス自身の node・cli・env から組み立てられるので、一覧と版や環境が食い違い、@wn_guide を解釈できなくなりうる。",
+   "quote": "`whatnext workbench` が作り直す案内のペインは、workbench のプロセス自身の node・cli・process.env から paneCommand で組み立てている。一覧の側が持つ版と環境ではない。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/cli/workbench.ts:43",
+   "summary": "askListToRefreshGuide が guide.ts の頼みごとを送る手順をそのまま写しており、書式を変えるときに複数の箇所を揃えて直す必要がある。",
+   "quote": "askListToRefreshGuide は、guide.ts のキー処理にある頼みごとを送る手順(@wn_req_<秒>_<pid> を set し、@wn_pid を読んで SIGUSR2 を送る)を、そのまま写している。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/cli/list.ts:67",
+   "summary": "ensureGuide の中と list.ts とで workbenchOptions(GUIDE, '') が2回呼ばれ、どちらがオプションを入れる責任を持つのかがはっきりしない。",
+   "quote": "ensureGuide は、作った場合はすでに workbenchOptions(GUIDE, '') を呼んでいる。そのすぐあとで、list.ts がもう一度 workbenchOptions(GUIDE, '') を呼ぶ。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test/e2e/workbench.test.ts:255",
+   "summary": "e2e テストが signal=kill という macOS 前提の形を確かめているので、Linux では signal=9 になって落ちる。",
+   "quote": "`signal=kill` を確かめているが、これは tmux の pane_dead_signal が sys_signame を使い、小文字の名前を返す前提(macOS)に頼っている。",
+   "quote_ok": true
+  }
+ ]
+}

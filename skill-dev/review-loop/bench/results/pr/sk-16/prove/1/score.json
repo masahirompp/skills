@@ -1,0 +1,76 @@
+{
+ "cost_usd": 0.09439360000000001,
+ "bugs": [
+  {
+   "id": "S16-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは SKILL.md の手順の解釈を指摘の対象から外しており、範囲の定義で PR の目的の直し残しが差分の外に入る点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再現したら直すという手順と、差分の外は直さないという規則の衝突には言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再現を行う場所が限られておらず破壊的な操作を実行しうる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "issue の本文に起きる操作の順を書くとセキュリティの指摘の悪用手順が公開される点の指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "既存のテストが無い場合にも再レビューを省く条件が満たされてしまう点の指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "差分の外になる横展開の候補の行き先が定まっていない点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再現できない環境で試して起きなかった場合の扱いの境界には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-8",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "判定役の差分の外の判断を確かめずに受け入れられる非対称には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-9",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再レビューを省けない条件が修正の大きさに結び付いている点の指摘はない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S16-10",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "再現したら採用するという規則が意図した変更を戻しうる点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

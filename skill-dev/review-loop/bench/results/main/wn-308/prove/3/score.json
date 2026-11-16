@@ -1,0 +1,13 @@
+{
+ "cost_usd": 0.0459216,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは古い書式が残る作業台を検討したものの、正常終了で killServer が呼ばれることを根拠に問題なしと結論しており、異常終了後に cleanupLeftovers で Y を選ぶと workbenchOptions が入れ直されないという原因には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

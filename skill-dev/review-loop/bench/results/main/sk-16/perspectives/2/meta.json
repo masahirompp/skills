@@ -1,0 +1,27 @@
+{
+ "case": "sk-16",
+ "kind": "doc",
+ "config": "perspectives",
+ "trial": 2,
+ "model": "claude-opus-5-5",
+ "status": "ok",
+ "tokens": {
+  "input": 199375,
+  "cache_read": 162963,
+  "output": 5403
+ },
+ "cost_usd": 0.4319086,
+ "started_at": "2026-11-15T07:59:03",
+ "duration_s": 68,
+ "num_turns": 6,
+ "models": [
+  "claude-opus-5-5"
+ ],
+ "denials_blocking": [],
+ "denials_tolerated": [],
+ "outside_access": [
+  "Bash cd skills/review-loop; grep -n \"範囲が「差分の外」\\|修正したら手順1\\|再現を試みたが\\|実行では示せない(\\|どの修正も\\|gh issue create\\|判定と異なる判断\\|指摘は仮説\" SKILL.md; grep -n \"範囲は、その問題\\|再現は、分類\" scripts/review_loop.py; grep -n \"verdict\\|範囲\" ../../skill-dev/review-loop/test.py | head -20"
+ ],
+ "tree_changed": [],
+ "head_changed": false
+}

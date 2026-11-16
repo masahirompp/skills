@@ -1,0 +1,69 @@
+{
+ "cost_usd": 0.08033760000000001,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "skills/housekeeping/SKILL.md:20, :61",
+   "summary": "新しく足した /tmp への固定名フォールバックのせいで、複数ユーザーの環境では TSV を改ざんされたりシンボリックリンク攻撃を受けたりする恐れがあり、中身を他人に読まれる恐れもある。",
+   "quote": "新しく足した `/tmp` へのフォールバックが、複数ユーザーの環境で改ざんの入口になる",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "skills/housekeeping/scripts/lib.sh:96",
+   "summary": "「自分が lsof の一覧に出れば、ほかのプロセスも見えている」という推定では、守りたいプロセスが見えないときに worktree を使用中でないと判定してしまう fail-open が残る。テストも一覧が空の場合しかない。",
+   "quote": "「自分が一覧に出れば、ほかのプロセスも見えている」という推定は、fail-open の穴を残す(可能性あり)",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "skills/housekeeping/scripts/lib.sh:81",
+   "summary": "hk_parse_action が、呼び出し元に関係なく prune を受け付ける。そのため branch の行に prune が出ると、apply.sh で git branch -D まで進んでしまう。",
+   "quote": "`hk_parse_action` が、呼び出し元に関係なく `prune` を受け付ける",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skills/housekeeping/scripts/lib.sh:46",
+   "summary": "hk_protect_patterns の set -f の効き目は呼び出し方に依存し、直接呼ぶと呼び出し元のシェルに set -f が残る。",
+   "quote": "`set -f` の効き目が呼び出し方に依存している",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "skills/housekeeping/scripts/scan.sh:46",
+   "summary": "JSON の検証が一番外側の配列だけなので、要素がオブジェクトでないとスタックした PR の保護が外れる。いまの安全さは、2つの関数の失敗がそろって起きることに頼った偶然に近い。",
+   "quote": "確かめているのは一番外側が配列であることだけ",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "apply.sh:37",
+   "summary": "プロセス一覧を最初に1回取るだけなので、そのあとに worktree へ cd したプロセスを見逃し、SKILL.md の「削除の直前に確かめ直す」という記述とずれている。",
+   "quote": "前からある制約として、`apply.sh:37` のプロセス一覧は最初に1回取るだけです。そのあとに worktree へ `cd` したプロセスは見逃します。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "skills/housekeeping/scripts/scan.sh:85-86",
+   "summary": "既定ブランチの履歴を読めないと、PR の無いブランチが1本も無い場合でも走査全体が止まり、使えない場面が増える。",
+   "quote": "既定ブランチの履歴を読めないと、走査全体が止まる",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "skills/housekeeping/SKILL.md",
+   "summary": "サンドボックスの案内が、外で走査して中で apply すると worktree の行がすべて skipped になる組み合わせを、手順の形で防いでいない。",
+   "quote": "「外で走査して、中で apply する」とどうなるかが、手順の形で避けられていない",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "skill-dev/housekeeping/test.sh",
+   "summary": "ヒアドキュメントが無いことを grep で確かめる方式は、行頭の # だけをコメントとして除くので、行末のコメントや文字列の中にある << を誤検知しうる。",
+   "quote": "ヒアドキュメントが無いことを grep で確かめる方式は、コメントを除く判定が粗い",
+   "quote_ok": true
+  }
+ ]
+}

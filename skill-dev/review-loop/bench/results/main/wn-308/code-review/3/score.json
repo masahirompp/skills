@@ -1,0 +1,56 @@
+{
+ "cost_usd": 0.0657976,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは cleanupLeftovers で引き継いだ作業台にステータス行の書式を入れ直していない点にまったく触れておらず、正しさの不具合は無いと結論している。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md:442",
+   "summary": "ふつうの幅の作業台の画面ではキーの説明が右から切れてほぼ見えず、キーを出す目的を果たさない。",
+   "quote": "ふつうの幅の作業台の画面では、キーの説明がほぼ全部右から切れて見えない。docs の図そのものが `· ^` までしか出ておらず、「`^Q%` が最後まで残る」という説明と合っていない。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "画面に出すキーの説明の文言を昇格済みの lib に直接書き込んでおり、claude の画面の keysHelp を src から渡す作りと揃っていない。",
+   "quote": "画面に出すキーの説明の文言(`^Q%% split │ · ...`)を、昇格済みの lib に書き込んでいる。claude の画面のキーの説明は、src から `keysHelp` で渡しているので、作りが揃っていない。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "lib/tmux/tmux.test.ts:1",
+   "summary": "lib の workbenchOptions を変えたのに lib の単体テストが無く、`%%` の逃がしを確かめるテストが使い捨ての e2e にしかない。",
+   "quote": "lib の workbenchOptions を変えたのに、lib の単体テストを足していない。`%%` の逃がしを確かめているのは、使い捨て層の test/e2e/workbench.test.ts だけ。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "docs/PRODUCT.md:442",
+   "summary": "作業台の図の最下行が実際の描画から取られず手で書き換えられており、CLAUDE.md の規則に反し、切れる位置もずれている。",
+   "quote": "作業台の図の最下行は、実際の描画から取らずに、手で書き換えたように見える(`0:zsh*     ` を `0:zsh*  · ^` に置き換えた)。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "docs/PRODUCT.md:558",
+   "summary": "採らなかった形は幅60の画面で示しているのに、採った形は同じ幅の画面で示しておらず比較ができない。",
+   "quote": "採らなかった形は幅60で取った画面で示しているが、採った形は同じ幅60の画面では示しておらず、本文中のコード(切れていない全体の文字列)だけになっている。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": ".claude/skills/working-with-tmux/SKILL.md:41",
+   "summary": "strftime で `%` が消える問題がほかの書式でも起きないか確かめておらず、学びの issue を起票したかも分からない。",
+   "quote": "strftime で `%` が消えるという学びをスキルに追記しているが、ほかの書式(`#{T;...:status-left}` など)で同じことが起きないかは確かめていない。学びの issue を起票したかも、diff からは分からない。",
+   "quote_ok": true
+  }
+ ]
+}

@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.0774176,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "source=config で止めない点には触れているが、reason_type を見ていないことや分類器による拒否まで通してしまうことは指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "detected",
+   "quote": "config の拒否で `tool_use_id` が None だと、result の `permission_denials` のうち `tool_use_id` のないものが読み飛ばされます。これは判定の正確さの問題で",
+   "reason": "tool_use_id が None の config 拒否のせいで、id のない permission_denials が照合で除外されるという原因と結果を、正解どおりに指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "result の行をつなぐ変更は信頼の境界の観点でしか扱っておらず、判定役の出力に複数の判定や余計な文が混ざる問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "is_error の result の行を除かずにつないでいる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "run_reviews が途中で抜けたときに、ほかの子の止めない拒否の記録が漏れる点には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "child_error の詳細メッセージが、エラーの行ではなくつないだ本文の先頭を載せる点には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

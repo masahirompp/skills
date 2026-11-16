@@ -1,0 +1,49 @@
+{
+ "cost_usd": 0.100568,
+ "bugs": [
+  {
+   "id": "B1",
+   "verdict": "detected",
+   "quote": "ref が1つでも存在しないと rev-list 全体が失敗し、出力ファイルは空になります。それでも処理は黙って続きます。",
+   "reason": "rev-list が存在しない ref で失敗して first-parent が空になることを指摘し、Spec 側で未着手のブランチを含めて delete になることも再現しているため、detect_criteria の両方を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "B2",
+   "verdict": "detected",
+   "quote": "**`scan.sh:93` `is_ancestor \"$oid\" \"$sha\"` は引数の向きが逆です。**",
+   "reason": "verify_pr_merged の祖先判定の引数の向きが元と逆になったことを指摘し、追加コミットのあるブランチが delete になることにも触れている。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "scan.sh is_ancestor",
+   "summary": "is_ancestor という名前では引数の順序を取り違えやすいので、役割の分かる名前にすべきだという指摘。",
+   "quote": "引数の順序を取り違えやすい名前のままで、それが1の誤りにつながりました。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "scan.sh on_first_parent",
+   "summary": "on_first_parent が三値を終了コードで返していて、意味がコメントにしか書かれていない(Primitive Obsession の可能性)という指摘。",
+   "quote": "`on_first_parent` が返す 0/1/2 の三値を終了コードで受けていて、意味がコメントにしか書かれていません(Primitive Obsession の可能性)。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "scan.sh:93",
+   "summary": "93行目の呼び出しに 2>/dev/null が加わって stderr を捨てるようになり、「挙動は変えない」の範囲を外れているという指摘。",
+   "quote": "93行目の呼び出しに `2>/dev/null` が加わり、stderr を捨てるようになりました。影響は小さいものの、「挙動は変えない」の範囲を外れています。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "test.sh",
+   "summary": "test.sh に追加コミットのケースと ref が片方しか無いケースが無く、今回の2件の回帰を検出できないという指摘。",
+   "quote": "test.sh には「PR マージ後に追加コミットがある」ケースも、「既定ブランチの ref が片方しか無い」ケースもありません。",
+   "quote_ok": true
+  }
+ ]
+}

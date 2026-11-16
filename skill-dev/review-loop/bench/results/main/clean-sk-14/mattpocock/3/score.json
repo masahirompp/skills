@@ -1,0 +1,69 @@
+{
+ "cost_usd": 0.07615759999999999,
+ "bugs": [],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib.sh hk_path_in_use",
+   "summary": "hk_path_in_use が1つの文字列で「使用中」と「lsof で確かめられない」の両方を表しており、apply.sh の理由文の重複や SKILL.md の部分一致依存を招いている。",
+   "quote": "`hk_path_in_use` は1つの文字列で「使用中(`pid …`)」と「lsof で確かめられない」の両方を表しています。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "SKILL.md 手順1・手順4",
+   "summary": "終了コードが見えない点の注意書きが手順1と手順4に同じ形で重複している。",
+   "quote": "「`!` の結果では終了コードが見えないので…確かめてから進む」が手順1と手順4に同じ形で2回あります。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "scan.sh on_fp -gt 1 分岐",
+   "summary": "直前の exit 1 によって、first-parent 履歴を読めない分岐はほぼ通らない。",
+   "quote": "`on_fp -gt 1` の「first-parent 履歴を読めない」分岐は、直前の `[ -s \"$tmp/first-parent\" ] || exit 1` があるのでほぼ通りません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "コミット 961a888",
+   "summary": "コミット名は mktemp/TMPDIR だが、無関係な変更が多く含まれているので、タイトルを実態に合わせるか分割すべき。",
+   "quote": "ただ revert やレビューのしやすさを考えると、タイトルを実態に合わせるか、分割するのが望ましいです。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "test.sh:162-169",
+   "summary": "lsof で確かめられないときに残す扱いのテストが scan.sh にしか無く、apply.sh で skipped になることを検証していない。",
+   "quote": "apply.sh で skipped になることは検証していません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "test.sh / hk_process_cwds",
+   "summary": "command -v lsof が失敗する「lsof が無い」経路のテストが無い。",
+   "quote": "`command -v lsof` が失敗する「lsof が無い」経路もテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "scan.sh:20",
+   "summary": "jq が無いときに止まる処理のテストが無い。",
+   "quote": "「jq が無い…ときは止まる」は scan.sh:20 に実装がありますが、テストはありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "lib.sh:108-109, apply.sh:43, scan.sh:164",
+   "summary": "hk_path_in_use の awk が失敗すると出力が空になり、apply.sh が worktree を削除し、scan.sh も keep にならない。",
+   "quote": "apply.sh:43 は `[ -z \"$proc\" ]` なので、そのまま削除に進みます。",
+   "quote_ok": true
+  },
+  {
+   "n": 9,
+   "location": "lib.sh hk_process_cwds(lsof の完全性の確かめ方)",
+   "summary": "自分自身が一覧に出ればプロセス一覧を完全とみなすので、一部のプロセスしか見えない環境では使用中の worktree を「使用中でない」と誤って判定する。",
+   "quote": "サンドボックスが自分と子プロセスだけ見せて外のプロセスを隠す場合、他のプロセスが使っている worktree が「使用中でない」と判定されます。",
+   "quote_ok": true
+  }
+ ]
+}

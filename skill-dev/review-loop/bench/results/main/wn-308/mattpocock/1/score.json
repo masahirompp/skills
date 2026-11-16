@@ -1,0 +1,70 @@
+{
+ "cost_usd": 0.0694296,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは cleanupLeftovers や、異常終了のあとに Y で引き継いだ作業台へ workbenchOptions/status-format を入れ直していない点に一切触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "docs/PRODUCT.md:557, docs/lib/tmux.md",
+   "summary": "「窓」という語が、スクロールで見える範囲と、ウィンドウの一覧の二つの意味で使われ、節の中でも表記が揺れている。",
+   "quote": "**用語「窓」が二つの意味になっている(標準違反、直すべき)**",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "docs/PRODUCT.md(見た目の決定)",
+   "summary": "採った形を幅60の画面で示しておらず、採らなかった形と目で比べられない。",
+   "quote": "採った形は全幅のインラインコード(76桁)でしか示していません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "docs/lib/tmux.md",
+   "summary": "キーが出るという注記が workbenchOptions ではなく createWorkbench の側にしかないため、契約から読み取れない。",
+   "quote": "今は注記が `createWorkbench` の側にしかないため、`workbenchOptions` を単独で呼ぶ人は、キーが出ることを契約から読み取れません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "",
+   "summary": "CLAUDE.md の「学びの捕捉」に従った learning の issue が起票されているか確かめられず、まだなければ起票が必要。",
+   "quote": "`learning` の issue があるかは、`gh` が未認証で確かめられませんでした。まだなければ起票が必要です。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "docs/PRODUCT.md:442",
+   "summary": "典型の幅34では ^Q% が見えず、作業台の中を分けられると気づいてもらうという仕様の目的が果たせていない。",
+   "quote": "全体の画面例(442行)は作業台の画面の幅が34で、キーは `· ^` までしか見えず、`^Q%` も出ません。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "docs/PRODUCT.md:516",
+   "summary": "キーの表記が、ADR-0013 の項の空白入りの `^Q l` と、今回の空白なしの `^Qc` とで揺れている。",
+   "quote": "**キーの表記の揺れ:** ADR-0013 の項(516行)は、文字だけの形を `^Q l` と空白入りで書いています。今回の `^Qc` は空白がありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "e2e テスト 25行",
+   "summary": "案内のセッションでキーが出ないことを確かめる否定のテストがない。",
+   "quote": "**否定のテストがない:** 案内のときにキーが出ないことを確かめるテストがありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "docs/PRODUCT.md:441",
+   "summary": "441行の表示幅が77で、ほかの行の75と2桁ずれている(差分より前からある問題)。",
+   "quote": "PRODUCT.md の441行は表示幅77で、ほかの行(75)より2桁ずれています。",
+   "quote_ok": true
+  }
+ ]
+}

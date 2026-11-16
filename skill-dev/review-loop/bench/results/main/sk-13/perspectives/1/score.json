@@ -1,0 +1,112 @@
+{
+ "cost_usd": 0.11311360000000001,
+ "bugs": [
+  {
+   "id": "S13-1",
+   "verdict": "detected",
+   "quote": "名前の検査は `split()[0]` を使うので、`' code-review high {pr}'` は `code-review` と読まれ、`:397` の空チェックも事前確認も通ります。",
+   "reason": "spec を正規化しないため、split()[0] による照合・事前確認は通る一方で、`/`+spec のプロンプトが壊れるという食い違いを指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-2",
+   "verdict": "detected",
+   "quote": "一方 `JUDGE_PROMPT` は「観点の欠落」の基準だけを書いていて、指示の節をどう扱うかに触れていません。",
+   "reason": "JUDGE_PROMPT に指示ブロックの扱いが書かれておらず、指示で外した範囲を欠落と取り違えうると指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-3",
+   "verdict": "detected",
+   "quote": "`--perspective 'code-review medium {pr}'` のようにレベルだけ下げると、名前の一覧は既定と同じなので `perspectives` は記録されません。",
+   "reason": "比較がスキル名だけで行われるため引数違いが記録されない点と、並べ替えを差とみなす点の両方を指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "SKILL.md の例が、外した security-review に --instruct を渡しているため終了コード2になる、という指摘はありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-5",
+   "verdict": "detected",
+   "quote": "`a.get(\"perspectives\") or []` を回しているだけなので、値が文字列 `\"abc\"` でも各要素が str になって検査を通ります。",
+   "reason": "リストかどうかを確かめないため、文字列や辞書が検査を通ると指摘しています。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "--append-system-prompt で渡した指示がサブエージェントに届かない、という指摘はありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "指示ブロックとレビュー出力が同じ区切りで並ぶため偽装・混同されうる、という指摘はありません。",
+   "quote_ok": true
+  },
+  {
+   "id": "S13-8",
+   "verdict": "detected",
+   "quote": "先頭の `/` も、取り除くか終了コード2で止めるとよいです。今は `//code-review` を作り、事前確認で「見つからない」として止まるだけです。",
+   "reason": "--perspective の先頭の `/` を取り除かないため、事前確認で「見つからない」として止まると指摘しています。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "review_loop.py:749",
+   "summary": "追加の指示に付いた「この指示を優先してください」という文言が、編集を禁じる NO_MUTATION より優先すると LLM に読まれうる。",
+   "quote": "利用者が「見つけた問題は直しておいて」のような指示を書くと、LLM が後に来た優先指示を、編集を禁じた制約より強いものと受け取る余地があります。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "review_loop.py:963 / SKILL.md:57",
+   "summary": "反復をまたいでオプション(観点の組や --instruct)が一貫しているかをスクリプトが確かめず、付け忘れても警告が出ない。",
+   "quote": "反復をまたいでオプションが一貫しているかを、スクリプトが確かめていない",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "review_loop.py:412 / :759",
+   "summary": "`{pr}` が --perspective では展開されるのに --instruct では展開されず、扱いが揃っていない。",
+   "quote": "`--perspective` では `{pr}` が置き換わりますが、`--instruct` では置き換わりません。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "skill-dev/review-loop/test.py:570",
+   "summary": "by_name.get の既定値が \"x\" なので、その観点の呼び出しが記録されていなくてもテストが通ってしまう。",
+   "quote": "`by_name.get(\"mattpocock-skills:code-review\", \"x\")` は、その観点の呼び出しが記録されていない(キーがない)ときも成り立ちます。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "",
+   "summary": "前後に空白がある --perspective を確かめるテストがない。",
+   "quote": "前後に空白がある `--perspective`(正確性の1件目)",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "",
+   "summary": "引数だけを変えた --perspective が状態に記録されるかを確かめるテストがない。",
+   "quote": "引数だけ変えた `--perspective` の記録(正確性の2件目)",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "",
+   "summary": "同じスキルを2回指定した --perspective が終了コード2になるかを確かめるテストがない。",
+   "quote": "重複した `--perspective`(同じスキルを2回指定して終了コード2になるか)",
+   "quote_ok": true
+  }
+ ]
+}

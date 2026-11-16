@@ -1,0 +1,55 @@
+{
+ "cost_usd": 0.0678816,
+ "bugs": [
+  {
+   "id": "W306-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "cursorBlock の範囲には触れているが「範囲を誤っても、表示が崩れるだけ」とするだけで、(sub) を含めて窓より長くなり選んだ行や入力欄が外れることは指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "trailing が区切りの境目で切れない問題への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "選べる行がないときに通し番号が 0/0 になる問題への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "guard の文言『left the list』が事実と食い違う問題への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "メモの入力中に対象の行が (sub) に変わっても入力が閉じない問題への言及がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "openNote の判定を外したことには触れているが、カーソルが (sub) の行に乗ることはないと逆の結論を出しており、作業台の案内からの経路は指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W306-7",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "README の記述が実装と食い違う問題への言及がない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

@@ -1,0 +1,56 @@
+{
+ "cost_usd": 0.060138,
+ "bugs": [
+  {
+   "id": "W308-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは cleanupLeftovers の Y の分岐で引き継いだ作業台に workbenchOptions や status-format を入れ直していない点に一切触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "ステータス行の書式(^Q%% split)を確かめるテストが使い捨ての e2e 層にしかなく、昇格済みの lib/tmux/tmux.test.ts に無い。",
+   "quote": "今回の変更を守るテストが、使い捨ての層にしかありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "test/e2e/workbench.test.ts:25 / :117",
+   "summary": "案内のセッションではキーを出さないという振る舞いを否定の形で確かめるテストが無い。",
+   "quote": "「案内のセッションでは出さない」を誰も確かめていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "docs/PRODUCT.md:442",
+   "summary": "図の右の分割の最下行が実際の描画と1文字ずれていて、`^` だけが残る形になっている。",
+   "quote": "図の右の分割の最下行が、実際の描画と1文字ずれているようです。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "docs/PRODUCT.md:558-562",
+   "summary": "幅60の画面の例が採らなかった形にしか無く、採った形の例が無いので、規約に沿っていない。",
+   "quote": "採らなかった形だけが幅60の画面で示され、採った形の幅60の画面がありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "lib/tmux/tmux.ts:340",
+   "summary": "`│` と `─` は東アジアの文字幅で曖昧に分類されるため、端末の設定によってはステータス行の切れ方がずれる。",
+   "quote": "`│` と `─` は、東アジアの文字幅で「曖昧」に分類される文字です。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "PR の本文「確かめたこと」",
+   "summary": "Ghostty の実際の分割での見え方を capture で確かめていない。",
+   "quote": "Ghostty の実際の分割での見え方は未確認です。",
+   "quote_ok": true
+  }
+ ]
+}

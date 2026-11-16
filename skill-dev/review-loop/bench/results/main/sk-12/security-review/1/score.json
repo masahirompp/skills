@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.0647776,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "レビューは source=config で止まらなくなった変更に触れているが、セキュリティの境界ではないとして問題とせず、reason_type を見ずに分類器の拒否まで通してしまう点は指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "tool_use_id が None の場合を候補に挙げてはいるが、攻撃者が操作できないとして棄却しており、None キーが seen に入って id なしの拒否まで除外される仕組みは指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "result の行を全てつなぐ点は「除外対象」として棄却しており、判定役で複数の判定や余計な文が混ざる問題は指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "is_error の行を除かずにつなぐため、エラーの文が本文になって成功扱いになる問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "run_reviews で途中で抜けたとき、ほかの子の止めない拒否が記録から漏れる問題には触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "child_error の詳細に、エラーの文ではなくつないだ本文の先頭が載る問題には触れていない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

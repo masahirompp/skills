@@ -1,0 +1,26 @@
+{
+ "case": "sh-1",
+ "kind": "shell",
+ "config": "code-review",
+ "trial": 1,
+ "status": "denied",
+ "tokens": {
+  "input": 359822,
+  "cache_read": 298814,
+  "output": 9736
+ },
+ "cost_usd": 1.0592508,
+ "started_at": "2026-11-15T00:07:25",
+ "duration_s": 108,
+ "num_turns": 0,
+ "models": [
+  "claude-fable-5-2"
+ ],
+ "denials_blocking": [
+  "Bash {\"command\": \"set +e\\nR=/private/var/folders/5t/j2015ppn7pj1lf0h39j3c5jm0000gn/T/rb-90ylyb0d/w/d3a73074a2/skills\\nS=$R/skills/housekeeping/scripts\\nT=$(mktemp -d \\\"${TMPDIR:-/tmp}/hkrev.XXXXXX\\\"); T=$("
+ ],
+ "denials_tolerated": [],
+ "outside_access": [],
+ "tree_changed": [],
+ "head_changed": false
+}

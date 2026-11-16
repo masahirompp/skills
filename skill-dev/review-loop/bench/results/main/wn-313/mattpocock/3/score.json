@@ -1,0 +1,105 @@
+{
+ "cost_usd": 0.1223656,
+ "bugs": [
+  {
+   "id": "W313-1",
+   "verdict": "detected",
+   "quote": "作り直すのは `whatnext workbench` を起動したときだけなので(DESIGN 228)、つながっているあいだに消えた場合は救えません。",
+   "reason": "作り直しが workbench の起動時だけで、つながったまま wbguide が消えると最後のシェルの exit で切り替えに失敗し作業台の画面ごと離れると指摘しており、detect_criteria を満たす。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-2",
+   "verdict": "detected",
+   "quote": "`@wn_respawned` はペインのオプションで、`respawn-pane` してもペインは変わらないので、値は増えるだけで戻りません(`lib/tmux/tmux.ts:52-58`)。",
+   "reason": "起動し直しの回数が通算で数えられて戻らず、間をおいて落ちてもいずれ上限に達して wbguide が消えると指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-3",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "シグナルで終わった attach を「つなげなかった」と誤判定する点には触れておらず、判定方法は問題なしとしている。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "wbguide のうち利用者が分割したペインまで起動し直す点への指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "失敗の道でタイトルを消す OSC 2 が出なくなった点への指摘がない。",
+   "quote_ok": true
+  },
+  {
+   "id": "W313-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "ensureGuide がセッションの有無だけで判定し、案内のペインが無い場合に作り直さない点への指摘がない。",
+   "quote_ok": true
+  }
+ ],
+ "extras": [
+  {
+   "n": 1,
+   "location": "lib/tmux/tmux.test.ts",
+   "summary": "pane-died のテストは sh の本文に文字列が含まれるかしか見ておらず、実際の動きは e2e でしか確かめていない。",
+   "quote": "ただしテストが見ているのは sh の本文に文字列が含まれるかどうかだけです。実際の動きは e2e(使い捨て層)でしか確かめていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 2,
+   "location": "docs/DESIGN.md",
+   "summary": "案内のプログラムが終わる原因が未解明なのに、learning/bug の issue に起票した記録がない。",
+   "quote": "これは `learning` か `bug` の issue にすべき事象ですが、コミット本文に issue 番号がありません。",
+   "quote_ok": true
+  },
+  {
+   "n": 3,
+   "location": "src/cli/workbench.ts askListToRefreshGuide",
+   "summary": "@wn_req_* に書いて @wn_pid を読み SIGUSR2 を送る手順が、guide.ts と lib にも重複している。",
+   "quote": "同じ手順が `src/cli/guide.ts:74-78` と lib の `@wn_req_sh` / `signalGuide` にもあります。頼みごとの形を変えるときは何か所も直すことになります。",
+   "quote_ok": true
+  },
+  {
+   "n": 4,
+   "location": "src/cli/list.ts",
+   "summary": "案内のセッションを作り直したときに workbenchOptions(GUIDE, '') が2回走る。",
+   "quote": "`src/cli/list.ts` で、案内のセッションを作り直したときは `workbenchOptions(GUIDE, '')` が2回走ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 5,
+   "location": "src/cli/workbench.ts GUIDE_REFRESH / fail()",
+   "summary": "GUIDE_REFRESH がセッション名 GUIDE と紛らわしく、fail() の名前から「分割ならキーを待つ」という副作用が読めない。",
+   "quote": "`GUIDE_REFRESH = 'guide'` は、セッション名の `GUIDE` と紛らわしく、ログの `request guide` を読んでも何を頼んだのか分かりにくいです。",
+   "quote_ok": true
+  },
+  {
+   "n": 6,
+   "location": "docs/PRODUCT.md",
+   "summary": "Ghostty の分割で失敗のたびにキーを待って分割が残る挙動と、新しいエラー文言が、PRODUCT.md に書かれていない。",
+   "quote": "今回の変更で、Ghostty の分割では、not running を含む失敗のたびにキーを待ち、分割が開いたまま残ります。",
+   "quote_ok": true
+  },
+  {
+   "n": 7,
+   "location": "src/cli/workbench.ts",
+   "summary": "whatnext の終了でサーバごと閉じたときの終了コードが tmux の値から 0 に変わったのに、仕様に書かれていない。",
+   "quote": "whatnext の終了でサーバごと閉じたときの終了コードが、tmux の値から 0 に変わったようです。仕様には書かれていません。",
+   "quote_ok": true
+  },
+  {
+   "n": 8,
+   "location": "src/cli/workbench.ts ensureGuide",
+   "summary": "workbench から案内を作り直すと、打ったプロセスの node/cli が使われ、一覧と違う版の案内が動きうる。",
+   "quote": "別の場所に入れた whatnext で打つと、一覧と違う版の案内が動きえます。",
+   "quote_ok": true
+  }
+ ]
+}

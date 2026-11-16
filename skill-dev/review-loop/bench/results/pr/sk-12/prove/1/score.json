@@ -1,0 +1,48 @@
+{
+ "cost_usd": 0.0655216,
+ "bugs": [
+  {
+   "id": "S12-1",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "source == config だけで振り分けており reason_type を見ていない、という点にレビューは触れていない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-2",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "tool_use_id が無い拒否で None がキーになり、照合で除外される問題をレビューは指摘していない。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-3",
+   "verdict": "detected",
+   "quote": "判定役(`run_judge`)にもレビュー役と同じ処理 `check_result` を使います。この処理は空でない `result` の行を全てつなぐので、判定役が複数のターンを回すと次の3つが起きます。",
+   "reason": "run_judge が check_result で result の行を全てつなぐため、出し直した判定や後ろの短い文が判定に混ざると、原因と場所の両方が正解と一致する形で指摘している。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-4",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "is_error の行を除かずにつなぐ問題についての指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-5",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "run_reviews のループを途中で抜けたとき、止めない拒否の記録が漏れる問題についての指摘は無い。",
+   "quote_ok": true
+  },
+  {
+   "id": "S12-6",
+   "verdict": "missed",
+   "quote": "",
+   "reason": "child_error の詳細に、つないだ本文の先頭500字が載るという問題についての指摘は無い。",
+   "quote_ok": true
+  }
+ ],
+ "extras": []
+}

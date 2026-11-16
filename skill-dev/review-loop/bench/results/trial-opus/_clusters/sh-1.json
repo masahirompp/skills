@@ -1,0 +1,158 @@
+{
+ "case": "sh-1",
+ "cost_usd": 0.061352000000000004,
+ "clusters": [
+  {
+   "title": "マージ後の追加コミットがあるケースと、既定ブランチの ref が片方しか無いケースのテストが無く、今回の2件の退行を検出できない",
+   "location": "skill-dev/housekeeping/test.sh:59",
+   "members": [
+    "e2",
+    "e6",
+    "e11"
+   ],
+   "id": "sh-1/c1",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "test.sh に該当ケースが無いのは事実。MERGED の例は L62/72/82/89 で、どれも追加コミットが無い。first-parent の ref を消すケースも無い。指摘の前提にある2件の退行は、一時ディレクトリでの再現で実在を確かめた。(1) 追加コミットあり: main 版は「keep PR #1 のマージ後に追加コミットが 1 件ある」、HEAD 版は「delete PR #1 マージ済み」。(2) ローカルの main を消す: HEAD 版では fresh が ask から『delete … merge コミットで取り込み済み』に変わる。ただ、この指摘の主張は「テストが無い」ことなので、分類の基準どおり trivial とする。退行そのものは scan.sh の不具合で、c3 と c6 の検証でも扱う。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "MERGED のテストケースがすべて headRefOid と手元の sha が同じなので、祖先判定の向きの誤りを検出できない",
+   "location": "skill-dev/housekeeping/test.sh:62,89",
+   "members": [
+    "e4",
+    "e5"
+   ],
+   "id": "sh-1/c2",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "test.sh の L62/72/82/89 は、headRefOid にどれも \"$(git rev-parse <branch>)\" を渡している。これはブランチ先端と同じ sha。L78 は存在しない oid で、照合できないケースを見るもの。そのため is_ancestor の引数を逆にしても既存テストは通る。指摘は事実だが、主張はテストの網羅性についてなので trivial とする。向きの逆転が実際に起きることは c1 の再現で確かめた(scan.sh:93 の is_ancestor \"$oid\" \"$sha\")。このファイルだけを確かめるために別の実行はしていない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "is_ancestor に加わった 2>/dev/null が verify_pr_merged の呼び出しにも及び、エラーが表示されないまま keep に落ちる(挙動が変わっている)",
+   "location": "skills/housekeeping/scripts/scan.sh:74",
+   "members": [
+    "e3",
+    "e8"
+   ],
+   "id": "sh-1/c3",
+   "class": "trivial",
+   "scope": "na",
+   "ran": true,
+   "evidence": "事実としては正しい。main の L93 は `git merge-base --is-ancestor \"$sha\" \"$oid\"` で、stderr を捨てていなかった。HEAD では scan.sh:74 の is_ancestor の中で 2>/dev/null が付く。再現として、ルートコミットの loose object を退避した。main 版は first-parent を作るところで「error: main の履歴を読めない」と出して止まる。HEAD 版は extra を keep にし、fatal も error も表示しない。ただ、verify_pr_merged で merge-base が失敗したときは、どちらの版でも keep の分岐(残す側)に入る。変わるのは診断の表示だけで、判定の結果は変わらない。そのため trivial とする(「挙動は変えない」という commit メッセージとは食い違う)。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "is_ancestor という名前では判定の向きや引数の順序を取り違えやすいので、役割が分かる名前にすべき",
+   "location": "skills/housekeeping/scripts/scan.sh:74",
+   "members": [
+    "e7",
+    "e10"
+   ],
+   "id": "sh-1/c4",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "命名についての指摘。scan.sh:73 のコメント『a が b の祖先か』は実装と合っている。誤りの原因は L93 の引数の順序で、それ自体は c1 と c2 で扱った不具合。名前を変えても挙動は変わらない。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "on_first_parent が三値を終了コードで返しており、その意味がコメントにしか書かれていない",
+   "location": "scan.sh on_first_parent",
+   "members": [
+    "e1"
+   ],
+   "id": "sh-1/c5",
+   "class": "trivial",
+   "scope": "na",
+   "ran": false,
+   "evidence": "三値を終了コードで返す書き方の好みについての指摘で、挙動には関わらない(scan.sh:84-85, 118-119)。なお、2 以上を返す経路が実際には無いことは c6 で扱う。",
+   "classified_by": "llm"
+  },
+  {
+   "title": "on_fp の値の意味を説明するコメントが消え、移した先の L84 の説明が実装と食い違っている",
+   "location": "skills/housekeeping/scripts/scan.sh:118-119",
+   "members": [
+    "e9"
+   ],
+   "id": "sh-1/c6",
+   "class": "real",
+   "scope": "in",
+   "ran": true,
+   "evidence": "scan.sh:118-119 から値の意味のコメントは消え、L84 には『それ以外は履歴を読めない』と書いてある。しかし L82 の rev-list は失敗しても `>\"$tmp/first-parent\"` で空のファイルを作り、失敗のチェックも消えた。そのため grep -qxF は 1 を返し、2 にはならない。結果として L122-123 の『履歴を読めない』で keep する分岐には到達できない。main では fp_refs を組み立ててから空かどうかを確かめ、読めなければ exit 1 で止まっていた。再現: refs/heads/main を消すと rev-list が失敗して空のファイルになり、HEAD 版では fresh(main 版は ask『未着手の可能性』)が『delete PR なし・merge コミットで main に取り込み済み』に変わる。ffb も、理由が merge コミットという誤ったものになる。ルートコミットの object を退避した場合も、main 版は止まるのに HEAD 版は走査を続ける。コメントと実装の食い違いは、削除の判定の誤りとして実際に表れている。この差分で入ったものなので in。",
+   "classified_by": "llm"
+  }
+ ],
+ "members": {
+  "e1": {
+   "dir": "sh-1/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 2
+  },
+  "e2": {
+   "dir": "sh-1/code-review/1",
+   "config": "code-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e3": {
+   "dir": "sh-1/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 3
+  },
+  "e4": {
+   "dir": "sh-1/security-review/1",
+   "config": "security-review",
+   "trial": 1,
+   "n": 1
+  },
+  "e5": {
+   "dir": "sh-1/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 1
+  },
+  "e6": {
+   "dir": "sh-1/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 4
+  },
+  "e7": {
+   "dir": "sh-1/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 2
+  },
+  "e8": {
+   "dir": "sh-1/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 3
+  },
+  "e9": {
+   "dir": "sh-1/perspectives/1",
+   "config": "perspectives",
+   "trial": 1,
+   "n": 4
+  },
+  "e10": {
+   "dir": "sh-1/mattpocock/1",
+   "config": "mattpocock",
+   "trial": 1,
+   "n": 1
+  },
+  "e11": {
+   "dir": "sh-1/prove/1",
+   "config": "prove",
+   "trial": 1,
+   "n": 1
+  }
+ },
+ "classify_cost_usd": 0.5469556
+}
