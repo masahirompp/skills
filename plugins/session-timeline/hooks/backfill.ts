@@ -76,8 +76,10 @@ export function timesOf(jsonl: string): Map<string, { start?: number; end?: numb
 
 /**
  * Gives each stretch the span of its tool calls; one with none takes the end of
- * the one before. A stretch at or after `liveFrom` (the live recording's
- * start) is dropped: the live phases hold it.
+ * the one before. A stretch with no tool calls that starts at or after
+ * `liveFrom` (the live recording's start) is dropped: the live phases hold it.
+ * One with tool calls is kept: those the live recording saw are left out
+ * earlier, by their ids.
  */
 export function timed(stretches: readonly Stretch[], times: Times, liveFrom: number | undefined): Stretch[] {
   const out: Stretch[] = []

@@ -23,10 +23,19 @@ const backfill = atom({ plugin: 'session-timeline', key: 'backfill' } as const, 
 const isBackfilled = atom({ plugin: 'session-timeline', key: 'isBackfilled' } as const, false)
 const cwd = atom({ plugin: 'session-timeline', key: 'cwd' } as const, '')
 const transcriptPath = atom({ plugin: 'session-timeline', key: 'transcriptPath' } as const, '')
+/** How many messages the conversation held when the live recording began: the backfill covers those alone. -1 unknown. */
+const liveFromIndex = atom({ plugin: 'session-timeline', key: 'liveFromIndex' } as const, -1)
 
 // The stretch being gathered and the classifications in flight: a reload drops
 // them, and the next stretch starts afresh.
 let stretch: Stretch | undefined
+/** Calls of a stretch still running: a stretch is classified once it is closed and none is left. */
+const running = new Map<Stretch, number>()
+const closed = new WeakSet<Stretch>()
+/** Whether this module has asked for the backfill yet: set before any await, so two opens ask once. */
+let isFillAsked = false
+/** Bumped by a reset: a backfill begun under an older epoch writes nothing more. */
+let epoch = 0
 let queue: Promise<void> = Promise.resolve()
 let isRegroupQueued = false
 /**
@@ -124,8 +133,10 @@ async function writeRecap($: EngineInterface): Promise<void> {
 
 async function gather($: EngineInterface): Promise<Stretch> {
   if (!stretch) {
-    const s: Stretch = { start: await $.clock.now(), steps: [], subSteps: 0 }
+    // Set before the first await: two calls arriving together share one stretch.
+    const s: Stretch = { steps: [], subSteps: 0 }
     stretch = s
+    s.start = await $.clock.now()
     await update($, live, l => ({ since: s.start ?? 0, steps: 0, isClassifying: l?.isClassifying ?? false }))
   }
   return stretch
@@ -135,11 +146,19 @@ async function countStep($: EngineInterface): Promise<void> {
   await update($, live, l => (l ? { ...l, steps: l.steps + 1 } : l))
 }
 
-/** Closes the stretch and classifies it after the ones before it. */
+/** Closes the stretch; it is classified once its running calls are back. */
 function close($: EngineInterface): void {
   const done = stretch
   stretch = undefined
-  if (!done || (done.steps.length === 0 && !done.prompt && !done.answer)) return
+  if (!done) return
+  closed.add(done)
+  if (!running.get(done)) finish($, done)
+}
+
+/** Classifies a closed stretch with nothing left running, after the ones before it. */
+function finish($: EngineInterface, done: Stretch): void {
+  running.delete(done)
+  if (done.steps.length === 0 && !done.prompt && !done.answer) return
   enqueue(() => classifyLive($, done))
 }
 
@@ -188,39 +207,61 @@ async function readTimes($: EngineInterface): Promise<Times> {
 }
 
 /** Classifies the history before the mod loaded and puts it ahead of the live phases. */
-async function fillHistory($: EngineInterface): Promise<void> {
-  const messages = await $.session.messages()
-  if (!Array.isArray(messages)) return
-  const existing = await read($, phases)
+/** The conversation's messages, or none where the session cannot give them. */
+async function messageCount($: EngineInterface): Promise<number> {
+  const messages = await $.session.messages().catch(() => undefined)
+  return Array.isArray(messages) ? messages.length : -1
+}
+
+/**
+ * Classifies the history before the live recording began and puts it ahead of the
+ * live phases. Returns false where a reset made it stale before it finished.
+ */
+async function fillHistory($: EngineInterface, mine: number): Promise<boolean> {
+  const all = await $.session.messages()
+  if (!Array.isArray(all)) return true
+  // Only what came before the live recording: a turn it saw, text alone included, is its own.
+  const until = await read($, liveFromIndex)
+  const messages = until >= 0 ? all.slice(0, until) : all
+  // A backfill cut short left past- phases: they are this backfill's to redo, not known.
+  const existing = (await read($, phases)).filter(p => !p.id.startsWith('past-'))
   const known = new Set([...existing.flatMap(p => p.toolIds), ...(stretch?.steps.map(s => s.id) ?? [])])
   const liveStarts = [...existing.map(p => p.start), stretch?.start].filter((n): n is number => n !== undefined)
   const liveFrom = liveStarts.length > 0 ? Math.min(...liveStarts) : undefined
   const past = timed(stretchesOf(messages, known), await readTimes($), liveFrom)
-  if (past.length === 0) return
+  if (past.length === 0) return epoch === mine
 
   let done: Phase[] = []
-
+  if (epoch !== mine) return false
   await update($, backfill, () => ({ done: 0, total: past.length }))
   for (const s of past) {
     const verdict = await judge($, s, done.slice(-6))
+    if (epoch !== mine) return false
     done = fold(done, s, verdict, 'past')
     const now = done
     await update($, phases, list => [...now, ...list.filter(p => !p.id.startsWith('past-'))])
     await update($, backfill, b => (b ? { ...b, done: b.done + 1 } : b))
   }
+  return epoch === mine
 }
 
 async function openPane($: EngineInterface): Promise<boolean> {
   const { isPlaced } = await $.ui.open({ id: PANE, title: TITLE })
-  if (!(await read($, isBackfilled))) {
-    await update($, isBackfilled, () => true)
+  // Read and set with no await between: of two opens at once, one asks.
+  const isFirstAsk = !isFillAsked
+  isFillAsked = true
+  if (isFirstAsk && !(await read($, isBackfilled))) {
+    const mine = epoch
     enqueue(async () => {
       try {
-        await fillHistory($)
+        // Marked done only once it is: a backfill a reload cuts short runs again on the next open.
+        if (await fillHistory($, mine)) await update($, isBackfilled, () => true)
       } finally {
-        await update($, backfill, () => null)
-        isRecapWanted = true
-        scheduleRegroup($)
+        if (epoch === mine) {
+          await update($, backfill, () => null)
+          isRecapWanted = true
+          scheduleRegroup($)
+        }
       }
     })
   } else if ((await read($, phases)).length > 0) {
@@ -234,6 +275,12 @@ async function openPane($: EngineInterface): Promise<boolean> {
 
 /** Forgets every phase, the grouping and the recap, so the next open rebuilds them from the history. */
 async function reset($: EngineInterface): Promise<void> {
+  // A backfill under way stops writing; the open after this asks for a new one over the whole history.
+  epoch += 1
+  isFillAsked = false
+  const count = await messageCount($)
+  await update($, liveFromIndex, () => count)
+  await update($, backfill, () => null)
   await update($, phases, () => [])
   await update($, groups, () => [])
   await update($, expanded, () => [])
@@ -267,8 +314,12 @@ async function record($: EngineInterface, s: Stretch | undefined, step: Step): P
   }
   // The call may have outlived its stretch: it still belongs to the one it began in.
   s.steps.push(step)
+  const left = (running.get(s) ?? 1) - 1
+  running.set(s, left)
   await countStep($)
-  if (stretch === s && (BOUNDARY_TOOLS.has(step.tool) || s.steps.length >= MAX_STEPS)) close($)
+  if (closed.has(s)) {
+    if (left === 0) finish($, s)
+  } else if (stretch === s && (BOUNDARY_TOOLS.has(step.tool) || s.steps.length >= MAX_STEPS)) close($)
 }
 
 export const register: Register = (on, options) => {
@@ -282,6 +333,13 @@ export const register: Register = (on, options) => {
       description: 'Show what this session is doing, phase by phase (reset: rebuild from the history)',
     })
     await update($, cwd, c => c || e.cwd)
+    // A fresh module has no backfill running: progress left by one a reload cut short is stale.
+    await update($, backfill, () => null)
+    // Where the live recording begins, once per session: the backfill covers the messages before it.
+    if ((await read($, liveFromIndex)) < 0) {
+      const count = await messageCount($)
+      if (count >= 0) await update($, liveFromIndex, () => count)
+    }
     // Unasked, the pane waits undrawn until the terminal is wide enough or the person opens it.
     if (isAutoOpen) void openPane($).catch(() => undefined)
     return next(e)
@@ -335,9 +393,12 @@ export const register: Register = (on, options) => {
   })
 
   on('tool.call', async ($, e, next) => {
-    // An Agent or Skill call (a review, a plan) is a stretch of its own: close what came before it.
-    if (!e.agentId && BOUNDARY_TOOLS.has(e.tool)) close($)
+    // An Agent or Skill call (a review, a plan) is a stretch of its own: close what came before it,
+    // unless that holds nothing yet but the prompt, which the call then shares.
+    const before = stretch
+    if (!e.agentId && BOUNDARY_TOOLS.has(e.tool) && before && (before.steps.length > 0 || running.get(before))) close($)
     const s = e.agentId ? undefined : await gather($).catch(() => undefined)
+    if (s) running.set(s, (running.get(s) ?? 0) + 1)
     if (!e.agentId) latestTool = e.tool_use_id
     const ran = await next(e)
     const outcome = outcomeOf(e.tool, ran.result ?? ran.text)

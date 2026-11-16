@@ -53,6 +53,7 @@ declare module 'claude-code' {
       recap: Shaped<Recap>
       latestRow: string
       usage: Shaped<Usage>
+      liveFromIndex: number
       live: Shaped<Live>
       backfill: Shaped<Backfill>
       isBackfilled: boolean
