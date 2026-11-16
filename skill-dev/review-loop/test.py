@@ -143,18 +143,21 @@ def commit_and_push(wt, name):
 wt = setup()
 rc, out, err = run(wt)
 check(rc == 0, f"成功すると終了コード0({rc}) {err[-300:] if rc else ''}")
-check(out.startswith("## 指摘") and "### F1: s" in out, "標準出力は判定のテキストだけ")
+check(out.startswith("===== 観点: code-review =====") and "code-review: 指摘1件" in out,
+      "標準出力はレビュー役の出力をつないだものだけ")
 s = state()
 check(s and s["iter"] == 1 and s["attempts"][0]["result"] == "completed", "状態コメントに反復1が記録される")
 check(s and s["lock"]["running"] is False, "ロックが解除される")
-check(s and s["attempts"][0]["tokens"] == {"input": 4 * 3500, "cache_read": 4 * 2000, "output": 4 * 300},
-      "トークン数はレビュー役3つと判定役の modelUsage の合計(入力はキャッシュを含む)")
+check(s and s["attempts"][0]["tokens"] == {"input": 3 * 3500, "cache_read": 3 * 2000, "output": 3 * 300},
+      "トークン数はレビュー役3つの modelUsage の合計(入力はキャッシュを含む)")
 body = comments()[0]["body"]
-check("| 1.4万(うちキャッシュ読み込み 8000) | 1200 |" in body, "入力と出力のトークン数を別の列に出す")
+check("| 1.1万(うちキャッシュ読み込み 6000) | 900 |" in body, "入力と出力のトークン数を別の列に出す")
 workdir = err.rstrip().splitlines()[-1]
-check(os.path.isfile(os.path.join(workdir, "verdict.md")), "stderr の最後の行は作業ディレクトリ")
-with open(os.path.join(workdir, "verdict.md"), encoding="utf-8") as f:
-    check(f.read() == out, "判定は作業ディレクトリの verdict.md にも残る")
+check(os.path.isfile(os.path.join(workdir, "reviews.md")), "stderr の最後の行は作業ディレクトリ")
+with open(os.path.join(workdir, "reviews.md"), encoding="utf-8") as f:
+    joined = f.read()
+check(joined.strip() == out.strip(), "レビュー役の出力をつないだものは、作業ディレクトリの reviews.md にも残る")
+check(not [n for n in os.listdir(workdir) if n.startswith(("judge", "verdict"))], "判定役は起動せず、判定のファイルも作らない")
 check(workdir.startswith(os.path.join(root, "review-loop", "o_r", "7")), "作業ディレクトリは <tmp>/review-loop/<リポジトリ>/<PR>/<run>/<試行>")
 with open(os.path.join(workdir, "review-code-review.result.md"), encoding="utf-8") as f:
     check(f.read() == "code-review: 指摘1件\n", "各レビューの result のテキストを review-*.result.md に残す")
@@ -164,19 +167,18 @@ check(len(reviews) == 3, "観点ごとに1プロセス起動する")
 check(all(not c["env_job_dir"] and not c["env_session_id"] for c in cs), "子の環境から CLAUDE_JOB_DIR などを外す")
 check(all(c["guard"] == "1" for c in cs), "子には REVIEW_LOOP_ACTIVE が渡る")
 check(not any(c["kind"] == "preflight-not-killed" for c in cs), "事前確認の子は init の直後に止める")
-judge = [c for c in cs if c["kind"] == "judge"]
-check(judge and "===== 観点: security-review =====" in judge[0]["stdin"], "判定役には各レビューを区切って stdin で渡す")
-check(judge and "--json-schema" not in judge[0]["args"] and "## 指摘" in judge[0]["args"][-1],
-      "判定役には出力の形をプロンプトで渡す")
-check(all("--append-system-prompt" in c["args"] for c in reviews + judge), "運用上の制約を渡す")
-check(judge and "stream-json" in judge[0]["args"] and "--verbose" in judge[0]["args"], "判定役も stream-json で受ける")
-check(os.path.isfile(os.path.join(workdir, "judge.result.md")) and not os.path.exists(os.path.join(workdir, "denials.txt")),
-      "判定役の result のテキストも judge.result.md に残し、拒否がなければ denials.txt は作らない")
+check("===== 観点: security-review =====\nsecurity-review: 指摘1件\n===== ここまで: security-review =====" in joined,
+      "reviews.md は各レビューを役の名前で区切る")
+check(all("--append-system-prompt" in c["args"] for c in reviews), "運用上の制約を渡す")
+check(all(c["args"][c["args"].index("--model") + 1] == "opus" for c in reviews + [c for c in cs if c["kind"] == "preflight"]),
+      "レビュー役と事前確認には、既定でモデル opus を指定する")
+check(not os.path.exists(os.path.join(workdir, "denials.txt")) and "拒否" not in joined,
+      "拒否がなければ denials.txt は作らず、reviews.md にも添えない")
 prompts = sorted(c["args"][-1] for c in reviews)
 check(prompts == ["/code-review high 7", "/code-review high 7", "/security-review"],
       f"レビュー役のプロンプトは /<観点と引数>({{pr}} を展開)。{prompts}")
 check(os.path.isfile(os.path.join(workdir, "review-code-review-2.result.md"))
-      and judge and "===== 観点: code-review =====" in judge[0]["stdin"] and "===== 観点: code-review-2 =====" in judge[0]["stdin"],
+      and "===== 観点: code-review =====" in joined and "===== 観点: code-review-2 =====" in joined,
       "同じスキルを重ねた観点は、2つ目から名前に番号を付け、出力を分けて残す")
 
 # 2回目: 同じコメントを編集で更新する
@@ -245,17 +247,6 @@ s = state()
 check(rc == 0 and s["iter"] == 1 and s["previous_run"]["iterations"] == 2 and len(s["attempts"]) == 1,
       "--new-run で直前のシリーズを要約して始め直す")
 
-rc, _, err = run(wt, FAKE_JUDGE="noheading")
-check(rc == 1 and "no_output" in err and "## 指摘" in err, "判定に決めた見出しがなければ失敗")
-rc, out, err = run(wt, FAKE_JUDGE="fenced")
-check(rc == 0 and out.startswith("## 指摘(1件)") and out.rstrip().endswith("なし"),
-      "見出しに文字が足されていても通し、前置きとコードフェンスは落とす")
-rc, out, err = run(wt, FAKE_JUDGE="codeend")
-check(rc == 0 and out.rstrip().endswith("x\n```"), "前置きでフェンスを開いていなければ、末尾のコードブロックは残す")
-rc, out, err = run(wt, FAKE_JUDGE="conflictfirst")
-check(rc == 0 and out.startswith("## 競合"), "競合の節が先にあっても落とさない")
-rc, _, err = run(wt, FAKE_JUDGE="empty")
-check(rc == 1 and "no_output" in err and "空でない result の行がない" in err, "判定が空なら失敗")
 rc, _, err = run(wt, FAKE_REVIEW_code_review="fail")
 check(rc == 1 and "boom" in err, "子が異常終了したら stderr を添えて失敗")
 
@@ -511,47 +502,41 @@ check(not any(alive(c["pid"]) for c in last), "拒否で止めたとき、どの
 
 # result の行が複数あれば、最上位の空でないものを全てつなぐ(最後の行だけを使うと本文が捨てられる)
 run(wt, "--new-run")
+def joined_of(err):
+    with open(os.path.join(err.rstrip().splitlines()[-1], "reviews.md"), encoding="utf-8") as f:
+        return f.read()
+
+
 for mode, final in (("multiempty", ""), ("multishort", "前のメッセージの内容から変わりません")):
     rc, out, err = run(wt, FAKE_REVIEW_security_review=mode)
     wd = err.rstrip().splitlines()[-1]
-    stdin = [c for c in calls() if c["kind"] == "judge"][-1]["stdin"]
+    stdin = joined_of(err)
     with open(os.path.join(wd, "review-security-review.result.md"), encoding="utf-8") as f:
         saved = f.read()
     check(rc == 0 and "security-review: 本文" in stdin and "バックグラウンドで実行しています" in stdin
           and saved.index("バックグラウンド") < saved.index("本文") and (not final or final in saved)
           and "サブエージェントの結果" not in saved,
           f"result の行が複数あれば、最上位の空でないものを出た順につなぐ(最後の行が{'空' if not final else '短い文'})")
-    check(state()["attempts"][-1]["tokens"]["output"] == 4 * 300,
+    check(state()["attempts"][-1]["tokens"]["output"] == 3 * 300,
           "トークン数は最後の result の行だけで数える(modelUsage は累計なので足さない)")
 rc, out, err = run(wt, FAKE_REVIEW_code_review="multierror")
-stdin = [c for c in calls() if c["kind"] == "judge"][-1]["stdin"]
+stdin = joined_of(err)
 check(rc == 0 and "code-review: 本文" in stdin and "API Error" not in stdin, "エラーの result の行はつながない")
 rc, _, err = run(wt, FAKE_REVIEW_code_review="multiallempty")
 check(rc == 1 and "no_output: review code-review" in err, "result の行が全て空なら no_output")
 
-# 判定役は行をつながず、見出しを含む行のうち最後のものを採る
-rc, out, err = run(wt, FAKE_JUDGE="multi")
-check(rc == 0 and out.startswith("## 指摘") and "突き合わせています" not in out,
-      "判定役の result の行が複数でも、判定の行を採り、前置きは落とす")
-rc, out, err = run(wt, FAKE_JUDGE="multishort")
-check(rc == 0 and out.rstrip().endswith("なし") and "変わりません" not in out, "判定役の後の行の短い文は判定に混ぜない")
-rc, out, err = run(wt, FAKE_JUDGE="partiallater")
-check(rc == 0 and "## 競合" in out and "補足" not in out, "後の行が見出しを一部だけ持っていても、完全な判定を採る")
-rc, out, err = run(wt, FAKE_JUDGE="redo")
-check(rc == 0 and out.count("## 指摘") == 1 and "下書き" not in out and "```" not in out,
-      "判定役が判定を出し直したら、最後の判定だけを採る")
-
 # 設定のルールで、`;` でつないだコマンドの一部が拒否されただけなら止めず、内容を作業ディレクトリと stderr に残す
-rc, out, err = run(wt, FAKE_REVIEW_security_review="denyconfig", FAKE_JUDGE="denyconfig")
+rc, out, err = run(wt, FAKE_REVIEW_security_review="denyconfig")
 wd = err.rstrip().splitlines()[-1]
 with open(os.path.join(wd, "denials.txt"), encoding="utf-8") as f:
     denials = f.read()
-check(rc == 0 and out.startswith("## 指摘"), f"設定のルールでの拒否では試行を止めない {err[-300:] if rc else ''}")
-check("review security-review: Bash" in denials and "judge: Bash" in denials and "grep -n KEY .env" in denials
+check(rc == 0 and out.startswith("===== 観点:"), f"設定のルールでの拒否では試行を止めない {err[-300:] if rc else ''}")
+check("review security-review: Bash" in denials and "grep -n KEY .env" in denials
       and "subcommandResults" in denials, "設定のルールでの拒否は作業ディレクトリの denials.txt に残す")
 check("設定のルールで拒否された" in err and "grep -n KEY .env" in err, "設定のルールでの拒否は stderr にも出す")
-stdin = [c for c in calls() if c["kind"] == "judge"][-1]["stdin"]
-check("権限の設定で拒否された" in stdin and "review security-review: Bash" in stdin, "止めなかった拒否は判定役の入力にも添える")
+stdin = joined_of(err)
+check("権限の設定で拒否された" in stdin and "review security-review: Bash" in stdin and stdin.strip() == out.strip(),
+      "止めなかった拒否は reviews.md と標準出力にも添える")
 
 # 分類器による拒否や、tool_use_id のない拒否は止める
 rc, _, err = run(wt, FAKE_REVIEW_security_review="denyclassifier")
@@ -579,7 +564,6 @@ rc, out, err = run(wt, "--perspective", " /code-review\thigh  {pr} ", "--perspec
                    "--instruct", "/mattpocock-skills:code-review=a=b PR #{pr}")
 new = calls()[n:]
 reviews = [c for c in new if c["kind"] == "review"]
-judge = [c for c in new if c["kind"] == "judge"]
 check(rc == 0 and {c["args"][-1] for c in reviews} == {"/code-review high 7", "/mattpocock-skills:code-review PR #7"},
       f"--perspective を渡すと、既定の代わりにそれだけを使い、空白を詰めて起動する {err[-300:] if rc else ''}")
 by_name = {c["name"]: system_prompt(c) for c in reviews}
@@ -587,13 +571,9 @@ check("削除したファイルの中身は確かめない\nテストは見な�
       "--instruct はその観点のシステムプロンプトに足し、同じ観点への指示は改行でつなぐ")
 check("削除したファイル" not in by_name.get("mattpocock-skills:code-review", "x"), "--instruct はほかの観点には渡さない")
 check(by_name.get("mattpocock-skills:code-review", "").endswith("\na=b PR #7"), "--instruct は最初の `=` で分け、スキル名の先頭の `/` を除き、{pr} を置き換える")
-check(all("依頼文" in system_prompt(c) for c in reviews + judge),
-      "レビュー役にも判定役にも、サブエージェントに任せるときは制約と指示を依頼文に含めるよう頼む")
-check(judge and "観点 code-review のレビュー役に与えた追加の指示 -----\n削除したファイル" in system_prompt(judge[0])
-      and "----- ここまで: code-review -----" in system_prompt(judge[0])
-      and "削除したファイル" not in judge[0]["stdin"],
-      "追加の指示は判定役のシステムプロンプトで渡し、標準入力には混ぜない")
-check(judge and "追加の指示" in judge[0]["args"][-1], "判定役の手順に、追加の指示の扱いを書く")
+check(all("依頼文" in system_prompt(c) for c in reviews),
+      "レビュー役に、サブエージェントに任せるときは制約と指示を依頼文に含めるよう頼む")
+check("削除したファイル" not in out, "追加の指示は reviews.md に混ぜない")
 last = state()["attempts"][-1]
 body = comments()[0]["body"]
 check(last.get("perspectives") == ["code-review high {pr}", "mattpocock-skills:code-review PR #{pr}"]
@@ -611,12 +591,9 @@ n = len(calls())
 rc, _, err = run(wt, "--perspective", "code-review high {pr}", "--perspective", "code-review low {pr}",
                  "--instruct", "code-review=テストは見ない")
 new = calls()[n:]
-judge = [c for c in new if c["kind"] == "judge"]
 check(rc == 0 and sorted(c["args"][-1] for c in new if c["kind"] == "review") == ["/code-review high 7", "/code-review low 7"]
       and all("テストは見ない" in system_prompt(c) for c in new if c["kind"] == "review"),
       f"同じスキルを重ねた --perspective は、それぞれを起動し、そのスキルへの --instruct をどちらにも渡す {err[-300:] if rc else ''}")
-check(judge and "観点 code-review、code-review-2 のレビュー役に与えた追加の指示" in system_prompt(judge[0]),
-      "重ねたスキルへの指示は、判定役に、レビュー役の名前を全て添えて伝える")
 rc, _, err = run(wt, "--perspective", "security-review", "--perspective", "code-review high {pr}",
                  "--perspective", "code-review high {pr}")
 last = state()["attempts"][-1]
@@ -632,6 +609,17 @@ s["attempts"].append({"sha": "abcdef0", "at": "2026-01-01T00:00:00Z", "result": 
 write_state(s)
 rc, _, err = run(wt)
 check(rc == 0 and "warn: 直前の試行と" not in err, "古いロックを片付けた記録とは比べない")
+n = len(calls())
+rc, _, err = run(wt, "--model", " sonnet ")
+new = [c for c in calls()[n:] if c["kind"] in ("review", "preflight")]
+check(rc == 0 and new and all(c["args"][c["args"].index("--model") + 1] == "sonnet" for c in new)
+      and state()["attempts"][-1].get("model") == "sonnet" and "、モデル sonnet" in last_row(),
+      f"--model はレビュー役と事前確認に渡し、既定と違えば状態コメントの表に出す {err[-300:] if rc else ''}")
+check("直前の試行とモデルが違う" in err, "直前の試行とモデルが違えば警告する")
+rc, _, err = run(wt)
+check(rc == 0 and "、モデル" not in last_row() and "直前の試行とモデルが違う" in err, "既定のモデルなら表に出さない")
+rc, _, err = run(wt, "--model", " ")
+check(rc == 2 and "--model" in err, "空の --model は終了コード2")
 rc, _, _ = run(wt, "--instruct", "security-review=x", FAKE_REVIEW_security_review="fail")
 check(rc == 1 and state()["attempts"][-1].get("instructed") == ["security-review"], "失敗した試行にも、指示を渡した観点を残す")
 rc, _, err = run(wt, "--new-run", "--instruct", "security-review=x")
@@ -672,13 +660,12 @@ rc, out, err = run(wt, "--perspective", "code-review high {pr}", "--focus", "並
 wd = err.rstrip().splitlines()[-1]
 new = calls()[n:]
 prompts = [c["args"][-1] for c in new if c["kind"] == "review"]
-judge = [c for c in new if c["kind"] == "judge"]
 check(rc == 0 and len(prompts) == 3 and "/code-review high 7" in prompts
       and any(p.startswith("PR #7 の差分を") and p.endswith("観点: 並行性と タイミング") for p in prompts),
       f"--focus は、スキルを使わないレビュー役を観点ごとに足す(空白は詰める)。{prompts}")
-check(judge and "===== 観点: focus-1 =====" in judge[0]["stdin"] and "===== 観点: focus-2 =====" in judge[0]["stdin"]
+check("===== 観点: focus-1 =====" in out and "===== 観点: focus-2 =====" in out
       and os.path.isfile(os.path.join(wd, "review-focus-2.result.md")),
-      "--focus のレビュー役の出力も、判定役に区切って渡し、作業ディレクトリに残す")
+      "--focus のレビュー役の出力も、reviews.md に区切って入れ、作業ディレクトリに残す")
 check("focus 並行性と タイミング" in state()["attempts"][-1]["perspectives"] and "focus 並行性と タイミング" in last_row(),
       "--focus の観点も状態コメントに記録し、表に出す")
 before = json.dumps(state())
