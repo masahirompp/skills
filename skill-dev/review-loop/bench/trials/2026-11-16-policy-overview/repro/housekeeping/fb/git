@@ -1,0 +1,6 @@
+#!/bin/sh
+case "${FAULT:-}" in
+ git-gitpath) case "$*" in *--git-path*) exit 128;; esac;;
+ git-ignored) case "$*" in *--ignored*) exit 128;; esac;;
+esac
+exec /opt/homebrew/bin/git "$@"
