@@ -69,7 +69,8 @@ MARGIN = 5 * 60               # Bash の制限時間に対する余裕(事前確
 LOCK_MARGIN = 15 * 60         # ロックを持ったまま行う git・gh の呼び出し(各 COMMAND_TIMEOUT まで)の余裕
 BASH_TIMEOUT = 90 * 60        # SKILL.md で Bash ツールに指定する制限時間
 BASH_TIMEOUT_MAX = 120 * 60   # Bash ツールの最大制限時間
-STALE_LOCK_AFTER = REVIEW_TIMEOUT + LOCK_MARGIN
+STALE_LOCK_AFTER = REVIEW_TIMEOUT + LOCK_MARGIN  # ロックに stale_after として記録し、読む側はその値で古さを決める
+LEGACY_STALE_LOCK_AFTER = 75 * 60  # stale_after を記録する前の版(判定役を含む)がロックを持ちうる長さ
 WATCHDOG_GRACE = 60           # 子の見張り役が、親のタイムアウトに加えて待つ時間
 LOCK_SETTLE_SECONDS = 3       # nonce を書いてから読み直すまで
 POLL_SECONDS = 2
@@ -620,6 +621,7 @@ def valid_state(s):
         return (bool(RUN_ID_RE.match(s["run_id"]))
                 and isinstance(s["iter"], int) and isinstance(s["consecutive_failures"], int)
                 and isinstance(lock["running"], bool) and valid_sha(lock.get("sha"))
+                and isinstance(lock.get("stale_after", 0), int)
                 and all(isinstance(a["result"], str) and isinstance(a["at"], str)
                         and valid_sha(a.get("sha")) and isinstance(a.get("reason") or "", str)
                         and valid_tokens(a.get("tokens")) and isinstance(a.get("model") or "", str)
@@ -796,7 +798,9 @@ def acquire_lock(sc, head, new_run):
         log(f"warn: 状態コメント {sc.id} を読めないので、新しいシリーズとして上書きする")
     if state is not None and state["lock"]["running"]:
         age = (now() - parse_iso(state["lock"]["started_at"])).total_seconds()
-        if age < STALE_LOCK_AFTER:
+        # 古さは、ロックを書いた版が持ちうる長さで決める。版ごとに長さが違うので、自分の値で決めると、
+        # 長く持つ版の実行中のロックを奪ってしまう
+        if age < state["lock"].get("stale_after", LEGACY_STALE_LOCK_AFTER):
             raise Precondition(f"別の試行が実行中(開始 {state['lock']['started_at']})。二重起動の可能性がある")
         log(f"warn: 古いロックが残っていた(開始 {state['lock']['started_at']})。前回の試行を interrupted として記録する")
         state["attempts"].append({"sha": state["lock"].get("sha"), "at": state["lock"]["started_at"],
@@ -808,7 +812,8 @@ def acquire_lock(sc, head, new_run):
         state = new_state({"run_id": state["run_id"], "iterations": state["iter"],
                            "tokens": total_tokens(state["attempts"])})
     nonce = uuid.uuid4().hex
-    state["lock"] = {"running": True, "started_at": iso(now()), "sha": head, "nonce": nonce}
+    state["lock"] = {"running": True, "started_at": iso(now()), "sha": head, "nonce": nonce,
+                     "stale_after": STALE_LOCK_AFTER}
     try:
         sc.write(state)
         time.sleep(LOCK_SETTLE_SECONDS)
@@ -1047,6 +1052,8 @@ def warn_option_change(attempts, attempt):
         if key in ("perspectives", "model") and key not in prev:  # 記録する前の版で書かれた試行
             continue
         if key == "model":
+            if not isinstance(prev[key], str):  # 手で編集されて null になっているなど。比べられない
+                continue
             before, after = [prev[key]], [attempt[key]]
         else:
             before, after = sorted(prev.get(key) or []), sorted(attempt.get(key) or [])

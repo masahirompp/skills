@@ -291,6 +291,30 @@ s = state()
 check(rc == 0 and s["attempts"][n]["result"] == "interrupted" and s["attempts"][n]["sha"] == "abcdef0",
       "古いロックは interrupted として記録してから取得する")
 
+
+def lock_started(minutes_ago):
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - minutes_ago * 60))
+
+
+# ロックを持ちうる長さは版ごとに違う。長さを記録していない旧版のロックは、旧版の長さ(75分)で見る
+s = state()
+s["lock"] = {"running": True, "started_at": lock_started(60), "sha": "abcdef0", "nonce": "old"}
+write_state(s)
+n = len(s["attempts"])
+rc, _, err = run(wt)
+check(rc == 2 and "実行中" in err and state()["lock"]["nonce"] == "old" and len(state()["attempts"]) == n,
+      "長さを記録していない旧版のロックは、60分たっていても奪わない")
+s["lock"]["started_at"] = lock_started(80)
+write_state(s)
+rc, _, err = run(wt)
+check(rc == 0 and state()["attempts"][n]["reason"] == "stale_lock", "旧版のロックも75分を超えれば片付ける")
+s = state()
+s["lock"] = {"running": True, "started_at": lock_started(60), "sha": "abcdef0", "nonce": "n", "stale_after": 55 * 60}
+write_state(s)
+n = len(s["attempts"])
+rc, _, err = run(wt)
+check(rc == 0 and state()["attempts"][n]["reason"] == "stale_lock", "ロックに記録した長さを超えれば片付ける")
+
 # --- 後片付けと中断 ----------------------------------------------------------
 rc, _, err = run(wt, FAKE_REVIEW_security_review="bg")
 g = [c for c in calls() if c["kind"] == "grandchild"][-1]["grandchild"]
@@ -679,6 +703,16 @@ check("focus 並行性と タイミング" in state()["attempts"][-1]["perspecti
 before = json.dumps(state())
 rc, _, err = run(wt, "--focus", "  ")
 check(rc == 2 and "--focus" in err and json.dumps(state()) == before, "空の --focus は終了コード2で、状態に記録しない")
+
+# --- 手で編集された状態コメント ----------------------------------------------
+wt = setup()
+run(wt)
+s = state()
+s["attempts"][-1]["model"] = None
+write_state(s)
+rc, _, err = run(wt)
+check(rc == 0 and state()["attempts"][-1]["result"] == "completed" and "モデルが違う" not in err,
+      f"直前の試行の model が null でも、比べずに試行を続ける {err.strip().splitlines()[-2:]}")
 
 if os.environ.get("KEEP"):
     print("作業ディレクトリ:", root)
