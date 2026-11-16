@@ -316,6 +316,8 @@ def cmd_classify(args):
     root = os.path.realpath(tempfile.mkdtemp(prefix="rb-"))
     work = []
     for name in sorted(os.listdir(cdir)) if os.path.isdir(cdir) else []:
+        if not name.endswith(".json"):  # .DS_Store など
+            continue
         data = read_json(os.path.join(cdir, name))
         todo = [c for c in data["clusters"] if "class" not in c]
         for i in range(0, len(todo), BATCH):
@@ -537,7 +539,8 @@ def cmd_report(args):
     counts = collections.Counter()
     for (d, n), cid in cluster_of.items():
         meta = read_json(os.path.join(d, "meta.json"))
-        counts[(cid, meta["config"])] += 1
+        if meta:  # まとめたあとに消えた試行は数えない(cluster が警告する)
+            counts[(cid, meta["config"])] += 1
     for i, c in enumerate(cl):
         who = "、".join(f"{k} ×{counts[(c['id'], k)]}" for k in configs if counts[(c["id"], k)])
         label = CLASS_JA.get(c.get("class"), "未分類") + (f"・差分の{'外' if c.get('scope') == 'out' else '内'}"

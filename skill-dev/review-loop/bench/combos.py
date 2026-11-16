@@ -24,6 +24,8 @@ rows = score.trials(out)
 configs = [c for c in score.bench.CONFIGS if any(m["config"] == c for _, m in rows)]
 cases = sorted({m["case"] for _, m in rows})
 bugs = [(c, b["id"]) for c in cases for b in score.answers(c)["bugs"] if b.get("scope", "in") == "in"]
+if not bugs:
+    sys.exit("正解の不具合が0件なので、検出率を出せない(不具合のない題材だけの結果)")
 ran = {c: {m["trial"] for _, m in rows if m["config"] == c} for c in configs}  # 構成 -> 回した試行の番号
 
 det = collections.defaultdict(set)      # (構成, 試行) -> 検出した不具合

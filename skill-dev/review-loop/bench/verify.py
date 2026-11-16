@@ -95,6 +95,8 @@ def collect(outs, per_bug):
     for out in outs:
         klass = {}
         for case in os.listdir(os.path.join(out, "_clusters")) if os.path.isdir(os.path.join(out, "_clusters")) else []:
+            if not case.endswith(".json"):  # .DS_Store など
+                continue
             data = score.read_json(os.path.join(out, "_clusters", case))
             for c in data["clusters"]:
                 for m in c["members"]:
