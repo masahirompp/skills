@@ -3,6 +3,7 @@
 #   FAKE_DIR                 呼び出しの記録(calls.jsonl)を置く場所
 #   FAKE_SKILLS              init で返すスキル(カンマ区切り。既定は観点スキル全部)
 #   FAKE_PREFLIGHT_DELAY     init を返すまでの秒数
+#   FAKE_PREFLIGHT_ERROR     事前確認で、この本文の is_error の result を返す(モデル以外の理由の失敗)
 #   FAKE_BAD_MODELS          使えないモデルとして扱う --model の値(カンマ区切り。事前確認で is_error の result を返す)
 #   FAKE_REVIEW_<観点>       ok(既定) / deny / denylive(拒否のイベントを出して、終わらずに続ける) / fail / empty(結果が空) / dirty / hang / slow / bg(孫を残して終わる)
 #                            / denyconfig(設定のルールでの拒否のイベントを出したあと、正常に終わる)
@@ -90,6 +91,10 @@ if args[-1] == "ok":  # 事前確認(レビュー役も stream-json を使うの
         emit({"type": "assistant", "message": {"content": [{"type": "text", "text": msg}]}})
         emit({"type": "result", "subtype": "success", "is_error": True, "result": msg})
         print(f'[claude-code:unrecognized_model] {{"model":"{model}","query_source":"sdk"}}', file=sys.stderr)
+        sys.exit(1)
+    if os.environ.get("FAKE_PREFLIGHT_ERROR"):
+        # モデル以外の理由(過負荷など)で応答を得られなかった形。本物では観測していない
+        emit({"type": "result", "subtype": "success", "is_error": True, "result": os.environ["FAKE_PREFLIGHT_ERROR"]})
         sys.exit(1)
     emit({"type": "assistant", "message": {"content": [{"type": "text", "text": "ok"}]}})
     result("ok")

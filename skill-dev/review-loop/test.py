@@ -652,6 +652,9 @@ rc, _, err = run(wt, "--model", "opsu-nonexistent", FAKE_BAD_MODELS="opsu-nonexi
 check(rc == 2 and "事前確認" in err and "opsu-nonexistent" in err and json.dumps(state()) == before
       and not [c for c in calls()[n:] if c["kind"] == "review"],
       f"使えないモデルは事前確認で止め、試行を始めない {err.strip().splitlines()[-2:]}")
+rc, _, err = run(wt, "--new-run", FAKE_PREFLIGHT_ERROR="API Error: 529 Overloaded")
+check(rc == 0 and "warn: 事前確認で" in err and "529" in err and "名前の誤り" not in err,
+      f"モデル以外の理由の事前確認の失敗では、モデルの誤りとせず、警告して試行に進む {err.strip().splitlines()[-2:]}")
 rc, _, _ = run(wt, "--instruct", "security-review=x", FAKE_REVIEW_security_review="fail")
 check(rc == 1 and state()["attempts"][-1].get("instructed") == ["security-review"], "失敗した試行にも、指示を渡した観点を残す")
 rc, _, err = run(wt, "--new-run", "--instruct", "security-review=x")

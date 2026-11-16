@@ -57,6 +57,10 @@ PERSPECTIVES = [
 # 指摘の数と質がモデルで変わり、親のモデルに引きずられると反復や PR の間で比べられないので固定する
 MODEL = "opus"
 
+# 使えないモデルを渡したときに、claude が出すもの(本物で観測した形)。stderr のタグか、result の本文で見分ける
+UNKNOWN_MODEL_STDERR = "[claude-code:unrecognized_model]"
+UNKNOWN_MODEL_RESULT = "There's an issue with the selected model"
+
 # --focus で足す、スキルを使わないレビュー役のプロンプト
 FOCUS_PROMPT = "PR #{pr} の差分を、次の観点でレビューし、具体的な指摘を file:line 付きの箇条書きで出してください。\n\n観点: {focus}"
 
@@ -64,6 +68,7 @@ SAFETY_MAX_ITER = 10          # シリーズあたりの反復の上限
 MAX_CONSECUTIVE_FAILURES = 3  # 連続失敗の上限
 
 PREFLIGHT_TIMEOUT = 2 * 60    # 事前確認(最初の result を受け取るまで)
+PREFLIGHT_EXIT_WAIT = 5       # 事前確認が失敗の result を返したあと、子が終わって stderr を書き切るのを待つ
 REVIEW_TIMEOUT = 40 * 60      # レビュー役1つあたり
 MARGIN = 5 * 60               # Bash の制限時間に対する余裕(事前確認の後の gh の呼び出しなど)
 LOCK_MARGIN = 15 * 60         # ロックを持ったまま行う git・gh の呼び出し(各 COMMAND_TIMEOUT まで)の余裕
@@ -538,7 +543,9 @@ def preflight(wt, env, perspectives, model):
     """子を1回だけ起動し、init で cwd と観点スキルを、最初の result でモデルを使えるかを確かめる。
 
     init はモデルの名前を確かめない(誤った名前でも、渡した文字列のまま載る)。使えないモデルは、API を呼んだ
-    あとの result が is_error になって初めて分かるので、result まで待つ。短い応答を1回呼ぶ分の費用がかかる。"""
+    あとの result が is_error になって初めて分かるので、result まで待つ。短い応答を1回呼ぶ分の費用がかかる。
+    止めるのは、モデルを使えないと分かったときだけ。それ以外の理由で応答を得られなかったとき(過負荷や
+    レート制限のような一時的なものもありうる)は、警告だけ出して試行に進み、試行の失敗として記録させる。"""
     err_file = tempfile.TemporaryFile(mode="w+")
     try:
         p = subprocess.Popen(watched(["claude", "-p", "--model", model, "--output-format", "stream-json", "--verbose", "ok"],
@@ -576,6 +583,11 @@ def preflight(wt, env, perspectives, model):
                 init = msg
             elif msg.get("type") == "result" and not msg.get("parent_tool_use_id") and init is not None:
                 result = msg
+        if result is not None and result.get("is_error"):
+            try:  # 失敗の理由は stderr にも出るので、子が自分で終わるのを少し待って読み切る
+                p.wait(timeout=PREFLIGHT_EXIT_WAIT)
+            except subprocess.TimeoutExpired:
+                pass
     finally:
         kill_group(p)
 
@@ -596,10 +608,15 @@ def preflight(wt, env, perspectives, model):
         raise Precondition(f"事前確認: 観点スキルが見つからない: {', '.join(missing)}"
                            "(名前の誤りか未導入。プラグインのスキルは plugin:name の形式で書く)")
     if result is None:
-        raise Precondition(f"事前確認: claude が result を返さなかった(モデル {model})。stderr: {stderr_text()}")
-    if result.get("is_error") or result.get("subtype") != "success":
-        raise Precondition(f"事前確認: モデル {model} で応答を得られなかった(名前の誤りか、使えないモデル): "
-                           f"{str(result.get('result') or '')[:500]} stderr: {stderr_text()}")
+        log(f"warn: 事前確認で、モデル {model} の応答(result)を受け取れなかった。試行に進む。stderr: {stderr_text()}")
+        return
+    if not (result.get("is_error") or result.get("subtype") != "success"):
+        return
+    text, err = str(result.get("result") or "")[:500], stderr_text()
+    if UNKNOWN_MODEL_STDERR in err or UNKNOWN_MODEL_RESULT in text:
+        raise Precondition(f"事前確認: モデル {model} を使えない(名前の誤りか、使う権限が無い): {text} stderr: {err}")
+    log(f"warn: 事前確認で、モデル {model} の応答を得られなかった(モデル以外の理由。一時的なものもありうる)。"
+        f"試行に進む: {text} stderr: {err}")
 
 
 # --- PR の状態コメント -------------------------------------------------------
