@@ -714,6 +714,26 @@ rc, _, err = run(wt)
 check(rc == 0 and state()["attempts"][-1]["result"] == "completed" and "モデルが違う" not in err,
       f"直前の試行の model が null でも、比べずに試行を続ける {err.strip().splitlines()[-2:]}")
 
+# 手で編集された stale_after でも、実行中のロックを奪わず、永久にも止まらない
+wt = setup()
+run(wt)
+for value in (True, -1, 0, "x"):
+    s = state()
+    s["lock"] = {"running": True, "started_at": lock_started(1), "sha": "abcdef0", "nonce": "live", "stale_after": value}
+    write_state(s)
+    rc, _, err = run(wt)
+    check(rc == 2 and "実行中" in err and state()["lock"]["nonce"] == "live",
+          f"stale_after={value!r} でも、1分前のロックは奪わない")
+s["lock"]["stale_after"] = 3300.0
+write_state(s)
+rc, _, err = run(wt, "--new-run")
+check(rc == 2 and "実行中" in err and state()["lock"]["nonce"] == "live",
+      "小数の stale_after も読めて、--new-run でも実行中のロックを上書きしない")
+s["lock"].update(stale_after=10 ** 9, started_at=lock_started(600))
+write_state(s)
+rc, _, err = run(wt)
+check(rc == 0 and state()["attempts"][-2]["reason"] == "stale_lock", "大きな stale_after でも、10時間前のロックは片付ける")
+
 if os.environ.get("KEEP"):
     print("作業ディレクトリ:", root)
 else:

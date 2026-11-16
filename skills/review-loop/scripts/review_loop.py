@@ -621,7 +621,6 @@ def valid_state(s):
         return (bool(RUN_ID_RE.match(s["run_id"]))
                 and isinstance(s["iter"], int) and isinstance(s["consecutive_failures"], int)
                 and isinstance(lock["running"], bool) and valid_sha(lock.get("sha"))
-                and isinstance(lock.get("stale_after", 0), int)
                 and all(isinstance(a["result"], str) and isinstance(a["at"], str)
                         and valid_sha(a.get("sha")) and isinstance(a.get("reason") or "", str)
                         and valid_tokens(a.get("tokens")) and isinstance(a.get("model") or "", str)
@@ -785,6 +784,18 @@ def render(state):
     return "\n".join(lines)
 
 
+def lock_stale_after(lock):
+    """ロックを古いとみなすまでの秒数。ロックに記録した stale_after を使う。
+
+    状態コメントは手で編集されうるので、値は信じすぎない。数でなければ、記録の無い旧版のロックと同じ長さで
+    見る。数でも、STALE_LOCK_AFTER より短くはしない(実行中のロックを奪わない)し、Bash ツールの最大制限時間
+    より長くもしない(それより長く生きている試行は無いので、永久に止まらない)。"""
+    v = lock.get("stale_after", LEGACY_STALE_LOCK_AFTER)
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v:  # v != v は NaN
+        v = LEGACY_STALE_LOCK_AFTER
+    return min(max(v, STALE_LOCK_AFTER), BASH_TIMEOUT_MAX)
+
+
 def acquire_lock(sc, head, new_run):
     """ロックを取り、状態と nonce を返す。
 
@@ -800,7 +811,7 @@ def acquire_lock(sc, head, new_run):
         age = (now() - parse_iso(state["lock"]["started_at"])).total_seconds()
         # 古さは、ロックを書いた版が持ちうる長さで決める。版ごとに長さが違うので、自分の値で決めると、
         # 長く持つ版の実行中のロックを奪ってしまう
-        if age < state["lock"].get("stale_after", LEGACY_STALE_LOCK_AFTER):
+        if age < lock_stale_after(state["lock"]):
             raise Precondition(f"別の試行が実行中(開始 {state['lock']['started_at']})。二重起動の可能性がある")
         log(f"warn: 古いロックが残っていた(開始 {state['lock']['started_at']})。前回の試行を interrupted として記録する")
         state["attempts"].append({"sha": state["lock"].get("sha"), "at": state["lock"]["started_at"],
