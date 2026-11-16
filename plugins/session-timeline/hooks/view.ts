@@ -1,4 +1,31 @@
+import type { Usage } from '../types'
 import { kindOf } from './classify'
+
+/**
+ * Claude Haiku 5.5's API prices per 1M tokens (prompts up to 100K tokens), as of 2026-11:
+ * input $0.10, output $0.50; a cache write at 1.25x input, a cache read at 0.1x.
+ */
+const PRICE = { input: 0.1, output: 0.5, cacheWrite: 0.125, cacheRead: 0.01 }
+
+/** What the tokens would cost at API prices, in dollars. */
+export function costOf(u: Usage): number {
+  return (
+    (u.input * PRICE.input + u.output * PRICE.output + u.cacheWrite * PRICE.cacheWrite + u.cacheRead * PRICE.cacheRead) /
+    1_000_000
+  )
+}
+
+function kilo(n: number): string {
+  return n < 1000 ? String(n) : n < 100_000 ? `${(n / 1000).toFixed(1)}k` : `${Math.round(n / 1000)}k`
+}
+
+/** One faint line under the timeline: how many calls, how many tokens, roughly what they cost. */
+export function usageLine(u: Usage): string {
+  const input = u.input + u.cacheRead + u.cacheWrite
+  const cost = costOf(u)
+  const dollars = cost < 0.01 ? cost.toFixed(4) : cost < 1 ? cost.toFixed(3) : cost.toFixed(2)
+  return `Haiku ${u.calls}回 · 入力 ${kilo(input)} / 出力 ${kilo(u.output)} トークン · 約 $${dollars}(API 料金換算)`
+}
 
 const WIDE = /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/
 

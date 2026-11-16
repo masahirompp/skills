@@ -38,6 +38,9 @@ export type Recap = { goal: string; status: string; next: string; sides: string[
 /** The stretch not yet classified: since when, and how many steps. */
 export type Live = { since: number; steps: number; isClassifying: boolean } | null
 
+/** What the model calls behind the timeline have used, all told. */
+export type Usage = { calls: number; input: number; output: number; cacheRead: number; cacheWrite: number }
+
 /** How far filling in the history before the mod loaded has got. */
 export type Backfill = { done: number; total: number } | null
 
@@ -49,6 +52,7 @@ declare module 'claude-code' {
       expanded: Shaped<string[]>
       recap: Shaped<Recap>
       latestRow: string
+      usage: Shaped<Usage>
       live: Shaped<Live>
       backfill: Shaped<Backfill>
       isBackfilled: boolean

@@ -1,13 +1,13 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, ModelCompleteResult, Register } from 'claude-code'
 
-import type { Backfill, Group, Live, Phase, Recap } from '../types'
+import type { Backfill, Group, Live, Phase, Recap, Usage } from '../types'
 import { stretchesOf, timed, timesOf, transcriptPathOf } from './backfill'
 import type { Times } from './backfill'
 import { BOUNDARY_TOOLS, MAX_STEPS, SYSTEM, briefOf, fold, outcomeOf, parseVerdict, promptOf } from './classify'
 import type { Step, Stretch, Verdict } from './classify'
 import { RECAP_SYSTEM, REGROUP_SYSTEM, groupsByKind, mergeSameKind, parseGroups, parseRecap, recapPrompt, regroupPrompt } from './group'
-import { cells, clockOf, colorOf, durationOf, padCells } from './view'
+import { cells, clockOf, colorOf, durationOf, padCells, usageLine } from './view'
 
 const PANE = 'session-timeline'
 const TITLE = 'Session timeline'
@@ -17,6 +17,7 @@ const groups = atom({ plugin: 'session-timeline', key: 'groups' } as const, [] a
 const expanded = atom({ plugin: 'session-timeline', key: 'expanded' } as const, [] as string[], { shape: 'expanded-1' })
 const recap = atom({ plugin: 'session-timeline', key: 'recap' } as const, null as Recap, { shape: 'recap-1' })
 const savedLatest = atom({ plugin: 'session-timeline', key: 'latestRow' } as const, '')
+const usage = atom({ plugin: 'session-timeline', key: 'usage' } as const, { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } as Usage, { shape: 'usage-1' })
 const live = atom({ plugin: 'session-timeline', key: 'live' } as const, null as Live, { shape: 'live-1' })
 const backfill = atom({ plugin: 'session-timeline', key: 'backfill' } as const, null as Backfill, { shape: 'backfill-1' })
 const isBackfilled = atom({ plugin: 'session-timeline', key: 'isBackfilled' } as const, false)
@@ -46,6 +47,18 @@ let isRecapWanted = false
 
 function enqueue(job: () => Promise<void>): void {
   queue = queue.then(job).catch(() => undefined)
+}
+
+/** Adds a model call's tokens to the running total, answered or not: a failed call can still cost. */
+async function track($: EngineInterface, r: ModelCompleteResult): Promise<void> {
+  const u = r.usage
+  await update($, usage, t => ({
+    calls: t.calls + 1,
+    input: t.input + (u.input_tokens ?? 0),
+    output: t.output + (u.output_tokens ?? 0),
+    cacheRead: t.cacheRead + (u.cache_read_input_tokens ?? 0),
+    cacheWrite: t.cacheWrite + (u.cache_creation_input_tokens ?? 0),
+  }))
 }
 
 /** Regroups once the work queued before it is done; one waiting regroup covers any number of asks. */
@@ -78,6 +91,7 @@ async function regroup($: EngineInterface): Promise<void> {
     effort: 'low',
     timeoutMs: 45000,
   })
+  await track($, r)
   const parsed = r.isAnswered ? parseGroups(r.text, list) : undefined
   // A failed regroup keeps the last good one; new phases show as not yet grouped.
   if (!parsed && previous.length > 0) return
@@ -103,6 +117,7 @@ async function writeRecap($: EngineInterface): Promise<void> {
     effort: 'low',
     timeoutMs: 45000,
   })
+  await track($, r)
   const next = r.isAnswered ? parseRecap(r.text) : null
   if (next) await update($, recap, () => next)
 }
@@ -137,6 +152,7 @@ async function judge($: EngineInterface, done: Stretch, recent: readonly Phase[]
     effort: 'low',
     timeoutMs: 30000,
   })
+  await track($, r)
   return (
     (r.isAnswered ? parseVerdict(r.text) : undefined) ?? {
       continues: recent.length > 0,
@@ -459,6 +475,7 @@ export const register: Register = (on, options) => {
     })
 
     const summary = await read($, recap)
+    const tokens = await read($, usage)
     const recapRows = summary
       ? (
           [
@@ -494,6 +511,13 @@ export const register: Register = (on, options) => {
           <Box flexDirection="column" marginTop={1}>
             <Text bold>まとめ</Text>
             {recapRows}
+          </Box>
+        ) : null}
+        {tokens.calls > 0 ? (
+          <Box marginTop={1}>
+            <Text dimColor wrap="truncate-end">
+              {usageLine(tokens)}
+            </Text>
           </Box>
         ) : null}
       </Box>

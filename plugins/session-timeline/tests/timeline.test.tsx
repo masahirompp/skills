@@ -5,7 +5,7 @@ import type { Phase } from '../types'
 import { SYSTEM, fold, kindOf, parseVerdict } from '../hooks/classify'
 import { RECAP_SYSTEM, REGROUP_SYSTEM, groupsByKind, mergeSameKind, parseGroups, parseRecap, regroupPrompt } from '../hooks/group'
 import { stretchesOf, timed, timesOf, transcriptPathOf } from '../hooks/backfill'
-import { colorOf, durationOf, padCells } from '../hooks/view'
+import { colorOf, costOf, durationOf, padCells, usageLine } from '../hooks/view'
 
 const PANE = {
   plugin: 'session-timeline',
@@ -110,6 +110,8 @@ test('turns and a review become phases, each a row to press', async ($, on) => {
   expect(recaps[0]).toContain('timeline mod を作って')
   expect(await ui.find({ type: 'Text', text: /^実装とレビュー対応まで済んだ$/ })).toBeTruthy()
   expect(await ui.find({ type: 'Text', text: /脇道/ })).toBeFalsy()
+  // Three phase calls, a regroup and a recap, each counted.
+  expect(await ui.find({ type: 'Text', text: /^Haiku 5回 · .*API 料金換算/ })).toBeTruthy()
   await ui.unmount()
 
   // A range the regroup calls a digression is drawn faint and marked in the timeline itself.
@@ -322,4 +324,14 @@ test('with autoOpen off, the pane waits for /timeline', { options: { autoOpen: f
   expect(opened).toEqual([])
   await $.command.run({ command: 'timeline', args: '' } as never)
   expect(opened).toEqual(['session-timeline'])
+})
+
+test('tokens are priced at Haiku rates and shown in one line', () => {
+  const u = { calls: 12, input: 1_000_000, output: 100_000, cacheRead: 2_000_000, cacheWrite: 400_000 }
+  // 0.10 + 0.05 + 0.02 + 0.05
+  expect(Math.round(costOf(u) * 1e6)).toBe(220_000)
+  expect(usageLine(u)).toBe('Haiku 12回 · 入力 3400k / 出力 100k トークン · 約 $0.220(API 料金換算)')
+  expect(usageLine({ calls: 1, input: 900, output: 50, cacheRead: 0, cacheWrite: 0 })).toBe(
+    'Haiku 1回 · 入力 900 / 出力 50 トークン · 約 $0.0001(API 料金換算)',
+  )
 })
