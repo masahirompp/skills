@@ -24,8 +24,6 @@ sys.dont_write_bytecode = True  # スキルのディレクトリに __pycache__ 
 sys.path.insert(0, sys.argv[1])
 import review_loop as r
 r.LOCK_SETTLE_SECONDS = 0
-# 観点が複数あるときの挙動を確かめるため、既定(今は1つ)を3つに差し替えて流す
-r.PERSPECTIVES = ["code-review high {pr}", "security-review", "mattpocock-skills:code-review PR #{pr}"]
 r.POLL_SECONDS = 0.1
 for k, v in json.loads(os.environ.get("OVERRIDES", "{}")).items():
     setattr(r, k, v)
@@ -133,11 +131,6 @@ def last_row():
     return lines[lines.index(next(line for line in lines if line.startswith("| **合計**"))) - 1]
 
 
-def judged(out):
-    """標準出力のうち、判定役の判定の部分(検証の節より前)。"""
-    return out.split("\n\n## 検証")[0]
-
-
 def commit_and_push(wt, name):
     with open(os.path.join(wt, name), "w") as f:
         f.write(name)
@@ -151,15 +144,13 @@ wt = setup()
 rc, out, err = run(wt)
 check(rc == 0, f"成功すると終了コード0({rc}) {err[-300:] if rc else ''}")
 check(out.startswith("## 指摘") and "### F1: s" in out, "標準出力は判定のテキストだけ")
-check(out.rstrip().endswith("- 根拠: r") and out.count("## 検証") == 1 and "以下が検証の結果です" not in out,
-      "判定の後ろに、検証役の「## 検証」の節を足す(前置きは落とす)")
 s = state()
 check(s and s["iter"] == 1 and s["attempts"][0]["result"] == "completed", "状態コメントに反復1が記録される")
 check(s and s["lock"]["running"] is False, "ロックが解除される")
-check(s and s["attempts"][0]["tokens"] == {"input": 5 * 3500, "cache_read": 5 * 2000, "output": 5 * 300},
-      "トークン数はレビュー役3つと判定役と検証役の modelUsage の合計(入力はキャッシュを含む)")
+check(s and s["attempts"][0]["tokens"] == {"input": 4 * 3500, "cache_read": 4 * 2000, "output": 4 * 300},
+      "トークン数はレビュー役3つと判定役の modelUsage の合計(入力はキャッシュを含む)")
 body = comments()[0]["body"]
-check("| 1.8万(うちキャッシュ読み込み 1.0万) | 1500 |" in body, "入力と出力のトークン数を別の列に出す")
+check("| 1.4万(うちキャッシュ読み込み 8000) | 1200 |" in body, "入力と出力のトークン数を別の列に出す")
 workdir = err.rstrip().splitlines()[-1]
 check(os.path.isfile(os.path.join(workdir, "verdict.md")), "stderr の最後の行は作業ディレクトリ")
 with open(os.path.join(workdir, "verdict.md"), encoding="utf-8") as f:
@@ -253,10 +244,10 @@ check(rc == 0 and s["iter"] == 1 and s["previous_run"]["iterations"] == 2 and le
 rc, _, err = run(wt, FAKE_JUDGE="noheading")
 check(rc == 1 and "no_output" in err and "## 指摘" in err, "判定に決めた見出しがなければ失敗")
 rc, out, err = run(wt, FAKE_JUDGE="fenced")
-check(rc == 0 and out.startswith("## 指摘(1件)") and judged(out).rstrip().endswith("なし"),
+check(rc == 0 and out.startswith("## 指摘(1件)") and out.rstrip().endswith("なし"),
       "見出しに文字が足されていても通し、前置きとコードフェンスは落とす")
 rc, out, err = run(wt, FAKE_JUDGE="codeend")
-check(rc == 0 and judged(out).rstrip().endswith("x\n```"), "前置きでフェンスを開いていなければ、末尾のコードブロックは残す")
+check(rc == 0 and out.rstrip().endswith("x\n```"), "前置きでフェンスを開いていなければ、末尾のコードブロックは残す")
 rc, out, err = run(wt, FAKE_JUDGE="conflictfirst")
 check(rc == 0 and out.startswith("## 競合"), "競合の節が先にあっても落とさない")
 rc, _, err = run(wt, FAKE_JUDGE="empty")
@@ -519,7 +510,7 @@ for mode, final in (("multiempty", ""), ("multishort", "前のメッセージの
           and saved.index("バックグラウンド") < saved.index("本文") and (not final or final in saved)
           and "サブエージェントの結果" not in saved,
           f"result の行が複数あれば、最上位の空でないものを出た順につなぐ(最後の行が{'空' if not final else '短い文'})")
-    check(state()["attempts"][-1]["tokens"]["output"] == 5 * 300,
+    check(state()["attempts"][-1]["tokens"]["output"] == 4 * 300,
           "トークン数は最後の result の行だけで数える(modelUsage は累計なので足さない)")
 rc, out, err = run(wt, FAKE_REVIEW_code_review="multierror")
 stdin = [c for c in calls() if c["kind"] == "judge"][-1]["stdin"]
@@ -532,7 +523,7 @@ rc, out, err = run(wt, FAKE_JUDGE="multi")
 check(rc == 0 and out.startswith("## 指摘") and "突き合わせています" not in out,
       "判定役の result の行が複数でも、判定の行を採り、前置きは落とす")
 rc, out, err = run(wt, FAKE_JUDGE="multishort")
-check(rc == 0 and judged(out).rstrip().endswith("なし") and "変わりません" not in out, "判定役の後の行の短い文は判定に混ぜない")
+check(rc == 0 and out.rstrip().endswith("なし") and "変わりません" not in out, "判定役の後の行の短い文は判定に混ぜない")
 rc, out, err = run(wt, FAKE_JUDGE="partiallater")
 check(rc == 0 and "## 競合" in out and "補足" not in out, "後の行が見出しを一部だけ持っていても、完全な判定を採る")
 rc, out, err = run(wt, FAKE_JUDGE="redo")
@@ -650,81 +641,7 @@ for flags, label in ((("--instruct", "security-review"), "`=` のない --instru
     check(rc == 2, f"{label}: 終了コード2({rc}) {err.strip().splitlines()[-2:] if rc != 2 else ''}")
 check(json.dumps(state()) == before, "観点の指定の誤りは状態に記録しない")
 
-# --- 検証役 ------------------------------------------------------------------
-wt = setup()
-with open(os.path.join(wt, "dep.log"), "w") as f:  # ignored のファイル(依存のディレクトリの代わり)
-    f.write("dep")
-# ignored の中にある、元のリポジトリに届く経路(入れ子の worktree と、元やほかの worktree を絶対パスで指すシンボリックリンク)
-sh("git", "worktree", "add", "-q", "nested.log", "-b", "nested", cwd=wt)
-sh("git", "worktree", "add", "-q", os.path.join(root, "sibling"), "-b", "sibling", cwd=wt)
-os.symlink(os.path.join(wt, "a.txt"), os.path.join(wt, "link.log"))
-os.symlink(os.path.join(root, "sibling"), os.path.join(wt, "shared.log"))
-os.symlink("/usr/bin/env", os.path.join(wt, "tool.log"))
-sh("git", "config", "status.showUntrackedFiles", "no", cwd=wt)  # 利用者の設定に左右されない
-with open(os.path.join(root, "gitconfig"), "w") as f:
-    f.write("[clone]\n\tdefaultRemoteName = upstream\n")
-rc, out, err = run(wt, GIT_CONFIG_GLOBAL=os.path.join(root, "gitconfig"))
-wd = err.rstrip().splitlines()[-1]
-v = [c for c in calls() if c["kind"] == "verify"][-1]
-copy = os.path.join(wd, "verify-repo")
-check(rc == 0 and not os.path.lexists(os.path.join(copy, "nested.log"))
-      and not os.path.lexists(os.path.join(copy, "link.log")) and not os.path.lexists(os.path.join(copy, "shared.log"))
-      and err.count("元のリポジトリを指す") == 3,
-      "複製には、入れ子の worktree と、元のリポジトリの作業ツリーを絶対パスで指すシンボリックリンクを残さない")
-check(os.path.islink(os.path.join(copy, "tool.log")), "リポジトリと関係のない場所を指すシンボリックリンクは残す")
-sh("git", "config", "--unset", "status.showUntrackedFiles", cwd=wt)
-sh("git", "worktree", "remove", "--force", "nested.log", cwd=wt)
-sh("git", "worktree", "remove", "--force", os.path.join(root, "sibling"), cwd=wt)
-for name in ("link.log", "shared.log", "tool.log"):
-    os.remove(os.path.join(wt, name))
-check(all(subprocess.run(["git", "rev-parse", "-q", "--verify", ref], cwd=copy, capture_output=True).returncode == 0
-          for ref in ("main", "origin/main")),
-      "複製に、元のローカルのブランチとリモート追跡の参照を残す")
-check(rc == 0 and os.path.realpath(v["cwd"]) == os.path.realpath(copy) and v["cwd"] != wt,
-      "検証役は worktree ではなく、作業ディレクトリの下の複製で動かす")
-check("### F1: s" in v["stdin"] and "## 検証" in v["args"][-1] and "PR #7" in v["args"][-1],
-      "検証役には判定を stdin で、出力の形をプロンプトで渡す")
-check(v["remotes"] == [] and "a.txt" in v["files"] and "dep.log" in v["files"],
-      "複製はリモートを外し、追跡しているファイルと ignored のファイルを持つ")
-check("複製" in system_prompt(v) and "作業ツリーやブランチを変える操作をしないで" not in system_prompt(v),
-      "検証役には、複製の中で実行してよいと伝える")
-check(os.path.isfile(os.path.join(wd, "verify.result.md")) and os.path.isfile(os.path.join(wd, "verify-input.md")),
-      "検証役の入力と出力を作業ディレクトリに残す")
-rc, out, err = run(wt, FAKE_VERIFY="dirty")
-wd = err.rstrip().splitlines()[-1]
-check(rc == 0 and os.path.isfile(os.path.join(wd, "verify-repo", "scratch", "repro.sh"))
-      and not os.path.exists(os.path.join(wt, "scratch")),
-      "検証役が複製に書いても混入にならず、再現のファイルは複製に残る")
-rc, out, err = run(wt, FAKE_VERIFY="push")
-pushed = [c for c in calls() if c["kind"] == "verify-push"][-1]
-check(rc == 0 and pushed["rc"] != 0, "複製から origin へは push できない")
-for mode, word in (("fail", "異常終了した"), ("noheading", "決めた形の出力がない")):
-    rc, out, err = run(wt, FAKE_VERIFY=mode)
-    check(rc == 0 and out.startswith("## 指摘") and f"検証役が結果を返さなかった({word})" in out
-          and "warn: 検証役" in err and state()["attempts"][-1]["result"] == "completed",
-          f"検証役が失敗しても({mode})試行は成功にし、確かめられていないと判定に書く")
-rc, out, err = run(wt, overrides={"VERIFY_PROMPT": "{nope}"})
-check(rc == 0 and out.startswith("## 指摘") and "検証役が結果を返さなかった(スクリプトの中で失敗した)" in out
-      and "warn: 検証役の実行に失敗した: KeyError" in err and state()["attempts"][-1]["result"] == "completed",
-      "検証の段でスクリプトが例外を出しても、試行は成功にし、判定を返す")
-rc, out, err = run(wt, overrides={"VERIFY_TIMEOUT": 2, "WATCHDOG_GRACE": 1}, FAKE_VERIFY="hang")
-hung = [c for c in calls() if c["kind"] == "verify"][-1]
-check(rc == 0 and "分を超えた" in out and not alive(hung["pid"]), "検証役が時間切れなら止めて、試行は成功にする")
-rc, out, err = run(wt, FAKE_VERIFY="deny")
-check(rc == 0 and "### F1: 再現した" in out and "warn: verify: 権限の設定で拒否された" in err,
-      "検証役の権限の拒否では止めず、stderr に残す")
-n = len([c for c in calls() if c["kind"] == "verify"])
-rc, out, err = run(wt, "--no-verify")
-check(rc == 0 and "## 検証" not in out and len([c for c in calls() if c["kind"] == "verify"]) == n,
-      "--no-verify なら検証役を回さない")
-rc, out, err = run(wt, FAKE_JUDGE="noheading", FAKE_VERIFY="ok")
-check(rc == 1 and len([c for c in calls() if c["kind"] == "verify"]) == n, "判定が失敗したら検証役は回さない")
-os.remove(os.path.join(wt, "dep.log"))
-
-# --- 既定の観点と --focus -----------------------------------------------------
-default = subprocess.run([sys.executable, "-c", "import sys; sys.dont_write_bytecode = True; sys.path.insert(0, sys.argv[1]); "
-                          "import review_loop as r; print(r.PERSPECTIVES)", SCRIPTS], capture_output=True, text=True).stdout.strip()
-check(default == "['code-review high {pr}']", f"既定の観点は code-review high の1つ({default})")
+# --- --focus -----------------------------------------------------------------
 wt = setup()
 n = len(calls())
 rc, out, err = run(wt, "--perspective", "code-review high {pr}", "--focus", "並行性と  タイミング", "--focus", "文書とコードの食い違い")

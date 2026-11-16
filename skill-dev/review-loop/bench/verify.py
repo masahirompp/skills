@@ -10,7 +10,7 @@
 - 正解と一致した指摘が「起きなかった」になる率 = 検証の段が本物を落とす率
 - 正解に無い指摘について、分類役(score.py classify)の分類と突き合わせる
 
-検証役の結論は、このファイルの VERIFY_PROMPT が正(本番の review_loop.py の VERIFY_PROMPT とは別。違いは README)。
+検証役の結論は VERIFY_PROMPT が正。本番の review_loop.py に検証役は無い(README の「本番との違い」)。
 """
 import argparse
 import collections
