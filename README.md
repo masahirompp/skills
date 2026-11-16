@@ -1,6 +1,6 @@
 # skills
 
-masahirompp の Claude Code 用 [Agent Skills](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview) 集。[Claude Code plugin](https://code.claude.com/docs/en/plugins) として配布している（このリポジトリが plugin marketplace 兼、全スキルを同梱する単一プラグイン `masahirompp-skills`）。
+masahirompp の Claude Code 用 [Agent Skills](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview) 集。[Claude Code plugin](https://code.claude.com/docs/en/plugins) として配布している（このリポジトリが plugin marketplace 兼、全スキルを同梱するプラグイン `masahirompp-skills`）。スキルとは別に、Claude Code の画面を拡張する mod（関数フックのプラグイン）を `plugins/` に置いている。
 
 ## 構成
 
@@ -9,11 +9,13 @@ masahirompp の Claude Code 用 [Agent Skills](https://docs.claude.com/en/docs/a
 ```
 .claude-plugin/
 ├── plugin.json       # プラグイン定義（名前 "masahirompp-skills"、skills/ を参照）
-└── marketplace.json  # マーケットプレイス定義（名前 "masahirompp"、source "./" の単一プラグイン）
+└── marketplace.json  # マーケットプレイス定義（名前 "masahirompp"。masahirompp-skills と plugins/ の mod を載せる）
 skills/
 └── <skill-name>/
     ├── SKILL.md      # frontmatter (name, description) + 本文
     └── references/   # 必要時に読み込まれる詳細ドキュメント
+plugins/
+└── <mod-name>/       # mod 1 つが 1 プラグイン（独自の .claude-plugin/plugin.json と hooks/ を持つ）
 ```
 
 `skill-dev/` はスキル本体ではなく開発用資産（eval 定義・fixture 生成スクリプト・ベンチマーク履歴、スクリプトのテストと偽コマンド）。プラグインには含まれず、Claude Code には読み込ませない。
@@ -25,6 +27,12 @@ skills/
 | [cycle-rewrite](skills/cycle-rewrite/SKILL.md) | サイクル型リライト開発ワークフローの管理。PoC/プロトタイプをサイクル単位でゼロから書き直し、仕様と学び（PRODUCT.md・ADR・CONTEXT.md・プロジェクトスキル）を永続資産として積み上げる開発方式のオーケストレーション |
 | [housekeeping](skills/housekeeping/SKILL.md) | git リポジトリの後片付け。PR マージ済み・ローカルでマージ済みのブランチと worktree をまとめて削除する。作業中のものと監査用ブランチ（entire.io の `entire/*`）は残す |
 | [review-loop](skills/review-loop/SKILL.md) | 自分の PR のレビューループ。観点別のレビュースキルを並列に実行し、判定役が突き合わせて競合を裁定した結果をもとに修正する、を収束するまで回す |
+
+## mod 一覧
+
+| mod | 概要 |
+| --- | --- |
+| [session-timeline](plugins/session-timeline/README.md) | セッションで何をしているかを、LLM が名付けた工程（実装・レビュー・修正など）の縦のタイムラインとまとめで表示する。工程を押すと会話のその位置へ移動し、本題と関係ない脇道は薄く表示する |
 
 ## インストール
 
@@ -48,6 +56,13 @@ Claude Code のプラグインとしてインストールする:
 ```
 
 インストール後、各スキルは `masahirompp-skills:<skill-name>`（例: `/masahirompp-skills:cycle-rewrite`）として呼び出せる。更新は `/plugin marketplace update masahirompp`。
+
+mod は個別にインストールする（skills CLI では入らない）:
+
+```
+/plugin marketplace add masahirompp/skills
+/plugin install session-timeline@masahirompp
+```
 
 プラグインを使わず user scope に直接置く場合はシンボリックリンクを張る:
 
