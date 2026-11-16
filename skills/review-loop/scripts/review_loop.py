@@ -1040,16 +1040,21 @@ def copy_ignored(src, dst, timeout):
                           timeout=timeout)
 
 
-def cut_paths_to_original(path, wt):
-    """写したものから、元のリポジトリに届く経路を取り除き、取り除いたパスを返す。
+def cut_paths_to_original(copy, wt):
+    """複製から、元のリポジトリに届く経路を取り除き、取り除いたパスを返す。
 
-    取り除くのは、linked worktree の作業ツリー(`.git` が、元の管理情報を絶対パスで指すファイル)と、元の worktree の
-    中を絶対パスで指すシンボリックリンク。残すと、複製の中の操作が、元のブランチや HEAD、ファイルを書き換える。"""
-    original = os.path.realpath(wt) + os.sep
+    取り除くのは、linked worktree の作業ツリー(`.git` が、元の管理情報を絶対パスで指すファイル)と、元のリポジトリの
+    作業ツリー(メインのチェックアウトと、全ての worktree)の中を絶対パスで指すシンボリックリンク。残すと、複製の中の
+    操作が、元のブランチや HEAD、ファイルを書き換える。リポジトリと関係のない場所を指すリンクは残す(仮想環境の
+    インタプリタのように、無いと動かせないものがある)。"""
+    listed = run(["git", "worktree", "list", "--porcelain"], cwd=wt).stdout
+    originals = [os.path.realpath(line[len("worktree "):]) + os.sep
+                 for line in listed.splitlines() if line.startswith("worktree ")]
+    originals.append(os.path.realpath(wt) + os.sep)
 
     def into_original(link):
         target = os.readlink(link)
-        return os.path.isabs(target) and (os.path.realpath(target) + os.sep).startswith(original)
+        return os.path.isabs(target) and (os.path.realpath(target) + os.sep).startswith(tuple(originals))
 
     def absolute_gitdir(root):
         git = os.path.join(root, ".git")
@@ -1060,12 +1065,9 @@ def cut_paths_to_original(path, wt):
         return text.startswith("gitdir:") and os.path.isabs(text[len("gitdir:"):].strip())
 
     removed = []
-    if os.path.islink(path):
-        if into_original(path):
-            os.unlink(path)
-            removed.append(path)
-        return removed
-    for root, dirs, files in os.walk(path):
+    for root, dirs, files in os.walk(copy):
+        if root == copy and ".git" in dirs:
+            dirs.remove(".git")
         if absolute_gitdir(root):
             shutil.rmtree(root)
             removed.append(root)
@@ -1092,7 +1094,10 @@ def make_verify_copy(wt, workdir, head, deadline):
     run(["git", "remote", "set-head", "origin", "-d"], cwd=copy, check=False)
     run(["git", "fetch", "-q", ".", "refs/remotes/origin/*:refs/heads/*"], cwd=copy, check=False)
     run(["git", "remote", "remove", "origin"], cwd=copy)
-    ignored = run(["git", "status", "--porcelain", "--ignored", "-z"], cwd=wt).stdout
+    # 元のリモート追跡の参照(origin/main など)も、同じ名前で持たせる。リモートの設定は無いので、push 先にはならない
+    run(["git", "fetch", "-q", wt, "refs/remotes/*:refs/remotes/*"], cwd=copy, check=False)
+    # 利用者の status.showUntrackedFiles に左右されないよう、明示する(no だと ignored が出ず、all だとファイル単位になる)
+    ignored = run(["git", "status", "--porcelain", "--ignored", "--untracked-files=normal", "-z"], cwd=wt).stdout
     for entry in ignored.split("\0"):
         if not entry.startswith("!! "):
             continue
@@ -1109,15 +1114,11 @@ def make_verify_copy(wt, workdir, head, deadline):
             failed = str(e)
         if failed:  # 写せなくても検証は進める(検証役が、動かせなかったと書く)
             log(f"warn: 検証用の複製に {rel} を写せなかった: {failed}")
-        try:  # 途中まで写したものにも行う
-            for p in cut_paths_to_original(dst, wt):
-                log(f"warn: 検証用の複製から、元のリポジトリを指す {os.path.relpath(p, copy)} を取り除いた")
-        except OSError as e:  # 取り除けたか分からないので、写したものごと捨てる
-            log(f"warn: 検証用の複製の {rel} を確かめられず、写さなかった: {e}")
-            if os.path.isdir(dst) and not os.path.islink(dst):
-                shutil.rmtree(dst, ignore_errors=True)
-            elif os.path.lexists(dst):
-                os.unlink(dst)
+    try:  # チェックアウトしたものと、途中まで写したものを含め、複製の全体に行う
+        for p in cut_paths_to_original(copy, wt):
+            log(f"warn: 検証用の複製から、元のリポジトリを指す {os.path.relpath(p, copy)} を取り除いた")
+    except OSError as e:  # 取り除けたか分からない複製は、検証役に渡さない
+        raise Precondition(f"複製から、元のリポジトリを指す経路を取り除けなかった: {e}")
     return copy
 
 

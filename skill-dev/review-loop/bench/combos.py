@@ -68,15 +68,19 @@ def mean(xs):
 
 
 print(f"## 構成の組み合わせ(1反復あたり。不具合は {len(bugs)} 件、題材は {len(cases)} 件)\n")
-print("| 組み合わせ | 検出した不具合(試行ごと) | 平均 | 本物でない余計な指摘 / 題材 | 本物の余計な指摘 / 題材 | 時間 / 題材 | 費用 / 題材 |")
-print("|---|---|---|---|---|---|---|")
+if len({frozenset(v) for v in ran.values()}) > 1:
+    print("構成によって、回した試行が違う。組み合わせの行は、その全ての構成にある試行だけの値(列「試行」)なので、\n"
+          "試行の違う行どうしは、平均、時間、費用を比べられない。\n")
+print("| 組み合わせ | 試行 | 検出した不具合(試行ごと) | 平均 | 本物でない余計な指摘 / 題材 | 本物の余計な指摘 / 題材 | 時間 / 題材 | 費用 / 題材 |")
+print("|---|---|---|---|---|---|---|---|")
 table = []
 for r in range(1, len(configs) + 1):
     for combo in itertools.combinations(configs, r):
         f, n, re_, t, u = measure(combo)
         table.append((mean(f), combo, f, n, re_, t, u))
 for _, combo, f, n, re_, t, u in sorted(table, key=lambda x: (len(x[1]), -x[0])):
-    print(f"| {' + '.join(combo)} | {'、'.join(map(str, f))} | {mean(f):.1f}({100 * mean(f) / len(bugs):.0f}%) | "
+    print(f"| {' + '.join(combo)} | {'、'.join(map(str, sorted(set.intersection(*[ran[c] for c in combo]))))} "
+          f"| {'、'.join(map(str, f))} | {mean(f):.1f}({100 * mean(f) / len(bugs):.0f}%) | "
           f"{mean(n) / len(cases):.1f} | {mean(re_) / len(cases):.1f} | {mean(t):.1f}分 | ${mean(u):.2f} |")
 
 # 構成どうしの差(検出率の差)の 95% の幅。不具合を単位に引き直す

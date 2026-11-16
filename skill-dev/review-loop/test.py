@@ -654,20 +654,30 @@ check(json.dumps(state()) == before, "観点の指定の誤りは状態に記録
 wt = setup()
 with open(os.path.join(wt, "dep.log"), "w") as f:  # ignored のファイル(依存のディレクトリの代わり)
     f.write("dep")
-# ignored の中にある、元のリポジトリに届く経路(入れ子の worktree と、元を絶対パスで指すシンボリックリンク)
+# ignored の中にある、元のリポジトリに届く経路(入れ子の worktree と、元やほかの worktree を絶対パスで指すシンボリックリンク)
 sh("git", "worktree", "add", "-q", "nested.log", "-b", "nested", cwd=wt)
+sh("git", "worktree", "add", "-q", os.path.join(root, "sibling"), "-b", "sibling", cwd=wt)
 os.symlink(os.path.join(wt, "a.txt"), os.path.join(wt, "link.log"))
+os.symlink(os.path.join(root, "sibling"), os.path.join(wt, "shared.log"))
+os.symlink("/usr/bin/env", os.path.join(wt, "tool.log"))
+sh("git", "config", "status.showUntrackedFiles", "no", cwd=wt)  # 利用者の設定に左右されない
 rc, out, err = run(wt)
 wd = err.rstrip().splitlines()[-1]
 v = [c for c in calls() if c["kind"] == "verify"][-1]
 copy = os.path.join(wd, "verify-repo")
 check(rc == 0 and not os.path.lexists(os.path.join(copy, "nested.log"))
-      and not os.path.lexists(os.path.join(copy, "link.log")) and err.count("元のリポジトリを指す") == 2,
-      "複製には、入れ子の worktree と、元を絶対パスで指すシンボリックリンクを残さない")
+      and not os.path.lexists(os.path.join(copy, "link.log")) and not os.path.lexists(os.path.join(copy, "shared.log"))
+      and err.count("元のリポジトリを指す") == 3,
+      "複製には、入れ子の worktree と、元のリポジトリの作業ツリーを絶対パスで指すシンボリックリンクを残さない")
+check(os.path.islink(os.path.join(copy, "tool.log")), "リポジトリと関係のない場所を指すシンボリックリンクは残す")
+sh("git", "config", "--unset", "status.showUntrackedFiles", cwd=wt)
 sh("git", "worktree", "remove", "--force", "nested.log", cwd=wt)
-os.remove(os.path.join(wt, "link.log"))
-check(subprocess.run(["git", "rev-parse", "-q", "--verify", "main"], cwd=copy, capture_output=True).returncode == 0,
-      "複製に、ベースのブランチを残す")
+sh("git", "worktree", "remove", "--force", os.path.join(root, "sibling"), cwd=wt)
+for name in ("link.log", "shared.log", "tool.log"):
+    os.remove(os.path.join(wt, name))
+check(all(subprocess.run(["git", "rev-parse", "-q", "--verify", ref], cwd=copy, capture_output=True).returncode == 0
+          for ref in ("main", "origin/main")),
+      "複製に、元のローカルのブランチとリモート追跡の参照を残す")
 check(rc == 0 and os.path.realpath(v["cwd"]) == os.path.realpath(copy) and v["cwd"] != wt,
       "検証役は worktree ではなく、作業ディレクトリの下の複製で動かす")
 check("### F1: s" in v["stdin"] and "## 検証" in v["args"][-1] and "PR #7" in v["args"][-1],

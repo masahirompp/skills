@@ -105,8 +105,8 @@ def create(case_id, owner):
         for old, ititle, ibody in issues:
             url = gh("issue", "create", "-R", repo, "--title", ititle, "--body-file", "-", input=ibody).strip()
             mapping[old] = int(url.rsplit("/", 1)[1])
-        for old, new in mapping.items():
-            body = re.sub(rf"(?<![\w/])#{old}\b", f"#{new}", body)
+        # 1回で書き換える(番号ごとに順に書き換えると、新しい番号が、後で書き換える古い番号と重なったときに二重に変わる)
+        body = re.sub(r"(?<![\w/])#(\d+)\b", lambda m: f"#{mapping.get(int(m.group(1)), m.group(1))}", body)
         url = gh("pr", "create", "-R", repo, "--base", "main", "--head", case["branch"], "--title", title,
                  "--body-file", "-", input=body).strip()
         info = {"repo": repo, "pr": int(url.rsplit("/", 1)[1]), "issues": {str(k): v for k, v in mapping.items()},

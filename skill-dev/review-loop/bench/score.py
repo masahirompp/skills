@@ -278,6 +278,10 @@ def cmd_cluster(args):
         for case, items in sorted(extras_by_case(args.out).items()):
             path = os.path.join(args.out, "_clusters", case + ".json")
             if os.path.exists(path):
+                known = {(m["dir"], m["n"]) for m in read_json(path)["members"].values()}
+                if {(os.path.relpath(d, args.out), e["n"]) for _, d, _, e in items} != known:
+                    print(f"warn: {case}: まとめたあとに指摘が増減している。{path} を消して、cluster と classify をやり直す",
+                          file=sys.stderr, flush=True)
                 continue
             listing = [{"id": i, "location": e["location"], "summary": e["summary"]} for i, _, _, e in items]
             out, cost = ask(CLUSTER_PROMPT + "\n\n" + json.dumps(listing, ensure_ascii=False, indent=1),
