@@ -255,8 +255,10 @@ async function record($: EngineInterface, s: Stretch | undefined, step: Step): P
   if (stretch === s && (BOUNDARY_TOOLS.has(step.tool) || s.steps.length >= MAX_STEPS)) close($)
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
   loadedAt = Date.now()
+  // userConfig: open the pane as the session starts, so it is there without /timeline.
+  const isAutoOpen = options.autoOpen !== false
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -264,6 +266,8 @@ export const register: Register = on => {
       description: 'Show what this session is doing, phase by phase (reset: rebuild from the history)',
     })
     await update($, cwd, c => c || e.cwd)
+    // Unasked, the pane waits undrawn until the terminal is wide enough or the person opens it.
+    if (isAutoOpen) void openPane($).catch(() => undefined)
     return next(e)
   })
 

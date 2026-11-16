@@ -293,3 +293,33 @@ test('a recap without a goal is dropped', () => {
   expect(parseRecap('{"goal":"","status":"x"}')).toBeNull()
   expect(parseRecap('{"goal":"g","status":"s","next":"n","sides":["a",3]}')).toEqual({ goal: 'g', status: 's', next: 'n', sides: ['a'] })
 })
+
+test('the pane opens as the session starts, by default', async ($, on) => {
+  const opened: string[] = []
+  on('ui.open', (_, e) => {
+    opened.push(e.id)
+    return { value: { isPlaced: true } }
+  })
+  on('command.register', () => ({ value: { command: 'timeline' } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.messages', () => ({ value: [] }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await settle()
+  expect(opened).toEqual(['session-timeline'])
+})
+
+test('with autoOpen off, the pane waits for /timeline', { options: { autoOpen: false } }, async ($, on) => {
+  const opened: string[] = []
+  on('ui.open', (_, e) => {
+    opened.push(e.id)
+    return { value: { isPlaced: true } }
+  })
+  on('command.register', () => ({ value: { command: 'timeline' } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.messages', () => ({ value: [] }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await settle()
+  expect(opened).toEqual([])
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  expect(opened).toEqual(['session-timeline'])
+})
