@@ -658,6 +658,11 @@ for flags, label in ((("--instruct", "security-review"), "`=` のない --instru
                      (("--perspective", " "), "空の --perspective")):
     rc, _, err = run(wt, *flags)
     check(rc == 2, f"{label}: 終了コード2({rc}) {err.strip().splitlines()[-2:] if rc != 2 else ''}")
+rc, _, err = run(wt, "--instruct", "code-review-2=x")
+check(rc == 2 and "スキル名 code-review を書く" in err and "観点: code-review, security-review)" in err,
+      f"--instruct にレビュー役の名前を書いたら、書くべきスキル名を示す {err.strip().splitlines()[-1:]}")
+rc, _, err = run(wt, "--focus", "a", "--instruct", "focus-1=x")
+check(rc == 2 and "--focus のレビュー役" in err, "--instruct に --focus の役の名前を書いたら、対象にできないと示す")
 check(json.dumps(state()) == before, "観点の指定の誤りは状態に記録しない")
 
 # --- --focus -----------------------------------------------------------------

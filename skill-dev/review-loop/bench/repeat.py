@@ -64,6 +64,10 @@ def row(name, keys):
           f"{real / len(cases):.1f} | {minutes:.1f}分 | ${usd:.2f} |")
 
 
+partial = sorted(f"{c}#{n}" for (c, n), d in dur.items() if len(d) < len(cases))
+if partial:
+    sys.exit(f"題材の欠けた試行がある(欠けた分を検出0、時間0として数えてしまうので、集計しない): {', '.join(partial)}")
+
 print(f"## {target} を繰り返した場合と、ほかの構成を足した場合(不具合は {len(bugs)} 件、題材は {len(cases)} 件)\n")
 print("| 組み合わせ(構成#試行) | 検出した不具合 | 本物でない余計な指摘 / 題材 | 本物の余計な指摘 / 題材 | 時間 / 題材 | 費用 / 題材 |")
 print("|---|---|---|---|---|---|")
@@ -71,7 +75,8 @@ for n in trials:
     row(f"{target}#{n}", [(target, n)])
 for a, b in itertools.combinations(trials, 2):
     row(f"{target}#{a} + {target}#{b}", [(target, a), (target, b)])
-row(" + ".join(f"{target}#{n}" for n in trials), [(target, n) for n in trials])
+if len(trials) > 2:  # 2つなら、上の2つ組の行と同じになる
+    row(" + ".join(f"{target}#{n}" for n in trials), [(target, n) for n in trials])
 others = [c for c in configs if c != target and (c, 1) in cost]
 for r in (1, 2):
     for combo in itertools.combinations(others, r):

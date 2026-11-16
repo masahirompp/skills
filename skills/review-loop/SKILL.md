@@ -22,7 +22,7 @@ description: >-
 
 - 対象ブランチに PR がある。worktree の中で作業していて、`gh` が認証済み
 - 観点スキルが使う `gh` や `git` の読み取り系コマンドが、許可ルールで許可されている。`-p` では、許可されていないツールの呼び出しは確認なしで拒否され、その試行は失敗になる。ただし、複合コマンドがサブコマンドごとの判定から拒否されたものでは、試行を止めず、記録して続ける(後述の「失敗したとき」)
-- 観点スキルの既定の一覧は `scripts/review_loop.py` 冒頭の `PERSPECTIVES` にある。既定を変えるときはそこだけを書き換える。1つの PR だけで変えるときは、起動時のオプションで入れ替える(手順2)。既定は `code-review high` を2つと `security-review`。`code-review` は同じ差分でも回ごとに見つける不具合が変わるので、2回分を合わせる(根拠は `skill-dev/review-loop/bench/README.md`)。各要素は「スキル名と引数」で、引数の `{pr}` は PR 番号に置き換わる(例: `code-review high {pr}` → `/code-review high 12`)。引数の意味はスキルごとに違うので、PR 番号は自動では足さない。たとえば `mattpocock-skills:code-review` は引数を比較の起点として読むので、数字だけでなく `PR #{pr}` と書く(スキルが PR のベースを起点に決め、PR 本文を仕様として使う)。組み込みの `code-review` は、レベルを指定しないと利用者が最後に使ったレベルを引き継ぐので、固定してある
+- 観点スキルの既定の一覧は `scripts/review_loop.py` 冒頭の `PERSPECTIVES` にある。既定を変えるときはそこを書き換え、この文書の既定の説明(この項目と「既知の制約」)も合わせる。1つの PR だけで変えるときは、起動時のオプションで入れ替える(手順2)。既定は `code-review high` を2つと `security-review`。`code-review` は同じ差分でも回ごとに見つける不具合が変わるので、2回分を合わせる(根拠は、このスキルのリポジトリの `skill-dev/review-loop/bench/README.md`。プラグインには含まれない)。各要素は「スキル名と引数」で、引数の `{pr}` は PR 番号に置き換わる(例: `code-review high {pr}` → `/code-review high 12`)。引数の意味はスキルごとに違うので、PR 番号は自動では足さない。たとえば `mattpocock-skills:code-review` は引数を比較の起点として読むので、数字だけでなく `PR #{pr}` と書く(スキルが PR のベースを起点に決め、PR 本文を仕様として使う)。組み込みの `code-review` は、レベルを指定しないと利用者が最後に使ったレベルを引き継ぐので、固定してある
 - 制限時間・上限回数などの値は、同じファイル冒頭の定数(`REVIEW_TIMEOUT`、`BASH_TIMEOUT`、`STALE_LOCK_AFTER`、`SAFETY_MAX_ITER`、`MAX_CONSECUTIVE_FAILURES`)が正。この文書に書いた値は、その既定値
 
 ## 手順

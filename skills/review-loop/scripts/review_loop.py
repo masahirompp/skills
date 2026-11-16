@@ -35,6 +35,7 @@ import uuid
 # --- 設定 ------------------------------------------------------------------
 # 観点スキルの既定。先頭の `/` を除いたスキル名と、その引数を書く。プラグインのスキルは `plugin:name` の形式。
 # 起動時に --perspective を1つでも渡すと、この一覧の代わりにそれだけを使う。
+# 変えるときは、SKILL.md の「前提」と「既知の制約」にある既定の説明も合わせる。
 # 引数の {pr} は PR 番号に置き換わる。引数の意味はスキルごとに違うので、
 # PR 番号を自動では足さない。
 # - 組み込みの code-review は、レベルを指定しないと利用者が最後に使ったレベルを引き継ぎ、反復ごとに
@@ -454,7 +455,7 @@ def review_config(perspective_args, instruct_args, focuses=()):
     if not all(perspectives):
         raise Precondition("観点に空のものがある")
     names = [skill_name(s) for s in perspectives]
-    role_names(perspectives, focuses)  # 名前の重なりを、子を起動する前に断る
+    roles = role_names(perspectives, focuses)  # 名前の重なりを、子を起動する前に断る
     texts = {}
     for item in instruct_args or []:
         name, sep, text = item.partition("=")
@@ -463,7 +464,13 @@ def review_config(perspective_args, instruct_args, focuses=()):
             raise Precondition(f"--instruct は `スキル名=指示` の形で書く: {item}")
         # 名前の誤りで指示が黙って捨てられないよう、使う観点のどれかに当たるものだけを受け付ける
         if name not in names:
-            raise Precondition(f"--instruct のスキル {name} が観点にない(観点: {', '.join(names)})")
+            # stderr や判定に出るのはレビュー役の名前(code-review-2、focus-1)なので、それを書いたときは、書くべき名前を示す
+            hint = ""
+            if name in roles[:len(names)]:
+                hint = f"。{name} はレビュー役の名前。スキル名 {names[roles.index(name)]} を書く(重ねた全てに渡る)"
+            elif name in roles:
+                hint = f"。{name} は --focus のレビュー役で、--instruct の対象にできない(観点そのものに書く)"
+            raise Precondition(f"--instruct のスキル {name} が観点にない(観点: {', '.join(dict.fromkeys(names))}){hint}")
         texts.setdefault(name, []).append(text)
     return perspectives, {name: "\n".join(t) for name, t in texts.items()}
 
