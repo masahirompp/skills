@@ -444,6 +444,26 @@ for cfg in bad noperm; do
     pass "apply: git config を読めなければ止まる($cfg)" || fail "apply: git config を読めないのに止まらない($cfg, rc=$arc)"
 done
 chmod 600 "$root/noperm.gitconfig"
+# ~/.gitconfig があると、権限で読めない XDG の設定に git は警告を出さない(--global を明示しても)。それでも止まること
+mkdir -p "$root/xdg-home" "$root/xdg/git"
+printf '[user]\n\tname = test\n' >"$root/xdg-home/.gitconfig"
+printf '[housekeeping]\n\tprotect = nopr-ff\n' >"$root/xdg/git/config" && chmod 000 "$root/xdg/git/config"
+if unreadable "$root/xdg/git/config"; then
+  set +e
+  env -u GIT_CONFIG_GLOBAL HOME="$root/xdg-home" XDG_CONFIG_HOME="$root/xdg" "$scripts/scan.sh" >"$root/scan-xdg-cfg.out" 2>"$root/scan-xdg-cfg.err"
+  rc=$?
+  printf 'delete\tbranch\tnopr-ff\t%s\t\tx\n' "$(git rev-parse nopr-ff)" |
+    env -u GIT_CONFIG_GLOBAL HOME="$root/xdg-home" XDG_CONFIG_HOME="$root/xdg" "$scripts/apply.sh" >"$root/apply-xdg-cfg.out" 2>"$root/apply-xdg-cfg.err"
+  arc=$?
+  set -e
+  [ "$rc" != 0 ] && grep -q 'git config.*/xdg/git/config を読めない' "$root/scan-xdg-cfg.err" && ! grep -q '^delete' "$root/scan-xdg-cfg.out" &&
+    pass "scan: 読めない XDG の設定があれば止まる" || fail "scan: 読めない XDG の設定があるのに止まらない(rc=$rc)"
+  [ "$arc" != 0 ] && grep -q 'git config.*/xdg/git/config を読めない' "$root/apply-xdg-cfg.err" && git rev-parse -q --verify refs/heads/nopr-ff >/dev/null &&
+    pass "apply: 読めない XDG の設定があれば止まる" || fail "apply: 読めない XDG の設定があるのに止まらない(rc=$arc)"
+else
+  pass "scan/apply: (chmod 000 でも読めてしまう(root など)ので、読めない XDG の設定の確認は飛ばす)"
+fi
+chmod 600 "$root/xdg/git/config"
 
 # --- apply ----------------------------------------------------------------
 # プロセスを確かめられなければ、worktree の行は消さずに「確かめられない」で飛ばすこと。

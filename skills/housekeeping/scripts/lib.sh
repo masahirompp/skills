@@ -60,8 +60,12 @@ hk_default_branch() {
 #   - git config --get-all の終了コード 1 は「キーが無い」。それ以外は失敗
 #   - 権限で読めない ~/.gitconfig は、--get-all ではキーが無いときと同じ rc=1 になり、見分けられない。
 #     --global / --system を明示すると警告を stderr に出すので、それを失敗として扱う
+#   - ただし ~/.gitconfig があると、--global を明示しても、XDG の設定(${XDG_CONFIG_HOME:-$HOME/.config}/git/config)が
+#     読めないことには警告を出さない。そのため、git がグローバルの設定として読む候補のファイルごとに、
+#     読めるか、存在しないと確かめられるかを見る。システムの設定は、読めなければ git 自身が止まる(rc=128)
 hk_load_protect() {
-  local p cfg rc err scope IFS=$' \t\n'
+  local default=$1 p f xdg cfg rc err scope IFS=$' \t\n'
+  local -a global_files
   set -f # 呼び出し元の設定に頼らず、HOUSEKEEPING_PROTECT の glob を展開させない
   # stderr を値に混ぜない。エラー文は、失敗したときだけ取り直す
   cfg=$(git config --get-all housekeeping.protect 2>/dev/null)
@@ -79,8 +83,23 @@ hk_load_protect() {
       return 1
     fi
   done
+  # GIT_CONFIG_GLOBAL があれば git はそれだけを読み、~/.gitconfig と XDG の設定は読まない
+  if [ -n "${GIT_CONFIG_GLOBAL+x}" ]; then
+    global_files=("$GIT_CONFIG_GLOBAL")
+  else
+    xdg=${XDG_CONFIG_HOME:-${HOME:+$HOME/.config}}
+    global_files=(${HOME:+"$HOME/.gitconfig"} ${xdg:+"$xdg/git/config"})
+  fi
+  for f in "${global_files[@]}"; do
+    [ -n "$f" ] || continue
+    case $f in /*) ;; *) f=$PWD/$f ;; esac
+    if ! [ -r "$f" ] && ! hk_path_absent "$f"; then
+      echo "error: git config のファイル $f を読めない(保護パターンを確かめられない)" >&2
+      return 1
+    fi
+  done
   hk_protect=$(
-    printf '%s\n' 'entire/*' main master develop gh-pages "$1"
+    printf '%s\n' 'entire/*' main master develop gh-pages "$default"
     [ -z "$cfg" ] || printf '%s\n' "$cfg"
     for p in ${HOUSEKEEPING_PROTECT:-}; do printf '%s\n' "$p"; done
   )
