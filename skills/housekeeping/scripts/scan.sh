@@ -113,7 +113,7 @@ classify_branch() {
     return
   fi
   if ! stacked=$(open_pr_based_on "$name"); then
-    printf 'keep\t別のオープン PR のベースか確かめられない\n'
+    printf 'keep\t%s\n' "$(hk_unsure "別のオープン PR のベースか")"
     return
   elif [ -n "$stacked" ]; then
     printf 'keep\tオープン PR %s のベースブランチ\n' "$stacked"
@@ -130,7 +130,7 @@ classify_branch() {
       if ! merged_into_default "$sha"; then
         printf 'keep\tPR なし・%s に未取り込みのコミットがある\n' "$default"
       elif [ "$on_fp" -gt 1 ]; then
-        printf 'keep\t%s の first-parent 履歴を読めない\n' "$default"
+        printf 'keep\t%s\n' "$(hk_unsure "merge コミットで取り込まれたか" "$default の first-parent 履歴を読めない")"
       elif [ "$on_fp" = 1 ]; then
         printf 'delete\tPR なし・merge コミットで %s に取り込み済み\n' "$default"
       elif git reflog show --format=%gs "refs/heads/$name" -- 2>/dev/null |
@@ -140,7 +140,7 @@ classify_branch() {
         printf 'ask\tPR なし・%s に含まれるが、作成後にコミットした記録がない(未着手の可能性)\n' "$default"
       fi
       ;;
-    *) printf 'keep\tPR の状態を判定できなかった(%s)\n' "$st" ;;
+    *) printf 'keep\t%s\n' "$(hk_unsure "PR の状態を" "PR 一覧から読めない: $st")" ;;
   esac
 }
 
@@ -161,23 +161,28 @@ if cwds=$(hk_process_cwds); then cwds_err=''; else cwds_err=$cwds cwds=''; fi
 printf 'action\tkind\tname\tsha\tpath\treason\n'
 
 # --- worktree -------------------------------------------------------------
-: >"$tmp/wt-branches" # branch<TAB>action<TAB>path
+: >"$tmp/wt-branches" # branch<TAB>action<TAB>path<TAB>reason
+
+# record_wt <action> <reason>: worktree の行を出し、そのブランチの扱いを wt-branches に残す。
+# worktree を残したときは、ブランチの行もこの理由を引き継ぐ(読めずに残したなら「確かめられない」のまま伝わる)
+record_wt() {
+  emit "$1" worktree "$name" "$head" "$path" "$2"
+  [ -z "$branch" ] || printf '%s\t%s\t%s\t%s\n' "$branch" "$1" "$path" "$2" >>"$tmp/wt-branches"
+}
 
 handle_wt() {
   local name=${branch:-"(detached)"} rp action reason proc op st='' dirty ign
   if [ "$path" = "$main_wt" ]; then
-    [ -n "$branch" ] && printf '%s\tkeep\t%s\n' "$branch" "$path" >>"$tmp/wt-branches"
+    [ -z "$branch" ] || printf '%s\tkeep\t%s\t%s\n' "$branch" "$path" "メインの作業ツリー" >>"$tmp/wt-branches"
     return
   fi
   if [ -n "$prunable" ]; then
     # git は、ディレクトリが存在しても読めなければ prunable と出す。prune するとディレクトリ(未コミットの作業や
     # .env を含む)が管理から外れたまま残るので、存在しないと確かめられたときだけ prune にする
     if hk_path_absent "$path"; then
-      emit prune worktree "$name" "$head" "$path" "ディレクトリが存在しない(管理情報だけが残っている)"
-      [ -n "$branch" ] && printf '%s\tfree\t%s\n' "$branch" "$path" >>"$tmp/wt-branches"
+      record_wt prune "ディレクトリが存在しない(管理情報だけが残っている)"
     else
-      emit keep worktree "$name" "$head" "$path" "git は管理情報だけが残っている(prunable)と出すが、ディレクトリが無いと確かめられない(権限で読めない、など)"
-      [ -n "$branch" ] && printf '%s\tkeep\t%s\n' "$branch" "$path" >>"$tmp/wt-branches"
+      record_wt keep "$(hk_unsure "git は管理情報だけが残っている(prunable)と出すが、ディレクトリが無いと" "権限で読めない、など")"
     fi
     return
   fi
@@ -187,18 +192,18 @@ handle_wt() {
   elif [ "$cwd" = "$rp" ] || [ "${cwd#"$rp"/}" != "$cwd" ]; then
     action=keep reason="このスキャンを実行している作業ディレクトリ"
   elif [ -n "$cwds_err" ]; then
-    action=keep reason="プロセスが使用中か確かめられない($cwds_err)"
+    action=keep reason=$(hk_unsure "プロセスが使用中か" "$cwds_err")
   elif proc=$(hk_path_in_use "$rp" "$cwds") && [ -n "$proc" ]; then
     action=keep reason="プロセスがカレントディレクトリとして使用中($proc)"
   elif ! op=$(hk_in_progress_op "$path"); then
-    action=keep reason="進行中の操作(rebase など)があるか確かめられない"
+    action=keep reason=$(hk_unsure "進行中の操作(rebase など)があるか")
   elif [ -n "$op" ]; then
     action=keep reason="進行中の操作がある($op)"
   elif ! st=$(git -C "$path" status --porcelain --ignored 2>/dev/null); then
     # 未コミットの変更と、一緒に消える ignored ファイルの両方をこの出力で見る。読めなければどちらも確かめられない
-    action=keep reason="git status を読めない"
+    action=keep reason=$(hk_unsure "未コミットの変更と ignored ファイルを" "git status を読めない")
   elif ! dirty=$(printf '%s\n' "$st" | awk '$0 != "" && !/^!! /'); then
-    action=keep reason="git status の出力を読めない"
+    action=keep reason=$(hk_unsure "未コミットの変更を" "git status の出力を読めない")
   elif [ -n "$dirty" ]; then
     action=keep reason="未コミットの変更・未追跡ファイルが $(printf '%s\n' "$dirty" | wc -l | tr -d ' ') 件ある"
   elif [ -n "$branch" ]; then
@@ -211,13 +216,12 @@ handle_wt() {
   if [ "$action" != keep ]; then
     # st は上の git status --porcelain --ignored の出力(読めなかった worktree はここに来ない)
     if ! ign=$(printf '%s\n' "$st" | awk '/^!! / && n++ < 5 { print substr($0, 4) }' | paste -sd, -); then
-      action=keep reason="一緒に消える ignored ファイルを確かめられない"
+      action=keep reason=$(hk_unsure "一緒に消える ignored ファイルを")
     elif [ -n "$ign" ]; then
       reason="${reason}。一緒に消える ignored ファイル: $ign"
     fi
   fi
-  emit "$action" worktree "$name" "$head" "$path" "$reason"
-  [ -n "$branch" ] && printf '%s\t%s\t%s\n' "$branch" "$action" "$path" >>"$tmp/wt-branches"
+  record_wt "$action" "$reason"
 }
 
 path='' head='' branch='' locked='' prunable=''
@@ -237,11 +241,12 @@ done <"$tmp/wt"
 
 # --- ローカルブランチ -----------------------------------------------------
 while IFS=$'\t' read -r name sha track; do
-  wt=$(awk -F'\t' -v b="$name" '$1 == b { print $2 "\t" $3; exit }' "$tmp/wt-branches")
-  wt_action=${wt%%$'\t'*} wt_path=${wt#*$'\t'}
+  wt=$(awk -F'\t' -v b="$name" '$1 == b { print $2 "\t" $3 "\t" $4; exit }' "$tmp/wt-branches")
+  wt_action=${wt%%$'\t'*} wt=${wt#*$'\t'}
+  wt_path=${wt%%$'\t'*} wt_reason=${wt#*$'\t'}
   case $wt_action in
     keep)
-      emit keep branch "$name" "$sha" "" "worktree $wt_path で使用中"
+      emit keep branch "$name" "$sha" "" "worktree $wt_path を残すため: $wt_reason"
       continue
       ;;
     delete | ask)

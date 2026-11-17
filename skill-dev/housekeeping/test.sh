@@ -152,13 +152,13 @@ absent remote entire/checkpoints/v1
 expect delete worktree wt-merged ".env.local"
 expect delete branch wt-merged "worktree"
 expect keep worktree wt-dirty "未コミット"
-expect keep branch wt-dirty "使用中"
+expect keep branch wt-dirty "を残すため: 未コミット"
 expect keep worktree wt-untracked "未コミットの変更・未追跡ファイル"
 expect keep worktree wt-locked "ロック"
 expect prune worktree wt-gone
 expect delete branch wt-gone "PR #14"
 expect keep worktree wt-busy "カレントディレクトリとして使用中(pid"
-expect keep branch wt-busy "使用中"
+expect keep branch wt-busy "を残すため: プロセスがカレントディレクトリとして使用中"
 expect delete worktree "(detached)" "detached"
 
 # lsof でプロセスを見られないときは、どの worktree も残すこと(使用中かどうかを確かめられない)
@@ -169,7 +169,8 @@ got=$(awk -F'\t' '$2 == "worktree" && $3 == "wt-merged" { print $1 "\t" $6 }' "$
 [ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"確かめられない"* ]] &&
   pass "scan: lsof でプロセスを見られなければ worktree を残す" || fail "scan: lsof が使えないと wt-merged → ${got:-(出力なし)}"
 got=$(awk -F'\t' '$2 == "branch" && $3 == "wt-merged" { print $1 "\t" $6 }' "$root/scan-nolsof.tsv")
-[ "${got%%$'\t'*}" = keep ] && pass "scan: 残した worktree のブランチも残す" || fail "scan: 残した worktree のブランチ → ${got:-(出力なし)}"
+[ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"を残すため: プロセスが使用中か確かめられない"* ]] &&
+  pass "scan: 残した worktree のブランチも「確かめられない」で残す" || fail "scan: 残した worktree のブランチ → ${got:-(出力なし)}"
 grep -q $'^end\t' "$root/scan.tsv" && [ "$(tail -1 "$root/scan.tsv" | cut -f1)" = end ] &&
   pass "scan: 最後の行に end を出す" || fail "scan: 最後の行が end でない"
 
@@ -298,7 +299,28 @@ got=$(row scan-oldgit worktree wt-merged)
 wrap "$root/fail-ignored" git --ignored
 scan_with "$root/fail-ignored" scan-ignored
 got=$(row scan-ignored worktree wt-merged)
-[ "${got%%$'\t'*}" = keep ] && pass "scan: git status --ignored を読めなければ worktree を残す" || fail "scan: status --ignored が失敗すると wt-merged → ${got:-(出力なし)}"
+[ "${got%%$'\t'*}" = keep ] && [[ $got == *確かめられない* ]] &&
+  pass "scan: git status --ignored を読めなければ worktree を「確かめられない」で残す" || fail "scan: status --ignored が失敗すると wt-merged → ${got:-(出力なし)}"
+got=$(row scan-ignored branch wt-merged)
+[ "${got%%$'\t'*}" = keep ] && [[ $got == *"を残すため: "*確かめられない* ]] &&
+  pass "scan: そのブランチも「確かめられない」で残す" || fail "scan: status --ignored が失敗すると branch wt-merged → ${got:-(出力なし)}"
+
+# 未コミットの変更を数えられないとき、first-parent 履歴や PR の状態を読めないときも、理由に「確かめられない」を出すこと
+wrap "$root/fail-dirty" awk '!/^!! /'
+scan_with "$root/fail-dirty" scan-dirty
+got=$(row scan-dirty worktree wt-merged)
+[ "${got%%$'\t'*}" = keep ] && [[ $got == *確かめられない* ]] &&
+  pass "scan: git status の出力を読めなければ「確かめられない」で残す" || fail "scan: git status の出力を読めないと wt-merged → ${got:-(出力なし)}"
+wrap "$root/fail-fp" grep '/first-parent'
+scan_with "$root/fail-fp" scan-fp
+got=$(row scan-fp branch nopr-merge)
+[ "${got%%$'\t'*}" = keep ] && [[ $got == *確かめられない* ]] &&
+  pass "scan: first-parent 履歴を読めなければ「確かめられない」で残す" || fail "scan: first-parent 履歴を読めないと nopr-merge → ${got:-(出力なし)}"
+wrap "$root/fail-prinfo" jq 'max_by'
+scan_with "$root/fail-prinfo" scan-prinfo
+got=$(row scan-prinfo branch squashed)
+[ "${got%%$'\t'*}" = keep ] && [[ $got == *確かめられない* ]] &&
+  pass "scan: PR の状態を読めなければ「確かめられない」で残す" || fail "scan: PR の状態を読めないと squashed → ${got:-(出力なし)}"
 
 # worktree 一覧を読めなければ止まること(読めないと、worktree で使用中のブランチが delete 候補になる)
 wrap "$root/fail-wtlist" git 'worktree list'
@@ -382,7 +404,7 @@ fi
 parsed() { bash -c '. "$1/lib.sh"; hk_parse_action "$2"; printf "%s/%s" "$action" "$reason"' _ "$scripts" "$1"; }
 for input in '' 'delete' $'delete\tx\ndelete\ty' $'remove\tx'; do
   r=$(parsed "$input") || true
-  [ "${r%%/*}" = keep ] && pass "lib: 判定 $(printf %q "$input") は keep に倒す" || fail "lib: 判定 $(printf %q "$input") → $r"
+  [ "${r%%/*}" = keep ] && [[ $r == *確かめられない* ]] && pass "lib: 判定 $(printf %q "$input") は keep に倒す" || fail "lib: 判定 $(printf %q "$input") → $r"
 done
 r=$(parsed $'delete\tx') || true
 [ "$r" = delete/x ] && pass "lib: 判定を action と reason に分ける" || fail "lib: 判定の分け方が違う($r)"

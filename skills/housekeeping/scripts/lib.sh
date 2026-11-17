@@ -107,6 +107,11 @@ hk_is_protected() {
   return 1
 }
 
+# hk_unsure <何を確かめるか> [詳細]: 読めずに残すときの理由を "<何を確かめるか>確かめられない(<詳細>)" の形で返す。
+# 読めずに残す理由はすべてこれで作り、「確かめられない」の語で、状態が分かって残したもの(使用中・作業中)と
+# 見分けられるようにする(SKILL.md の手順2は、この語で分けて伝える)
+hk_unsure() { printf '%s確かめられない%s' "$1" "${2:+($2)}"; }
+
 # hk_parse_action <"action<TAB>reason">: 判定の結果をグローバル変数 action と reason に分ける。
 # 1行の「既知の action<TAB>理由」でなければ(空、タブが無い、複数行、未知の action)、残す側に倒す
 hk_parse_action() {
@@ -117,7 +122,7 @@ hk_parse_action() {
   esac
   case $action in
     delete | ask | keep) ;;
-    *) action=keep reason="判定できなかった" ;;
+    *) action=keep reason=$(hk_unsure "削除してよいか" "判定の結果を読めない") ;;
   esac
 }
 
