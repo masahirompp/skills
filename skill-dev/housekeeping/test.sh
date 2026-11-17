@@ -9,7 +9,7 @@ scripts=$(cd "$(dirname "$0")/../../skills/housekeeping/scripts" && pwd)
 root=$(cd "$(mktemp -d "${TMPDIR:-/tmp}/hk-test.XXXXXX")" && pwd -P)
 busy_pid='' traced_pid='' tracer_pid=''
 cleanup() {
-  if [ -n "$busy_pid" ]; then kill "$busy_pid" 2>/dev/null; wait "$busy_pid" 2>/dev/null; fi
+  if [ -n "$busy_pid" ]; then kill "$busy_pid" 2>/dev/null; wait "$busy_pid" 2>/dev/null || true; fi
   if [ -n "$traced_pid" ]; then kill -KILL "$traced_pid" 2>/dev/null; fi
   if [ -n "$tracer_pid" ]; then kill "$tracer_pid" 2>/dev/null; wait "$tracer_pid" 2>/dev/null; fi
   if [ -n "${KEEP:-}" ]; then echo "作業ディレクトリ: $root"; else rm -rf "$root"; fi
