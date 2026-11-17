@@ -156,6 +156,16 @@ hk_process_cwds() {
     /^c/ { cmd = substr($0, 2) }
     /^n/ { printf "%s\t%s\t%s\n", pid, cmd, substr($0, 2) }') # lsof の終了コードは見ない。欠けは下の突き合わせで見つける
   after=$(hk_ps_self) || { printf '%s\n' "ps でプロセス一覧を読めない"; return 1; }
+  # 突き合わせは、比べる側(ps の自分のユーザーのプロセス)が空だと素通りする。id -u を読めないと空になるので、
+  # 空なら確かめられない。lsof の側も、自分($$)が出ていなければ自分のプロセスを見られていない
+  if [ -z "$before" ] || [ -z "$after" ]; then
+    printf '%s\n' "ps で自分のユーザーのプロセスを選べない(id -u を読めない)"
+    return 1
+  fi
+  if ! printf '%s\n' "$out" | awk -F'\t' -v self="$$" '$1 == self { found = 1 } END { exit !found }'; then
+    printf '%s\n' "lsof の出力に自分(pid $$)が出ない"
+    return 1
+  fi
   # before と after の両方にあり、lsof に無い pid を数える。3つの一覧は "--" の行で区切って1本の入力にする
   missing=$({
     printf '%s\n' "$before" --

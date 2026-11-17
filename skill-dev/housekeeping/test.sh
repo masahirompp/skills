@@ -212,6 +212,22 @@ got=$(row scan-partial worktree wt-busy)
 [ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"確かめられない(lsof に出ないプロセス"* ]] &&
   pass "scan: lsof に一部のプロセスしか出なければ worktree を残す" || fail "scan: lsof が一部しか見せないと wt-busy → ${got:-(出力なし)}"
 
+# id -u を読めず(ps で比べる側が空になる)、lsof も何も出さないときも、使用中の worktree を消さないこと
+mkdir "$root/noid-lsof"
+printf '#!/bin/sh\nexit 1\n' >"$root/noid-lsof/id"
+printf '#!/bin/sh\nexit 0\n' >"$root/noid-lsof/lsof"
+chmod +x "$root/noid-lsof/id" "$root/noid-lsof/lsof"
+scan_with "$root/noid-lsof" scan-noid
+got=$(row scan-noid worktree wt-busy)
+[ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"確かめられない(ps で自分のユーザーのプロセスを選べない"* ]] &&
+  pass "scan: id -u を読めなければ worktree を残す" || fail "scan: id -u を読めず lsof が空だと wt-busy → ${got:-(出力なし)}"
+set +e
+printf 'delete\tworktree\twt-busy\t%s\t%s\tx\n' "$(git rev-parse wt-busy)" "$root/wt/wt-busy" |
+  PATH="$root/noid-lsof:$PATH" "$scripts/apply.sh" >"$root/apply-noid.out"
+set -e
+grep -q 'worktree .*wt-busy: プロセスが使用中か確かめられない(ps で自分のユーザーのプロセスを選べない' "$root/apply-noid.out" && [ -e "$root/wt/wt-busy" ] &&
+  pass "apply: id -u を読めなければ worktree を消さない" || fail "apply: id -u を読めず lsof が空なのに worktree を処理した: $(cat "$root/apply-noid.out")"
+
 # macOS でトレース中(ps の stat に X)の生きたプロセスも、lsof に出ているかの確認から外さないこと
 if [ "$(uname)" = Darwin ] && command -v python3 >/dev/null 2>&1; then
   # PT_TRACE_ME でトレース中にする。macOS では、トレースしている親が終わるまで SIGKILL を送っても消えないので、
