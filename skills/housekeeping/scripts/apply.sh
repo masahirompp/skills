@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # scan.sh の出力のうち、ユーザーが承認した行だけを標準入力で受け取って削除する。
 # 走査から削除までの間に作業が再開されていないか、各行を削除直前に確かめ直す。
-#   worktree: HEAD が走査時の sha のままか、使用中のプロセスが無いか。未コミットの変更・未追跡ファイル・ロックは
-#             git worktree remove(--force なし)自身が拒否する
+#   worktree: HEAD が走査時の sha のままか、使用中のプロセスが無いか。未コミットの変更・ロックは
+#             git worktree remove(--force なし)自身が拒否する。未追跡ファイルも普段は拒否するが、
+#             status.showUntrackedFiles=no の設定があると拒否せずに消す(未追跡ファイルの有無は scan.sh の判定に頼る)
 #   branch:   先端が走査時の sha のままか。チェックアウト中なら git branch -D が拒否する
 #   remote:   リモートの先端が走査時の sha のままのときだけ消す(--force-with-lease)
 # 保護対象(entire/* など)は入力に含まれていても消さない。

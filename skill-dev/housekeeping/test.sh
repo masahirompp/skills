@@ -175,6 +175,15 @@ got=$(awk -F'\t' '$2 == "branch" && $3 == "wt-merged" { print $1 "\t" $6 }' "$ro
 [ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"を残すため: プロセスが使用中か確かめられない"* ]] &&
   pass "scan: 残した worktree のブランチも「確かめられない」で残す" || fail "scan: 残した worktree のブランチ → ${got:-(出力なし)}"
 
+# status.showUntrackedFiles=no の設定があっても、未追跡ファイルのある worktree を残し、ignored ファイルの警告を出すこと
+GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=status.showUntrackedFiles GIT_CONFIG_VALUE_0=no "$scripts/scan.sh" >"$root/scan-nountracked.tsv" 2>/dev/null || true
+got=$(awk -F'\t' '$2 == "worktree" && $3 == "wt-untracked" { print $1 "\t" $6 }' "$root/scan-nountracked.tsv")
+[ "${got%%$'\t'*}" = keep ] && [[ $got == *未追跡ファイル* ]] &&
+  pass "scan: status.showUntrackedFiles=no でも未追跡ファイルのある worktree を残す" || fail "scan: status.showUntrackedFiles=no で wt-untracked → ${got:-(出力なし)}"
+got=$(awk -F'\t' '$2 == "worktree" && $3 == "wt-merged" { print $1 "\t" $6 }' "$root/scan-nountracked.tsv")
+[ "${got%%$'\t'*}" = delete ] && [[ $got == *".env.local"* ]] &&
+  pass "scan: status.showUntrackedFiles=no でも ignored ファイルの警告を出す" || fail "scan: status.showUntrackedFiles=no で wt-merged → ${got:-(出力なし)}"
+
 # --- 失敗の注入 -------------------------------------------------------------
 # 対象のコマンドだけを失敗させる包みを PATH の先頭に置く。
 # wrap <dir> <command> <引数に含まれたら失敗させる文字列>

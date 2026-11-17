@@ -216,8 +216,9 @@ handle_wt() {
     action=keep reason=$(hk_unsure "進行中の操作(rebase など)があるか")
   elif [ -n "$op" ]; then
     action=keep reason="進行中の操作がある($op)"
-  elif ! wt_status=$(git -C "$path" status --porcelain --ignored 2>/dev/null); then
-    # 未コミットの変更と、一緒に消える ignored ファイルの両方をこの出力で見る。読めなければどちらも確かめられない
+  elif ! wt_status=$(git -C "$path" status --porcelain --ignored --untracked-files=normal 2>/dev/null); then
+    # 未コミットの変更と、一緒に消える ignored ファイルの両方をこの出力で見る。読めなければどちらも確かめられない。
+    # --untracked-files を明示する。status.showUntrackedFiles=no の設定があると、未追跡ファイルも ignored ファイルも出ない
     action=keep reason=$(hk_unsure "未コミットの変更と ignored ファイルを" "git status を読めない")
   elif ! dirty=$(printf '%s\n' "$wt_status" | awk '$0 != "" && !/^!! /'); then
     action=keep reason=$(hk_unsure "未コミットの変更を" "git status の出力を読めない")
@@ -231,7 +232,7 @@ handle_wt() {
     action=keep reason="detached HEAD が $default 未取り込みのコミットを指している"
   fi
   if [ "$action" != keep ]; then
-    # wt_status は上の git status --porcelain --ignored の出力(読めなかった worktree はここに来ない)
+    # wt_status は上の git status --porcelain --ignored --untracked-files=normal の出力(読めなかった worktree はここに来ない)
     if ! ign=$(printf '%s\n' "$wt_status" | awk '/^!! / && n++ < 5 { print substr($0, 4) }' | paste -sd, -); then
       action=keep reason=$(hk_unsure "一緒に消える ignored ファイルを")
     elif [ -n "$ign" ]; then
