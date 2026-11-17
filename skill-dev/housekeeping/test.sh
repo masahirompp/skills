@@ -297,6 +297,24 @@ scan_with "$root/fail-wtlist" scan-wtlist
   ! grep -q $'^end\t' "$root/scan-wtlist.tsv" &&
   pass "scan: worktree 一覧を読めなければ止まり、end を出さない" || fail "scan: worktree 一覧を読めないのに止まらない(rc=$scan_rc)"
 
+# ブランチの一覧を読めなければ止まること(読めないと、ブランチの行が欠けたまま end が出る)
+for refs in refs/heads/ refs/remotes/origin/; do
+  wrap "$root/fail-refs-${refs//\//-}" git " $refs "
+  scan_with "$root/fail-refs-${refs//\//-}" scan-refs
+  [ "$scan_rc" != 0 ] && grep -q 'ブランチの一覧を読めない' "$root/scan-refs.err" && ! grep -q $'^end\t' "$root/scan-refs.tsv" &&
+    pass "scan: $refs の一覧を読めなければ止まり、end を出さない" || fail "scan: $refs の一覧を読めないのに止まらない(rc=$scan_rc)"
+done
+
+# 存在するのに読めない worktree(git は prunable と出す)を、prune にも、そのブランチを delete にもしないこと
+chmod 000 "$root/wt/wt-dirty"
+scan_with /nonexistent scan-noperm-wt
+chmod 755 "$root/wt/wt-dirty"
+got=$(row scan-noperm-wt worktree wt-dirty)
+[ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"ディレクトリが無いと確かめられない"* ]] &&
+  pass "scan: 読めない worktree は prune にしない" || fail "scan: 読めない worktree wt-dirty → ${got:-(出力なし)}"
+got=$(row scan-noperm-wt branch wt-dirty)
+[ "${got%%$'\t'*}" = keep ] && pass "scan: 読めない worktree のブランチを残す" || fail "scan: 読めない worktree のブランチ wt-dirty → ${got:-(出力なし)}"
+
 # git リポジトリを読めないときは、git の出力を添えて止まること
 set +e
 (cd "$root" && GIT_CEILING_DIRECTORIES="$root" "$scripts/scan.sh" >/dev/null 2>"$root/scan-norepo.err")
@@ -437,6 +455,17 @@ set -e
 grep -q "worktree .*wt-merged: プロセスがカレントディレクトリとして使用中(pid $merged_pid" "$root/apply-busy.out" && [ -e "$root/wt/wt-merged" ] &&
   pass "apply: 使用中の worktree は「使用中」として飛ばす" || fail "apply: 使用中の worktree の扱いが違う: $(cat "$root/apply-busy.out")"
 kill "$merged_pid" 2>/dev/null; wait "$merged_pid" 2>/dev/null || true
+
+# prune の行を受けても、存在するのに読めないだけの worktree(prunable に含まれる)があれば、git worktree prune をしないこと
+# (prune は承認した行に関係なく、prunable なものを全て消す)
+chmod 000 "$root/wt/wt-dirty"
+set +e
+awk -F'\t' '$1 == "prune"' "$root/scan.tsv" | "$scripts/apply.sh" >"$root/apply-noperm.out"
+set -e
+noperm_listed=$(git worktree list --porcelain | grep -c '/wt/wt-dirty$' || true)
+chmod 755 "$root/wt/wt-dirty"
+[ "$noperm_listed" = 1 ] && grep -q 'worktree prune: .*wt-dirty は prunable だが、ディレクトリが無いと確かめられない' "$root/apply-noperm.out" &&
+  pass "apply: 読めない worktree があれば prune しない" || fail "apply: 読めない worktree の管理情報を prune した: $(cat "$root/apply-noperm.out")"
 
 # 判定の関数が出さない行(branch の prune、未知の action)は消さずに知らせること
 set +e

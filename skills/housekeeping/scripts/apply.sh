@@ -43,8 +43,21 @@ done < <(printf '%s\n' "$input" | awk -F'\t' '
   { print }')
 
 # 1. ディレクトリが消えた worktree の管理情報
+# git worktree prune は、承認した行に関係なく prunable なものを全て消す。git は、存在するのに読めないだけの
+# ディレクトリも prunable と出すので、存在しないと確かめられない worktree が含まれていれば prune 自体を飛ばす
 if [ -n "$(rows worktree | awk -F'\t' '$1 == "prune"')" ]; then
-  git worktree prune && ok "worktree prune"
+  prune_ok=1
+  if ! wl=$(git worktree list --porcelain 2>/dev/null) ||
+    ! prunable=$(printf '%s\n' "$wl" | awk '/^worktree / { p = substr($0, 10) } /^prunable/ { print p }'); then
+    prune_ok=0
+    skip "worktree prune: git worktree list を読めず、prune で消える管理情報を確かめられない"
+  else
+    while IFS= read -r p; do
+      [ -z "$p" ] || hk_path_absent "$p" ||
+        { prune_ok=0; skip "worktree prune: $p は prunable だが、ディレクトリが無いと確かめられない(権限で読めない、など)"; }
+    done < <(printf '%s\n' "$prunable")
+  fi
+  [ "$prune_ok" = 1 ] && git worktree prune && ok "worktree prune"
 fi
 
 # 2. worktree(ブランチより先に消す。チェックアウト中のブランチは消せないため)

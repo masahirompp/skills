@@ -149,6 +149,12 @@ emit() { printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$@"; }
 # worktree 一覧。読めないまま進むと、worktree で使用中のブランチが delete 候補になる
 git worktree list --porcelain >"$tmp/wt" 2>"$tmp/wt.err" && main_wt=$(sed -n '1s/^worktree //p' "$tmp/wt") && [ -n "$main_wt" ] ||
   { echo "error: git worktree list を読めない: $(cat "$tmp/wt.err" 2>/dev/null)" >&2; exit 1; }
+# ローカルブランチとリモートブランチの一覧。読めないまま進むと、ブランチの行が欠けたまま end が出て、
+# 一部だけの結果が完全な結果として扱われる
+git for-each-ref --format='%(refname:lstrip=2)%09%(objectname)%09%(upstream:track)' refs/heads/ >"$tmp/heads" 2>"$tmp/heads.err" ||
+  { echo "error: ローカルブランチの一覧を読めない: $(cat "$tmp/heads.err" 2>/dev/null)" >&2; exit 1; }
+git for-each-ref --format='%(refname:lstrip=3)%09%(objectname)' "refs/remotes/$hk_remote/" >"$tmp/remotes" 2>"$tmp/remotes.err" ||
+  { echo "error: リモートブランチの一覧を読めない: $(cat "$tmp/remotes.err" 2>/dev/null)" >&2; exit 1; }
 # プロセスの一覧は、読めなくても止まらない(サンドボックスの中ではよく起きる)。worktree ごとに「確かめられない」として残す
 if cwds=$(hk_process_cwds); then cwds_err=''; else cwds_err=$cwds cwds=''; fi
 
@@ -164,8 +170,15 @@ handle_wt() {
     return
   fi
   if [ -n "$prunable" ]; then
-    emit prune worktree "$name" "$head" "$path" "ディレクトリが存在しない(管理情報だけが残っている)"
-    [ -n "$branch" ] && printf '%s\tfree\t%s\n' "$branch" "$path" >>"$tmp/wt-branches"
+    # git は、ディレクトリが存在しても読めなければ prunable と出す。prune するとディレクトリ(未コミットの作業や
+    # .env を含む)が管理から外れたまま残るので、存在しないと確かめられたときだけ prune にする
+    if hk_path_absent "$path"; then
+      emit prune worktree "$name" "$head" "$path" "ディレクトリが存在しない(管理情報だけが残っている)"
+      [ -n "$branch" ] && printf '%s\tfree\t%s\n' "$branch" "$path" >>"$tmp/wt-branches"
+    else
+      emit keep worktree "$name" "$head" "$path" "git は管理情報だけが残っている(prunable)と出すが、ディレクトリが無いと確かめられない(権限で読めない、など)"
+      [ -n "$branch" ] && printf '%s\tkeep\t%s\n' "$branch" "$path" >>"$tmp/wt-branches"
+    fi
     return
   fi
   rp=$(cd "$path" && pwd -P)
@@ -241,7 +254,7 @@ while IFS=$'\t' read -r name sha track; do
   esac
   case $track in *gone*) [ "$action" != keep ] && reason="${reason}(追跡先のリモートブランチは削除済み)" ;; esac
   emit "$action" branch "$name" "$sha" "" "$reason"
-done < <(git for-each-ref --format='%(refname:lstrip=2)%09%(objectname)%09%(upstream:track)' refs/heads/)
+done <"$tmp/heads"
 
 # --- リモートブランチ ------------------------------------------------------
 # PR がマージ済みで、リモートの先端が PR の head に含まれるものだけを候補にする(PR の無いリモートブランチには触れない)。
@@ -254,6 +267,6 @@ while IFS=$'\t' read -r name sha; do
   hk_parse_action "$(verify_pr_merged "$num" "$oid" "$sha")"
   [ "$action" = keep ] && continue
   emit "$action" remote "$name" "$sha" "" "$reason"
-done < <(git for-each-ref --format='%(refname:lstrip=3)%09%(objectname)' "refs/remotes/$hk_remote/")
+done <"$tmp/remotes"
 
 printf 'end\t\t\t\t\t走査を最後まで終えた\n'

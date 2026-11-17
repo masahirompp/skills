@@ -7,7 +7,7 @@
 #   housekeeping.protect  追加の保護パターン(複数指定可。git config --add で足す)
 #
 # 判定の入力の扱い:
-#   - 判定の入力(PR 一覧、既定ブランチの履歴、保護パターン、worktree 一覧)は、scan.sh・apply.sh の冒頭で一度だけ集める。
+#   - 判定の入力(PR 一覧、既定ブランチの履歴、保護パターン、worktree 一覧、ブランチの一覧)は、scan.sh・apply.sh の冒頭で一度だけ集める。
 #     どれかを読めなければ、何を読めなかったかを error に出して止まる
 #   - プロセスの一覧(hk_process_cwds)と worktree ごとの状態は、読めなければ止まらずに「確かめられない」として残す。
 #     「使用中」とは別の理由として出す
@@ -204,6 +204,24 @@ hk_path_in_use() {
   # 入力を最後まで読む(途中で exit するとパイプの書き手が SIGPIPE で失敗し、pipefail で結果ごと失われる)
   printf '%s\n' "$2" | awk -F'\t' -v p="$1" -v self="$$" '
     !found && $1 != self && ($3 == p || index($3, p "/") == 1) { print "pid " $1 " " $2; found = 1 }'
+}
+
+# hk_path_absent <path>: path が存在しないと確かめられたときだけ成功を返す。
+# [ -e ] は、親を辿れない(権限など)ときも偽になるので、それだけでは「存在しない」の根拠にならない。
+# 存在する最も近い祖先を探し、それが辿れるディレクトリのときだけ、その下に path は無いとみなす。
+hk_path_absent() {
+  local p=$1
+  if [ -e "$p" ] || [ -L "$p" ]; then return 1; fi
+  case $p in /*) ;; *) return 1 ;; esac
+  while [ "$p" != / ]; do
+    p=${p%/*}
+    [ -n "$p" ] || p=/
+    if [ -e "$p" ]; then
+      [ -d "$p" ] && [ -x "$p" ]
+      return
+    fi
+  done
+  return 1
 }
 
 # hk_in_progress_op <worktree-path>: 進行中の rebase / merge / cherry-pick / revert / bisect を返す。
