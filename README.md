@@ -26,7 +26,7 @@ plugins/
 | --- | --- |
 | [cycle-rewrite](skills/cycle-rewrite/SKILL.md) | サイクル型リライト開発ワークフローの管理。PoC/プロトタイプをサイクル単位でゼロから書き直し、仕様と学び（PRODUCT.md・ADR・CONTEXT.md・プロジェクトスキル）を永続資産として積み上げる開発方式のオーケストレーション |
 | [housekeeping](skills/housekeeping/SKILL.md) | git リポジトリの後片付け。PR マージ済み・ローカルでマージ済みのブランチと worktree をまとめて削除する。作業中のものと監査用ブランチ（entire.io の `entire/*`）は残す |
-| [review-loop](skills/review-loop/SKILL.md) | 自分の PR のレビューループ。観点別のレビュースキルを並列に実行し、判定役が突き合わせて競合を裁定した結果をもとに修正する、を収束するまで回す |
+| [review-loop](skills/review-loop/SKILL.md) | 自分の PR のレビューループ。観点別のレビュースキルを並列に実行し、指摘を俯瞰の役が突き合わせて規則ごとにまとめ、再現できたものを直す、を収束するまで回す |
 
 ## mod 一覧
 

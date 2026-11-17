@@ -15,19 +15,14 @@
 #                            / multiallempty(result の行を複数出し、どれも空)
 #                            / remote(PR のブランチにだけ別のコミットを push する)
 #                            / switch(作業ツリーはクリーンのまま、別のブランチに切り替える)
+#                            / badmodel(使えないモデルを渡したときの出力。本物で観測した形)
+#                            / badmodelstderr(result の行を出さず、使えないモデルの印を stderr にだけ出して異常終了する)
+#                            / quotemodel(途中の本文で badmodel の文言を引用したあと、別の理由で失敗する)
 #                            <観点> は英数字以外を _ にしたもの(例: FAKE_REVIEW_code_review)
-#   FAKE_JUDGE               ok(既定) / noheading(決めた見出しがない) / empty(結果が空)
-#                            / fenced(前置きとコードフェンスで包み、見出しに文字を足す)
-#                            / multi(result の行を複数出し、判定は途中の行に入れる。最後の行は空)
-#                            / multishort(判定のあとに、短い文だけの result の行を出す)
-#                            / partiallater(判定のあとに、見出しを一部だけ持つ訂正の result の行を出す)
-#                            / redo(前置きとフェンスで包んだ下書きの判定を出したあと、直した判定を出す)
-#                            / denyconfig(設定のルールでの拒否のイベントを出したあと、正常に終わる)
 # 出力は本物と同じく stream-json(1行1イベント)。事前確認以外は init の行から始める
 import json
 import os
 import re
-import stat
 import sys
 import time
 
@@ -94,36 +89,6 @@ if args[-1] == "ok":  # 事前確認(レビュー役も stream-json を使うの
 
 emit({"type": "system", "subtype": "init", "cwd": os.getcwd()})
 
-if stat.S_ISREG(os.fstat(0).st_mode):  # 判定役(標準入力にレビューの出力のファイルを受け取るのは判定役だけ)
-    stdin = sys.stdin.read()
-    record("judge", stdin=stdin)
-    mode = os.environ.get("FAKE_JUDGE", "ok")
-    verdict = "## 指摘\n\n### F1: s\n- 観点: code-review\n- 場所: a.txt:1\n- 影響: 中。r\n- 範囲: 差分の内\n- 再現: 対象外\n\n## 競合\n\nなし\n"
-    if mode == "multi":
-        multi("レビューを突き合わせています。", verdict, "")
-    elif mode == "multishort":
-        multi(verdict, "前のメッセージの内容から変わりません")
-    elif mode == "partiallater":
-        multi(verdict, "## 指摘\n\n補足: F1 の行番号は 2")
-    elif mode == "redo":
-        multi("以下が判定です。\n\n```markdown\n## 指摘\n\n### F1: 下書き\n\n## 競合\n\nなし\n```", verdict)
-    elif mode == "denyconfig":
-        deny("subcommandResults")
-        result(verdict, permission_denials=[{"tool_name": "Bash", "tool_use_id": "x", "tool_input": {}}])
-    elif mode == "noheading":
-        result("done")
-    elif mode == "empty":
-        result("")
-    elif mode == "fenced":
-        result("以下が判定です。\n\n```markdown\n## 指摘(1件)\n\n### F1: s\n\n```sh\nx\n```\n\n## 競合\n\nなし\n```\n")
-    elif mode == "codeend":  # 前置きはなく、最後の項目が正当なコードブロックで終わる
-        result("## 指摘\n\nなし\n\n## 競合\n\n### C1: t\n```sh\nx\n```\n")
-    elif mode == "conflictfirst":
-        result("## 競合\n\nなし\n\n## 指摘\n\nなし\n")
-    else:
-        result(verdict)
-    sys.exit(0)
-
 name = args[-1].split()[0].lstrip("/")
 record("review", name=name)
 mode = os.environ.get("FAKE_REVIEW_" + re.sub(r"[^A-Za-z0-9]", "_", name), "ok")
@@ -168,6 +133,10 @@ elif mode == "failslow":
 elif mode == "multierror":
     result("API Error: overloaded", is_error=True)
     result(f"{name}: 本文")
+elif mode == "quotemodel":  # 途中の本文で使えないモデルの文言を引用したあと、別の理由で失敗する
+    result("review_loop.py の UNKNOWN_MODEL_RESULT は \"There's an issue with the selected model\" を見分ける")
+    result("API Error: overloaded", is_error=True)
+    sys.exit(1)
 elif mode == "multiempty":
     multi("2つのレビューをバックグラウンドで実行しています", "Standards のレビューは終わりました",
           f"{name}: 本文", "")
@@ -188,6 +157,19 @@ elif mode == "switch":  # 作業ツリーはクリーンのまま、別のブラ
     import subprocess
     subprocess.run(["git", "switch", "-q", "-c", "other"], capture_output=True)
     result(f"{name}: 指摘なし")
+elif mode == "badmodel":
+    # 本物の claude で観測した、使えないモデルを渡したときの出力(assistant と、is_error の result。終了コード1)
+    model = args[args.index("--model") + 1] if "--model" in args else ""
+    msg = (f"There's an issue with the selected model ({model}). It may not exist or you may not have access "
+           "to it. Run --model to pick a different model.")
+    emit({"type": "assistant", "message": {"content": [{"type": "text", "text": msg}]}})
+    emit({"type": "result", "subtype": "success", "is_error": True, "result": msg})
+    print(f'[claude-code:unrecognized_model] {{"model":"{model}","query_source":"sdk"}}', file=sys.stderr)
+    sys.exit(1)
+elif mode == "badmodelstderr":
+    model = args[args.index("--model") + 1] if "--model" in args else ""
+    print(f'[claude-code:unrecognized_model] {{"model":"{model}","query_source":"sdk"}}', file=sys.stderr)
+    sys.exit(1)
 elif mode == "bg":
     import subprocess
     g = subprocess.Popen(["sleep", "120"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
