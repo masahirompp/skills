@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
-"""PR のレビューループを1反復だけ進める。
+"""PR のレビューループの1試行を、始める前と終えたあとに確かめて、PR の状態コメントに記録する。
 
-    review_loop.py iterate <worktree の絶対パス> [--new-run] [--model MODEL] [--perspective SPEC]... [--focus TEXT]... [--instruct SKILL=TEXT]...
+    review_loop.py begin <worktree の絶対パス> [--new-run]
+    review_loop.py end   <worktree の絶対パス> [--failed 理由]
 
-観点別のレビュースキルを `claude -p` で並列に実行し、レビュー役の出力を役の名前の区切りでつないだもの
-(作業ディレクトリの reviews.md と同じ)を標準出力に出す。指摘の突き合わせと採否は、呼び出し元(親)が行う。
-コードは修正しない。ループの状態は PR のコメント1つ(マーカー付き)に記録する。
+レビュー役は起動しない。観点スキルは、呼び出し元(親)が begin と end の間に呼ぶ。
+
+begin: 前提(作業ツリーがクリーン、ローカルの HEAD と PR の head が一致、自分のオープンな PR)と上限を確かめ、
+       ロックを取り、作業ディレクトリを作る。標準出力に `pr=`、`sha=`、`attempt=`、`workdir=` の行を出す。
+end:   begin のあとに作業ツリー、HEAD、ブランチ、PR の head が変わっていないかを確かめ、試行の結果を記録して
+       ロックを解く。レビュー役が失敗したときは、--failed に理由を付けて呼ぶ。
 
 終了コード:
-  0  成功。標準出力はレビュー役の出力をつないだものだけ
-  1  試行が失敗した。状態コメントに記録済み
-  2  試行を始めなかった(前提を満たさない、ロックを取れない、上限に達した、開始前に中断された)。試行は記録しない
-     (ただし、残っていた古いロックを interrupted として片付けた記録は残る)
-0 と 1 でも、状態コメントへの書き込みに失敗したときは記録されていない(stderr にそう出る)。
-どの場合も stderr の最後の行は作業ディレクトリのパス(作る前に終わったときは空行)。
+  0  begin: 試行を始めた。end: 試行を completed として記録した
+  1  試行の失敗を記録した(begin: 作業ディレクトリを作れない。end: 混入、PR の head の変化、--failed)
+  2  何も記録していない(前提を満たさない、ロックを取れない、上限に達した、gh や git の失敗)。
+     ただし begin は、残っていた古いロックを interrupted として片付けた記録を残すことがある。
+     end がこれで終わったときは、ロックが残っている。原因を除いて、もう一度 end を呼ぶ
 """
 import argparse
 import datetime as dt
 import json
 import os
-import queue
 import re
 import shutil
 import signal
@@ -27,94 +29,37 @@ import stat
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 import traceback
 import uuid
 
 # --- 設定 ------------------------------------------------------------------
-# 観点スキルの既定。先頭の `/` を除いたスキル名と、その引数を書く。プラグインのスキルは `plugin:name` の形式。
-# 起動時に --perspective を1つでも渡すと、この一覧の代わりにそれだけを使う。
-# 変えるときは、SKILL.md の「前提」と「既知の制約」にある既定の説明も合わせる。
-# 引数の {pr} は PR 番号に置き換わる。引数の意味はスキルごとに違うので、
-# PR 番号を自動では足さない。
-# - 組み込みの code-review は、レベルを指定しないと利用者が最後に使ったレベルを引き継ぎ、反復ごとに
-#   深さが変わりうるので固定する
-# - code-review を2つ並べるのは、同じ差分でも回ごとに見つける不具合が変わるため。2回分を合わせると、
-#   1回にほかのスキル(security-review、mattpocock-skills:code-review)を1つ足すより多く見つかった。
-#   余計な指摘は、security-review を足す場合より多く、mattpocock-skills:code-review を足す場合より少なかった
-#   (skill-dev/review-loop/bench/results/pr/repeat.md)
-# - mattpocock-skills:code-review を --perspective で使うときは、引数を比較の起点(commit や branch)として
-#   読むので、数字だけでなく「PR #{pr}」と書く。スキルが PR からベースを起点に決め(ローカルの main か
-#   origin/main になる)、PR 本文を仕様として使う
-PERSPECTIVES = [
-    "code-review high {pr}",
-    "code-review high {pr}",
-    "security-review",
-]
-
-# レビュー役のモデルの既定(claude の --model に渡す別名)。起動時に --model で変える。
-# 指摘の数と質がモデルで変わり、親のモデルに引きずられると反復や PR の間で比べられないので固定する
-MODEL = "opus"
-
-# 使えないモデルを渡したときに、claude が出すもの(本物で観測した形)。レビュー役が失敗したとき、stderr の
-# タグか result の本文にこれがあれば、失敗の詳細にモデルを使えない可能性を添える。止め方は変えない(ほかの
-# 失敗と同じく試行の失敗として記録する)。これ以外の形のモデルのエラー(未観測)は、添えずに通常の詳細だけになる
-UNKNOWN_MODEL_STDERR = "[claude-code:unrecognized_model]"
-UNKNOWN_MODEL_RESULT = "There's an issue with the selected model"
-
-# --focus で足す、スキルを使わないレビュー役のプロンプト
-FOCUS_PROMPT = "PR #{pr} の差分を、次の観点でレビューし、具体的な指摘を file:line 付きの箇条書きで出してください。\n\n観点: {focus}"
-
 SAFETY_MAX_ITER = 10          # シリーズあたりの反復の上限
 MAX_CONSECUTIVE_FAILURES = 3  # 連続失敗の上限
-
-PREFLIGHT_TIMEOUT = 2 * 60    # 事前確認(init を受け取るまで)
-REVIEW_TIMEOUT = 40 * 60      # レビュー役1つあたり
-MARGIN = 5 * 60               # Bash の制限時間に対する余裕(事前確認の後の gh の呼び出しなど)
-LOCK_MARGIN = 15 * 60         # ロックを持ったまま行う git・gh の呼び出し(各 COMMAND_TIMEOUT まで)の余裕
-BASH_TIMEOUT = 90 * 60        # SKILL.md で Bash ツールに指定する制限時間
-BASH_TIMEOUT_MAX = 120 * 60   # Bash ツールの最大制限時間
-STALE_LOCK_AFTER = REVIEW_TIMEOUT + LOCK_MARGIN  # ロックに stale_after として記録し、読む側はその値で古さを決める
-# stale_after を記録する前の版(判定役を含む)がロックを持ちうる長さ。main に入ったその版はどれも
-# REVIEW_TIMEOUT 40分 + JUDGE_TIMEOUT 20分 + LOCK_MARGIN 15分で、75分がその最大
+STALE_LOCK_AFTER = 55 * 60    # begin から end までの長さの上限。ロックに stale_after として記録し、読む側はその値で古さを決める
+# stale_after を記録していない旧版のロックを、古いとみなすまでの長さ(旧版がロックを持ちうる最長)
 LEGACY_STALE_LOCK_AFTER = 75 * 60
-WATCHDOG_GRACE = 60           # 子の見張り役が、親のタイムアウトに加えて待つ時間
+STALE_LOCK_MAX = 120 * 60     # 記録された stale_after を信じる上限(手で大きな値に書き換えられても、永久には止まらない)
 LOCK_SETTLE_SECONDS = 3       # nonce を書いてから読み直すまで
-POLL_SECONDS = 2
 COMMAND_TIMEOUT = 60          # git や gh の1回の呼び出し
 
 MARKER = "review-loop-state"
-MAX_RECORDED_SPEC = 200       # 状態コメントに記録する観点1つあたりの文字数
-TABLE_SPEC_CHARS = 80         # 状態コメントの表に出す観点1つあたりの文字数
-TABLE_REASON_CHARS = 100      # 状態コメントの表に出す失敗の理由の文字数
-MAX_BODY_CHARS = 60000        # 状態コメントの本文の上限(GitHub の上限 65536 に余裕を持たせる)
+TABLE_REASON_CHARS = 100      # 状態コメントに載せる失敗の理由の文字数
 RUN_ID_RE = re.compile(r"^\d{8}T\d{6}$")
 SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
-STRIP_ENV = ("CLAUDE_JOB_DIR", "CLAUDE_CODE_SESSION_KIND", "CLAUDE_CODE_SESSION_ID")
-GUARD_ENV = "REVIEW_LOOP_ACTIVE"
+TOKEN_KEYS = {"input", "cache_read", "output"}  # 旧版が試行ごとに記録していたトークン数の形(読むだけ)
 
-NO_MUTATION = "ファイルの編集、checkout、commit、stash、pushなど、作業ツリーやブランチを変える操作をしないでください。"
-# システムプロンプトはサブエージェントに引き継がれないので、任せるときは依頼文に含めるよう頼む
-DELEGATE_CONSTRAINT = "サブエージェントやサブタスクに作業を任せるときは、この制約をその依頼文にも含めてください。"
-REVIEW_CONSTRAINT = "他のレビューと並列に、同じworktreeで実行しています。" + NO_MUTATION + DELEGATE_CONSTRAINT
-# 利用者の指示を足すときに添える文。指示より作業ツリーの制約を優先させ、指示も依頼文に含めるよう頼む
-INSTRUCTION_RULES = "上の作業ツリーやブランチを変えない制約は、この指示よりも優先します。サブエージェントやサブタスクに作業を任せるときは、この指示もその依頼文に含めてください。"
 
 class Precondition(Exception):
-    """前提を満たさない。試行を始めず、終了コード2で終わる。"""
+    """前提を満たさない、または git や gh が失敗した。何も記録せず、終了コード2で終わる。"""
 
 
 class AttemptFailed(Exception):
-    """試行の失敗。kind と対象(どの子か)だけを状態コメントに載せ、detail は stderr と作業ディレクトリに残す。"""
+    """試行の失敗。kind を状態コメントに載せ、detail は stderr と作業ディレクトリに残す。"""
 
-    def __init__(self, kind, target="", detail=""):
-        super().__init__(f"{kind}: {target}".rstrip(": "))
-        self.kind, self.target, self.detail = kind, target, detail
-
-    @property
-    def reason(self):
-        return str(self)
+    def __init__(self, kind, detail=""):
+        super().__init__(kind)
+        self.kind, self.detail = kind, detail
 
 
 class Interrupted(Exception):
@@ -138,7 +83,7 @@ def parse_iso(s):
 
 
 def run(args, cwd, input=None, check=True):
-    """git や gh を実行する。後片付け中はシグナルを無視しているので、止まっても抜けられるよう制限時間を付ける。"""
+    """git や gh を実行する。止まっても抜けられるよう制限時間を付ける。"""
     try:
         r = subprocess.run(args, cwd=cwd, input=input, capture_output=True, text=True,
                            stdin=None if input is not None else subprocess.DEVNULL, timeout=COMMAND_TIMEOUT)
@@ -151,353 +96,19 @@ def run(args, cwd, input=None, check=True):
     return r
 
 
-def sandbox_hint(text):
-    keys = ("sandbox", "EPERM", "Operation not permitted", "ENOTFOUND", "ECONNREFUSED", "EAI_AGAIN", "eychain")
-    if any(k in text for k in keys):
-        return "(sandbox 内で実行している可能性がある。回避策は自動では取らないので、設定か実行場所を見直してほしい)"
-    return ""
-
-
 def ignore_signals():
     """後片付けの途中で2回目のシグナルに割り込まれないようにする。以後は終了するだけなので戻さない。"""
     for s in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(s, signal.SIG_IGN)
 
 
-# --- 子プロセス --------------------------------------------------------------
-def kill_group(p):
-    """子をプロセスグループごと止める。子自身が終わっていても、グループに残った孫(バックグラウンドの
-    シェルなど)を止めるために送る。子が終わってから時間が経つと、PID が再利用されて無関係な
-    グループに届きうるので、終わった子には終わりを検知した直後に一度だけ使う(Children.finish)。"""
-    for sig in (signal.SIGTERM, signal.SIGKILL):
-        try:
-            os.killpg(p.pid, sig)
-        except (ProcessLookupError, PermissionError):
-            return
-        if p.poll() is None:
-            try:
-                p.wait(5)
-            except subprocess.TimeoutExpired:
-                pass
-
-
-class Children:
-    """起動した子を覚えておき、どこで終わっても全て止められるようにする。
-
-    子は見張り役(このスクリプトの `_watch`)を介して新しいプロセスグループで起動する。スクリプトが
-    SIGKILL で止められて後始末できなくても、見張り役が親の消滅を検知してグループごと止める。"""
-
-    def __init__(self):
-        self.procs = []
-
-    def spawn(self, args, timeout, cwd, env, stdin, stdout, stderr):
-        try:
-            p = subprocess.Popen(watched(args, timeout), cwd=cwd, env=env, stdin=stdin, stdout=stdout,
-                                 stderr=stderr, start_new_session=True)
-        except OSError as e:
-            raise AttemptFailed("spawn_error", args[0], str(e))
-        self.procs.append(p)
-        return p
-
-    def finish(self, p):
-        """子が終わった(または止める)ときに、グループの残りを止めて以後は触らない。"""
-        kill_group(p)
-        self.procs.remove(p)
-
-    def kill_all(self):
-        for p in list(self.procs):
-            self.finish(p)
-
-
-def watched(args, timeout):
-    """args を見張り役(`_watch`)経由で起動するコマンドにする。"""
-    return [sys.executable, os.path.abspath(__file__), "_watch", str(os.getpid()),
-            str(timeout + WATCHDOG_GRACE), "--", *args]
-
-
-def watch_main(parent_pid, limit, cmd):
-    """見張り役。cmd を同じグループで起動し、親が消えるか制限時間を超えたらグループごと止める。"""
-    p = subprocess.Popen(cmd)
-    deadline = time.monotonic() + limit
-    while p.poll() is None:
-        if os.getppid() != parent_pid or time.monotonic() > deadline:
-            os.killpg(0, signal.SIGKILL)
-        time.sleep(1)
-    return p.returncode
-
-
-def child_env():
-    env = {k: v for k, v in os.environ.items() if k not in STRIP_ENV}
-    env[GUARD_ENV] = "1"
-    return env
-
-
-def summarize_denials(denials):
-    out = []
-    for d in denials:
-        inp = json.dumps(d.get("tool_input", {}), ensure_ascii=False)
-        out.append(f"{d.get('tool_name', '?')} {inp[:200]}")
-    return "; ".join(out)
-
-
-def new_tokens():
-    return {"input": 0, "cache_read": 0, "output": 0}
-
-
-def add_tokens(tokens, data):
-    """子の使ったトークン数を足す。usage はサブエージェントの分を含まず、空のこともあるので、モデルごとの
-    累計である modelUsage を使う。input はキャッシュの書き込みと読み込みを含む入力の全体。"""
-    for m in (data.get("modelUsage") or {}).values():
-        tokens["input"] += (m.get("inputTokens", 0) + m.get("cacheCreationInputTokens", 0)
-                            + m.get("cacheReadInputTokens", 0))
-        tokens["cache_read"] += m.get("cacheReadInputTokens", 0)
-        tokens["output"] += m.get("outputTokens", 0)
-
-
-def model_hint(stderr, error_result, model):
-    """子の失敗に、使えないモデルを渡したときの印(本物で観測した形)があれば、失敗の詳細に添える文を返す。
-
-    照らすのは stderr と、失敗で終わった最後の result の行の本文だけ。途中の result の行は、レビューの本文が
-    この文言を引用しうる(このスキル自身を変える PR など)ので見ない。"""
-    if UNKNOWN_MODEL_STDERR in stderr or UNKNOWN_MODEL_RESULT in error_result:
-        return f"\n(--model のモデル {model} を使えない可能性がある。名前の誤りか、使う権限が無い)"
-    return ""
-
-
-def check_result(label, rc, base, attempt, tail, model):
-    """子の結果を読んでトークン数を attempt に足し、成功の条件を全て満たすか確かめる。結果のテキストを返す。
-
-    結果のテキストは StreamTail.texts を出た順につないだもの。サブエージェントをバックグラウンドで動かす
-    スキルでは、子がタスクの通知を受けるたびにターンを回して result の行を出し、本文は途中の行に入る
-    (空の行が本文の前後に出ることも、最後の行が「変わりません」のような短い文になることもある)。途中経過の
-    文も混ざるが、読む側が読み飛ばせる量なので、欠けるよりよい。テキストは成否にかかわらず <base>.result.md
-    に書く(stream はツールの出力まで含んで大きいので、親はこちらを読む)。
-    トークン数と成否は最後の result の行で見る(どの行の modelUsage にもセッション全体の値が入るので、足すと
-    二重に数える)。"""
-    with open(base + ".stderr.txt", encoding="utf-8", errors="replace") as f:
-        full_err = f.read()
-    if not tail.results:
-        err = full_err.strip()[-1000:]
-        raise AttemptFailed("child_error", label, f"result の行がない(終了コード {rc})。stderr: {err}{sandbox_hint(err)}"
-                            f"{model_hint(full_err, '', model)}")
-    text = "\n\n".join(tail.texts())
-    with open(base + ".result.md", "w", encoding="utf-8") as f:
-        f.write(text + "\n")
-    data = tail.results[-1]
-    add_tokens(attempt["tokens"], data)
-    denials = tail.blocking_denials()
-    if denials:
-        raise AttemptFailed("permission_denied", label, summarize_denials(denials))
-    if rc != 0 or data.get("subtype") != "success" or data.get("is_error"):
-        errored = data.get("subtype") != "success" or data.get("is_error")
-        raise AttemptFailed("child_error", label, f"終了コード {rc}、subtype {data.get('subtype')}、"
-                            f"is_error {data.get('is_error')}: {str(data.get('result') or '')[:500]}"
-                            f"{model_hint(full_err, str(data.get('result') or '') if errored else '', model)}")
-    if not text:
-        raise AttemptFailed("no_output", label, "空でない result の行がない")
-    return text
-
-
-# 試行を止めない拒否の decision_reason_type。複合コマンド(`;`・`&&`・パイプなど)を、サブコマンドごとの
-# 判定から拒否したもの。読み取りの一部が利用者の deny ルール(`Read(**/.env*)` など)に当たるといった形で
-# 普通に起き、子は該当部分を外してやり直せる。この値からは、拒否されたのが一部か全部か、deny ルールに
-# 当たったのか許可ルールに無かったのかは見分けられない。auto mode の分類器の判定(classifier)や安全確認
-# (safetyCheck)のように、子が読めないまま進みうるものは含めない。項目名と値は、本物の claude(2.1.325)が
-# stream に出す permission_denied のイベントに合わせてある
-TOLERATED_DENIAL = "subcommandResults"
-
-
-def tolerated(event):
-    """試行を止めない拒否のイベントか。tool_use_id がないものは、result の permission_denials と
-    突き合わせられないので止める側に倒す。"""
-    return event.get("decision_reason_type") == TOLERATED_DENIAL and bool(event.get("tool_use_id"))
-
-
-class StreamTail:
-    """子が書き出している stream-json のファイルを、書き終わった行だけ少しずつ読み、成否の判断に使うものだけを覚える。
-
-    - results: 最上位(parent_tool_use_id がない)の result の行を、出た順に全て
-    - blocking: 試行を止める権限の拒否のイベント(system の permission_denied)。止めない拒否(tolerated)は
-      tolerated_ids に覚え、まだ記録していないものを take_tolerated で渡す。サブエージェントの中での拒否も、
-      同じイベントとして stream に出る
-    - 拒否されたツールの入力はイベントにないので、tool_use の行から引けるよう、ツール呼び出しの入力を
-      id ごとに覚えておく"""
-
-    def __init__(self, path):
-        self.path, self.offset = path, 0
-        self.results = []
-        self.blocking = []
-        self.tolerated_ids = set()
-        self.unrecorded = []
-        self.tool_inputs = {}
-
-    def poll(self):
-        try:
-            with open(self.path, "rb") as f:
-                f.seek(self.offset)
-                chunk = f.read()
-        except OSError:
-            return
-        end = chunk.rfind(b"\n") + 1  # 書きかけの最後の行は次に回す
-        self.offset += end
-        for line in chunk[:end].splitlines():
-            try:
-                msg = json.loads(line)
-            except ValueError:
-                continue
-            if not isinstance(msg, dict):
-                continue
-            kind = msg.get("type")
-            if kind == "result":
-                if not msg.get("parent_tool_use_id"):
-                    self.results.append(msg)
-            elif kind == "system" and msg.get("subtype") == "permission_denied":
-                if tolerated(msg):
-                    self.tolerated_ids.add(msg["tool_use_id"])
-                    self.unrecorded.append(msg)
-                else:
-                    self.blocking.append(msg)
-            elif kind == "assistant":
-                for block in (msg.get("message") or {}).get("content") or []:
-                    if isinstance(block, dict) and block.get("type") == "tool_use":
-                        self.tool_inputs[block.get("id")] = block.get("input", {})
-
-    def texts(self):
-        """最上位の result の行のうち、エラーでも空でもないもののテキストを、出た順に返す。"""
-        return [t for t in (str(r.get("result") or "").strip() for r in self.results if not r.get("is_error")) if t]
-
-    def denied_call(self, event):
-        """拒否のイベントを、summarize_denials に渡せる形(ツール名と入力)にする。"""
-        return {"tool_name": event.get("tool_name"), "tool_input": self.tool_inputs.get(event.get("tool_use_id"), {})}
-
-    def blocking_denials(self):
-        """試行を止める拒否を、summarize_denials に渡せる形で返す。イベントで出たものに加え、result の
-        permission_denials にしか載っていないもの(出どころが分からない)も含める。"""
-        out = [self.denied_call(e) for e in self.blocking]
-        seen = self.tolerated_ids | {e.get("tool_use_id") for e in self.blocking if e.get("tool_use_id")}
-        for r in self.results:  # permission_denials は result の行ごとに同じものが繰り返し載りうる
-            for d in r.get("permission_denials") or []:
-                # tool_use_id のないものは止める側に倒し、重複はツールと入力で見分ける
-                key = d.get("tool_use_id") or json.dumps([d.get("tool_name"), d.get("tool_input")], sort_keys=True)
-                if key not in seen:
-                    seen.add(key)
-                    out.append(d)
-        return out
-
-    def take_tolerated(self):
-        """まだ記録していない、止めない拒否の要約を返す。"""
-        items, self.unrecorded = self.unrecorded, []
-        return [summarize_denials([self.denied_call(e)]) + f"(decision_reason_type {e.get('decision_reason_type')})" for e in items]
-
-
-def record_tolerated(label, tail, workdir):
-    """止めない拒否を stderr と作業ディレクトリの denials.txt に残す(denials.txt は reviews.md にも添える)。
-
-    失敗の後始末(finally)からも呼ぶので、denials.txt に書けなくても例外にしない(元の失敗を上書きしない)。"""
-    for s in tail.take_tolerated():
-        log(f"warn: {label}: 設定のルールで拒否された(試行は続ける): {s}")
-        try:
-            with open(os.path.join(workdir, "denials.txt"), "a", encoding="utf-8") as f:
-                f.write(f"{label}: {s}\n")
-        except OSError as e:
-            log(f"warn: denials.txt に書けなかった: {e}")
-
-
-def watch_denials(label, tail, workdir):
-    """動いている子の拒否を見る。止めない拒否は記録し、止める拒否が出たらその時点で失敗にする。
-
-    止める拒否(sandbox の入れ子など)では、どのみち試行は失敗し、全ての試行で起きうる。子は拒否されても
-    作業を続けるので、終わるのを待たずに止めて残りの時間と費用を省く(終わった子の拒否は check_result が扱う)。"""
-    record_tolerated(label, tail, workdir)
-    if tail.blocking:
-        raise AttemptFailed("permission_denied", label, summarize_denials([tail.denied_call(tail.blocking[0])]))
-
-
-# --- 前提チェック ------------------------------------------------------------
-def skill_name(spec):
-    return spec.split()[0]
-
-
-def expand(spec, pr):
-    return spec.replace("{pr}", str(pr["number"]))
-
-
+# --- 前提 --------------------------------------------------------------------
 def check_tools():
     if sys.version_info < (3, 9):
         raise Precondition("Python 3.9 以降が必要")
-    missing = [c for c in ("git", "gh", "claude") if shutil.which(c) is None]
+    missing = [c for c in ("git", "gh") if shutil.which(c) is None]
     if missing:
         raise Precondition(f"コマンドが見つからない: {', '.join(missing)}")
-    if PREFLIGHT_TIMEOUT + REVIEW_TIMEOUT + MARGIN > BASH_TIMEOUT or BASH_TIMEOUT > BASH_TIMEOUT_MAX:
-        raise Precondition("タイムアウトの合計が Bash ツールの制限時間を超えている(スクリプト冒頭の設定を見直す)")
-
-
-def normalize_spec(spec):
-    """観点を、空白(改行やタブを含む)を1つの空白に詰め、先頭の `/` を除いた形にする。スキル名の照合は
-    空白で区切って行うので、そのまま起動すると `/ code-review` や `//code-review` のように照合とは違う
-    プロンプトになるため。"""
-    return re.sub(r"^[/\s]+", "", " ".join(spec.split()))
-
-
-def default_perspectives():
-    """既定の観点を、--perspective と同じ形に整えて返す。テストが PERSPECTIVES を差し替えるので、毎回作る。"""
-    return [normalize_spec(s) for s in PERSPECTIVES]
-
-
-def focus_config(focus_args):
-    """--focus の値を、空白を詰めた形にして返す。"""
-    focuses = [" ".join(t.split()) for t in focus_args or []]
-    if not all(focuses):
-        raise Precondition("--focus に空のものがある")
-    return focuses
-
-
-def role_names(perspectives, focuses=()):
-    """レビュー役の名前(出力ファイル、reviews.md の区切り、ログに使う)を、観点の分、--focus の分の順に
-    並べて返す。観点の役はスキル名をそのまま使い、同じスキルを重ねたときは2つ目から `-2`、`-3` を付ける。
-    --focus の役は `focus-1`、`focus-2`…。
-
-    出力ファイルと結果を名前で分けているので、名前を作るここで、役の全体(観点と --focus)で出力ファイルの
-    名前が重ならないことを確かめる(スキル `focus` を2つ重ねた `focus-2` と、2つ目の --focus など)。"""
-    seen, names = {}, []
-    for spec in perspectives:
-        name = skill_name(spec)
-        seen[name] = seen.get(name, 0) + 1
-        names.append(name if seen[name] == 1 else f"{name}-{seen[name]}")
-    names += [f"focus-{i}" for i in range(1, len(focuses) + 1)]
-    files = [safe_name(n) for n in names]
-    clashed = sorted({n for n, f in zip(names, files) if files.count(f) > 1})
-    if clashed:
-        raise Precondition(f"レビュー役の出力ファイルの名前が同じになる観点がある: {', '.join(clashed)}")
-    return names
-
-
-def review_config(perspective_args, instruct_args, focuses=()):
-    """(観点の一覧, {スキル名: 追加の指示}) を返す。perspective_args は --perspective の値(なければ既定の
-    PERSPECTIVES)、instruct_args は --instruct の値(`スキル名=指示`)。同じスキルへの指示が複数あれば、改行でつなぐ。
-    focuses は focus_config の結果で、レビュー役の名前の重なりを確かめるのに使う。"""
-    perspectives = [normalize_spec(s) for s in perspective_args] if perspective_args else default_perspectives()
-    if not all(perspectives):
-        raise Precondition("観点に空のものがある")
-    names = [skill_name(s) for s in perspectives]
-    roles = role_names(perspectives, focuses)  # 名前の重なりを、子を起動する前に断る
-    texts = {}
-    for item in instruct_args or []:
-        name, sep, text = item.partition("=")
-        name, text = normalize_spec(name), text.strip()
-        if not sep or not name or not text:
-            raise Precondition(f"--instruct は `スキル名=指示` の形で書く: {item}")
-        # 名前の誤りで指示が黙って捨てられないよう、使う観点のどれかに当たるものだけを受け付ける
-        if name not in names:
-            # stderr や reviews.md に出るのはレビュー役の名前(code-review-2、focus-1)なので、それを書いたときは、書くべき名前を示す
-            hint = ""
-            if name in roles[:len(names)]:
-                hint = f"。{name} はレビュー役の名前。スキル名 {names[roles.index(name)]} を書く(重ねた全てに渡る)"
-            elif name in roles:
-                hint = f"。{name} は --focus のレビュー役で、--instruct の対象にできない(観点そのものに書く)"
-            raise Precondition(f"--instruct のスキル {name} が観点にない(観点: {', '.join(dict.fromkeys(names))}){hint}")
-        texts.setdefault(name, []).append(text)
-    return perspectives, {name: "\n".join(t) for name, t in texts.items()}
 
 
 def normalize_worktree(path):
@@ -523,105 +134,29 @@ def pr_view(wt):
     return json.loads(r.stdout)
 
 
-def pr_view_retrying(wt, attempts=3, wait=5):
-    """pr_view を、一時的な失敗に備えて数回試す。長い試行の最後の確認で、レビューの出力を捨てないようにする。"""
-    for i in range(attempts):
-        try:
-            return pr_view(wt)
-        except Precondition:
-            if i == attempts - 1:
-                raise
-            time.sleep(wait)
-
-
 def local_refs(wt):
     """(HEAD の SHA, ブランチ名) を返す。detached HEAD ならブランチ名は空。"""
     return (run(["git", "rev-parse", "HEAD"], cwd=wt).stdout.strip(),
             run(["git", "symbolic-ref", "--quiet", "--short", "HEAD"], cwd=wt, check=False).stdout.strip())
 
 
-def snapshot(wt):
-    """HEAD の SHA、ブランチ名、PR の head などを返す。混入の検出に使う。"""
-    pr = pr_view(wt)
+def repo_slug(pr):
     m = re.match(r"https?://[^/]+/([^/]+)/([^/]+)/pull/", pr.get("url") or "")
-    head, branch = local_refs(wt)
-    return {
-        "number": pr["number"],
-        "repo": f"{m.group(1)}_{m.group(2)}" if m else "unknown",
-        "state": pr.get("state"),
-        "author": (pr.get("author") or {}).get("login"),
-        "head": head,
-        "branch": branch,
-        "pr_head": pr["headRefOid"],
-    }
+    return f"{m.group(1)}_{m.group(2)}" if m else "unknown"
 
 
-def preflight(wt, env, perspectives):
-    """子を1回だけ起動し、init を受け取ったらすぐ止める。API を呼ぶ前に止まるので費用はほぼかからない。"""
-    err_file = tempfile.TemporaryFile(mode="w+")
-    try:
-        p = subprocess.Popen(watched(["claude", "-p", "--output-format", "stream-json", "--verbose", "ok"],
-                                     PREFLIGHT_TIMEOUT),
-                             cwd=wt, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                             stderr=err_file, text=True, start_new_session=True)
-    except OSError as e:
-        raise Precondition(f"claude を起動できない: {e}")
-    lines = queue.Queue()
-
-    def reader():
-        for line in p.stdout:
-            lines.put(line)
-        lines.put(None)
-
-    threading.Thread(target=reader, daemon=True).start()
-    deadline = time.monotonic() + PREFLIGHT_TIMEOUT
-    init = None
-    try:
-        while init is None:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                break
-            try:
-                line = lines.get(timeout=remaining)
-            except queue.Empty:
-                break
-            if line is None:
-                break
-            try:
-                msg = json.loads(line)
-            except ValueError:
-                continue
-            if msg.get("type") == "system" and msg.get("subtype") == "init":
-                init = msg
-    finally:
-        kill_group(p)
-    if init is None:
-        err_file.seek(0)
-        err = err_file.read().strip()[-1000:]
-        raise Precondition("事前確認: claude が起動しなかった(init が来ない)。認証・sandbox・ネットワークを確かめてほしい。"
-                           f"stderr: {err}{sandbox_hint(err)}")
-    if os.path.realpath(init.get("cwd") or "") != wt:
-        raise Precondition(f"事前確認: 子の cwd が worktree と一致しない: {init.get('cwd')}")
-    # 組み込みのコマンド(security-review など)は skills には載らず、slash_commands にだけ載る
-    available = set(init.get("skills") or []) | set(init.get("slash_commands") or [])
-    missing = list(dict.fromkeys(skill_name(s) for s in perspectives if skill_name(s) not in available))
-    if missing:
-        raise Precondition(f"事前確認: 観点スキルが見つからない: {', '.join(missing)}"
-                           "(名前の誤りか未導入。プラグインのスキルは plugin:name の形式で書く)")
-
-
-# --- PR の状態コメント -------------------------------------------------------
+# --- 状態コメント ------------------------------------------------------------
 def valid_tokens(t):
-    return t is None or (isinstance(t, dict) and set(t) == set(new_tokens())
-                         and all(isinstance(v, int) for v in t.values()))
+    return t is None or (isinstance(t, dict) and set(t) == TOKEN_KEYS and all(isinstance(v, int) for v in t.values()))
 
 
 def valid_sha(v):
-    return v is None or bool(SHA_RE.match(v))
+    return v is None or (isinstance(v, str) and bool(SHA_RE.match(v)))
 
 
 def valid_state(s):
-    """状態コメントの JSON が、このスクリプトの書いた形をしているか(render と acquire_lock が読むものを全て)。"""
+    """状態コメントの JSON が、このスクリプト(旧版を含む)の書いた形をしているか。render、begin、end が読むものを全て見る。
+    旧版が試行に記録していた観点、指示を渡した観点、モデル、トークン数は、あっても読まない(形だけ確かめる)。"""
     try:
         lock, prev = s["lock"], s.get("previous_run")
         if lock["running"]:
@@ -629,9 +164,11 @@ def valid_state(s):
         return (bool(RUN_ID_RE.match(s["run_id"]))
                 and isinstance(s["iter"], int) and isinstance(s["consecutive_failures"], int)
                 and isinstance(lock["running"], bool) and valid_sha(lock.get("sha"))
+                and isinstance(lock.get("branch") or "", str)
                 and all(isinstance(a["result"], str) and isinstance(a["at"], str)
                         and valid_sha(a.get("sha")) and isinstance(a.get("reason") or "", str)
                         and valid_tokens(a.get("tokens")) and isinstance(a.get("model") or "", str)
+                        and isinstance(a.get("iter") or 0, int)
                         and all(isinstance(a.get(k) or [], list) and all(isinstance(n, str) for n in a.get(k) or [])
                                 for k in ("perspectives", "instructed"))
                         for a in s["attempts"])
@@ -679,7 +216,7 @@ class StateComment:
         return state
 
     def write(self, state):
-        payload = json.dumps({"body": fit_body(state)}, ensure_ascii=False)
+        payload = json.dumps({"body": render(state)}, ensure_ascii=False)
         if self.id is None:
             r = run(["gh", "api", "-X", "POST", f"repos/{{owner}}/{{repo}}/issues/{self.pr}/comments",
                      "--input", "-", "--jq", ".id"], cwd=self.wt, input=payload)
@@ -714,48 +251,9 @@ def new_state(previous=None):
     }
 
 
-def format_count(n):
-    """トークン数を 1.2万 のように短く書く。"""
-    return f"{n / 10000:.1f}万" if n >= 10000 else str(n)
-
-
-def format_tokens(t):
-    """(入力, 出力) の表記を返す。入力にはキャッシュ読み込みの内訳を添える。"""
-    return (f"{format_count(t['input'])}(うちキャッシュ読み込み {format_count(t['cache_read'])})",
-            format_count(t["output"]))
-
-
-def total_tokens(attempts):
-    total = new_tokens()
-    for a in attempts:
-        for k, v in (a.get("tokens") or {}).items():
-            total[k] += v
-    return total
-
-
 def cell(text):
     """表のセルに入れる値を、表を壊さず(| と改行)、HTML として解釈されず(<)、メンションにならない(@)形にする。"""
     return text.replace("|", "\\|").replace("\n", " ").replace("<", "&lt;").replace("@", "@\u200b")
-
-
-def is_default(perspectives):
-    """今の既定の観点と同じか。観点は並列に起動するので、並びの違いは数えない。"""
-    return sorted(perspectives) == sorted(p[:MAX_RECORDED_SPEC] for p in default_perspectives())
-
-
-def fit_body(state):
-    """状態コメントの本文を返す。上限を超えるなら、古い試行から順に観点の記録を外す(書けないとロックが残るため)。
-    外すのは書き込む本文からだけで、手元の state は変えない。"""
-    body = render(state)
-    if len(body) <= MAX_BODY_CHARS:
-        return body
-    trimmed = json.loads(json.dumps(state))
-    for a in trimmed["attempts"]:
-        a.pop("perspectives", None)
-        body = render(trimmed)
-        if len(body) <= MAX_BODY_CHARS:
-            break
-    return body
 
 
 def render(state):
@@ -769,25 +267,15 @@ def render(state):
              f"**review-loop** run {state['run_id']} — 反復 {state['iter']} — {status}", ""]
     prev = state.get("previous_run")
     if prev:
-        used = "、入力 {}・出力 {} トークン".format(*format_tokens(prev["tokens"])) if prev.get("tokens") else ""
-        lines += [f"直前のシリーズ: run {prev['run_id']}(反復 {prev['iterations']}{used})", ""]
+        lines += [f"直前のシリーズ: run {prev['run_id']}(反復 {prev['iterations']})", ""]
     if state["attempts"]:
-        lines += ["| SHA | 時刻 | 結果 | 入力トークン | 出力トークン |", "|---|---|---|---|---|"]
+        lines += ["| SHA | 時刻 | 結果 |", "|---|---|---|"]
         for a in state["attempts"]:
             result = a["result"] + (f"(反復 {a['iter']})" if a.get("iter") else "")
-            if a.get("perspectives") and not is_default(a["perspectives"]):
-                result += f"、観点 {', '.join(p[:TABLE_SPEC_CHARS] for p in a['perspectives'])}"
-            if a.get("model") and a["model"] != MODEL:
-                result += f"、モデル {a['model'][:TABLE_SPEC_CHARS]}"
-            if a.get("instructed"):
-                result += f"、指示あり {', '.join(a['instructed'])}"
             if a.get("reason"):
                 result += f": {a['reason'][:TABLE_REASON_CHARS]}"
-            tin, tout = format_tokens(a["tokens"]) if a.get("tokens") else ("—", "—")
-            lines.append(f"| {cell((a['sha'] or '')[:7])} | {cell(a['at'])} | {cell(result)} | {tin} | {tout} |")
-        tin, tout = format_tokens(total_tokens(state["attempts"]))
-        lines.append(f"| **合計** | | | {tin} | {tout} |")
-        lines += ["", "失敗した試行のトークン数は、途中で止めた子の分を含まない(下限)。", ""]
+            lines.append(f"| {cell((a['sha'] or '')[:7])} | {cell(a['at'])} | {cell(result)} |")
+        lines.append("")
     lines.append("<sub>review-loop のスクリプトが更新するコメント。手で編集しても上書きされる。</sub>")
     return "\n".join(lines)
 
@@ -796,19 +284,19 @@ def lock_stale_after(lock):
     """ロックを古いとみなすまでの秒数。ロックに記録した stale_after を使う。
 
     状態コメントは手で編集されうるので、値は信じすぎない。数でなければ、記録の無い旧版のロックと同じ長さで
-    見る。数でも、STALE_LOCK_AFTER より短くはしない(実行中のロックを奪わない)し、Bash ツールの最大制限時間
-    より長くもしない(それより長く生きている試行は無いので、永久に止まらない)。"""
+    見る。数でも、STALE_LOCK_AFTER より短くはしない(実行中のロックを奪わない)し、STALE_LOCK_MAX より長くも
+    しない(永久に止まらない)。"""
     v = lock.get("stale_after", LEGACY_STALE_LOCK_AFTER)
     if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v:  # v != v は NaN
         v = LEGACY_STALE_LOCK_AFTER
-    return min(max(v, STALE_LOCK_AFTER), BASH_TIMEOUT_MAX)
+    return min(max(v, STALE_LOCK_AFTER), STALE_LOCK_MAX)
 
 
-def acquire_lock(sc, head, new_run):
+def acquire_lock(sc, head, branch, new_run):
     """ロックを取り、状態と nonce を返す。
 
-    誤って二重に起動したことを検出するためのもので、厳密な排他制御ではない。ループを駆動する親は
-    1つだけなので、gh の書き込みが遅れて両方が通る程度の取りこぼしは許容する。"""
+    誤って二重に始めたことを検出するためのもので、厳密な排他制御ではない。ループを回す親は1つだけなので、
+    gh の書き込みが遅れて両方が通る程度の取りこぼしは許容する。"""
     state = sc.read()
     if sc.unreadable:
         if not new_run:
@@ -820,18 +308,18 @@ def acquire_lock(sc, head, new_run):
         # 古さは、ロックを書いた版が持ちうる長さで決める。版ごとに長さが違うので、自分の値で決めると、
         # 長く持つ版の実行中のロックを奪ってしまう
         if age < lock_stale_after(state["lock"]):
-            raise Precondition(f"別の試行が実行中(開始 {state['lock']['started_at']})。二重起動の可能性がある")
+            raise Precondition(f"別の試行が実行中(開始 {state['lock']['started_at']})。二重に始めたか、前の試行で end を"
+                               "呼んでいない。呼んでいなければ、end を呼んで閉じる")
         log(f"warn: 古いロックが残っていた(開始 {state['lock']['started_at']})。前回の試行を interrupted として記録する")
         state["attempts"].append({"sha": state["lock"].get("sha"), "at": state["lock"]["started_at"],
-                                  "result": "interrupted", "reason": "stale_lock", "tokens": new_tokens()})
+                                  "result": "interrupted", "reason": "stale_lock"})
         state["consecutive_failures"] += 1
     if state is None:
         state = new_state()
     elif new_run:
-        state = new_state({"run_id": state["run_id"], "iterations": state["iter"],
-                           "tokens": total_tokens(state["attempts"])})
+        state = new_state({"run_id": state["run_id"], "iterations": state["iter"]})
     nonce = uuid.uuid4().hex
-    state["lock"] = {"running": True, "started_at": iso(now()), "sha": head, "nonce": nonce,
+    state["lock"] = {"running": True, "started_at": iso(now()), "sha": head, "branch": branch, "nonce": nonce,
                      "stale_after": STALE_LOCK_AFTER}
     try:
         sc.write(state)
@@ -843,7 +331,7 @@ def acquire_lock(sc, head, new_run):
         raise
     if not again or again["lock"].get("nonce") != nonce:
         sc.discard_created()
-        raise Precondition("ロックの取得で競合した(二重起動の可能性がある)。撤退する")
+        raise Precondition("ロックの取得で競合した(二重に始めた可能性がある)。撤退する")
     return state, nonce
 
 
@@ -862,257 +350,139 @@ def release_lock(sc, state, nonce):
         return False
 
 
-# --- レビュー役 --------------------------------------------------------------
-def safe_name(s):
-    return re.sub(r"[^A-Za-z0-9_.-]", "_", s)
+# --- 作業ディレクトリ --------------------------------------------------------
+def workdir_path(repo, pr_number, run_id, attempt_no):
+    """<一時ディレクトリ>/review-loop/<owner>_<repo>/<PR番号>/<run_id>/<試行>/"""
+    return os.path.join(tempfile.gettempdir(), "review-loop", repo, str(pr_number), run_id, str(attempt_no))
 
 
-def review_system_prompt(instruction):
-    """レビュー役に渡すシステムプロンプト。利用者からの追加の指示は、スキルの引数ではなくここに足す
-    (引数の読み方はスキルごとに違い、引数を取らないスキルもあるため)。"""
-    if not instruction:
-        return REVIEW_CONSTRAINT
-    return (REVIEW_CONSTRAINT + "\n\nこのレビューについて、利用者から次の追加の指示があります。"
-            "スキルの手順と食い違うときは、この指示を優先してください。" + INSTRUCTION_RULES + "\n" + instruction)
-
-
-def run_reviews(wt, env, pr, workdir, children, attempt, perspectives, instructions, focuses=(), model=MODEL):
-    """観点別レビューを並列に実行し、{観点: 結果のテキスト} を返す。1つでも失敗したら残りを止める。
-
-    出力は stream-json で受け、試行を止める権限の拒否が出たらその時点で止める(watch_denials)。"""
-    roles = role_names(perspectives, focuses)
-    jobs = [(role, "/" + expand(spec, pr), instructions.get(skill_name(spec))) for role, spec in zip(roles, perspectives)]
-    jobs += [(role, FOCUS_PROMPT.format(pr=pr["number"], focus=text), None)
-             for role, text in zip(roles[len(perspectives):], focuses)]
-    running = {}
-    for name, prompt, instruction in jobs:
-        base = os.path.join(workdir, f"review-{safe_name(name)}")
-        with open(base + ".stdout.jsonl", "w") as out, open(base + ".stderr.txt", "w") as err:
-            p = children.spawn(["claude", "-p", "--model", model, "--output-format", "stream-json", "--verbose",
-                                "--append-system-prompt", review_system_prompt(instruction), prompt],
-                               REVIEW_TIMEOUT, cwd=wt, env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=err)
-        running[name] = (p, base, time.monotonic(), StreamTail(base + ".stdout.jsonl"))
-    results = {}
-    try:
-        while running:
-            for name, (p, base, started, tail) in list(running.items()):
-                rc = p.poll()
-                tail.poll()
-                if rc is None:
-                    watch_denials(f"review {name}", tail, workdir)
-                    if time.monotonic() - started > REVIEW_TIMEOUT:
-                        raise AttemptFailed("timeout", f"review {name}", f"{REVIEW_TIMEOUT // 60} 分を超えた")
-                    continue
-                del running[name]
-                children.finish(p)
-                tail.poll()  # 終わる直前に書かれた行を読み残さない
-                record_tolerated(f"review {name}", tail, workdir)
-                results[name] = check_result(f"review {name}", rc, base, attempt, tail, model)
-                log(f"review {name}: 完了")
-            if running:
-                time.sleep(POLL_SECONDS)
-    finally:
-        # ほかの観点の失敗で抜けるときも、まだ動いている子の止めない拒否を記録に残す
-        for name, (_, _, _, tail) in running.items():
-            tail.poll()
-            record_tolerated(f"review {name}", tail, workdir)
-    return {name: results[name] for name, _, _ in jobs}
-
-
-def write_reviews(workdir, reviews):
-    """レビュー役の出力を、役の名前の区切りでつないで reviews.md に書き、そのテキストを返す。親と、親が起動する
-    俯瞰の役は、これを入力に指摘を突き合わせる。"""
-    parts = [f"===== 観点: {name} =====\n{text.strip()}\n===== ここまで: {name} =====\n" for name, text in reviews.items()]
-    # 試行を止めなかった拒否があれば添える。レビュー役が一部を読めないまま書いた可能性を、出力だけから
-    # 見分けることはできないため
-    try:
-        with open(os.path.join(workdir, "denials.txt"), encoding="utf-8") as d:
-            denied = d.read().strip()
-    except FileNotFoundError:
-        denied = ""
-    if denied:
-        parts.append("===== レビュー中に権限の設定で拒否されたツールの呼び出し(レビュー役はこれを実行できていない) =====\n"
-                     f"{denied}\n===== ここまで: 拒否 =====\n")
-    text = "\n".join(parts)
-    with open(os.path.join(workdir, "reviews.md"), "w", encoding="utf-8") as f:
-        f.write(text)
-    return text
-
-
-def find_contamination(wt, start):
-    """子が作業ツリーやブランチを変えていないか、PR の head が試行中に動いていないかを確かめる。
-    問題があれば (種類, 詳細) を、なければ None を返す。"""
-    problems = []
-    status = git_status(wt)
-    if status.strip():
-        problems.append("作業ツリーがクリーンでない:\n" + status.rstrip())
-    # ブランチが切り替わっていると gh pr view が失敗するので、git で分かるものを先に見る
-    head, branch = local_refs(wt)
-    for label, before, after in (("HEAD", start["head"], head), ("ブランチ", start["branch"], branch)):
-        if before != after:
-            problems.append(f"{label} が変わった: {before} → {after}")
-    if problems:
-        return "contamination", "\n".join(problems) + "\n(変更は元に戻していない)"
-    pr_head = pr_view_retrying(wt)["headRefOid"]
-    if pr_head != start["pr_head"]:
-        # 外からの push と、子がローカルを変えずに直接 push したものは区別できない
-        return "head_changed", (f"試行中に PR の head が変わった: {start['pr_head']} → {pr_head}。"
-                                "自分で push したのでなければ、子が禁じられた push をした可能性がある。"
-                                "取り込む前に、新しいコミットの作者と内容を確かめる")
-    return None
-
-
-# --- 本体 --------------------------------------------------------------------
-def iterate(worktree, new_run, ctx, perspective_args, instruct_args, focus_args=None, model=None):
-    # 前提チェック。ロックを取る前なので、失敗しても状態には記録しない
-    if os.environ.get(GUARD_ENV):
-        raise Precondition(f"{GUARD_ENV} が設定済み。レビューループの中から再帰的に起動された")
-    os.environ[GUARD_ENV] = "1"
-    check_tools()
-    focuses = focus_config(focus_args)
-    model = MODEL if model is None else " ".join(model.split())
-    if not model:
-        raise Precondition("--model が空")
-    perspectives, instructions = review_config(perspective_args, instruct_args, focuses)
-    env = child_env()
-    wt = normalize_worktree(worktree)
-    if git_status(wt).strip():
-        raise Precondition("作業ツリーがクリーンでない。コミットしてから実行する")
-    me = run(["gh", "api", "user", "--jq", ".login"], cwd=wt).stdout.strip()
-    start = snapshot(wt)
-    if start["state"] != "OPEN":
-        raise Precondition(f"PR #{start['number']} はオープンではない({start['state']})")
-    if start["author"] != me:
-        raise Precondition(f"PR #{start['number']} の作成者({start['author']})が自分({me})ではない")
-    if start["head"] != start["pr_head"]:
-        raise Precondition(f"ローカルの HEAD({start['head'][:7]})が PR の head({start['pr_head'][:7]})と"
-                           "一致しない。push してから実行する")
-    preflight(wt, env, perspectives)
-    instructions = {name: expand(text, start) for name, text in instructions.items()}  # 以後は {pr} を置き換えた値
-
-    sc = StateComment(wt, start["number"], me)
-    children = Children()
-    attempt = state = nonce = None
-    try:  # ロックを取ったら、どこで終わっても解除する
-        state, nonce = acquire_lock(sc, start["head"], new_run)
-        if state["iter"] >= SAFETY_MAX_ITER:
-            raise Precondition(f"反復が安全上限({SAFETY_MAX_ITER} 回)に達した")
-        if state["consecutive_failures"] >= MAX_CONSECUTIVE_FAILURES:
-            raise Precondition(f"連続失敗が {MAX_CONSECUTIVE_FAILURES} 回に達した。原因を取り除いてから、利用者の指示で --new-run する")
-
-        attempt = {"sha": start["head"], "at": state["lock"]["started_at"], "result": "failed", "tokens": new_tokens(),
-                   "model": model[:MAX_RECORDED_SPEC]}
-        # どの観点や指示で回したかを、あとから表で読めるようにする(指示の本文は PR に載せない)。観点は
-        # 既定でも記録する。既定(PERSPECTIVES)はスクリプトの更新で変わりうるので、記録しないと前後で比べられない
-        # 状態コメントの本文には GitHub の上限があるので、観点ごとに長さを抑える
-        attempt["perspectives"] = [p[:MAX_RECORDED_SPEC] for p in perspectives + [f"focus {t}" for t in focuses]]
-        if instructions:
-            attempt["instructed"] = sorted(instructions)
-        warn_option_change(state["attempts"], attempt)
-        ctx["attempt"] = attempt
-        ctx["workdir"] = make_workdir(start, state["run_id"], len(state["attempts"]) + 1)
-        log(f"作業ディレクトリ: {ctx['workdir']}")
-        reviews = run_reviews(wt, env, start, ctx["workdir"], children, attempt, perspectives, instructions, focuses, model)
-        children.kill_all()
-        found = find_contamination(wt, start)
-        if found:
-            raise AttemptFailed(found[0], "", found[1])
-        joined = write_reviews(ctx["workdir"], reviews)
-        ignore_signals()  # ここから先は成功の記録だけなので、中断させない
-        state["iter"] += 1
-        state["consecutive_failures"] = 0
-        attempt.update(result="completed", iter=state["iter"])
-        return joined
-    except BaseException as e:
-        ignore_signals()
-        if attempt is None:
-            raise
-        kind, detail = classify(e)
-        # 失敗した試行でも、子が作業ツリーやブランチを変えていないかを確かめる。変えていれば、そちらを優先して
-        # 報告する(放っておくと、親が子の変更を自分の修正としてコミットしかねない)
-        children.kill_all()
-        if not (isinstance(e, AttemptFailed) and e.kind in ("contamination", "head_changed")):
-            try:
-                found = find_contamination(wt, start)
-            except Exception:
-                found = None
-            if found:
-                e = AttemptFailed(found[0], "", f"{found[1]}\n\n(この試行はもともと {kind} で失敗した: {detail.strip()})")
-                kind, detail = classify(e)
-        attempt["reason"] = kind
-        state["consecutive_failures"] += 1
-        if ctx["workdir"]:  # 作業ディレクトリを作る前の失敗(workdir_error)では残さない
-            try:
-                with open(os.path.join(ctx["workdir"], "failure.txt"), "w", encoding="utf-8") as f:
-                    f.write(f"{kind}\n{detail}\n")
-            except OSError:  # 詳細を残せなくても、記録と報告は続ける
-                pass
-        raise e
-    finally:
-        ignore_signals()
-        children.kill_all()
-        if attempt is not None:
-            state["attempts"].append(attempt)
-        if nonce is not None and not release_lock(sc, state, nonce) and attempt is not None:
-            log("warn: この試行の結果を状態コメントに記録できなかった"
-                + ("(反復回数が進んでいない)" if attempt["result"] == "completed" else "(連続失敗にも数えられていない)")
-                + f"。ロックが残っていれば、{STALE_LOCK_AFTER // 60}分たつまで次の起動は「別の試行が実行中」で止まる")
-
-
-def warn_option_change(attempts, attempt):
-    """同じシリーズの直前の試行と観点、指示を渡した観点、モデルが違えば、警告する。スクリプトはオプションを
-    反復をまたいで覚えないので、付け忘れに気づけるようにする。利用者の指示で変えることもあるので止めない。"""
-    # 古いロックを片付けた記録は、オプションを持たないので比べない
-    recorded = [a for a in attempts if a.get("reason") != "stale_lock"]
-    if not recorded:
-        return
-    prev = recorded[-1]
-    for key, label in (("perspectives", "観点"), ("instructed", "指示を渡した観点"), ("model", "モデル")):
-        if key in ("perspectives", "model") and key not in prev:  # 記録する前の版で書かれた試行
-            continue
-        if key == "model":
-            if not isinstance(prev[key], str):  # 手で編集されて null になっているなど。比べられない
-                continue
-            before, after = [prev[key]], [attempt[key]]
-        else:
-            before, after = sorted(prev.get(key) or []), sorted(attempt.get(key) or [])
-        if before != after:
-            log(f"warn: 直前の試行と{label}が違う(直前: {', '.join(before) or 'なし'}、"
-                f"今回: {', '.join(after) or 'なし'})。利用者の指示で変えたのでなければ、オプションの付け忘れを確かめる")
-
-
-def make_workdir(start, run_id, attempt_no):
-    """<一時ディレクトリ>/review-loop/<owner>_<repo>/<PR番号>/<run_id>/<試行>/ を新しく作る。
+def make_workdir(path):
+    """作業ディレクトリを新しく作る。
 
     共有の一時ディレクトリ(TMPDIR のない Linux の /tmp)で他人に先回りされたり、レビューの出力を
     読まれたりしないよう、起点は自分が所有するディレクトリに限り、権限を 0700 に絞って使う。
     試行のディレクトリが既にあれば、前の出力と混ざるので失敗にする。"""
     top = os.path.join(tempfile.gettempdir(), "review-loop")
-    path = os.path.join(top, start["repo"], str(start["number"]), run_id, str(attempt_no))
     try:
         os.makedirs(top, mode=0o700, exist_ok=True)
         st = os.lstat(top)
         if stat.S_ISLNK(st.st_mode) or st.st_uid != os.getuid():
-            raise AttemptFailed("workdir_error", "", f"{top} が自分の所有するディレクトリではない")
+            raise AttemptFailed("workdir_error", f"{top} が自分の所有するディレクトリではない")
         if st.st_mode & 0o077:  # umask などで広い権限で作られていたら絞る
             os.chmod(top, 0o700)
         os.makedirs(path)
     except FileExistsError:
-        raise AttemptFailed("workdir_error", "", f"作業ディレクトリが既にある: {path}")
+        raise AttemptFailed("workdir_error", f"作業ディレクトリが既にある: {path}")
     except OSError as e:
-        raise AttemptFailed("workdir_error", "", f"作業ディレクトリを作れない: {e}")
-    return path
+        raise AttemptFailed("workdir_error", f"作業ディレクトリを作れない: {e}")
 
 
-def classify(e):
-    """例外を (失敗の種類, 詳細) にする。状態コメントへの記録と stderr への出力で同じ分類を使う。"""
-    if isinstance(e, AttemptFailed):
-        return e.reason, e.detail
-    if isinstance(e, Interrupted):
-        return f"interrupted: {e}", f"シグナル {e} で止められた"
-    if isinstance(e, Precondition):  # 前提チェックの失敗、または試行中の git や gh の失敗
-        return "command_error", str(e)
-    return "internal_error", "".join(traceback.format_exception(type(e), e, e.__traceback__))
+# --- 混入の検査 --------------------------------------------------------------
+def find_contamination(wt, lock):
+    """begin のあとに、作業ツリーやブランチが変わっていないか、PR の head が動いていないかを確かめる。
+    問題があれば (種類, 詳細) を、なければ None を返す。"""
+    problems = []
+    status = git_status(wt)
+    if status.strip():
+        problems.append("作業ツリーがクリーンでない:\n" + status.rstrip())
+    head, branch = local_refs(wt)
+    if head != lock["sha"]:
+        problems.append(f"HEAD が変わった: {lock['sha']} → {head}")
+    if "branch" in lock and branch != lock["branch"]:  # 旧版のロックはブランチ名を持たない
+        problems.append(f"ブランチが変わった: {lock['branch']} → {branch}")
+    if problems:
+        return "contamination", "\n".join(problems) + "\n(変更は元に戻していない)"
+    pr_head = pr_view(wt)["headRefOid"]
+    if pr_head != lock["sha"]:
+        # 外からの push と、レビュー役がローカルを変えずに直接 push したものは区別できない
+        return "head_changed", (f"試行中に PR の head が変わった: {lock['sha']} → {pr_head}。"
+                                "自分で push したのでなければ、レビュー役が禁じられた push をした可能性がある。"
+                                "取り込む前に、新しいコミットの作者と内容を確かめる")
+    return None
+
+
+# --- 本体 --------------------------------------------------------------------
+def begin(worktree, new_run):
+    """試行を始める。標準出力に出す行の辞書を返す。"""
+    check_tools()
+    wt = normalize_worktree(worktree)
+    if git_status(wt).strip():
+        raise Precondition("作業ツリーがクリーンでない。コミットしてから実行する")
+    me = run(["gh", "api", "user", "--jq", ".login"], cwd=wt).stdout.strip()
+    pr = pr_view(wt)
+    author = (pr.get("author") or {}).get("login")
+    head, branch = local_refs(wt)
+    if pr.get("state") != "OPEN":
+        raise Precondition(f"PR #{pr['number']} はオープンではない({pr.get('state')})")
+    if author != me:
+        raise Precondition(f"PR #{pr['number']} の作成者({author})が自分({me})ではない")
+    if head != pr["headRefOid"]:
+        raise Precondition(f"ローカルの HEAD({head[:7]})が PR の head({pr['headRefOid'][:7]})と"
+                           "一致しない。push してから実行する")
+
+    sc = StateComment(wt, pr["number"], me)
+    state, nonce = acquire_lock(sc, head, branch, new_run)
+    try:  # ロックを取ったあとは、試行を始められなければ解除する
+        if state["iter"] >= SAFETY_MAX_ITER:
+            raise Precondition(f"反復が安全上限({SAFETY_MAX_ITER} 回)に達した")
+        if state["consecutive_failures"] >= MAX_CONSECUTIVE_FAILURES:
+            raise Precondition(f"連続失敗が {MAX_CONSECUTIVE_FAILURES} 回に達した。原因を取り除いてから、利用者の指示で --new-run する")
+        attempt_no = len(state["attempts"]) + 1
+        workdir = workdir_path(repo_slug(pr), pr["number"], state["run_id"], attempt_no)
+        make_workdir(workdir)
+    except BaseException as e:
+        ignore_signals()
+        if isinstance(e, AttemptFailed):
+            state["attempts"].append({"sha": head, "at": state["lock"]["started_at"], "result": "failed", "reason": e.kind})
+            state["consecutive_failures"] += 1
+        if not release_lock(sc, state, nonce) and isinstance(e, AttemptFailed):
+            log("warn: この試行の失敗を状態コメントに記録できなかった(連続失敗にも数えられていない)")
+        raise
+    return {"pr": pr["number"], "sha": head, "attempt": attempt_no, "workdir": workdir}
+
+
+def end(worktree, failed_reason):
+    """試行を閉じる。completed なら反復の番号を返す。失敗として記録したら AttemptFailed を投げる。"""
+    check_tools()
+    wt = normalize_worktree(worktree)
+    me = run(["gh", "api", "user", "--jq", ".login"], cwd=wt).stdout.strip()
+    pr = pr_view(wt)
+    sc = StateComment(wt, pr["number"], me)
+    state = sc.read()
+    if state is None or not state["lock"]["running"]:
+        raise Precondition("閉じる試行が無い(begin で始めた試行のロックが、状態コメントに無い"
+                           + ("。状態コメントを読めない" if sc.unreadable else "") + ")")
+    lock = state["lock"]
+    workdir = workdir_path(repo_slug(pr), pr["number"], state["run_id"], len(state["attempts"]) + 1)
+    found = find_contamination(wt, lock)
+    attempt = {"sha": lock["sha"], "at": lock["started_at"], "result": "failed"}
+    error = None
+    if found:
+        # 混入があれば、レビュー役の失敗より優先して記録する(放っておくと、親がレビュー役の変更を自分の修正としてコミットしかねない)
+        detail = found[1] + (f"\n\n(この試行は、もともと --failed で閉じようとした: {failed_reason})" if failed_reason else "")
+        error = AttemptFailed(found[0], detail)
+    elif failed_reason:
+        error = AttemptFailed("reviewer_failed: " + " ".join(failed_reason.split())[:TABLE_REASON_CHARS], failed_reason)
+    if error:
+        attempt["reason"] = error.kind
+        state["consecutive_failures"] += 1
+    else:
+        state["iter"] += 1
+        state["consecutive_failures"] = 0
+        attempt.update(result="completed", iter=state["iter"])
+    state["attempts"].append(attempt)
+    state["lock"] = dict(UNLOCKED)
+    ignore_signals()  # ここから先は記録だけなので、中断させない
+    sc.write(state)  # 書けなければ Precondition。ロックは残るので、もう一度 end を呼べる
+    if error:
+        if os.path.isdir(workdir):
+            try:
+                with open(os.path.join(workdir, "failure.txt"), "w", encoding="utf-8") as f:
+                    f.write(f"{error.kind}\n{error.detail}\n")
+            except OSError:  # 詳細を残せなくても、報告は続ける
+                pass
+        raise error
+    return state["iter"]
 
 
 def on_signal(signum, _frame):
@@ -1120,44 +490,40 @@ def on_signal(signum, _frame):
 
 
 def main():
-    if len(sys.argv) > 1 and sys.argv[1] == "_watch":
-        sep = sys.argv.index("--")
-        return watch_main(int(sys.argv[2]), float(sys.argv[3]), sys.argv[sep + 1:])
-
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    it = sub.add_parser("iterate", help="レビューを1反復だけ実行する")
-    it.add_argument("worktree", help="PR のブランチをチェックアウトした worktree の絶対パス")
-    it.add_argument("--new-run", action="store_true", help="新しいシリーズを始める(利用者の指示があったときだけ使う)")
-    it.add_argument("--model", metavar="MODEL",
-                    help=f"レビュー役のモデル(claude の --model に渡す。既定 {MODEL})")
-    it.add_argument("--perspective", action="append", metavar="SPEC",
-                    help="観点スキルとその引数(例: 'code-review high {pr}')。1つでも渡すと、既定の一覧の代わりに渡したものだけを使う。繰り返せる")
-    it.add_argument("--focus", action="append", metavar="TEXT",
-                    help="スキルを使わないレビュー役を1つ足し、この観点でレビューさせる。観点スキルの一覧には影響しない。繰り返せる")
-    it.add_argument("--instruct", action="append", metavar="SKILL=TEXT",
-                    help="その観点のレビュー役だけに渡す追加の指示。繰り返せる")
+    b = sub.add_parser("begin", help="前提を確かめ、試行を始める")
+    b.add_argument("worktree", help="PR のブランチをチェックアウトした worktree の絶対パス")
+    b.add_argument("--new-run", action="store_true", help="新しいシリーズを始める(利用者の指示があったときだけ使う)")
+    e = sub.add_parser("end", help="混入が無いかを確かめ、試行の結果を記録する")
+    e.add_argument("worktree", help="begin に渡したのと同じ worktree の絶対パス")
+    e.add_argument("--failed", metavar="理由",
+                   help="レビュー役が失敗したときに付ける。理由は PR の状態コメントに載る(100文字まで)")
     args = ap.parse_args()
+    if args.cmd == "end" and args.failed is not None and not args.failed.strip():
+        ap.error("--failed の理由が空")
 
     for s in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(s, on_signal)
-    ctx = {"workdir": "", "attempt": None}
-    code = 0
     try:
-        joined = iterate(args.worktree, args.new_run, ctx, args.perspective, args.instruct, args.focus, args.model)
-        print(joined, flush=True)
-        log("完了: 反復 {}、入力 {}、出力 {} トークン".format(ctx["attempt"]["iter"], *format_tokens(ctx["attempt"]["tokens"])))
-    except BaseException as e:
-        ignore_signals()
-        kind, detail = classify(e)
-        if ctx["attempt"] is not None:  # 試行を始めていれば、状態コメントに記録済み
-            log(f"failed: {kind}\n{detail}".rstrip())
-            code = 1
+        if args.cmd == "begin":
+            for k, v in begin(args.worktree, args.new_run).items():
+                print(f"{k}={v}", flush=True)
         else:
-            log(f"error: {detail}" + ("(試行の開始前。記録していない)" if isinstance(e, Interrupted) else ""))
-            code = 2
-    log(ctx["workdir"])
-    return code
+            log(f"完了: 反復 {end(args.worktree, args.failed)}")
+        return 0
+    except AttemptFailed as e:
+        log(f"failed: {e.kind}\n{e.detail}".rstrip())
+        return 1
+    except Precondition as e:
+        log(f"error: {e}")
+        return 2
+    except Interrupted as e:
+        log(f"error: シグナル {e} で止められた")
+        return 2
+    except Exception:
+        log("error: internal_error\n" + traceback.format_exc())
+        return 2
 
 
 if __name__ == "__main__":
