@@ -3,8 +3,6 @@
 #   FAKE_DIR                 呼び出しの記録(calls.jsonl)を置く場所
 #   FAKE_SKILLS              init で返すスキル(カンマ区切り。既定は観点スキル全部)
 #   FAKE_PREFLIGHT_DELAY     init を返すまでの秒数
-#   FAKE_PREFLIGHT_ERROR     事前確認で、この本文の is_error の result を返す(モデル以外の理由の失敗)
-#   FAKE_BAD_MODELS          使えないモデルとして扱う --model の値(カンマ区切り。事前確認で is_error の result を返す)
 #   FAKE_REVIEW_<観点>       ok(既定) / deny / denylive(拒否のイベントを出して、終わらずに続ける) / fail / empty(結果が空) / dirty / hang / slow / bg(孫を残して終わる)
 #                            / denyconfig(設定のルールでの拒否のイベントを出したあと、正常に終わる)
 #                            / denyclassifier(分類器による拒否のイベントを出したあと、正常に終わる)
@@ -17,6 +15,7 @@
 #                            / multiallempty(result の行を複数出し、どれも空)
 #                            / remote(PR のブランチにだけ別のコミットを push する)
 #                            / switch(作業ツリーはクリーンのまま、別のブランチに切り替える)
+#                            / badmodel(使えないモデルを渡したときの出力。本物で観測した形)
 #                            <観点> は英数字以外を _ にしたもの(例: FAKE_REVIEW_code_review)
 # 出力は本物と同じく stream-json(1行1イベント)。事前確認以外は init の行から始める
 import json
@@ -80,24 +79,8 @@ if args[-1] == "ok":  # 事前確認(レビュー役も stream-json を使うの
     skills = os.environ.get("FAKE_SKILLS", "code-review,mattpocock-skills:code-review").split(",")
     print(json.dumps({"type": "system", "subtype": "hook_started"}), flush=True)
     time.sleep(float(os.environ.get("FAKE_PREFLIGHT_DELAY", "0")))
-    model = args[args.index("--model") + 1] if "--model" in args else ""
-    # init の model は、使えないモデルでも渡した文字列のまま載る(本物で観測)
-    print(json.dumps({"type": "system", "subtype": "init", "cwd": os.getcwd(), "skills": skills, "model": model,
+    print(json.dumps({"type": "system", "subtype": "init", "cwd": os.getcwd(), "skills": skills,
                       "slash_commands": skills + ["security-review", "clear"]}), flush=True)
-    if model in os.environ.get("FAKE_BAD_MODELS", "").split(","):
-        # 本物の claude で観測した、使えないモデルを渡したときの出力(assistant と、is_error の result。終了コード1)
-        msg = (f"There's an issue with the selected model ({model}). It may not exist or you may not have access "
-               "to it. Run --model to pick a different model.")
-        emit({"type": "assistant", "message": {"content": [{"type": "text", "text": msg}]}})
-        emit({"type": "result", "subtype": "success", "is_error": True, "result": msg})
-        print(f'[claude-code:unrecognized_model] {{"model":"{model}","query_source":"sdk"}}', file=sys.stderr)
-        sys.exit(1)
-    if os.environ.get("FAKE_PREFLIGHT_ERROR"):
-        # モデル以外の理由(過負荷など)で応答を得られなかった形。本物では観測していない
-        emit({"type": "result", "subtype": "success", "is_error": True, "result": os.environ["FAKE_PREFLIGHT_ERROR"]})
-        sys.exit(1)
-    emit({"type": "assistant", "message": {"content": [{"type": "text", "text": "ok"}]}})
-    result("ok")
     time.sleep(60)  # 止められるはず
     record("preflight-not-killed")
     sys.exit(0)
@@ -168,6 +151,15 @@ elif mode == "switch":  # 作業ツリーはクリーンのまま、別のブラ
     import subprocess
     subprocess.run(["git", "switch", "-q", "-c", "other"], capture_output=True)
     result(f"{name}: 指摘なし")
+elif mode == "badmodel":
+    # 本物の claude で観測した、使えないモデルを渡したときの出力(assistant と、is_error の result。終了コード1)
+    model = args[args.index("--model") + 1] if "--model" in args else ""
+    msg = (f"There's an issue with the selected model ({model}). It may not exist or you may not have access "
+           "to it. Run --model to pick a different model.")
+    emit({"type": "assistant", "message": {"content": [{"type": "text", "text": msg}]}})
+    emit({"type": "result", "subtype": "success", "is_error": True, "result": msg})
+    print(f'[claude-code:unrecognized_model] {{"model":"{model}","query_source":"sdk"}}', file=sys.stderr)
+    sys.exit(1)
 elif mode == "bg":
     import subprocess
     g = subprocess.Popen(["sleep", "120"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

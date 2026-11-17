@@ -57,7 +57,9 @@ PERSPECTIVES = [
 # 指摘の数と質がモデルで変わり、親のモデルに引きずられると反復や PR の間で比べられないので固定する
 MODEL = "opus"
 
-# 使えないモデルを渡したときに、claude が出すもの(本物で観測した形)。stderr のタグか、result の本文で見分ける
+# 使えないモデルを渡したときに、claude が出すもの(本物で観測した形)。レビュー役が失敗したとき、stderr の
+# タグか result の本文にこれがあれば、失敗の詳細にモデルを使えない可能性を添える。止め方は変えない(ほかの
+# 失敗と同じく試行の失敗として記録する)。これ以外の形のモデルのエラー(未観測)は、添えずに通常の詳細だけになる
 UNKNOWN_MODEL_STDERR = "[claude-code:unrecognized_model]"
 UNKNOWN_MODEL_RESULT = "There's an issue with the selected model"
 
@@ -67,8 +69,7 @@ FOCUS_PROMPT = "PR #{pr} の差分を、次の観点でレビューし、具体�
 SAFETY_MAX_ITER = 10          # シリーズあたりの反復の上限
 MAX_CONSECUTIVE_FAILURES = 3  # 連続失敗の上限
 
-PREFLIGHT_TIMEOUT = 2 * 60    # 事前確認(最初の result を受け取るまで)
-PREFLIGHT_EXIT_WAIT = 5       # 事前確認が失敗の result を返したあと、子が終わって stderr を書き切るのを待つ
+PREFLIGHT_TIMEOUT = 2 * 60    # 事前確認(init を受け取るまで)
 REVIEW_TIMEOUT = 40 * 60      # レビュー役1つあたり
 MARGIN = 5 * 60               # Bash の制限時間に対する余裕(事前確認の後の gh の呼び出しなど)
 LOCK_MARGIN = 15 * 60         # ロックを持ったまま行う git・gh の呼び出し(各 COMMAND_TIMEOUT まで)の余裕
@@ -251,7 +252,14 @@ def add_tokens(tokens, data):
         tokens["output"] += m.get("outputTokens", 0)
 
 
-def check_result(label, rc, base, attempt, tail):
+def model_hint(stderr, tail, model):
+    """子の失敗に、使えないモデルを渡したときの印(本物で観測した形)があれば、失敗の詳細に添える文を返す。"""
+    if UNKNOWN_MODEL_STDERR in stderr or any(UNKNOWN_MODEL_RESULT in str(r.get("result") or "") for r in tail.results):
+        return f"\n(--model のモデル {model} を使えない可能性がある。名前の誤りか、使う権限が無い)"
+    return ""
+
+
+def check_result(label, rc, base, attempt, tail, model):
     """子の結果を読んでトークン数を attempt に足し、成功の条件を全て満たすか確かめる。結果のテキストを返す。
 
     結果のテキストは StreamTail.texts を出た順につないだもの。サブエージェントをバックグラウンドで動かす
@@ -261,10 +269,12 @@ def check_result(label, rc, base, attempt, tail):
     に書く(stream はツールの出力まで含んで大きいので、親はこちらを読む)。
     トークン数と成否は最後の result の行で見る(どの行の modelUsage にもセッション全体の値が入るので、足すと
     二重に数える)。"""
+    with open(base + ".stderr.txt", encoding="utf-8", errors="replace") as f:
+        full_err = f.read()
     if not tail.results:
-        with open(base + ".stderr.txt", encoding="utf-8", errors="replace") as f:
-            err = f.read().strip()[-1000:]
-        raise AttemptFailed("child_error", label, f"result の行がない(終了コード {rc})。stderr: {err}{sandbox_hint(err)}")
+        err = full_err.strip()[-1000:]
+        raise AttemptFailed("child_error", label, f"result の行がない(終了コード {rc})。stderr: {err}{sandbox_hint(err)}"
+                            f"{model_hint(full_err, tail, model)}")
     text = "\n\n".join(tail.texts())
     with open(base + ".result.md", "w", encoding="utf-8") as f:
         f.write(text + "\n")
@@ -275,7 +285,8 @@ def check_result(label, rc, base, attempt, tail):
         raise AttemptFailed("permission_denied", label, summarize_denials(denials))
     if rc != 0 or data.get("subtype") != "success" or data.get("is_error"):
         raise AttemptFailed("child_error", label, f"終了コード {rc}、subtype {data.get('subtype')}、"
-                            f"is_error {data.get('is_error')}: {str(data.get('result') or '')[:500]}")
+                            f"is_error {data.get('is_error')}: {str(data.get('result') or '')[:500]}"
+                            f"{model_hint(full_err, tail, model)}")
     if not text:
         raise AttemptFailed("no_output", label, "空でない result の行がない")
     return text
@@ -539,16 +550,11 @@ def snapshot(wt):
     }
 
 
-def preflight(wt, env, perspectives, model):
-    """子を1回だけ起動し、init で cwd と観点スキルを、最初の result でモデルを使えるかを確かめる。
-
-    init はモデルの名前を確かめない(誤った名前でも、渡した文字列のまま載る)。使えないモデルは、API を呼んだ
-    あとの result が is_error になって初めて分かるので、result まで待つ。短い応答を1回呼ぶ分の費用がかかる。
-    止めるのは、モデルを使えないと分かったときだけ。それ以外の理由で応答を得られなかったとき(過負荷や
-    レート制限のような一時的なものもありうる)は、警告だけ出して試行に進み、試行の失敗として記録させる。"""
+def preflight(wt, env, perspectives):
+    """子を1回だけ起動し、init を受け取ったらすぐ止める。API を呼ぶ前に止まるので費用はほぼかからない。"""
     err_file = tempfile.TemporaryFile(mode="w+")
     try:
-        p = subprocess.Popen(watched(["claude", "-p", "--model", model, "--output-format", "stream-json", "--verbose", "ok"],
+        p = subprocess.Popen(watched(["claude", "-p", "--output-format", "stream-json", "--verbose", "ok"],
                                      PREFLIGHT_TIMEOUT),
                              cwd=wt, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                              stderr=err_file, text=True, start_new_session=True)
@@ -563,9 +569,9 @@ def preflight(wt, env, perspectives, model):
 
     threading.Thread(target=reader, daemon=True).start()
     deadline = time.monotonic() + PREFLIGHT_TIMEOUT
-    init = result = None
+    init = None
     try:
-        while result is None:
+        while init is None:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 break
@@ -581,22 +587,11 @@ def preflight(wt, env, perspectives, model):
                 continue
             if msg.get("type") == "system" and msg.get("subtype") == "init":
                 init = msg
-            elif msg.get("type") == "result" and not msg.get("parent_tool_use_id") and init is not None:
-                result = msg
-        if result is not None and result.get("is_error"):
-            try:  # 失敗の理由は stderr にも出るので、子が自分で終わるのを少し待って読み切る
-                p.wait(timeout=PREFLIGHT_EXIT_WAIT)
-            except subprocess.TimeoutExpired:
-                pass
     finally:
         kill_group(p)
-
-    def stderr_text():
-        err_file.seek(0)
-        return err_file.read().strip()[-1000:]
-
     if init is None:
-        err = stderr_text()
+        err_file.seek(0)
+        err = err_file.read().strip()[-1000:]
         raise Precondition("事前確認: claude が起動しなかった(init が来ない)。認証・sandbox・ネットワークを確かめてほしい。"
                            f"stderr: {err}{sandbox_hint(err)}")
     if os.path.realpath(init.get("cwd") or "") != wt:
@@ -607,16 +602,6 @@ def preflight(wt, env, perspectives, model):
     if missing:
         raise Precondition(f"事前確認: 観点スキルが見つからない: {', '.join(missing)}"
                            "(名前の誤りか未導入。プラグインのスキルは plugin:name の形式で書く)")
-    if result is None:
-        log(f"warn: 事前確認で、モデル {model} の応答(result)を受け取れなかった。試行に進む。stderr: {stderr_text()}")
-        return
-    if not (result.get("is_error") or result.get("subtype") != "success"):
-        return
-    text, err = str(result.get("result") or "")[:500], stderr_text()
-    if UNKNOWN_MODEL_STDERR in err or UNKNOWN_MODEL_RESULT in text:
-        raise Precondition(f"事前確認: モデル {model} を使えない(名前の誤りか、使う権限が無い): {text} stderr: {err}")
-    log(f"warn: 事前確認で、モデル {model} の応答を得られなかった(モデル以外の理由。一時的なものもありうる)。"
-        f"試行に進む: {text} stderr: {err}")
 
 
 # --- PR の状態コメント -------------------------------------------------------
@@ -916,7 +901,7 @@ def run_reviews(wt, env, pr, workdir, children, attempt, perspectives, instructi
                 children.finish(p)
                 tail.poll()  # 終わる直前に書かれた行を読み残さない
                 record_tolerated(f"review {name}", tail, workdir)
-                results[name] = check_result(f"review {name}", rc, base, attempt, tail)
+                results[name] = check_result(f"review {name}", rc, base, attempt, tail, model)
                 log(f"review {name}: 完了")
             if running:
                 time.sleep(POLL_SECONDS)
@@ -996,7 +981,7 @@ def iterate(worktree, new_run, ctx, perspective_args, instruct_args, focus_args=
     if start["head"] != start["pr_head"]:
         raise Precondition(f"ローカルの HEAD({start['head'][:7]})が PR の head({start['pr_head'][:7]})と"
                            "一致しない。push してから実行する")
-    preflight(wt, env, perspectives, model)
+    preflight(wt, env, perspectives)
     instructions = {name: expand(text, start) for name, text in instructions.items()}  # 以後は {pr} を置き換えた値
 
     sc = StateComment(wt, start["number"], me)
