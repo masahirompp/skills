@@ -128,10 +128,14 @@ hk_parse_action() {
 # process-info を禁じると、lsof は自分の系統のプロセスだけを返す。そこで、ps で見える自分のユーザーのプロセス
 # (終了中・ゾンビを除く)が、すべて lsof に出ているかを確かめる。lsof の前後で ps を取り、両方に出たものだけを
 # 比べる(その間に始まった・終わったプロセスで誤判定しない)。ps が pid 1 を見られないときも、一覧が絞られているとみなす。
+#   - 除くのは終了中のプロセスだけ。stat の Z(ゾンビ)と E(macOS の終了中)、Linux では X(終了済み)も。
+#     macOS の X はトレース中(デバッガの下)で、生きているので除かない
 hk_ps_self() {
-  ps -A -o pid= -o uid= -o stat= 2>/dev/null | awk -v u="$(id -u)" '
+  local ex='[ZE]'
+  [ "$(uname -s 2>/dev/null)" = Darwin ] || ex='[ZEX]'
+  ps -A -o pid= -o uid= -o stat= 2>/dev/null | awk -v u="$(id -u)" -v ex="$ex" '
     $1 == 1 { init = 1 }
-    $2 == u && $3 !~ /[ZEX]/ { print $1 }
+    $2 == u && $3 !~ ex { print $1 }
     END { if (!init) exit 1 }'
 }
 hk_process_cwds() {

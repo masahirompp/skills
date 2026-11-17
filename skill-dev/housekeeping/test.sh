@@ -7,9 +7,11 @@ set -euo pipefail
 
 scripts=$(cd "$(dirname "$0")/../../skills/housekeeping/scripts" && pwd)
 root=$(cd "$(mktemp -d "${TMPDIR:-/tmp}/hk-test.XXXXXX")" && pwd -P)
-busy_pid=''
+busy_pid='' traced_pid='' tracer_pid=''
 cleanup() {
   if [ -n "$busy_pid" ]; then kill "$busy_pid" 2>/dev/null; wait "$busy_pid" 2>/dev/null; fi
+  if [ -n "$traced_pid" ]; then kill -KILL "$traced_pid" 2>/dev/null; fi
+  if [ -n "$tracer_pid" ]; then kill "$tracer_pid" 2>/dev/null; wait "$tracer_pid" 2>/dev/null; fi
   if [ -n "${KEEP:-}" ]; then echo "作業ディレクトリ: $root"; else rm -rf "$root"; fi
 }
 trap cleanup EXIT
@@ -208,6 +210,42 @@ if command -v sandbox-exec >/dev/null 2>&1 && sandbox-exec -p "$sbx" true 2>/dev
     pass "scan: サンドボックスで他プロセスを見られなければ worktree を残す" || fail "scan: サンドボックスの中で wt-merged → ${got:-(出力なし)}"
 else
   pass "scan: (sandbox-exec を使えないので、サンドボックスの確認は飛ばす)"
+fi
+
+# macOS でトレース中(ps の stat に X)の生きたプロセスも、lsof に出ているかの確認から外さないこと
+if [ "$(uname)" = Darwin ] && command -v python3 >/dev/null 2>&1; then
+  # PT_TRACE_ME でトレース中にする。macOS では、トレースしている親が終わるまで SIGKILL を送っても消えないので、
+  # 親をこのテストとは別の subshell(cwd は worktree の外)にして、子を止めたら親も終わるようにする
+  rm -f "$root/traced.pid"
+  (
+    (cd "$root/wt/wt-merged" && exec python3 -I -c 'import ctypes, time; ctypes.CDLL(None).ptrace(0, 0, None, 0); time.sleep(120)') &
+    echo $! >"$root/traced.pid"
+    wait
+  ) &
+  tracer_pid=$!
+  traced_pid='' traced_stat=''
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    [ -n "$traced_pid" ] || traced_pid=$(cat "$root/traced.pid" 2>/dev/null) || true
+    [ -n "$traced_pid" ] && traced_stat=$(ps -o stat= -p "$traced_pid" 2>/dev/null) || true
+    [[ $traced_stat == *X* ]] && break
+    sleep 0.2
+  done
+  mkdir -p "$root/traced-lsof"
+  printf '#!/bin/sh\n%s "$@" | awk -v drop="p%s" '"'"'/^p/ { skip = ($0 == drop) } !skip'"'"'\n' "$real_lsof" "$traced_pid" >"$root/traced-lsof/lsof"
+  chmod +x "$root/traced-lsof/lsof"
+  scan_with "$root/traced-lsof" scan-traced
+  if [ -n "$traced_pid" ]; then kill -KILL "$traced_pid" 2>/dev/null || true; else kill "$tracer_pid" 2>/dev/null || true; fi
+  wait "$tracer_pid" 2>/dev/null || true
+  traced_pid='' tracer_pid=
+  got=$(row scan-traced worktree wt-merged)
+  if [[ $traced_stat != *X* ]]; then
+    pass "scan: (トレース中のプロセスを作れないので、stat X の確認は飛ばす)"
+  else
+    [ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"確かめられない(lsof に出ないプロセス"* ]] &&
+      pass "scan: トレース中のプロセスが lsof に出なければ worktree を残す" || fail "scan: トレース中のプロセスが lsof に出ないと wt-merged → ${got:-(出力なし)}"
+  fi
+else
+  pass "scan: (macOS でないか python3 が無いので、トレース中のプロセスの確認は飛ばす)"
 fi
 
 # オープン PR のベースの一覧を読めなければ止まること(読めないと、スタックした PR のベースが delete になる)
