@@ -284,6 +284,16 @@ got=$(row scan-gitpath worktree wt-merged)
 got=$(row scan-gitpath branch wt-merged)
 [ "${got%%$'\t'*}" = keep ] && pass "scan: そのブランチも残す" || fail "scan: git-path が失敗すると branch wt-merged → ${got:-(出力なし)}"
 
+# --path-format を知らない git(2.31 未満。知らないオプションを出力にそのまま返す)でも、進行中の操作を確かめずに進まないこと。
+# 今の git が知らないオプションに置き換えて、同じ出力(2行)を作る
+mkdir "$root/old-git"
+printf '#!/usr/bin/env bash\nargs=()\nfor a in "$@"; do [ "$a" = --path-format=absolute ] && a=--hk-unknown-option=absolute; args+=("$a"); done\nexec %s "${args[@]}"\n' "$(command -v git)" >"$root/old-git/git"
+chmod +x "$root/old-git/git"
+scan_with "$root/old-git" scan-oldgit
+got=$(row scan-oldgit worktree wt-merged)
+[ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"進行中の操作"*"確かめられない"* ]] &&
+  pass "scan: --git-path の出力が1行の絶対パスでなければ worktree を残す" || fail "scan: --path-format を知らない git で wt-merged → ${got:-(出力なし)}"
+
 # git status --ignored を読めなければ、ignored ファイルの警告を黙って落とさずに worktree を残すこと
 wrap "$root/fail-ignored" git --ignored
 scan_with "$root/fail-ignored" scan-ignored

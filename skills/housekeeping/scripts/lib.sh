@@ -225,11 +225,15 @@ hk_path_absent() {
 }
 
 # hk_in_progress_op <worktree-path>: 進行中の rebase / merge / cherry-pick / revert / bisect を返す。
-# 何も無ければ空を返す。git が場所を返さなければ(確かめられない)、失敗を返す。
+# 何も無ければ空を返す。git が場所を1行の絶対パスで返さなければ(確かめられない)、失敗を返す。
 hk_in_progress_op() {
   local f p
   for f in rebase-merge rebase-apply MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
-    p=$(git -C "$1" rev-parse --path-format=absolute --git-path "$f" 2>/dev/null) && [ -n "$p" ] || return 1
+    p=$(git -C "$1" rev-parse --path-format=absolute --git-path "$f" 2>/dev/null) || return 1
+    # 1行の絶対パスでなければ確かめられない。--path-format を知らない git(2.31 未満)は、
+    # 知らないオプションを出力にそのまま返すので、2行になる
+    case $p in /*) ;; *) return 1 ;; esac
+    case $p in *$'\n'*) return 1 ;; esac
     if [ -e "$p" ]; then
       printf '%s\n' "$f"
       return 0
