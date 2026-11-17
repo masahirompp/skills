@@ -248,6 +248,27 @@ else
   pass "scan: (macOS でないか python3 が無いので、トレース中のプロセスの確認は飛ばす)"
 fi
 
+# lsof が cwd を読めないプロセスを付記付きで出す(Linux の "n/proc/<pid>/cwd (readlink: Permission denied)")ときも、
+# そのプロセスを「見えた」に数えないこと
+mkdir "$root/unreadable-lsof"
+printf '#!/bin/sh\n%s "$@" | awk -v p=%s %s\n' "$real_lsof" "$busy_pid" \
+  "'/^p/ { cur = substr(\$0, 2) } cur == p && /^n/ { print \"n/proc/\" p \"/cwd (readlink: Permission denied)\"; next } { print }'" >"$root/unreadable-lsof/lsof"
+chmod +x "$root/unreadable-lsof/lsof"
+scan_with "$root/unreadable-lsof" scan-unreadable
+got=$(row scan-unreadable worktree wt-busy)
+[ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"確かめられない(lsof が cwd を読めないプロセス"* ]] &&
+  pass "scan: lsof が cwd を読めないプロセスがあれば worktree を残す" || fail "scan: lsof が cwd を読めないと wt-busy → ${got:-(出力なし)}"
+
+# PID 名前空間の中(ps も lsof も外のプロセスを見ず、pid 1 は init でない)でも、外のプロセスが使う worktree を残すこと
+mkdir "$root/pidns"
+printf '#!/bin/sh\n%s "$@" | awk -v b=%s %s\n' "$(command -v ps)" "$busy_pid" "'\$1 == b { next } \$1 == 1 { \$NF = \"bash\" } { print }'" >"$root/pidns/ps"
+printf '#!/bin/sh\n%s "$@" | awk -v drop="p%s" %s\n' "$real_lsof" "$busy_pid" "'/^p/ { skip = (\$0 == drop) } !skip'" >"$root/pidns/lsof"
+chmod +x "$root/pidns/ps" "$root/pidns/lsof"
+scan_with "$root/pidns" scan-pidns
+got=$(row scan-pidns worktree wt-busy)
+[ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"確かめられない(pid 1 が init でない"* ]] &&
+  pass "scan: pid 1 が init でなければ worktree を残す" || fail "scan: PID 名前空間の中で wt-busy → ${got:-(出力なし)}"
+
 # オープン PR のベースの一覧を読めなければ止まること(読めないと、スタックした PR のベースが delete になる)
 wrap "$root/fail-jq" jq baseRefName
 scan_with "$root/fail-jq" scan-jq
