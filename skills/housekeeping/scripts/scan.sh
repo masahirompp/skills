@@ -7,7 +7,6 @@
 #           prune   ディレクトリが消えた worktree の管理情報(git worktree prune で消える)
 #           ask     判断材料が足りない。ユーザーに確認する
 #           keep    残す
-#           end     最後の行。走査を最後まで終えたしるし(この行が無ければ途中で止まっている)
 #   kind:   worktree / branch / remote
 #
 # 環境変数(lib.sh のものに加えて):
@@ -149,13 +148,13 @@ emit() { printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$@"; }
 # worktree 一覧。読めないまま進むと、worktree で使用中のブランチが delete 候補になる
 git worktree list --porcelain >"$tmp/wt" 2>"$tmp/wt.err" && main_wt=$(sed -n '1s/^worktree //p' "$tmp/wt") && [ -n "$main_wt" ] ||
   { echo "error: git worktree list を読めない: $(cat "$tmp/wt.err" 2>/dev/null)" >&2; exit 1; }
-# ローカルブランチとリモートブランチの一覧。読めないまま進むと、ブランチの行が欠けたまま end が出て、
+# ローカルブランチとリモートブランチの一覧。読めないまま進むと、ブランチの行が欠けたまま正常に終わり、
 # 一部だけの結果が完全な結果として扱われる
 git for-each-ref --format='%(refname:lstrip=2)%09%(objectname)%09%(upstream:track)' refs/heads/ >"$tmp/heads" 2>"$tmp/heads.err" ||
   { echo "error: ローカルブランチの一覧を読めない: $(cat "$tmp/heads.err" 2>/dev/null)" >&2; exit 1; }
 git for-each-ref --format='%(refname:lstrip=3)%09%(objectname)' "refs/remotes/$hk_remote/" >"$tmp/remotes" 2>"$tmp/remotes.err" ||
   { echo "error: リモートブランチの一覧を読めない: $(cat "$tmp/remotes.err" 2>/dev/null)" >&2; exit 1; }
-# プロセスの一覧は、読めなくても止まらない(サンドボックスの中ではよく起きる)。worktree ごとに「確かめられない」として残す
+# プロセスの一覧は、読めなくても止まらない(ブランチの判定は続けられる)。worktree ごとに「確かめられない」として残す
 if cwds=$(hk_process_cwds); then cwds_err=''; else cwds_err=$cwds cwds=''; fi
 
 printf 'action\tkind\tname\tsha\tpath\treason\n'
@@ -274,4 +273,3 @@ while IFS=$'\t' read -r name sha; do
   emit "$action" remote "$name" "$sha" "" "$reason"
 done <"$tmp/remotes"
 
-printf 'end\t\t\t\t\t走査を最後まで終えた\n'

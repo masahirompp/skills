@@ -21,7 +21,7 @@ default=$(hk_default_branch)
 hk_load_protect "$default" || exit 1
 if cwds=$(hk_process_cwds); then cwds_err=''; else cwds_err=$cwds cwds=''; fi
 
-# 承認済みの行は変数で持つ(一時ファイルを使わない。作れない環境で空のパスに書きに行くことを避ける)
+# 承認済みの行は変数で持つ
 input=$(grep -v '^action	')
 
 status=0
@@ -35,10 +35,10 @@ accepted='(($1 == "delete" || $1 == "ask") && ($2 == "worktree" || $2 == "branch
 # kind ごとに、受け付ける行だけを返す
 rows() { printf '%s\n' "$input" | awk -F'\t' -v k="$1" "\$2 == k && ($accepted)"; }
 
-# 受け付けない行(keep・end・空行を除く)は、消さずに知らせる
+# 受け付けない行(keep・空行を除く)は、消さずに知らせる
 while IFS= read -r line; do
   skip "未知の行のため扱わない: $line"
-done < <(printf '%s\n' "$input" | awk -F'\t' "\$0 == \"\" || \$1 == \"keep\" || \$1 == \"end\" { next } !($accepted)")
+done < <(printf '%s\n' "$input" | awk -F'\t' "\$0 == \"\" || \$1 == \"keep\" { next } !($accepted)")
 
 # 1. ディレクトリが消えた worktree の管理情報
 # git worktree prune は、承認した行に関係なく prunable なものを全て消す。git は、存在するのに読めないだけの

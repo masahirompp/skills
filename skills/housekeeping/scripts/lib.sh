@@ -23,22 +23,13 @@ hk_remote=${HOUSEKEEPING_REMOTE:-origin}
 
 # hk_mktemp_dir: 一時ディレクトリを作り、そのパスを返す。作れなければ理由を stderr に出して失敗を返す。
 # $(...) の中では exit しても呼び出し元は止まらないので、呼び出し側は必ず `|| exit 1` で止まる。
-# macOS の mktemp はテンプレートを付けないと TMPDIR を見ずに /var/folders/... を使う。
-# サンドボックスではそこに書けないことがあるので、場所をテンプレートで明示する。
-# TMPDIR が設定されていればそこだけを使う。未設定なら /tmp、次に mktemp の既定の場所を試す。
 hk_mktemp_dir() {
-  local d=''
-  if [ -n "${TMPDIR:-}" ]; then
-    d=$(mktemp -d "${TMPDIR%/}/housekeeping.XXXXXX" 2>/dev/null)
-  else
-    # -t のテンプレートには X を含める(GNU mktemp は X が足りないと失敗する。BSD は末尾に乱数を足す)
-    d=$(mktemp -d /tmp/housekeeping.XXXXXX 2>/dev/null) || d=$(mktemp -d -t housekeeping.XXXXXX 2>/dev/null)
-  fi
-  if [ -n "$d" ] && [ -d "$d" ]; then
+  local d base=${TMPDIR:-/tmp}
+  if d=$(mktemp -d "${base%/}/housekeeping.XXXXXX") && [ -n "$d" ] && [ -d "$d" ]; then
     printf '%s\n' "$d"
     return 0
   fi
-  echo "error: 一時ディレクトリを作れない(${TMPDIR:-/tmp と mktemp の既定の場所})。TMPDIR=<書き込める場所> で実行し直すか、サンドボックスの外で実行する" >&2
+  echo "error: 一時ディレクトリを作れない($base)" >&2
   return 1
 }
 
@@ -132,78 +123,41 @@ hk_parse_action() {
 # hk_process_cwds: 実行中プロセスのカレントディレクトリ一覧("pid<TAB>command<TAB>cwd")を返す。
 # 一覧がそろっていると確かめられなければ、理由を1行返して失敗を返す(呼び出し側は「使用中か確かめられない」として残す)。
 #
-# lsof の結果に自分($$)が出るだけでは「ほかも見える」の根拠にならない。sandbox-exec で他プロセスの
-# process-info を禁じると、lsof は自分の系統のプロセスだけを返す。そこで、ps で見える自分のユーザーのプロセス
-# (終了中・ゾンビを除く)が、すべて lsof に cwd 付きで出ているかを確かめる。lsof の前後で ps を取り、両方に出たものだけを
-# 比べる(その間に始まった・終わったプロセスで誤判定しない)。
-#   - cwd が分かったとみなすのは、lsof の n 行が "/" で始まり、末尾に " (...)" の付記が無いときだけ。
-#     Linux の lsof は cwd を読めないプロセス(dumpable でない gpg-agent など)も "/proc/<pid>/cwd (readlink: ...)" の形で出す
-#   - 除くのは終了中のプロセスだけ。stat の Z(ゾンビ)と E(macOS の終了中)、Linux では X(終了済み)も。
-#     macOS の X はトレース中(デバッガの下)で、生きているので除かない
-#   - PID 名前空間の中では、ps も lsof も同じ絞られた一覧を見る。その中の pid 1 は init ではないので、
-#     pid 1 が launchd / systemd / init でなければ、一覧が絞られているとみなす。ps が pid 1 を見られないときも同じ
-# hk_ps_self の終了コード: 1 ps で pid 1 を見られない / 2 pid 1 が init でない
+# lsof の結果に自分($$)が出るだけでは「ほかも見える」の根拠にならないので、ps で見える自分のユーザーのプロセスが、
+# すべて lsof に出ているかを確かめる。lsof の前後で ps を取り、両方に出たものだけを比べる
+# (その間に始まった・終わったプロセスで誤判定しない)。除くのは stat の Z(ゾンビ)と E(終了中)だけで、
+# X(トレース中。デバッガの下)は生きているので除かない。macOS の ps と lsof を前提にしている。
 hk_ps_self() {
-  local ex='[ZE]'
-  [ "$(uname -s 2>/dev/null)" = Darwin ] || ex='[ZEX]'
-  ps -A -o pid= -o uid= -o stat= -o comm= 2>/dev/null | awk -v u="$(id -u)" -v ex="$ex" '
-    $1 == 1 {
-      one = 1
-      c = $0
-      sub(/^[[:space:]]*[0-9]+[[:space:]]+[0-9]+[[:space:]]+[^[:space:]]+[[:space:]]+/, "", c)
-      sub(/.*\//, "", c)
-      if (c == "launchd" || c == "systemd" || c == "init") init = 1
-    }
-    $2 == u && $3 !~ ex { print $1 }
-    END { if (!one) exit 1; if (!init) exit 2 }'
+  ps -A -o pid= -o uid= -o stat= 2>/dev/null | awk -v u="$(id -u)" -v self="$$" '
+    $1 == self { found = 1 }
+    $2 == u && $3 !~ /[ZE]/ { print $1 }
+    END { exit !found }'
 }
 hk_process_cwds() {
-  local before after raw counts rc
+  local before after out missing
   command -v lsof >/dev/null 2>&1 || { printf '%s\n' "lsof が無い"; return 1; }
-  before=$(hk_ps_self)
-  rc=$?
-  case $rc in
-    0) ;;
-    2) printf '%s\n' "pid 1 が init でない。PID 名前空間の中などで、一部のプロセスしか見えていない"; return 1 ;;
-    *) printf '%s\n' "ps でプロセス一覧を読めない"; return 1 ;;
-  esac
-  # cwd が分かった行は "pid<TAB>command<TAB>cwd"、分からなかった行は "?<TAB>pid"
-  raw=$(lsof -w -a -d cwd -Fpcn 2>/dev/null | awk '
+  before=$(hk_ps_self) || { printf '%s\n' "ps でプロセス一覧を読めない"; return 1; }
+  out=$(lsof -w -a -d cwd -Fpcn 2>/dev/null | awk '
     /^p/ { pid = substr($0, 2) }
     /^c/ { cmd = substr($0, 2) }
-    /^n/ {
-      n = substr($0, 2)
-      if (n ~ /^\// && n !~ / \([^()]*\)$/) printf "%s\t%s\t%s\n", pid, cmd, n
-      else printf "?\t%s\n", pid
-    }')
+    /^n/ { printf "%s\t%s\t%s\n", pid, cmd, substr($0, 2) }') # lsof の終了コードは見ない。欠けは下の突き合わせで見つける
   after=$(hk_ps_self) || { printf '%s\n' "ps でプロセス一覧を読めない"; return 1; }
-  # before と after の両方にあり、lsof に cwd 付きで出ていない pid を数える("lsof に出ない 件数<TAB>cwd を読めない 件数")。
-  # 3つの一覧は "--" の行で区切って1本の入力にする
-  counts=$({
+  # before と after の両方にあり、lsof に無い pid を数える。3つの一覧は "--" の行で区切って1本の入力にする
+  missing=$({
     printf '%s\n' "$before" --
     printf '%s\n' "$after" --
-    printf '%s\n' "$raw"
+    printf '%s\n' "$out"
   } | awk -F'\t' '
     $0 == "--" { part++; next }
     part == 0 { b[$1] = 1; next }
     part == 1 { if ($1 in b) both[$1] = 1; next }
-    $1 == "?" { bad[$2] = 1; next }
     { seen[$1] = 1 }
-    END {
-      m = 0; u = 0
-      for (p in both) if (!(p in seen)) { if (p in bad) u++; else m++ }
-      print m "\t" u
-    }')
-  case $counts in
-    0$'\t'0) ;;
-    *$'\t'0) printf '%s\n' "lsof に出ないプロセスが ${counts%%$'\t'*} 件ある。サンドボックスなどで一部しか見えていない"; return 1 ;;
-    0$'\t'*) printf '%s\n' "lsof が cwd を読めないプロセスが ${counts#*$'\t'} 件ある"; return 1 ;;
-    *$'\t'*) printf '%s\n' "lsof に出ないプロセスが ${counts%%$'\t'*} 件、cwd を読めないプロセスが ${counts#*$'\t'} 件ある。一部しか見えていない"; return 1 ;;
-    *) printf '%s\n' "lsof の出力と ps の一覧を突き合わせられない"; return 1 ;;
-  esac
-  # 失敗を空の一覧(どれも使用中でない)として返さない
-  raw=$(printf '%s\n' "$raw" | awk -F'\t' '$1 != "?"') || { printf '%s\n' "lsof の出力を読めない"; return 1; }
-  printf '%s\n' "$raw"
+    END { n = 0; for (p in both) if (!(p in seen)) n++; print n }')
+  if [ "$missing" != 0 ]; then
+    printf '%s\n' "lsof に出ないプロセスが ${missing:-?} 件ある"
+    return 1
+  fi
+  printf '%s\n' "$out"
 }
 
 # hk_path_in_use <path> <process-cwds>: path 以下をカレントにしているプロセスを1つ、"pid <pid> <command>" の形で返す。

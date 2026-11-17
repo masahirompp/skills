@@ -173,8 +173,6 @@ got=$(awk -F'\t' '$2 == "worktree" && $3 == "wt-merged" { print $1 "\t" $6 }' "$
 got=$(awk -F'\t' '$2 == "branch" && $3 == "wt-merged" { print $1 "\t" $6 }' "$root/scan-nolsof.tsv")
 [ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"を残すため: プロセスが使用中か確かめられない"* ]] &&
   pass "scan: 残した worktree のブランチも「確かめられない」で残す" || fail "scan: 残した worktree のブランチ → ${got:-(出力なし)}"
-grep -q $'^end\t' "$root/scan.tsv" && [ "$(tail -1 "$root/scan.tsv" | cut -f1)" = end ] &&
-  pass "scan: 最後の行に end を出す" || fail "scan: 最後の行が end でない"
 
 # --- 失敗の注入 -------------------------------------------------------------
 # 対象のコマンドだけを失敗させる包みを PATH の先頭に置く。
@@ -203,17 +201,6 @@ scan_with "$root/partial-lsof" scan-partial
 got=$(row scan-partial worktree wt-busy)
 [ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"確かめられない(lsof に出ないプロセス"* ]] &&
   pass "scan: lsof に一部のプロセスしか出なければ worktree を残す" || fail "scan: lsof が一部しか見せないと wt-busy → ${got:-(出力なし)}"
-
-# サンドボックスで他プロセスの情報を禁じたとき(lsof には自分の系統だけが出る)も、worktree を残すこと
-sbx='(version 1)(allow default)(deny process-info* (target others))'
-if command -v sandbox-exec >/dev/null 2>&1 && sandbox-exec -p "$sbx" true 2>/dev/null; then
-  sandbox-exec -p "$sbx" "$scripts/scan.sh" >"$root/scan-sbx.tsv" 2>/dev/null || true
-  got=$(row scan-sbx worktree wt-merged)
-  [ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"確かめられない"* ]] &&
-    pass "scan: サンドボックスで他プロセスを見られなければ worktree を残す" || fail "scan: サンドボックスの中で wt-merged → ${got:-(出力なし)}"
-else
-  pass "scan: (sandbox-exec を使えないので、サンドボックスの確認は飛ばす)"
-fi
 
 # macOS でトレース中(ps の stat に X)の生きたプロセスも、lsof に出ているかの確認から外さないこと
 if [ "$(uname)" = Darwin ] && command -v python3 >/dev/null 2>&1; then
@@ -250,27 +237,6 @@ if [ "$(uname)" = Darwin ] && command -v python3 >/dev/null 2>&1; then
 else
   pass "scan: (macOS でないか python3 が無いので、トレース中のプロセスの確認は飛ばす)"
 fi
-
-# lsof が cwd を読めないプロセスを付記付きで出す(Linux の "n/proc/<pid>/cwd (readlink: Permission denied)")ときも、
-# そのプロセスを「見えた」に数えないこと
-mkdir "$root/unreadable-lsof"
-printf '#!/bin/sh\n%s "$@" | awk -v p=%s %s\n' "$real_lsof" "$busy_pid" \
-  "'/^p/ { cur = substr(\$0, 2) } cur == p && /^n/ { print \"n/proc/\" p \"/cwd (readlink: Permission denied)\"; next } { print }'" >"$root/unreadable-lsof/lsof"
-chmod +x "$root/unreadable-lsof/lsof"
-scan_with "$root/unreadable-lsof" scan-unreadable
-got=$(row scan-unreadable worktree wt-busy)
-[ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"確かめられない(lsof が cwd を読めないプロセス"* ]] &&
-  pass "scan: lsof が cwd を読めないプロセスがあれば worktree を残す" || fail "scan: lsof が cwd を読めないと wt-busy → ${got:-(出力なし)}"
-
-# PID 名前空間の中(ps も lsof も外のプロセスを見ず、pid 1 は init でない)でも、外のプロセスが使う worktree を残すこと
-mkdir "$root/pidns"
-printf '#!/bin/sh\n%s "$@" | awk -v b=%s %s\n' "$(command -v ps)" "$busy_pid" "'\$1 == b { next } \$1 == 1 { \$NF = \"bash\" } { print }'" >"$root/pidns/ps"
-printf '#!/bin/sh\n%s "$@" | awk -v drop="p%s" %s\n' "$real_lsof" "$busy_pid" "'/^p/ { skip = (\$0 == drop) } !skip'" >"$root/pidns/lsof"
-chmod +x "$root/pidns/ps" "$root/pidns/lsof"
-scan_with "$root/pidns" scan-pidns
-got=$(row scan-pidns worktree wt-busy)
-[ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"確かめられない(pid 1 が init でない"* ]] &&
-  pass "scan: pid 1 が init でなければ worktree を残す" || fail "scan: PID 名前空間の中で wt-busy → ${got:-(出力なし)}"
 
 # オープン PR のベースの一覧を読めなければ止まること(読めないと、スタックした PR のベースが delete になる)
 wrap "$root/fail-jq" jq baseRefName
@@ -328,15 +294,14 @@ got=$(row scan-prinfo branch squashed)
 wrap "$root/fail-wtlist" git 'worktree list'
 scan_with "$root/fail-wtlist" scan-wtlist
 [ "$scan_rc" != 0 ] && grep -q 'worktree list を読めない' "$root/scan-wtlist.err" && ! grep -q '^delete' "$root/scan-wtlist.tsv" &&
-  ! grep -q $'^end\t' "$root/scan-wtlist.tsv" &&
-  pass "scan: worktree 一覧を読めなければ止まり、end を出さない" || fail "scan: worktree 一覧を読めないのに止まらない(rc=$scan_rc)"
+  pass "scan: worktree 一覧を読めなければ止まる" || fail "scan: worktree 一覧を読めないのに止まらない(rc=$scan_rc)"
 
-# ブランチの一覧を読めなければ止まること(読めないと、ブランチの行が欠けたまま end が出る)
+# ブランチの一覧を読めなければ止まること(読めないと、ブランチの行が欠けたまま正常に終わる)
 for refs in refs/heads/ refs/remotes/origin/; do
   wrap "$root/fail-refs-${refs//\//-}" git " $refs "
   scan_with "$root/fail-refs-${refs//\//-}" scan-refs
-  [ "$scan_rc" != 0 ] && grep -q 'ブランチの一覧を読めない' "$root/scan-refs.err" && ! grep -q $'^end\t' "$root/scan-refs.tsv" &&
-    pass "scan: $refs の一覧を読めなければ止まり、end を出さない" || fail "scan: $refs の一覧を読めないのに止まらない(rc=$scan_rc)"
+  [ "$scan_rc" != 0 ] && grep -q 'ブランチの一覧を読めない' "$root/scan-refs.err" &&
+    pass "scan: $refs の一覧を読めなければ止まる" || fail "scan: $refs の一覧を読めないのに止まらない(rc=$scan_rc)"
 done
 
 # 存在するのに読めない worktree(git は prunable と出す)を、prune にも、そのブランチを delete にもしないこと
