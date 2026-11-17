@@ -661,6 +661,11 @@ check(rc == 1 and "failed: child_error" in err and "overloaded" in err and "使�
       "途中の result の本文が文言を引用しただけの失敗には、モデルのことを添えない")
 rc, _, err = run(wt, "--new-run")
 check(rc == 0, "新しいシリーズで続ける")
+rc, _, err = run(wt, "--model", "opsu-nonexistent", FAKE_REVIEW_security_review="badmodelstderr")
+failed = err[err.index("failed:"):] if "failed:" in err else ""
+check(rc == 1 and failed.startswith("failed: child_error: review security-review") and "result の行がない" in failed
+      and "--model のモデル opsu-nonexistent を使えない可能性がある" in failed,
+      f"result の行を出さず stderr にだけ印を出して失敗しても、failed: の詳細に添える {failed[:300]}")
 rc, _, _ = run(wt, "--instruct", "security-review=x", FAKE_REVIEW_security_review="fail")
 check(rc == 1 and state()["attempts"][-1].get("instructed") == ["security-review"], "失敗した試行にも、指示を渡した観点を残す")
 rc, _, err = run(wt, "--new-run", "--instruct", "security-review=x")
@@ -733,7 +738,15 @@ for value in (True, -1, 0, "x"):
     rc, _, err = run(wt)
     check(rc == 2 and "実行中" in err and state()["lock"]["nonce"] == "live",
           f"stale_after={value!r} でも、1分前のロックは奪わない")
-s["lock"]["stale_after"] = 3300.0
+# 数でない値は、記録の無い旧版のロックと同じ75分で見る(下限の55分に丸めない)
+for value in ("x", True, None):
+    s = state()
+    s["lock"] = {"running": True, "started_at": lock_started(60), "sha": "abcdef0", "nonce": "live", "stale_after": value}
+    write_state(s)
+    rc, _, err = run(wt)
+    check(rc == 2 and "実行中" in err and state()["lock"]["nonce"] == "live",
+          f"stale_after={value!r} は旧版の長さで見て、60分前のロックも奪わない")
+s["lock"].update(stale_after=3300.0, started_at=lock_started(1))
 write_state(s)
 rc, _, err = run(wt, "--new-run")
 check(rc == 2 and "実行中" in err and state()["lock"]["nonce"] == "live",

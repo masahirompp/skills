@@ -16,6 +16,7 @@
 #                            / remote(PR のブランチにだけ別のコミットを push する)
 #                            / switch(作業ツリーはクリーンのまま、別のブランチに切り替える)
 #                            / badmodel(使えないモデルを渡したときの出力。本物で観測した形)
+#                            / badmodelstderr(result の行を出さず、使えないモデルの印を stderr にだけ出して異常終了する)
 #                            / quotemodel(途中の本文で badmodel の文言を引用したあと、別の理由で失敗する)
 #                            <観点> は英数字以外を _ にしたもの(例: FAKE_REVIEW_code_review)
 # 出力は本物と同じく stream-json(1行1イベント)。事前確認以外は init の行から始める
@@ -163,6 +164,10 @@ elif mode == "badmodel":
            "to it. Run --model to pick a different model.")
     emit({"type": "assistant", "message": {"content": [{"type": "text", "text": msg}]}})
     emit({"type": "result", "subtype": "success", "is_error": True, "result": msg})
+    print(f'[claude-code:unrecognized_model] {{"model":"{model}","query_source":"sdk"}}', file=sys.stderr)
+    sys.exit(1)
+elif mode == "badmodelstderr":
+    model = args[args.index("--model") + 1] if "--model" in args else ""
     print(f'[claude-code:unrecognized_model] {{"model":"{model}","query_source":"sdk"}}', file=sys.stderr)
     sys.exit(1)
 elif mode == "bg":
