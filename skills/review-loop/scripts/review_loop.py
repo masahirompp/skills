@@ -1,25 +1,26 @@
 #!/usr/bin/env python3
 """PR のレビューループの1試行を、始める前と終えたあとに確かめて、PR の状態コメントに記録する。
 
-    review_loop.py begin <worktree の絶対パス> [--new-run]
+    review_loop.py begin <worktree の絶対パス> [--new-run] [--roles 役,役,...]
     review_loop.py end   <worktree の絶対パス> [--failed 理由]
 
 レビュー役は起動しない。観点スキルは、呼び出し元(親)が begin と end の間に呼ぶ。
 
 begin: 前提(作業ディレクトリが worktree のトップ、作業ツリーがクリーン、ローカルの HEAD と PR の head が一致、
-       自分のオープンな PR)と上限を確かめ、ロックを取り、作業ディレクトリを作る。試行の記録(PR 番号、SHA、ブランチ、
-       ロックの nonce、作業ディレクトリ)を git の管理ディレクトリに置き、標準出力に `pr=`、`sha=`、`attempt=`、
-       `workdir=` の行を出す。
+       自分のオープンな PR)と上限を確かめ、ロックを取り、作業ディレクトリと、レビュー役ごとの出力の置き場を作る。
+       試行の記録(PR 番号、SHA、ブランチ、ロックの nonce、作業ディレクトリ、役ごとの出力の置き場)を git の
+       管理ディレクトリに置き、標準出力に `pr=`、`sha=`、`attempt=`、`workdir=`、役ごとの `out.<役の名前>=` の行を出す。
 end:   試行の記録を読み、begin のあとに作業ツリー、HEAD、ブランチ、PR の head が変わっていないかを確かめる。
-       作業ディレクトリの `review-<役の名前>.md` を、役の名前の区切りでつないで `reviews.md` を作り、試行の結果を
-       記録してロックを解く。レビュー役が失敗したときは、--failed に理由を付けて呼ぶ。
+       全ての役の出力を作業ディレクトリに集め(`review-<役の名前>.md`)、役の名前の区切りでつないで `reviews.md` を
+       作り、試行の結果を記録してロックを解く。標準出力に `workdir=` と `roles=` の行を出す。
+       レビュー役が失敗したときは、--failed に理由を付けて呼ぶ。
 
 終了コード:
   0  begin: 試行を始めた。end: 試行を completed として記録した
   1  試行の失敗を記録した(begin: 作業ディレクトリを作れない。end: 混入、PR の head の変化、--failed)
-  2  何も記録していない(前提を満たさない、ロックを取れない、上限に達した、gh や git の失敗、閉じる試行が無い)。
-     ただし begin は、残っていた古いロックを interrupted として片付けた記録を残すことがある。
-     end がこれで終わったときにロックが残っているかは、stderr の理由による(SKILL.md の手順3)
+  2  何も記録していない(前提を満たさない、ロックを取れない、上限に達した、gh や git の失敗、閉じる試行が無い、
+     出力の無い役がある)。ただし begin は、残っていた古いロックを interrupted として片付けた記録を残すことがある。
+     end がこれで終わったときに試行が開いたままかは、stderr の理由による(SKILL.md の手順3)
 """
 import argparse
 import datetime as dt
@@ -37,9 +38,14 @@ import traceback
 import uuid
 
 # --- 設定 ------------------------------------------------------------------
+# レビュー役の既定。begin の --roles で変える。変えるときは、SKILL.md の「前提」と手順2の表も合わせる。
+# code-review を2つ並べるのは、同じ差分でも回ごとに見つける不具合が変わるため(skill-dev/review-loop/bench/README.md)
+ROLES = ["code-review", "code-review-2", "security-review"]
 SAFETY_MAX_ITER = 10          # シリーズあたりの反復の上限
 MAX_CONSECUTIVE_FAILURES = 3  # 連続失敗の上限
-STALE_LOCK_AFTER = 55 * 60    # begin から end までの長さの上限。ロックに stale_after として記録し、読む側はその値で古さを決める
+# ロックを古いとみなすまでの長さ。ロックに stale_after として記録し、読む側はその値で古さを決める。
+# レビュー役に制限時間は無いので、これより長引いた試行のロックは、ほかの begin に奪われうる(SKILL.md の「既知の制約」)
+STALE_LOCK_AFTER = 55 * 60
 # stale_after を記録していない旧版のロックを、古いとみなすまでの長さ(旧版がロックを持ちうる最長)
 LEGACY_STALE_LOCK_AFTER = 75 * 60
 STALE_LOCK_MAX = 120 * 60     # 記録された stale_after を信じる上限(手で大きな値に書き換えられても、永久には止まらない)
@@ -53,7 +59,6 @@ ATTEMPT_FILE = "review-loop-attempt.json"  # 試行の記録。git の管理デ�
 ROLE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$")  # レビュー役の名前(review-<名前>.md の <名前>)
 RUN_ID_RE = re.compile(r"^\d{8}T\d{6}$")
 SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
-TOKEN_KEYS = {"input", "cache_read", "output"}  # 旧版が試行ごとに記録していたトークン数の形(読むだけ)
 
 
 class Precondition(Exception):
@@ -152,17 +157,13 @@ def repo_slug(pr):
 
 
 # --- 状態コメント ------------------------------------------------------------
-def valid_tokens(t):
-    return t is None or (isinstance(t, dict) and set(t) == TOKEN_KEYS and all(isinstance(v, int) for v in t.values()))
-
-
 def valid_sha(v):
     return v is None or (isinstance(v, str) and bool(SHA_RE.match(v)))
 
 
 def valid_state(s):
-    """状態コメントの JSON が、このスクリプト(旧版を含む)の書いた形をしているか。render、begin、end が読むものを全て見る。
-    旧版が試行に記録していた観点、指示を渡した観点、モデル、トークン数は、あっても読まない(形だけ確かめる)。"""
+    """状態コメントの JSON が、このスクリプト(旧版を含む)の書いた形をしているか。render、begin、end が読むものだけを見る。
+    旧版が試行に記録していた観点、指示を渡した観点、モデル、トークン数は読まないので、形も確かめない。"""
     try:
         lock, prev = s["lock"], s.get("previous_run")
         if lock["running"]:
@@ -170,17 +171,14 @@ def valid_state(s):
         return (bool(RUN_ID_RE.match(s["run_id"]))
                 and isinstance(s["iter"], int) and isinstance(s["consecutive_failures"], int)
                 and isinstance(lock["running"], bool) and valid_sha(lock.get("sha"))
-                and (not lock["running"] or isinstance(lock.get("sha"), str))  # 実行中のロックは、end が sha を読む
+                and (not lock["running"] or isinstance(lock.get("sha"), str))  # end が、試行の記録の SHA と照らす
                 and isinstance(lock.get("branch") or "", str)
                 and all(isinstance(a["result"], str) and isinstance(a["at"], str)
                         and valid_sha(a.get("sha")) and isinstance(a.get("reason") or "", str)
-                        and valid_tokens(a.get("tokens")) and isinstance(a.get("model") or "", str)
                         and isinstance(a.get("iter") or 0, int)
-                        and all(isinstance(a.get(k) or [], list) and all(isinstance(n, str) for n in a.get(k) or [])
-                                for k in ("perspectives", "instructed", "roles"))
+                        and isinstance(a.get("roles") or [], list) and all(isinstance(n, str) for n in a.get("roles") or [])
                         for a in s["attempts"])
-                and (prev is None or (bool(RUN_ID_RE.match(prev["run_id"])) and isinstance(prev["iterations"], int)
-                                      and valid_tokens(prev.get("tokens")))))
+                and (prev is None or (bool(RUN_ID_RE.match(prev["run_id"])) and isinstance(prev["iterations"], int))))
     except (KeyError, TypeError, ValueError, AttributeError):
         return False
 
@@ -281,7 +279,7 @@ def render(state):
             result = a["result"] + (f"(反復 {a['iter']})" if a.get("iter") else "")
             if a.get("reason"):
                 result += f": {a['reason'][:TABLE_REASON_CHARS]}"
-            lines.append(f"| {cell((a['sha'] or '')[:7])} | {cell(a['at'])} | {cell(result)} |")
+            lines.append(f"| {cell((a.get('sha') or '')[:7])} | {cell(a['at'])} | {cell(result)} |")
         lines.append("")
     lines.append("<sub>review-loop のスクリプトが更新するコメント。手で編集しても上書きされる。</sub>")
     return "\n".join(lines)
@@ -358,17 +356,11 @@ def release_lock(sc, state, nonce):
 
 
 # --- 作業ディレクトリ --------------------------------------------------------
-def workdir_path(repo, pr_number, run_id, attempt_no):
-    """<一時ディレクトリ>/review-loop/<owner>_<repo>/<PR番号>/<run_id>/<試行>/"""
-    return os.path.join(tempfile.gettempdir(), "review-loop", repo, str(pr_number), run_id, str(attempt_no))
-
-
-def make_workdir(path):
-    """作業ディレクトリを新しく作る。
+def tmp_top():
+    """<一時ディレクトリ>/review-loop を、自分だけが使える形で用意して返す。
 
     共有の一時ディレクトリ(TMPDIR のない Linux の /tmp)で他人に先回りされたり、レビューの出力を
-    読まれたりしないよう、起点は自分が所有するディレクトリに限り、権限を 0700 に絞って使う。
-    試行のディレクトリが既にあれば、前の出力と混ざるので失敗にする。"""
+    読まれたりしないよう、起点は自分が所有するディレクトリに限り、権限を 0700 に絞って使う。"""
     top = os.path.join(tempfile.gettempdir(), "review-loop")
     try:
         os.makedirs(top, mode=0o700, exist_ok=True)
@@ -377,17 +369,64 @@ def make_workdir(path):
             raise AttemptFailed("workdir_error", f"{top} が自分の所有するディレクトリではない")
         if st.st_mode & 0o077:  # umask などで広い権限で作られていたら絞る
             os.chmod(top, 0o700)
+    except OSError as e:
+        raise AttemptFailed("workdir_error", f"作業ディレクトリを作れない: {e}")
+    return top
+
+
+def make_workdir(top, repo, pr_number, run_id, attempt_no):
+    """<top>/<owner>_<repo>/<PR番号>/<run_id>/<試行>/ を新しく作って返す。
+    既にあれば、前の出力と混ざるので失敗にする。"""
+    path = os.path.join(top, repo, str(pr_number), run_id, str(attempt_no))
+    try:
         os.makedirs(path)
     except FileExistsError:
         raise AttemptFailed("workdir_error", f"作業ディレクトリが既にある: {path}")
     except OSError as e:
         raise AttemptFailed("workdir_error", f"作業ディレクトリを作れない: {e}")
+    return path
+
+
+def make_outs(top, roles):
+    """レビュー役ごとの出力の置き場を作り、{役の名前: 出力のファイルのパス} を返す。
+
+    役ごとに、名前を推し量れない別のディレクトリにする。作業ディレクトリの中に置くと、レビュー役が、ほかの役の
+    出力や、過去の試行の記録(俯瞰の役の出力)を、渡されたパスの隣で見つけられる。"""
+    outs = {}
+    try:
+        for role in roles:
+            d = os.path.join(top, "out", uuid.uuid4().hex)
+            os.makedirs(d, mode=0o700)
+            outs[role] = os.path.join(d, "review.md")
+    except OSError as e:
+        raise AttemptFailed("workdir_error", f"レビュー役の出力の置き場を作れない: {e}")
+    return outs
+
+
+def remove_outs(outs):
+    for path in outs.values():
+        shutil.rmtree(os.path.dirname(path), ignore_errors=True)
 
 
 # --- 試行の記録 --------------------------------------------------------------
 def attempt_file(wt):
     """試行の記録の置き場。git の管理ディレクトリの中なので、作業ツリーを汚さず、worktree ごとに分かれる。"""
     return os.path.join(run(["git", "rev-parse", "--absolute-git-dir"], cwd=wt).stdout.strip(), ATTEMPT_FILE)
+
+
+def write_attempt(path, rec):
+    """試行の記録を書く。書きかけのファイルを残さないよう、隣に書いてから置き換える。"""
+    tmp = f"{path}.{os.getpid()}.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(rec, f, ensure_ascii=False)
+        os.replace(tmp, path)
+    except OSError as e:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise AttemptFailed("workdir_error", f"試行の記録 {path} を書けない: {e}")
 
 
 def read_attempt(path):
@@ -398,11 +437,16 @@ def read_attempt(path):
     except FileNotFoundError:
         return None
     except (OSError, ValueError) as e:
-        raise Precondition(f"試行の記録 {path} を読めない: {e}")
+        raise Precondition(f"試行の記録 {path} を読めない: {e}。この試行は閉じられないので、ファイルを消してから、"
+                           "手順1からやり直す(状態コメントのロックは、古くなると次の begin が片付ける)")
+    outs = rec.get("outs") if isinstance(rec, dict) else None
     ok = (isinstance(rec, dict) and isinstance(rec.get("pr"), int) and valid_sha(rec.get("sha")) and rec.get("sha")
-          and all(isinstance(rec.get(k), str) for k in ("branch", "nonce", "workdir", "started_at")))
+          and all(isinstance(rec.get(k), str) for k in ("branch", "nonce", "workdir", "started_at"))
+          and isinstance(outs, dict) and outs
+          and all(isinstance(k, str) and ROLE_RE.match(k) and isinstance(v, str) for k, v in outs.items()))
     if not ok:
-        raise Precondition(f"試行の記録 {path} が、begin の書いた形をしていない")
+        raise Precondition(f"試行の記録 {path} が、begin の書いた形をしていない。この試行は閉じられないので、ファイルを"
+                           "消してから、手順1からやり直す(状態コメントのロックは、古くなると次の begin が片付ける)")
     return rec
 
 
@@ -435,50 +479,69 @@ def pr_head_change(wt, rec):
 
 
 # --- レビュー役の出力 --------------------------------------------------------
-def collect_reviews(workdir):
-    """作業ディレクトリの review-<役の名前>.md を読み、[(役の名前, 本文)] を名前の順で返す。"""
-    found = []
-    try:
-        names = sorted(os.listdir(workdir))
-    except OSError as e:
-        raise Precondition(f"作業ディレクトリ {workdir} を読めない: {e}")
-    for n in names:
-        if not (n.startswith("review-") and n.endswith(".md")):
-            continue
-        role = n[len("review-"):-len(".md")]
-        if not ROLE_RE.match(role):
-            raise Precondition(f"レビュー役の出力のファイル名を、役の名前として読めない: {n}"
-                               "(review-<役の名前>.md。名前は英数字と _ . : - で、80文字まで)")
+SEPARATOR_RE = re.compile(r"^===== 観点: .* =====\s*$")
+
+
+def parse_roles(arg):
+    """--roles の値を、役の名前の一覧にする。"""
+    roles = [r.strip() for r in arg.split(",")] if arg is not None else list(ROLES)
+    bad = [r for r in roles if not ROLE_RE.match(r)]
+    if bad or not roles:
+        raise Precondition(f"--roles を役の名前として読めない: {arg!r}(カンマ区切り。名前は英数字と _ . : - で、80文字まで)")
+    if len(set(roles)) != len(roles):
+        raise Precondition(f"--roles に同じ名前がある: {arg}(同じスキルを重ねるときは code-review-2 のように番号を付ける)")
+    return roles
+
+
+def collect_reviews(outs):
+    """全ての役の出力を読み、[(役の名前, 本文)] を名前の順で返す。出力の無い役があれば Precondition。"""
+    found, missing = [], []
+    for role, path in sorted(outs.items()):
         try:
-            with open(os.path.join(workdir, n), encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 text = f.read()
+        except FileNotFoundError:
+            text = ""
         except (OSError, ValueError) as e:
-            raise Precondition(f"{n} を読めない: {e}")
-        if not text.strip():
-            raise Precondition(f"{n} が空。そのレビュー役が失敗したなら、--failed を付けて閉じる")
-        found.append((role, text))
-    return sorted(found)  # ファイル名の順ではなく、役の名前の順(code-review、code-review-2 の順になる)
+            raise Precondition(f"{role} の出力 {path} を読めない: {e}")
+        if text.strip():
+            found.append((role, text))
+        else:
+            missing.append(f"{role}({path})")
+    if missing:
+        raise Precondition("出力の無いレビュー役がある: " + "、".join(missing)
+                           + "。結果が届いているなら、その内容をそのまま置く。その役が失敗したなら、--failed を付けて閉じる")
+    return found
 
 
 def write_reviews(workdir, reviews):
-    """レビュー役の出力を、役の名前の区切りでつないで reviews.md に書く。"""
-    joined = "\n\n".join(f"===== 観点: {role} =====\n{text.rstrip()}" for role, text in reviews) + "\n"
+    """役ごとの出力を作業ディレクトリに写し(review-<役の名前>.md)、役の名前の区切りでつないで reviews.md に書く。
+
+    本文に区切りと同じ形の行があれば、行頭に空白を足す(行頭から始まる区切りの行を数えれば、役を数えられるように)。"""
+    parts = []
     try:
+        for role, text in reviews:
+            with open(os.path.join(workdir, f"review-{role}.md"), "w", encoding="utf-8") as f:
+                f.write(text)
+            body = "\n".join(" " + line if SEPARATOR_RE.match(line) else line for line in text.rstrip().split("\n"))
+            parts.append(f"===== 観点: {role} =====\n{body}")
         with open(os.path.join(workdir, "reviews.md"), "w", encoding="utf-8") as f:
-            f.write(joined)
+            f.write("\n\n".join(parts) + "\n")
     except OSError as e:
-        raise Precondition(f"reviews.md を書けない: {e}")
+        raise Precondition(f"レビュー役の出力を {workdir} に書けない: {e}")
 
 
 # --- 本体 --------------------------------------------------------------------
-def begin(worktree, new_run):
+def begin(worktree, new_run, roles_arg=None):
     """試行を始める。標準出力に出す行の辞書を返す。"""
     check_tools()
+    roles = parse_roles(roles_arg)
     wt = normalize_worktree(worktree)
     if os.path.realpath(os.getcwd()) != wt:
         # レビュー役は、呼び出し元(親)の作業ディレクトリで動く。ここが worktree でなければ、別のツリーをレビューする
         raise Precondition(f"作業ディレクトリ({os.getcwd()})が worktree のトップ({wt})ではない。"
-                           "レビュー役はあなたの作業ディレクトリで動くので、worktree の中から実行する")
+                           "レビュー役はあなたの作業ディレクトリで動くので、セッションの作業ディレクトリを worktree にしてから"
+                           "実行する(コマンドの前に cd を付けて通しても、レビュー役は元の場所で動く)")
     record = attempt_file(wt)
     if read_attempt(record) is not None:
         raise Precondition("前の試行を end で閉じていない。end を呼んで閉じてから始める"
@@ -499,29 +562,37 @@ def begin(worktree, new_run):
 
     sc = StateComment(wt, pr["number"], me)
     state, nonce = acquire_lock(sc, head, branch, new_run)
+    workdir, outs = None, {}
     try:  # ロックを取ったあとは、試行を始められなければ解除する
         if state["iter"] >= SAFETY_MAX_ITER:
             raise Precondition(f"反復が安全上限({SAFETY_MAX_ITER} 回)に達した")
         if state["consecutive_failures"] >= MAX_CONSECUTIVE_FAILURES:
             raise Precondition(f"連続失敗が {MAX_CONSECUTIVE_FAILURES} 回に達した。原因を取り除いてから、利用者の指示で --new-run する")
         attempt_no = len(state["attempts"]) + 1
-        workdir = workdir_path(repo_slug(pr), pr["number"], state["run_id"], attempt_no)
-        make_workdir(workdir)
-        try:
-            with open(record, "w", encoding="utf-8") as f:
-                json.dump({"pr": pr["number"], "sha": head, "branch": branch, "nonce": nonce, "workdir": workdir,
-                           "started_at": state["lock"]["started_at"]}, f)
-        except OSError as e:
-            raise AttemptFailed("workdir_error", f"試行の記録 {record} を書けない: {e}")
+        top = tmp_top()
+        workdir = make_workdir(top, repo_slug(pr), pr["number"], state["run_id"], attempt_no)
+        outs = make_outs(top, roles)
+        write_attempt(record, {"pr": pr["number"], "sha": head, "branch": branch, "nonce": nonce, "workdir": workdir,
+                               "started_at": state["lock"]["started_at"], "outs": outs})
     except BaseException as e:
         ignore_signals()
+        # 始められなかった試行のものを残さない(残すと、次の begin が「作業ディレクトリが既にある」で失敗する)
+        if workdir:
+            shutil.rmtree(workdir, ignore_errors=True)
+        remove_outs(outs)
+        try:
+            os.remove(record)
+        except OSError:
+            pass
         if isinstance(e, AttemptFailed):
             state["attempts"].append({"sha": head, "at": state["lock"]["started_at"], "result": "failed", "reason": e.kind})
             state["consecutive_failures"] += 1
         if not release_lock(sc, state, nonce) and isinstance(e, AttemptFailed):
             log("warn: この試行の失敗を状態コメントに記録できなかった(連続失敗にも数えられていない)")
         raise
-    return {"pr": pr["number"], "sha": head, "attempt": attempt_no, "workdir": workdir}
+    lines = {"pr": pr["number"], "sha": head, "attempt": attempt_no, "workdir": workdir}
+    lines.update({f"out.{role}": path for role, path in outs.items()})
+    return lines
 
 
 def end(worktree, failed_reason):
@@ -537,13 +608,18 @@ def end(worktree, failed_reason):
     me = run(["gh", "api", "user", "--jq", ".login"], cwd=wt).stdout.strip()
     sc = StateComment(wt, rec["pr"], me)
     state = sc.read()
-    if state is None or not state["lock"]["running"] or state["lock"].get("nonce") != rec["nonce"]:
-        # 自分の試行のロックではない。ほかの試行のロックを閉じないよう、何も書かない
+    lock = state["lock"] if state is not None else None
+    if not lock or not lock["running"] or lock.get("nonce") != rec["nonce"] or lock.get("sha") != rec["sha"]:
+        # 自分の試行のロックではない(SHA が合わなければ、試行の記録が書き換えられている)。ほかの試行のロックを
+        # 閉じないよう、何も書かない。見つけた混入は、記録できなくても必ず伝える(伝えないと、親がレビュー役の変更に
+        # 気づかないまま、自分の修正としてコミットしかねない)
         os.remove(record)
+        remove_outs(rec["outs"])
         raise Precondition("この試行のロックが、状態コメントに無い"
                            + ("(状態コメントを読めない)" if sc.unreadable else "")
                            + "。既に閉じたか、古いロックとして片付けられた。試行の記録は消した。"
-                           "状態コメントの最後の試行を見て、この試行が記録済みかを確かめる")
+                           "状態コメントの最後の試行を見て、この試行が記録済みかを確かめる"
+                           + (f"\n\nこの試行の間に、次の変更があった。手順をやり直す前に、内容を確かめる:\n{changed}" if changed else ""))
     workdir = rec["workdir"]
     error = None
     if changed:
@@ -563,16 +639,13 @@ def end(worktree, failed_reason):
         attempt["reason"] = error.kind
         state["consecutive_failures"] += 1
     else:
-        reviews = collect_reviews(workdir)
-        if not reviews:
-            raise Precondition(f"レビュー役の出力が無い({workdir} に review-<役の名前>.md が1つも無い)。"
-                               "出力を置いてから呼ぶ。レビュー役が失敗したなら、--failed を付けて閉じる")
+        reviews = collect_reviews(rec["outs"])
         write_reviews(workdir, reviews)
         attempt["roles"] = [role for role, _ in reviews]
         previous = [a["roles"] for a in state["attempts"] if a.get("roles")]
         if previous and sorted(previous[-1]) != sorted(attempt["roles"]):
             log(f"warn: 直前の試行とレビュー役が違う(直前: {', '.join(previous[-1])}、今回: {', '.join(attempt['roles'])})。"
-                "利用者の指示で変えたのでなければ、呼び忘れか、出力の置き忘れを確かめる")
+                "利用者の指示で変えたのでなければ、begin の --roles の付け忘れを確かめる")
         state["iter"] += 1
         state["consecutive_failures"] = 0
         attempt.update(result="completed", iter=state["iter"])
@@ -584,6 +657,7 @@ def end(worktree, failed_reason):
         os.remove(record)
     except OSError as e:
         log(f"warn: 試行の記録 {record} を消せなかった(次の begin が止まる。手で消す): {e}")
+    remove_outs(rec["outs"])  # 出力は作業ディレクトリに写した。置き場を残すと、次の試行のレビュー役が見つけうる
     if error:
         try:
             with open(os.path.join(workdir, "failure.txt"), "w", encoding="utf-8") as f:
@@ -591,7 +665,7 @@ def end(worktree, failed_reason):
         except OSError:  # 詳細を残せなくても、報告は続ける
             pass
         raise error
-    return state["iter"]
+    return {"iter": state["iter"], "workdir": workdir, "roles": ",".join(attempt["roles"])}
 
 
 def on_signal(signum, _frame):
@@ -604,6 +678,8 @@ def main():
     b = sub.add_parser("begin", help="前提を確かめ、試行を始める")
     b.add_argument("worktree", help="PR のブランチをチェックアウトした worktree の絶対パス")
     b.add_argument("--new-run", action="store_true", help="新しいシリーズを始める(利用者の指示があったときだけ使う)")
+    b.add_argument("--roles", metavar="役,役,...",
+                   help=f"この試行で呼ぶレビュー役の名前(カンマ区切り。既定 {','.join(ROLES)})。利用者の指示で観点を変えたときだけ使う")
     e = sub.add_parser("end", help="混入が無いかを確かめ、試行の結果を記録する")
     e.add_argument("worktree", help="begin に渡したのと同じ worktree の絶対パス")
     e.add_argument("--failed", metavar="理由",
@@ -616,10 +692,12 @@ def main():
         signal.signal(s, on_signal)
     try:
         if args.cmd == "begin":
-            for k, v in begin(args.worktree, args.new_run).items():
+            for k, v in begin(args.worktree, args.new_run, args.roles).items():
                 print(f"{k}={v}", flush=True)
         else:
-            log(f"完了: 反復 {end(args.worktree, args.failed)}")
+            done = end(args.worktree, args.failed)
+            print(f"workdir={done['workdir']}\nroles={done['roles']}", flush=True)
+            log(f"完了: 反復 {done['iter']}")
         return 0
     except AttemptFailed as e:
         log(f"failed: {e.kind}\n{e.detail}".rstrip())
