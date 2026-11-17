@@ -6,13 +6,15 @@ SKILL.md の手順5で、再現させる対象と直すものを決めたあと�
 
 ## 材料を用意する
 
-修正役のために、新しい一時ディレクトリを作る。俯瞰の材料のディレクトリは使い回さない(レビュー役の出力の全文や過去の反復が置いてあり、修正役に渡さないと決めたものまで読めてしまう)。作業ツリーの中から、1行ずつ別のコマンドとして実行する。
+修正役のために、新しい一時ディレクトリを作る。俯瞰の材料のディレクトリは使い回さない(レビュー役の出力の全文や過去の反復が置いてあり、修正役に渡さないと決めたものまで読めてしまう)。作業ツリーの中から、1行ずつ別のコマンドとして実行する(git を別のコマンドとつながない。避ける形と理由は、overview.md の「材料を用意する」にある)。
 
 ```sh
 mktemp -d                                   # 出たパスを <F> として、以下に書き写す
 mkdir <F>/before <F>/work
 git rev-parse HEAD                          # 出た SHA を <修正前の SHA> として控える
-git archive HEAD | tar -x -C <F>/before
+git archive -o <F>/before.tar HEAD
+tar -xf <F>/before.tar -C <F>/before
+rm <F>/before.tar
 ```
 
 `<F>/before` が、修正前のコードの写しになる。差分のレビューで出た指摘の続きを頼むときも、その時点の HEAD から新しく作り直す(修正が持ち込んだ問題は、レビューを受けた SHA の写しでは再現しない)。
@@ -97,7 +99,9 @@ git archive HEAD | tar -x -C <F>/before
 
    ```sh
    mkdir <F>/after
-   git archive HEAD | tar -x -C <F>/after
+   git archive -o <F>/after.tar HEAD
+   tar -xf <F>/after.tar -C <F>/after
+   rm <F>/after.tar
    ```
 
 3. 規則ごとの再現のコマンドを `<F>/before` に流し、終了コード 1 で終わるのを見る。次に `<F>/after` に流し、0 で終わるのを見る
@@ -123,7 +127,9 @@ git archive HEAD | tar -x -C <F>/before
 ```sh
 mkdir <F>/base
 git merge-base origin/<PR のベースブランチ> HEAD   # 出た SHA を <BASE> として書き写す
-git archive <BASE> | tar -x -C <F>/base
+git archive -o <F>/base.tar <BASE>
+tar -xf <F>/base.tar -C <F>/base
+rm <F>/base.tar
 ```
 
 そのあと、SKILL.md の手順5に戻り、修正の差分のレビューを行う。

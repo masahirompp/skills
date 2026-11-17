@@ -6,18 +6,23 @@ SKILL.md の手順4で、毎反復読む。俯瞰の役の出力の扱い(どれ
 
 ## 材料を用意する
 
-履歴を持たない一時ディレクトリに取り出す。俯瞰の役はこの中だけで動くので、作業ツリーは変わらない。worktree の中から、1行ずつ別のコマンドとして実行する(`git -C` や `$(...)` で1つにまとめると、worktree に隔離されたセッションでは、git の対象を確かめられないとして拒否されることがある)。
+履歴を持たない一時ディレクトリに取り出す。俯瞰の役はこの中だけで動くので、作業ツリーは変わらない。worktree の中から、1行ずつ別のコマンドとして実行する(`git -C` や `$(...)`、パイプやリダイレクトで git を別のコマンドとつなぐと、worktree に隔離されたセッションでは、git の対象を確かめられないとして拒否されることがある。git の出力は、`-o` や `--output=` でファイルに書かせる)。
 
 ```sh
 mktemp -d                                   # 出たパスを <D> として、以下に書き写す
 mkdir <D>/src <D>/base <D>/work
 git merge-base origin/<PR のベースブランチ> HEAD   # 出た SHA を <BASE> として書き写す
-git archive HEAD | tar -x -C <D>/src
-git archive <BASE> | tar -x -C <D>/base
-git diff <BASE> HEAD > <D>/pr.diff
+git archive -o <D>/src.tar HEAD
+git archive -o <D>/base.tar <BASE>
+tar -xf <D>/src.tar -C <D>/src
+tar -xf <D>/base.tar -C <D>/base
+rm <D>/src.tar <D>/base.tar
+git diff --output=<D>/pr.diff <BASE> HEAD
 gh pr view <PR 番号> --json body -q .body > <D>/pr-body.md
 cp <今回の試行の作業ディレクトリ>/reviews.md <D>/reviews.md
 ```
+
+`gh pr view` の行のリダイレクトが拒否されるかは、確かめていない。拒否されたら、リダイレクトを外して流し、出た本文を Write ツールで `<D>/pr-body.md` に書く(gh には出力先を指定するオプションが無い)。
 
 リポジトリが大きければ、`archive` と `diff` の末尾に `-- <PR が触れたディレクトリ...>` を付けて絞る。
 
@@ -26,7 +31,7 @@ cp <今回の試行の作業ディレクトリ>/reviews.md <D>/reviews.md
 ```sh
 mkdir <D>/history
 cp <反復 N の作業ディレクトリ>/overview.md <D>/history/overview-N.md   # 過去の反復ごと
-git diff <最初にレビューを受けた SHA> HEAD > <D>/history/fixes.diff
+git diff --output=<D>/history/fixes.diff <最初にレビューを受けた SHA> HEAD
 ```
 
 ## 依頼文
