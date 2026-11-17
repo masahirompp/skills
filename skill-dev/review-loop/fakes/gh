@@ -28,7 +28,10 @@ if args[:2] == ["pr", "view"]:
     if os.environ.get("FAKE_NO_PR"):
         print("no pull requests found for branch", file=sys.stderr)
         sys.exit(1)
-    branch = subprocess.run(["git", "symbolic-ref", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
+    if len(args) > 2 and args[2].isdigit():  # 番号で引くときは、今のブランチに関係なく、PR のブランチを見る
+        branch = "feature"
+    else:
+        branch = subprocess.run(["git", "symbolic-ref", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
     out = subprocess.run(["git", "ls-remote", "origin", f"refs/heads/{branch}"], capture_output=True, text=True).stdout
     if not out:  # 本物の gh と同じく、PR のないブランチでは失敗する
         print(f"no pull requests found for branch \"{branch}\"", file=sys.stderr)

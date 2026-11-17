@@ -27,10 +27,11 @@ python3 skill-dev/review-loop/bench/score.py report   skill-dev/review-loop/benc
 | 場所 | 中身 |
 |---|---|
 | `bench.py` | 題材の組み立てと実行。構成ごとのプロンプトは `CONFIGS` |
+| `claude_p.py` | 子を `claude -p` で起動し、stream を読む部品。`test_claude_p.py` はそのテスト |
 | `score.py` | 採点、余計な指摘のまとめと分類、集計。採点の基準は `SCORE_PROMPT` と `CLASSIFY_PROMPT` |
 | `combos.py` | 構成の組み合わせごとの集計(1反復で見つかる不具合、余計な指摘、時間、費用)と、構成どうしの差の揺れ |
 | `repeat.py` | 同じ構成を繰り返して合わせた場合と、ほかの構成を足した場合の比較。既存の結果から集計し、子を起動しない |
-| `publish.py` | 題材を、GitHub の検証用の非公開リポジトリ(`rlbench-<題材>`)と PR にする。`bench.py run --pr` で、本番と同じ引数でレビューさせるため。`publish.py delete` で消す |
+| `publish.py` | 題材を、GitHub の検証用の非公開リポジトリ(`rlbench-<題材>`)と PR にする。`bench.py run --pr` で、本番と同じく PR 番号を渡してレビューさせるため。`publish.py delete` で消す |
 | `verify.py` | レビューの指摘を実行で確かめる検証役の試し。本物の指摘を誤って落とす率を測る |
 | `cases/<題材>/` | 題材の定義(`case.json`)。skills の題材は `base.patch`(ベースへの加工)、`change.patch`(レビュー対象の差分)、`message.txt`(差分の意図) |
 | `answers/<題材>.json` | 正解の一覧。子からは見えない |
@@ -88,8 +89,10 @@ bare リポジトリで、GitHub には触れない。
 - 子を `claude -p` で起動し、モデルを指定する(既定は `claude-opus-5-5`。`--model` で変える)。レビュー役、採点役、分類役の
   全てに同じモデルを使う。本番は、親が観点スキルを Skill ツールで直接呼ぶ(フォークで動かないスキルは、サブエージェントに
   呼ばせる)ので、レビュー役は親と同じモデルで動く。親のモデルが Opus 5.5 でなければ、ここの数字はそのままは当てはまらない
-- `claude_p.py` は、本番の `review_loop.py` がレビュー役を `claude -p` で起動していた版の写し。子の起動、stream の読み取り、
-  権限の拒否の扱いは、その版のまま。本番の `review_loop.py` は、試行の前後の確認と状態コメントだけを受け持つ
+- `claude_p.py` は、本番の `review_loop.py` がレビュー役を `claude -p` で起動していた版から、bench が使う部品だけを写したもの。
+  子の起動、stream の読み取り、権限の拒否の扱いは、その版のまま。`python3 skill-dev/review-loop/bench/test_claude_p.py` で、
+  作り物の子を使って確かめる(claude は起動しない)。本番の `review_loop.py` は、試行の前後の確認と状態コメントだけを受け持つ
+- PR ありの形(`--pr`)では、制約をシステムプロンプトで渡す。本番は、スキルの引数か、サブエージェントへの依頼文に書く
 - 呼び方の違いで検出が大きくは落ちないことは、3題材で1回だけ確かめた(下の「親から呼ぶ形の試し」)
 - PR が無い。スキルには PR 番号ではなく、ブランチの差分を対象として渡す(`code-review high {pr}` → `code-review high`)。
   対象(`main...HEAD`)と意図の在りか(コミットメッセージ)は、全構成に同じ文(`bench.py` の `TARGET`)で伝える

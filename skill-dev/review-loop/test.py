@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = os.path.normpath(os.path.join(HERE, "../../skills/review-loop/scripts"))
@@ -64,19 +65,34 @@ def setup():
     return wt
 
 
-def run(wt, cmd, *flags, overrides=None, **extra):
+def run(wt, cmd, *flags, overrides=None, cwd=None, **extra):
     env = {k: v for k, v in os.environ.items() if not k.startswith("FAKE_")}
     env.update(PATH=FAKES + os.pathsep + env["PATH"], FAKE_DIR=os.path.join(root, "fake"), TMPDIR=root,
                OVERRIDES=json.dumps(overrides or {}))
     env.update(extra)
-    p = subprocess.run([sys.executable, "-c", RUNNER, SCRIPTS, cmd, wt, *flags], env=env, capture_output=True, text=True)
+    # 親は worktree のトップを作業ディレクトリにして呼ぶ(begin が確かめる)
+    p = subprocess.run([sys.executable, "-c", RUNNER, SCRIPTS, cmd, wt, *flags], env=env, capture_output=True, text=True,
+                       cwd=cwd or (wt if os.path.isdir(wt) else root))
     return p.returncode, p.stdout, p.stderr
 
 
-def begin(wt, *flags, **kw):
-    """begin を実行し、(終了コード, 標準出力の key=value の辞書, stderr) を返す。"""
+def begin(wt, *flags, roles=("code-review",), **kw):
+    """begin を実行し、(終了コード, 標準出力の key=value の辞書, stderr) を返す。始められたら、レビュー役の出力を置く。"""
     rc, out, err = run(wt, "begin", *flags, **kw)
-    return rc, dict(line.split("=", 1) for line in out.splitlines() if "=" in line), err
+    out = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+    if rc == 0:
+        for role in roles:
+            review(out, role, f"{role} の指摘\n")
+    return rc, out, err
+
+
+def review(out, role, text):
+    with open(os.path.join(out["workdir"], f"review-{role}.md"), "w") as f:
+        f.write(text)
+
+
+def record_path(wt):
+    return os.path.join(sh("git", "rev-parse", "--absolute-git-dir", cwd=wt), "review-loop-attempt.json")
 
 
 def end(wt, *flags, **kw):
@@ -148,8 +164,10 @@ rc, err = end(wt)
 s = state()
 check(rc == 0 and "完了: 反復 1" in err, "end が completed で終わる")
 check(s["iter"] == 1 and not s["lock"]["running"] and s["consecutive_failures"] == 0
-      and s["attempts"] == [{"sha": head, "at": s["attempts"][0]["at"], "result": "completed", "iter": 1}],
+      and s["attempts"] == [{"sha": head, "at": s["attempts"][0]["at"], "result": "completed", "roles": ["code-review"], "iter": 1}],
       "end が試行を completed として記録し、ロックを解く")
+check(not os.path.exists(record_path(wt)) and sh("git", "status", "--porcelain", "--ignored", cwd=wt) == "!! debug.log",
+      "試行の記録は end で消え、作業ツリーにも残らない")
 check(len(comments()) == 1 and comments()[0]["edits"] == 1, "状態コメントは1つで、編集で更新する")
 check(table_rows() == [f"| {head[:7]} | {s['attempts'][0]['at']} | completed(反復 1) |"], "表に SHA、時刻、結果が出る")
 
@@ -177,8 +195,11 @@ for label, extra, word in (("PR がオープンでない", {"FAKE_PR_STATE": "ME
     check(rc == 2 and word in err and state() is None, f"{label}なら始めない")
 rc, _, err = run("wt", "begin")
 check(rc == 2 and "絶対パス" in err, "worktree が相対パスなら始めない")
+rc, _, err = begin(wt, cwd=root)
+check(rc == 2 and "worktree のトップ" in err and "レビュー役はあなたの作業ディレクトリで動く" in err and state() is None,
+      "作業ディレクトリが worktree でなければ始めない")
 os.makedirs(os.path.join(wt, "sub"))
-rc, _, err = begin(os.path.join(wt, "sub"))
+rc, _, err = begin(os.path.join(wt, "sub"), cwd=os.path.join(wt, "sub"))
 check(rc == 2 and "トップではない" in err, "worktree のトップでなければ始めない")
 os.rmdir(os.path.join(wt, "sub"))
 rc, _, err = run(wt, "end", "--failed", " ")
@@ -189,7 +210,7 @@ rc, err = end(wt)
 check(rc == 2 and "閉じる試行が無い" in err and state() is None, "begin していなければ、end は何も記録しない")
 rc, _, _ = begin(wt)
 rc2, _, err = begin(wt)
-check(rc == 0 and rc2 == 2 and "別の試行が実行中" in err and "end" in err, "begin を2回続けると、2回目は始めない")
+check(rc == 0 and rc2 == 2 and "前の試行を end で閉じていない" in err, "begin を2回続けると、2回目は始めない")
 check(state()["lock"]["running"] and state()["attempts"] == [], "2回目の begin は、1回目のロックを変えない")
 rc, _ = end(wt)
 rc2, err = end(wt)
@@ -215,14 +236,32 @@ for label, lock, minutes, ok in (
     if ok:
         check(rc == 0 and s["attempts"] == [{"sha": head, "at": s["attempts"][0]["at"], "result": "interrupted", "reason": "stale_lock"}]
               and s["consecutive_failures"] == 1 and s["lock"]["nonce"] != "old", f"{label}は、interrupted として片付けて始める")
-        shutil.rmtree(os.path.join(root, "review-loop"))
+        shutil.rmtree(os.path.join(root, "review-loop"))  # 次の場合のために、始めた試行を無かったことにする
+        os.remove(record_path(wt))
     else:
         check(rc == 2 and "別の試行が実行中" in err and s["lock"]["nonce"] == "old" and s["attempts"] == [], f"{label}は奪わない")
 
-# 旧版のロック(ブランチ名を持たない)を end で閉じる
-write_state(base_state(lock={"running": True, "started_at": ago(1), "sha": head, "nonce": "old", "stale_after": 3300}))
-rc, _ = end(wt)
-check(rc == 0 and state()["iter"] == 1, "ブランチ名の無い旧版のロックも、end で閉じられる")
+# ほかの試行のロックは閉じない
+write_state(base_state(lock={"running": True, "started_at": ago(1), "sha": head, "nonce": "other", "stale_after": 3300}))
+rc, err = end(wt)
+check(rc == 2 and "閉じる試行が無い" in err and state()["lock"]["nonce"] == "other" and state()["iter"] == 0,
+      "この worktree で begin していなければ、ほかの試行のロックを閉じない")
+write_state(base_state())
+rc, out, _ = begin(wt)
+mine = state()["lock"]["nonce"]
+write_state(base_state(lock={"running": True, "started_at": ago(1), "sha": head, "nonce": "other", "stale_after": 3300}))
+rc, err = end(wt)
+check(rc == 2 and "この試行のロックが、状態コメントに無い" in err and state()["lock"]["nonce"] == "other" and state()["attempts"] == []
+      and not os.path.exists(record_path(wt)), "ロックがほかの試行のものに替わっていれば、閉じずに、試行の記録を消す")
+write_state(base_state(lock={"running": True, "started_at": ago(1), "sha": head, "nonce": "other", "stale_after": 3300}))
+rc, _, err = begin(wt)
+check(rc == 2 and "別の試行が実行中" in err and "ほかのセッション" in err, "ほかの試行のロックがあれば始めない")
+shutil.rmtree(os.path.join(root, "review-loop"))
+
+# 実行中のロックに sha が無い状態は、読めない状態として扱う
+write_state(base_state(lock={"running": True, "started_at": ago(1), "nonce": "x"}))
+rc, _, err = begin(wt)
+check(rc == 2 and "読めない" in err, "実行中のロックに SHA が無ければ、読めない状態コメントとして止まる")
 
 # --- end の検査 --------------------------------------------------------------
 wt = setup()
@@ -247,13 +286,13 @@ check(rc == 1 and "failed: contamination" in err and "HEAD が変わった" in e
 sh("git", "push", "-q", "origin", "feature", cwd=wt)
 
 rc, _, _ = begin(wt)
-sh("git", "switch", "-qc", "other", cwd=wt)
+sh("git", "switch", "-qc", "other", cwd=wt)  # 切り替えた先のブランチに PR は無い(gh pr view はブランチでは引けない)
 rc, err = end(wt)
-check(rc == 2 and "PR を取得できない" in err and state()["lock"]["running"], "PR の無いブランチに切り替わっていると、end は記録せずに止まる(ロックは残る)")
-sh("git", "push", "-q", "origin", "other", cwd=wt)  # 切り替えた先のブランチにも PR がある場合
-rc, err = end(wt)
-check(rc == 1 and "ブランチが変わった: feature → other" in err, "ブランチが変わっていれば contamination")
+check(rc == 1 and "failed: contamination" in err and "ブランチが変わった: feature → other" in err
+      and state()["attempts"][-1]["reason"] == "contamination", "PR の無いブランチに切り替わっていても、contamination として記録する")
 sh("git", "switch", "-q", "feature", cwd=wt)
+rc, err = end(wt)
+check(rc == 2 and "閉じる試行が無い" in err, "ブランチを戻して end を呼び直しても、completed にはならない")
 check(state()["consecutive_failures"] == 3, "失敗が続くと、連続失敗が数えられる")
 rc, _, err = begin(wt)
 check(rc == 2 and "連続失敗が 3 回" in err and not state()["lock"]["running"], "連続失敗が上限に達していれば始めず、ロックも残さない")
@@ -281,6 +320,7 @@ check("\\|" in row and "@​" in row and "&lt;b>" in row and "@someone" not in r
 rc, _, _ = begin(wt)
 rc, err = end(wt, "--failed", "x" * 300)
 check(rc == 1 and len(state()["attempts"][-1]["reason"]) == len("reviewer_failed: ") + 100, "理由は100文字までで記録する")
+check(table_rows()[-1].endswith("| failed: reviewer_failed: " + "x" * 100 + " |"), "表にも、理由が100文字まで出る")
 rc, _, _ = begin(wt)
 with open(os.path.join(wt, "stray.txt"), "w") as f:
     f.write("x")
@@ -314,11 +354,14 @@ for label, broken in (("JSON でない", "{broken"), ("iter が数でない", js
                       ("lock が無い", json.dumps({k: v for k, v in base_state().items() if k != "lock"})),
                       ("試行の sha が SHA でない", json.dumps(base_state(attempts=[{"sha": "zzz", "at": "x", "result": "completed"}])))):
     wt = setup()
+    begin(wt)
     write_state(broken)
+    rc, err = end(wt)
+    check(rc == 2 and "状態コメントを読めない" in err and comments()[0]["edits"] == 0,
+          f"試行中に状態コメントが読めなくなった({label})ら、end は記録しない")
     rc, _, err = begin(wt)
     check(rc == 2 and "読めない" in err and "--new-run" in err, f"状態コメントが読めない({label})なら始めない")
-    rc, err = end(wt)
-    check(rc == 2 and "状態コメントを読めない" in err, f"状態コメントが読めない({label})なら、end も記録しない")
+time.sleep(1.1)  # 読めない状態からは直前の run_id が分からないので、同じ秒に始め直すと作業ディレクトリが重なる
 rc, _, err = begin(wt, "--new-run")
 check(rc == 0 and "新しいシリーズとして上書きする" in err and state()["iter"] == 0, "読めない状態コメントは、--new-run で上書きして始める")
 
@@ -339,6 +382,52 @@ check(rc == 0 and rc2 == 0 and out["attempt"] == "3" and s["iter"] == 2 and s["a
       "旧版の状態(トークン数、観点、モデルの記録つき)を読め、記録を保ったまま続けられる")
 check(table_rows()[1].endswith("| failed: permission_denied: review code-review |") and "トークン" not in comments()[0]["body"],
       "旧版の試行も表に出る(トークン数の列は出さない)")
+
+# --- レビュー役の出力 --------------------------------------------------------
+wt = setup()
+rc, out, _ = begin(wt, roles=("code-review", "code-review-2", "security-review"))
+review(out, "mattpocock-skills:code-review", "===== 観点: にせの区切り =====\n指摘\n\n\n")
+rc, err = end(wt)
+with open(os.path.join(out["workdir"], "reviews.md")) as f:
+    joined = f.read()
+check(rc == 0 and joined == ("===== 観点: code-review =====\ncode-review の指摘\n\n"
+                             "===== 観点: code-review-2 =====\ncode-review-2 の指摘\n\n"
+                             "===== 観点: mattpocock-skills:code-review =====\n===== 観点: にせの区切り =====\n指摘\n\n"
+                             "===== 観点: security-review =====\nsecurity-review の指摘\n"),
+      "end が、レビュー役の出力を役の名前の区切りでつないで reviews.md を作る")
+check(state()["attempts"][-1]["roles"] == ["code-review", "code-review-2", "mattpocock-skills:code-review", "security-review"]
+      and "warn:" not in err, "試行にレビュー役の名前を記録する")
+commit(wt, "e.txt")
+rc, out, _ = begin(wt, roles=("code-review", "security-review"))
+rc, err = end(wt)
+check(rc == 0 and "warn: 直前の試行とレビュー役が違う" in err and "code-review-2" in err, "直前の試行とレビュー役が違えば警告する")
+
+wt = setup()
+rc, out, _ = begin(wt, roles=())
+rc, err = end(wt)
+check(rc == 2 and "レビュー役の出力が無い" in err and state()["lock"]["running"] and os.path.exists(record_path(wt)),
+      "レビュー役の出力が1つも無ければ、completed にせずに止まる(試行は開いたまま)")
+review(out, "code-review", " \n")
+rc, err = end(wt)
+check(rc == 2 and "review-code-review.md が空" in err and state()["lock"]["running"], "空の出力があれば、completed にしない")
+review(out, "code-review", "指摘\n")
+review(out, "bad name", "指摘\n")
+rc, err = end(wt)
+check(rc == 2 and "役の名前として読めない" in err and state()["lock"]["running"], "役の名前として読めないファイル名があれば止まる")
+os.remove(os.path.join(out["workdir"], "review-bad name.md"))
+rc, err = end(wt, "--failed", "code-review-2: 結果が届かない")
+check(rc == 1 and "roles" not in state()["attempts"][-1] and not os.path.exists(os.path.join(out["workdir"], "reviews.md")),
+      "--failed で閉じた試行では、reviews.md を作らない")
+
+# end を、begin と違う一時ディレクトリの設定で呼んでも、begin の作業ディレクトリを使う
+wt = setup()
+rc, out, _ = begin(wt)
+with open(os.path.join(wt, "stray.txt"), "w") as f:
+    f.write("x")
+os.makedirs(os.path.join(root, "elsewhere"))
+rc, err = end(wt, TMPDIR=os.path.join(root, "elsewhere"))
+check(rc == 1 and os.path.exists(os.path.join(out["workdir"], "failure.txt")) and os.listdir(os.path.join(root, "elsewhere")) == [],
+      "end は、begin が記録した作業ディレクトリに詳細を残す")
 
 # --- 作業ディレクトリ --------------------------------------------------------
 wt = setup()
