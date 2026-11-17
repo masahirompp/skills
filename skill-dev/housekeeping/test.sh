@@ -240,7 +240,7 @@ else
 fi
 
 # オープン PR のベースの一覧を読めなければ止まること(読めないと、スタックした PR のベースが delete になる)
-wrap "$root/fail-jq" jq baseRefName
+wrap "$root/fail-jq" jq 'baseRefName)' # ベースの一覧を作る jq だけ("\(.baseRefName)")。値の検証の jq は通す
 scan_with "$root/fail-jq" scan-jq
 [ "$scan_rc" != 0 ] && grep -q 'ベースブランチを読めない' "$root/scan-jq.err" && ! grep -q '^delete' "$root/scan-jq.tsv" &&
   pass "scan: オープン PR のベースを読めなければ止まる" || fail "scan: オープン PR のベースを読めないのに止まらない(rc=$scan_rc)"
@@ -409,6 +409,17 @@ bad_rc=$?
 set -e
 [ "$bad_rc" != 0 ] && grep -q 'JSON の配列として読めない' "$root/scan-bad.err" && ! grep -q '^delete' "$root/scan-bad.out" &&
   pass "scan: 読めない PR 一覧では止まる" || fail "scan: 読めない PR 一覧で止まらない(rc=$bad_rc)"
+# PR 一覧の値が欠けていれば止まること。OPEN の PR のベースが null だと、そのベース(stack-base)が delete になる。
+# head の名前が欠けると、そのオープン PR(open-pr)が見えなくなる
+for filter in '(.[] | select(.number == 6)).baseRefName = null' '(.[] | select(.number == 3)) |= del(.headRefName)'; do
+  jq "$filter" "$root/prs.json" >"$root/missing-prs.json"
+  set +e
+  HOUSEKEEPING_PR_JSON="$root/missing-prs.json" "$scripts/scan.sh" >"$root/scan-missing.out" 2>"$root/scan-missing.err"
+  missing_rc=$?
+  set -e
+  [ "$missing_rc" != 0 ] && grep -q '欠けた・型の違う PR がある' "$root/scan-missing.err" && ! grep -q '^delete' "$root/scan-missing.out" &&
+    pass "scan: PR 一覧の値が欠けていれば止まる($filter)" || fail "scan: PR 一覧の値が欠けているのに止まらない($filter, rc=$missing_rc)"
+done
 # PR 一覧の件数が上限に達していれば止まること(gh は上限で黙って切るので、古いオープン PR のベースが delete になりうる)
 pr_total=$(jq length "$root/prs.json")
 set +e

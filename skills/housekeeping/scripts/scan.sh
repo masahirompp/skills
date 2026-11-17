@@ -49,6 +49,13 @@ elif ! gh pr list -R "$slug" --state all --limit "$pr_limit" \
 fi
 # 読めない PR 一覧で進むと、jq が空を返してオープン PR やスタックした PR の保護が外れる
 jq -e 'type == "array"' "$tmp/prs.json" >/dev/null 2>&1 || { echo "error: PR 一覧を JSON の配列として読めない" >&2; exit 1; }
+# 判定に使う値が欠けた・型の違う PR があれば止まる。jq は欠けた値を null(文字列にすると "null")にして進むので、
+# OPEN の PR のベースが欠けるとどのブランチもそのベースに当たらず、head の名前や状態が欠けるとその PR が見えなくなる
+jq -e 'all(.[]; type == "object"
+    and (.state | type) == "string" and (.number | type) == "number"
+    and (.headRefName | type) == "string" and (.headRefOid | type) == "string"
+    and (.state != "OPEN" or (.baseRefName | type) == "string"))' "$tmp/prs.json" >/dev/null 2>&1 ||
+  { echo "error: PR 一覧に、state・number・headRefName・headRefOid(オープン PR では baseRefName も)が欠けた・型の違う PR がある" >&2; exit 1; }
 # gh pr list は、上限を超える分を黙って落とす(新しい順に上限まで返し、成功で終わる)。件数が上限に達していれば、
 # 範囲の外の古い PR が欠けている可能性があり、その PR のベースや head のブランチが「PR なし」として判定される
 pr_count=$(jq length "$tmp/prs.json" 2>/dev/null) && [ -n "$pr_count" ] ||
