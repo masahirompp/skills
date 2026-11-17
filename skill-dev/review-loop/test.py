@@ -656,6 +656,9 @@ check(rc == 1 and failed.startswith("failed: child_error: review security-review
       f"レビュー役が使えないモデルの印を出して失敗したら、試行の失敗として数え、failed: の詳細に添える {failed[:300]}")
 rc, _, err = run(wt, FAKE_REVIEW_security_review="fail")
 check(rc == 1 and "failed: child_error" in err and "使えない可能性" not in err, "印の無い失敗には、モデルのことを添えない")
+rc, _, err = run(wt, FAKE_REVIEW_security_review="quotemodel")
+check(rc == 1 and "failed: child_error" in err and "overloaded" in err and "使えない可能性" not in err,
+      "途中の result の本文が文言を引用しただけの失敗には、モデルのことを添えない")
 rc, _, err = run(wt, "--new-run")
 check(rc == 0, "新しいシリーズで続ける")
 rc, _, _ = run(wt, "--instruct", "security-review=x", FAKE_REVIEW_security_review="fail")

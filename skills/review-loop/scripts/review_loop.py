@@ -254,9 +254,12 @@ def add_tokens(tokens, data):
         tokens["output"] += m.get("outputTokens", 0)
 
 
-def model_hint(stderr, tail, model):
-    """子の失敗に、使えないモデルを渡したときの印(本物で観測した形)があれば、失敗の詳細に添える文を返す。"""
-    if UNKNOWN_MODEL_STDERR in stderr or any(UNKNOWN_MODEL_RESULT in str(r.get("result") or "") for r in tail.results):
+def model_hint(stderr, error_result, model):
+    """子の失敗に、使えないモデルを渡したときの印(本物で観測した形)があれば、失敗の詳細に添える文を返す。
+
+    照らすのは stderr と、失敗で終わった最後の result の行の本文だけ。途中の result の行は、レビューの本文が
+    この文言を引用しうる(このスキル自身を変える PR など)ので見ない。"""
+    if UNKNOWN_MODEL_STDERR in stderr or UNKNOWN_MODEL_RESULT in error_result:
         return f"\n(--model のモデル {model} を使えない可能性がある。名前の誤りか、使う権限が無い)"
     return ""
 
@@ -276,7 +279,7 @@ def check_result(label, rc, base, attempt, tail, model):
     if not tail.results:
         err = full_err.strip()[-1000:]
         raise AttemptFailed("child_error", label, f"result の行がない(終了コード {rc})。stderr: {err}{sandbox_hint(err)}"
-                            f"{model_hint(full_err, tail, model)}")
+                            f"{model_hint(full_err, '', model)}")
     text = "\n\n".join(tail.texts())
     with open(base + ".result.md", "w", encoding="utf-8") as f:
         f.write(text + "\n")
@@ -286,9 +289,10 @@ def check_result(label, rc, base, attempt, tail, model):
     if denials:
         raise AttemptFailed("permission_denied", label, summarize_denials(denials))
     if rc != 0 or data.get("subtype") != "success" or data.get("is_error"):
+        errored = data.get("subtype") != "success" or data.get("is_error")
         raise AttemptFailed("child_error", label, f"終了コード {rc}、subtype {data.get('subtype')}、"
                             f"is_error {data.get('is_error')}: {str(data.get('result') or '')[:500]}"
-                            f"{model_hint(full_err, tail, model)}")
+                            f"{model_hint(full_err, str(data.get('result') or '') if errored else '', model)}")
     if not text:
         raise AttemptFailed("no_output", label, "空でない result の行がない")
     return text
