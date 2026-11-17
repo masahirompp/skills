@@ -76,7 +76,9 @@ LOCK_MARGIN = 15 * 60         # ロックを持ったまま行う git・gh の�
 BASH_TIMEOUT = 90 * 60        # SKILL.md で Bash ツールに指定する制限時間
 BASH_TIMEOUT_MAX = 120 * 60   # Bash ツールの最大制限時間
 STALE_LOCK_AFTER = REVIEW_TIMEOUT + LOCK_MARGIN  # ロックに stale_after として記録し、読む側はその値で古さを決める
-LEGACY_STALE_LOCK_AFTER = 75 * 60  # stale_after を記録する前の版(判定役を含む)がロックを持ちうる長さ
+# stale_after を記録する前の版(判定役を含む)がロックを持ちうる長さ。main に入ったその版はどれも
+# REVIEW_TIMEOUT 40分 + JUDGE_TIMEOUT 20分 + LOCK_MARGIN 15分で、75分がその最大
+LEGACY_STALE_LOCK_AFTER = 75 * 60
 WATCHDOG_GRACE = 60           # 子の見張り役が、親のタイムアウトに加えて待つ時間
 LOCK_SETTLE_SECONDS = 3       # nonce を書いてから読み直すまで
 POLL_SECONDS = 2
