@@ -13,9 +13,13 @@ set -uo pipefail
 
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 
-git rev-parse --git-dir >/dev/null 2>&1 || { echo "error: git リポジトリの中で実行する" >&2; exit 1; }
+hk_check_repo || exit 1
 default=$(hk_default_branch)
 [ -n "$default" ] || { echo "error: 既定ブランチを特定できない" >&2; exit 1; }
+# 削除の直前に確かめ直す入力のうち、保護パターンは読めなければ止まる。
+# プロセスの一覧は読めなくても止まらず、worktree の行を「確かめられない」で飛ばす(ブランチの行は消せる)
+hk_load_protect "$default" || exit 1
+if cwds=$(hk_process_cwds); then cwds_err=''; else cwds_err=$cwds cwds=''; fi
 
 # 承認済みの行は変数で持つ(一時ファイルを使わない。作れない環境で空のパスに書きに行くことを避ける)
 input=$(grep -v '^action	')
@@ -26,7 +30,17 @@ skip() {
   printf 'skipped\t%s\n' "$*"
   status=1
 }
-rows() { printf '%s\n' "$input" | awk -F'\t' -v k="$1" '$2 == k && $1 != "keep"'; }
+# kind ごとに、削除できる action の行だけを返す。prune は worktree だけ
+rows() { printf '%s\n' "$input" | awk -F'\t' -v k="$1" '$2 == k && ($1 == "delete" || $1 == "ask" || ($1 == "prune" && k == "worktree"))'; }
+
+# 上の rows に当たらない行(keep・end・空行を除く)は、消さずに知らせる
+while IFS= read -r line; do
+  skip "未知の行のため扱わない: $line"
+done < <(printf '%s\n' "$input" | awk -F'\t' '
+  $0 == "" || $1 == "keep" || $1 == "end" { next }
+  ($2 == "worktree" && ($1 == "delete" || $1 == "ask" || $1 == "prune")) { next }
+  (($2 == "branch" || $2 == "remote") && ($1 == "delete" || $1 == "ask")) { next }
+  { print }')
 
 # 1. ディレクトリが消えた worktree の管理情報
 if [ -n "$(rows worktree | awk -F'\t' '$1 == "prune"')" ]; then
@@ -34,13 +48,14 @@ if [ -n "$(rows worktree | awk -F'\t' '$1 == "prune"')" ]; then
 fi
 
 # 2. worktree(ブランチより先に消す。チェックアウト中のブランチは消せないため)
-cwds=$(hk_process_cwds)
 while IFS=$'\t' read -r action kind name sha path reason; do
   [ "$action" = prune ] && continue
   cur=$(git -C "$path" rev-parse HEAD 2>/dev/null) || { skip "worktree $path: 見つからない"; continue; }
   [ "$cur" = "$sha" ] || { skip "worktree $path: HEAD が走査時から変わっている"; continue; }
-  proc=$(hk_path_in_use "$(cd "$path" && pwd -P)" "$cwds")
-  [ -z "$proc" ] || { skip "worktree $path: プロセスが使用中か、確かめられない($proc)"; continue; }
+  [ -z "$cwds_err" ] || { skip "worktree $path: プロセスが使用中か確かめられない($cwds_err)"; continue; }
+  rp=$(cd "$path" && pwd -P) && proc=$(hk_path_in_use "$rp" "$cwds") ||
+    { skip "worktree $path: プロセスが使用中か確かめられない(パスを解決できない)"; continue; }
+  [ -z "$proc" ] || { skip "worktree $path: プロセスがカレントディレクトリとして使用中($proc)"; continue; }
   if out=$(git worktree remove "$path" 2>&1); then
     ok "worktree $path"
   else
@@ -50,7 +65,7 @@ done < <(rows worktree)
 
 # 3. ローカルブランチ
 while IFS=$'\t' read -r action kind name sha path reason; do
-  if hk_is_protected "$name" "$default"; then skip "branch $name: 保護対象"; continue; fi
+  if hk_is_protected "$name"; then skip "branch $name: 保護対象"; continue; fi
   cur=$(git rev-parse -q --verify "refs/heads/$name") || { skip "branch $name: 見つからない"; continue; }
   [ "$cur" = "$sha" ] || { skip "branch $name: 先端が走査時から変わっている"; continue; }
   if out=$(git branch -D "$name" 2>&1); then
@@ -62,7 +77,7 @@ done < <(rows branch)
 
 # 4. リモートブランチ
 while IFS=$'\t' read -r action kind name sha path reason; do
-  if hk_is_protected "$name" "$default"; then skip "remote $name: 保護対象"; continue; fi
+  if hk_is_protected "$name"; then skip "remote $name: 保護対象"; continue; fi
   if out=$(git push --quiet --force-with-lease="refs/heads/$name:$sha" "$hk_remote" ":refs/heads/$name" 2>&1); then
     ok "remote $hk_remote/$name ($sha)"
   else

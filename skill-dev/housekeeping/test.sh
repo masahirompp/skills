@@ -155,7 +155,7 @@ expect keep worktree wt-untracked "未コミットの変更・未追跡ファイ
 expect keep worktree wt-locked "ロック"
 expect prune worktree wt-gone
 expect delete branch wt-gone "PR #14"
-expect keep worktree wt-busy "使用中か、確かめられない(pid"
+expect keep worktree wt-busy "カレントディレクトリとして使用中(pid"
 expect keep branch wt-busy "使用中"
 expect delete worktree "(detached)" "detached"
 
@@ -168,6 +168,83 @@ got=$(awk -F'\t' '$2 == "worktree" && $3 == "wt-merged" { print $1 "\t" $6 }' "$
   pass "scan: lsof でプロセスを見られなければ worktree を残す" || fail "scan: lsof が使えないと wt-merged → ${got:-(出力なし)}"
 got=$(awk -F'\t' '$2 == "branch" && $3 == "wt-merged" { print $1 "\t" $6 }' "$root/scan-nolsof.tsv")
 [ "${got%%$'\t'*}" = keep ] && pass "scan: 残した worktree のブランチも残す" || fail "scan: 残した worktree のブランチ → ${got:-(出力なし)}"
+grep -q $'^end\t' "$root/scan.tsv" && [ "$(tail -1 "$root/scan.tsv" | cut -f1)" = end ] &&
+  pass "scan: 最後の行に end を出す" || fail "scan: 最後の行が end でない"
+
+# --- 失敗の注入 -------------------------------------------------------------
+# 対象のコマンドだけを失敗させる包みを PATH の先頭に置く。
+# wrap <dir> <command> <引数に含まれたら失敗させる文字列>
+wrap() {
+  local real
+  real=$(command -v "$2")
+  mkdir -p "$1"
+  printf '#!/bin/sh\ncase " $* " in *"%s"*) echo "injected failure" >&2; exit 128 ;; esac\nexec %s "$@"\n' "$3" "$real" >"$1/$2"
+  chmod +x "$1/$2"
+}
+scan_with() { # <bin-dir> <out-name>: 包みを使って走査する。終了コードを scan_rc に入れる
+  set +e
+  PATH="$1:$PATH" "$scripts/scan.sh" >"$root/$2.tsv" 2>"$root/$2.err"
+  scan_rc=$?
+  set -e
+}
+row() { awk -F'\t' -v k="$2" -v n="$3" '$2 == k && $3 == n { print $1 "\t" $6 }' "$root/$1.tsv"; }
+
+# lsof が特定のプロセスだけを見せない(自分は見える)ときも、使用中の worktree を delete にしないこと
+real_lsof=$(command -v lsof)
+mkdir "$root/partial-lsof"
+printf '#!/bin/sh\n%s "$@" | awk -v drop="p%s" '"'"'/^p/ { skip = ($0 == drop) } !skip'"'"'\n' "$real_lsof" "$busy_pid" >"$root/partial-lsof/lsof"
+chmod +x "$root/partial-lsof/lsof"
+scan_with "$root/partial-lsof" scan-partial
+got=$(row scan-partial worktree wt-busy)
+[ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"確かめられない(lsof に出ないプロセス"* ]] &&
+  pass "scan: lsof に一部のプロセスしか出なければ worktree を残す" || fail "scan: lsof が一部しか見せないと wt-busy → ${got:-(出力なし)}"
+
+# サンドボックスで他プロセスの情報を禁じたとき(lsof には自分の系統だけが出る)も、worktree を残すこと
+sbx='(version 1)(allow default)(deny process-info* (target others))'
+if command -v sandbox-exec >/dev/null 2>&1 && sandbox-exec -p "$sbx" true 2>/dev/null; then
+  sandbox-exec -p "$sbx" "$scripts/scan.sh" >"$root/scan-sbx.tsv" 2>/dev/null || true
+  got=$(row scan-sbx worktree wt-merged)
+  [ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"確かめられない"* ]] &&
+    pass "scan: サンドボックスで他プロセスを見られなければ worktree を残す" || fail "scan: サンドボックスの中で wt-merged → ${got:-(出力なし)}"
+else
+  pass "scan: (sandbox-exec を使えないので、サンドボックスの確認は飛ばす)"
+fi
+
+# オープン PR のベースの一覧を読めなければ止まること(読めないと、スタックした PR のベースが delete になる)
+wrap "$root/fail-jq" jq baseRefName
+scan_with "$root/fail-jq" scan-jq
+[ "$scan_rc" != 0 ] && grep -q 'ベースブランチを読めない' "$root/scan-jq.err" && ! grep -q '^delete' "$root/scan-jq.tsv" &&
+  pass "scan: オープン PR のベースを読めなければ止まる" || fail "scan: オープン PR のベースを読めないのに止まらない(rc=$scan_rc)"
+
+# 進行中の操作を確かめられなければ worktree を残すこと
+wrap "$root/fail-gitpath" git --git-path
+scan_with "$root/fail-gitpath" scan-gitpath
+got=$(row scan-gitpath worktree wt-merged)
+[ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"進行中の操作"*"確かめられない"* ]] &&
+  pass "scan: 進行中の操作を確かめられなければ worktree を残す" || fail "scan: git-path が失敗すると wt-merged → ${got:-(出力なし)}"
+got=$(row scan-gitpath branch wt-merged)
+[ "${got%%$'\t'*}" = keep ] && pass "scan: そのブランチも残す" || fail "scan: git-path が失敗すると branch wt-merged → ${got:-(出力なし)}"
+
+# git status --ignored を読めなければ、ignored ファイルの警告を黙って落とさずに worktree を残すこと
+wrap "$root/fail-ignored" git --ignored
+scan_with "$root/fail-ignored" scan-ignored
+got=$(row scan-ignored worktree wt-merged)
+[ "${got%%$'\t'*}" = keep ] && pass "scan: git status --ignored を読めなければ worktree を残す" || fail "scan: status --ignored が失敗すると wt-merged → ${got:-(出力なし)}"
+
+# worktree 一覧を読めなければ止まること(読めないと、worktree で使用中のブランチが delete 候補になる)
+wrap "$root/fail-wtlist" git 'worktree list'
+scan_with "$root/fail-wtlist" scan-wtlist
+[ "$scan_rc" != 0 ] && grep -q 'worktree list を読めない' "$root/scan-wtlist.err" && ! grep -q '^delete' "$root/scan-wtlist.tsv" &&
+  ! grep -q $'^end\t' "$root/scan-wtlist.tsv" &&
+  pass "scan: worktree 一覧を読めなければ止まり、end を出さない" || fail "scan: worktree 一覧を読めないのに止まらない(rc=$scan_rc)"
+
+# git リポジトリを読めないときは、git の出力を添えて止まること
+set +e
+(cd "$root" && GIT_CEILING_DIRECTORIES="$root" "$scripts/scan.sh" >/dev/null 2>"$root/scan-norepo.err")
+norepo_rc=$?
+set -e
+[ "$norepo_rc" != 0 ] && grep -q 'git リポジトリとして読めない: .*not a git repository' "$root/scan-norepo.err" &&
+  pass "scan: リポジトリの外では git の出力を添えて止まる" || fail "scan: リポジトリの外での止まり方が違う: $(cat "$root/scan-norepo.err")"
 
 # 一時ディレクトリを作れないときは、空のパスのまま進まずに、fetch より前に止まること。
 # fetch に進めば、存在しないリモートへの fetch で warn が出る。
@@ -201,10 +278,15 @@ fi
 temp_usage() { # file pattern: コメント行を除いて、pattern に当たる行を出す
   grep -nE "$2" "$1" | grep -vE '^[0-9]+:[[:space:]]*#'
 }
+# lib.sh の mktemp は、hk_mktemp_dir の本体(行頭の "}" まで)の中だけ
+mktemp_outside() {
+  awk '/^hk_mktemp_dir\(\) \{/ { inside = 1; next } inside && /^}/ { inside = 0; next }
+    !inside && /mktemp/ && !/^[[:space:]]*#/ { print FILENAME ":" FNR ": " $0 }' "$scripts/lib.sh"
+}
 if temp_usage "$scripts/apply.sh" '<<|mktemp' || temp_usage "$scripts/lib.sh" '<<' || temp_usage "$scripts/scan.sh" '<<' ||
-  temp_usage "$scripts/scan.sh" 'mktemp' | grep -v 'hk_mktemp_dir' ||
-  [ "$(temp_usage "$scripts/lib.sh" 'mktemp' | grep -vc 'hk_mktemp_dir()')" != 1 ]; then
-  fail "scan/apply/lib: 一時ファイルを使う書き方がある(上の行。lib.sh の mktemp は hk_mktemp_dir の1か所だけ)"
+  temp_usage "$scripts/scan.sh" 'mktemp' | grep -v 'hk_mktemp_dir' || [ -n "$(mktemp_outside)" ]; then
+  mktemp_outside
+  fail "scan/apply/lib: 一時ファイルを使う書き方がある(上の行。lib.sh の mktemp は hk_mktemp_dir の中だけ)"
 else
   pass "scan/apply/lib: ヒアドキュメントを使わず、mktemp は hk_mktemp_dir だけ"
 fi
@@ -220,7 +302,7 @@ r=$(parsed $'delete\tx') || true
 
 # 保護パターンは、set -f が外れていてもファイル名に展開されないこと
 mkdir -p "$root/globcwd/release" && : >"$root/globcwd/release/notes.md"
-if (cd "$root/globcwd" && HOUSEKEEPING_PROTECT='release/*' bash -c '. "$1/lib.sh"; set +f; hk_is_protected release/1.0 main' _ "$scripts"); then
+if (cd "$root/globcwd" && HOUSEKEEPING_PROTECT='release/*' bash -c '. "$1/lib.sh"; set +f; hk_load_protect main && hk_is_protected release/1.0' _ "$scripts"); then
   pass "lib: set +f でも保護パターンを展開しない"
 else
   fail "lib: set +f で保護パターンが展開された"
@@ -247,7 +329,7 @@ set -e
   pass "scan: 読めない PR 一覧では止まる" || fail "scan: 読めない PR 一覧で止まらない(rc=$bad_rc)"
 
 # 保護パターン: 空白区切りの HOUSEKEEPING_PROTECT と git config の両方が効くこと
-protected() { HOUSEKEEPING_PROTECT='release/* sandbox' in_lib hk_is_protected "$1" main; }
+protected() { HOUSEKEEPING_PROTECT='release/* sandbox' bash -c '. "$1/lib.sh" && hk_load_protect main && hk_is_protected "$2"' _ "$scripts" "$1"; }
 git config --add housekeeping.protect 'keep me/*'
 for b in release/1.0 sandbox 'keep me/x' main entire/x; do
   protected "$b" && pass "lib: $b は保護対象" || fail "lib: $b が保護されない"
@@ -256,12 +338,56 @@ for b in releases feature/sandbox; do
   protected "$b" && fail "lib: $b が保護対象になった" || pass "lib: $b は保護対象でない"
 done
 git config --unset-all housekeeping.protect
-# git config を読めない(キーが無いのとは別の失敗)ときは、保護対象とみなすこと
+# 保護パターンを読み込まずに照合したら、保護対象とみなすこと(呼び出し側の誤りで保護が外れない)
+in_lib hk_is_protected feature/x && pass "lib: 保護パターンを読み込む前は保護対象とみなす" || fail "lib: 読み込む前に保護対象でないと答えた"
+# git config を読めない(キーが無いのとは別の失敗)ときは、scan も apply も止まること。
+#   壊れた設定: --get-all が rc=128 を返す
+#   権限で読めない設定: --get-all はキーが無いときと同じ rc=1 を返す。--global の警告で見分ける
 printf '[broken\n' >"$root/bad.gitconfig"
-GIT_CONFIG_GLOBAL="$root/bad.gitconfig" in_lib hk_is_protected feature/x main &&
-  pass "lib: git config を読めなければ保護対象とみなす" || fail "lib: git config を読めないのに保護対象でない"
+printf '[housekeeping]\n\tprotect = keep-me\n' >"$root/noperm.gitconfig" && chmod 000 "$root/noperm.gitconfig"
+for cfg in bad noperm; do
+  set +e
+  GIT_CONFIG_GLOBAL="$root/$cfg.gitconfig" "$scripts/scan.sh" >"$root/scan-$cfg-cfg.out" 2>"$root/scan-$cfg-cfg.err"
+  rc=$?
+  printf 'delete\tbranch\tnopr-ff\t%s\t\tx\n' "$(git rev-parse nopr-ff)" |
+    GIT_CONFIG_GLOBAL="$root/$cfg.gitconfig" "$scripts/apply.sh" >"$root/apply-$cfg-cfg.out" 2>"$root/apply-$cfg-cfg.err"
+  arc=$?
+  set -e
+  [ "$rc" != 0 ] && grep -qE 'git config.*を読めない|bad config' "$root/scan-$cfg-cfg.err" && ! grep -q '^delete' "$root/scan-$cfg-cfg.out" &&
+    pass "scan: git config を読めなければ止まる($cfg)" || fail "scan: git config を読めないのに止まらない($cfg, rc=$rc)"
+  [ "$arc" != 0 ] && grep -qE 'git config.*を読めない|bad config' "$root/apply-$cfg-cfg.err" && git rev-parse -q --verify refs/heads/nopr-ff >/dev/null &&
+    pass "apply: git config を読めなければ止まる($cfg)" || fail "apply: git config を読めないのに止まらない($cfg, rc=$arc)"
+done
+chmod 600 "$root/noperm.gitconfig"
 
 # --- apply ----------------------------------------------------------------
+# プロセスを確かめられなければ、worktree の行は消さずに「確かめられない」で飛ばすこと。
+# 走査の後に作業を始めたプロセスが lsof に出ない場合を、wt-merged を見せない lsof で作る
+(cd "$root/wt/wt-merged" && exec sleep 120) &
+merged_pid=$!
+printf '#!/bin/sh\n%s "$@" | awk -v drop="p%s" '"'"'/^p/ { skip = ($0 == drop) } !skip'"'"'\n' "$real_lsof" "$merged_pid" >"$root/partial-lsof/lsof"
+set +e
+awk -F'\t' '$2 == "worktree" && $3 == "wt-merged"' "$root/scan.tsv" | PATH="$root/partial-lsof:$PATH" "$scripts/apply.sh" >"$root/apply-partial.out"
+set -e
+grep -q 'worktree .*wt-merged: プロセスが使用中か確かめられない(lsof に出ないプロセス' "$root/apply-partial.out" && [ -e "$root/wt/wt-merged" ] &&
+  pass "apply: プロセスを確かめられなければ worktree を消さない" || fail "apply: lsof が一部しか見せないのに worktree を処理した: $(cat "$root/apply-partial.out")"
+# 使用中なら、確かめられないのとは別の理由で飛ばすこと
+set +e
+awk -F'\t' '$2 == "worktree" && $3 == "wt-merged"' "$root/scan.tsv" | "$scripts/apply.sh" >"$root/apply-busy.out"
+set -e
+grep -q "worktree .*wt-merged: プロセスがカレントディレクトリとして使用中(pid $merged_pid" "$root/apply-busy.out" && [ -e "$root/wt/wt-merged" ] &&
+  pass "apply: 使用中の worktree は「使用中」として飛ばす" || fail "apply: 使用中の worktree の扱いが違う: $(cat "$root/apply-busy.out")"
+kill "$merged_pid" 2>/dev/null; wait "$merged_pid" 2>/dev/null || true
+
+# 判定の関数が出さない行(branch の prune、未知の action)は消さずに知らせること
+set +e
+printf 'prune\tbranch\tnopr-ff\t%s\t\tx\nremove\tbranch\tnopr-ff\t%s\t\tx\n' "$(git rev-parse nopr-ff)" "$(git rev-parse nopr-ff)" |
+  "$scripts/apply.sh" >"$root/apply-unknown.out"
+unknown_rc=$?
+set -e
+[ "$unknown_rc" = 1 ] && [ "$(grep -c '未知の行' "$root/apply-unknown.out")" = 2 ] && git rev-parse -q --verify refs/heads/nopr-ff >/dev/null &&
+  pass "apply: 未知の行は消さずに知らせる" || fail "apply: 未知の行の扱いが違う(rc=$unknown_rc): $(cat "$root/apply-unknown.out")"
+
 # 走査後に作業が再開されたブランチ・保護対象を偽装した行は消さないこと
 git switch -q nopr-merge && commit resumed && git switch -q main
 {

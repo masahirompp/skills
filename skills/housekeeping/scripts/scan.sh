@@ -7,6 +7,7 @@
 #           prune   ディレクトリが消えた worktree の管理情報(git worktree prune で消える)
 #           ask     判断材料が足りない。ユーザーに確認する
 #           keep    残す
+#           end     最後の行。走査を最後まで終えたしるし(この行が無ければ途中で止まっている)
 #   kind:   worktree / branch / remote
 #
 # 環境変数(lib.sh のものに加えて):
@@ -16,7 +17,7 @@ set -uo pipefail
 
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 
-git rev-parse --git-dir >/dev/null 2>&1 || { echo "error: git リポジトリの中で実行する" >&2; exit 1; }
+hk_check_repo || exit 1
 command -v jq >/dev/null 2>&1 || { echo "error: jq が無い(PR の状態を判定できない)" >&2; exit 1; }
 cwd=$(pwd -P)
 
@@ -31,6 +32,9 @@ fi
 default=$(hk_default_branch)
 [ -n "$default" ] || { echo "error: 既定ブランチを特定できない" >&2; exit 1; }
 
+# --- 判定の入力を集める(どれかを読めなければ止まる) ----------------------
+hk_load_protect "$default" || exit 1
+
 # --- PR 一覧 -------------------------------------------------------------
 url=$(git remote get-url "$hk_remote" 2>/dev/null)
 slug=$(printf '%s\n' "$url" | sed -E 's#^(git@[^:]+:|ssh://([^@/]+@)?[^/]+/|https?://([^@/]+@)?[^/]+/)##; s#\.git$##; s#/$##')
@@ -44,6 +48,9 @@ elif ! gh pr list -R "$slug" --state all --limit "${HOUSEKEEPING_PR_LIMIT:-1000}
 fi
 # 読めない PR 一覧で進むと、jq が空を返してオープン PR やスタックした PR の保護が外れる
 jq -e 'type == "array"' "$tmp/prs.json" >/dev/null 2>&1 || { echo "error: PR 一覧を JSON の配列として読めない" >&2; exit 1; }
+# オープン PR のベースブランチの一覧("base<TAB>#number")。ブランチごとに jq を呼ぶと、その失敗が「ベースではない」に見える
+jq -r '.[] | select(.state == "OPEN") | "\(.baseRefName)\t#\(.number)"' "$tmp/prs.json" >"$tmp/open-bases" 2>/dev/null ||
+  { echo "error: PR 一覧からオープン PR のベースブランチを読めない" >&2; exit 1; }
 
 # parse_pr_info <pr_info の出力>: グローバル変数 st num oid に分ける。空なら st=UNKNOWN(残す側に倒す)
 parse_pr_info() {
@@ -63,9 +70,9 @@ pr_info() {
         | "\(.state) \(.number) \(.headRefOid)" end' "$tmp/prs.json"
 }
 
-# open_pr_based_on <branch> → そのブランチをベースにしたオープン PR の番号(スタックした PR)
+# open_pr_based_on <branch> → そのブランチをベースにしたオープン PR の番号(スタックした PR)。読めなければ失敗を返す
 open_pr_based_on() {
-  jq -r --arg b "$1" '[ .[] | select(.state == "OPEN" and .baseRefName == $b) | "#\(.number)" ] | join(" ")' "$tmp/prs.json"
+  awk -F'\t' -v b="$1" '$1 == b { s = s (s == "" ? "" : " ") $2 } END { print s }' "$tmp/open-bases"
 }
 
 has_commit() { git cat-file -e "$1^{commit}" 2>/dev/null; }
@@ -101,12 +108,14 @@ verify_pr_merged() {
 # classify_branch <branch> <sha> → action と理由(TAB 区切り)
 classify_branch() {
   local name=$1 sha=$2 st num oid stacked on_fp
-  if hk_is_protected "$name" "$default"; then
+  if hk_is_protected "$name"; then
     printf 'keep\t保護対象(既定ブランチ・監査用・設定による保護)\n'
     return
   fi
-  stacked=$(open_pr_based_on "$name")
-  if [ -n "$stacked" ]; then
+  if ! stacked=$(open_pr_based_on "$name"); then
+    printf 'keep\t別のオープン PR のベースか確かめられない\n'
+    return
+  elif [ -n "$stacked" ]; then
     printf 'keep\tオープン PR %s のベースブランチ\n' "$stacked"
     return
   fi
@@ -137,16 +146,19 @@ classify_branch() {
 
 emit() { printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$@"; }
 
+# worktree 一覧。読めないまま進むと、worktree で使用中のブランチが delete 候補になる
+git worktree list --porcelain >"$tmp/wt" 2>"$tmp/wt.err" && main_wt=$(sed -n '1s/^worktree //p' "$tmp/wt") && [ -n "$main_wt" ] ||
+  { echo "error: git worktree list を読めない: $(cat "$tmp/wt.err" 2>/dev/null)" >&2; exit 1; }
+# プロセスの一覧は、読めなくても止まらない(サンドボックスの中ではよく起きる)。worktree ごとに「確かめられない」として残す
+if cwds=$(hk_process_cwds); then cwds_err=''; else cwds_err=$cwds cwds=''; fi
+
 printf 'action\tkind\tname\tsha\tpath\treason\n'
 
 # --- worktree -------------------------------------------------------------
-git worktree list --porcelain >"$tmp/wt"
-main_wt=$(sed -n '1s/^worktree //p' "$tmp/wt")
-cwds=$(hk_process_cwds)
 : >"$tmp/wt-branches" # branch<TAB>action<TAB>path
 
 handle_wt() {
-  local name=${branch:-"(detached)"} rp action reason proc op dirty ign
+  local name=${branch:-"(detached)"} rp action reason proc op st='' dirty ign
   if [ "$path" = "$main_wt" ]; then
     [ -n "$branch" ] && printf '%s\tkeep\t%s\n' "$branch" "$path" >>"$tmp/wt-branches"
     return
@@ -161,12 +173,19 @@ handle_wt() {
     action=keep reason="ロックされている(git worktree lock)"
   elif [ "$cwd" = "$rp" ] || [ "${cwd#"$rp"/}" != "$cwd" ]; then
     action=keep reason="このスキャンを実行している作業ディレクトリ"
+  elif [ -n "$cwds_err" ]; then
+    action=keep reason="プロセスが使用中か確かめられない($cwds_err)"
   elif proc=$(hk_path_in_use "$rp" "$cwds") && [ -n "$proc" ]; then
-    action=keep reason="プロセスがカレントディレクトリとして使用中か、確かめられない($proc)"
-  elif op=$(hk_in_progress_op "$path") && [ -n "$op" ]; then
+    action=keep reason="プロセスがカレントディレクトリとして使用中($proc)"
+  elif ! op=$(hk_in_progress_op "$path"); then
+    action=keep reason="進行中の操作(rebase など)があるか確かめられない"
+  elif [ -n "$op" ]; then
     action=keep reason="進行中の操作がある($op)"
-  elif ! dirty=$(git -C "$path" status --porcelain 2>/dev/null); then
+  elif ! st=$(git -C "$path" status --porcelain --ignored 2>/dev/null); then
+    # 未コミットの変更と、一緒に消える ignored ファイルの両方をこの出力で見る。読めなければどちらも確かめられない
     action=keep reason="git status を読めない"
+  elif ! dirty=$(printf '%s\n' "$st" | awk '$0 != "" && !/^!! /'); then
+    action=keep reason="git status の出力を読めない"
   elif [ -n "$dirty" ]; then
     action=keep reason="未コミットの変更・未追跡ファイルが $(printf '%s\n' "$dirty" | wc -l | tr -d ' ') 件ある"
   elif [ -n "$branch" ]; then
@@ -177,8 +196,12 @@ handle_wt() {
     action=keep reason="detached HEAD が $default 未取り込みのコミットを指している"
   fi
   if [ "$action" != keep ]; then
-    ign=$(git -C "$path" status --porcelain --ignored 2>/dev/null | sed -n 's/^!! //p' | head -5 | paste -sd, -)
-    [ -n "$ign" ] && reason="${reason}。一緒に消える ignored ファイル: $ign"
+    # st は上の git status --porcelain --ignored の出力(読めなかった worktree はここに来ない)
+    if ! ign=$(printf '%s\n' "$st" | awk '/^!! / && n++ < 5 { print substr($0, 4) }' | paste -sd, -); then
+      action=keep reason="一緒に消える ignored ファイルを確かめられない"
+    elif [ -n "$ign" ]; then
+      reason="${reason}。一緒に消える ignored ファイル: $ign"
+    fi
   fi
   emit "$action" worktree "$name" "$head" "$path" "$reason"
   [ -n "$branch" ] && printf '%s\t%s\t%s\n' "$branch" "$action" "$path" >>"$tmp/wt-branches"
@@ -224,11 +247,13 @@ done < <(git for-each-ref --format='%(refname:lstrip=2)%09%(objectname)%09%(upst
 # PR がマージ済みで、リモートの先端が PR の head に含まれるものだけを候補にする(PR の無いリモートブランチには触れない)。
 while IFS=$'\t' read -r name sha; do
   [ "$name" = HEAD ] && continue
-  hk_is_protected "$name" "$default" && continue
-  [ -n "$(open_pr_based_on "$name")" ] && continue
+  hk_is_protected "$name" && continue
+  stacked=$(open_pr_based_on "$name") && [ -z "$stacked" ] || continue
   parse_pr_info "$(pr_info "$name")"
   [ "$st" = MERGED ] || continue
   hk_parse_action "$(verify_pr_merged "$num" "$oid" "$sha")"
   [ "$action" = keep ] && continue
   emit "$action" remote "$name" "$sha" "" "$reason"
 done < <(git for-each-ref --format='%(refname:lstrip=3)%09%(objectname)' "refs/remotes/$hk_remote/")
+
+printf 'end\t\t\t\t\t走査を最後まで終えた\n'
