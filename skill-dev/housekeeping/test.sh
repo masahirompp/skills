@@ -324,6 +324,13 @@ if unreadable "$root/wt/wt-dirty"; then
     pass "scan: 読めない worktree は prune にしない" || fail "scan: 読めない worktree wt-dirty → ${got:-(出力なし)}"
   got=$(row scan-noperm-wt branch wt-dirty)
   [ "${got%%$'\t'*}" = keep ] && pass "scan: 読めない worktree のブランチを残す" || fail "scan: 読めない worktree のブランチ wt-dirty → ${got:-(出力なし)}"
+  # そのとき apply.sh は prune をまるごと飛ばすので、ディレクトリが無い wt-gone も prune にせず、そのブランチも ask にする
+  got=$(row scan-noperm-wt worktree wt-gone)
+  [ "${got%%$'\t'*}" = ask ] && [[ "$got" == *"prune を実行できない"* ]] &&
+    pass "scan: prune を実行できなければ prune の行を ask にする" || fail "scan: prune を実行できないのに wt-gone → ${got:-(出力なし)}"
+  got=$(row scan-noperm-wt branch wt-gone)
+  [ "${got%%$'\t'*}" = ask ] && [[ "$got" == *"prune を実行できない"* ]] &&
+    pass "scan: そのブランチも ask にする" || fail "scan: prune を実行できないのに branch wt-gone → ${got:-(出力なし)}"
 else
   chmod 755 "$root/wt/wt-dirty"
   pass "scan: (chmod 000 でも読めてしまう(root など)ので、読めない worktree の確認は飛ばす)"

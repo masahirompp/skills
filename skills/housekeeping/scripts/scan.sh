@@ -170,7 +170,21 @@ git for-each-ref --format='%(refname:lstrip=2)%09%(objectname)%09%(upstream:trac
 git for-each-ref --format='%(refname:lstrip=3)%09%(objectname)' "refs/remotes/$hk_remote/" >"$tmp/remotes" 2>"$tmp/remotes.err" ||
   { echo "error: リモートブランチの一覧を読めない: $(cat "$tmp/remotes.err" 2>/dev/null)" >&2; exit 1; }
 # プロセスの一覧は、読めなくても止まらない(ブランチの判定は続けられる)。worktree ごとに「確かめられない」として残す
-if cwds=$(hk_process_cwds); then cwds_err=''; else cwds_err=$cwds cwds=''; fi
+# メイン以外の worktree が無いと確かめられたときは取らない
+cwds='' cwds_err=''
+if [ "$(grep -c '^worktree ' "$tmp/wt")" = 1 ]; then
+  :
+elif cwds=$(hk_process_cwds); then
+  cwds_err=''
+else
+  cwds_err=$cwds cwds=''
+fi
+# apply.sh の git worktree prune は、prunable なものをまとめて消す。ディレクトリが無いと確かめられない prunable の
+# worktree が1つでもあると、apply.sh は prune をまるごと飛ばすので、ほかの prune の行(とそのブランチの行)も ask にする
+prune_blocked=''
+while IFS= read -r p; do
+  [ -z "$p" ] || hk_path_absent "$p" || prune_blocked=1
+done < <(awk '/^worktree / { p = substr($0, 10) } /^prunable/ { print p }' "$tmp/wt")
 
 printf 'action\tkind\tname\tsha\tpath\treason\n'
 
@@ -193,7 +207,9 @@ handle_wt() {
   if [ -n "$prunable" ]; then
     # git は、ディレクトリが存在しても読めなければ prunable と出す。prune するとディレクトリ(未コミットの作業や
     # .env を含む)が管理から外れたまま残るので、存在しないと確かめられたときだけ prune にする
-    if hk_path_absent "$path"; then
+    if hk_path_absent "$path" && [ -n "$prune_blocked" ]; then
+      record_wt ask "ディレクトリが存在しない(管理情報だけが残っている)が、prune を実行できない(ディレクトリが無いと確かめられない prunable の worktree がある)"
+    elif hk_path_absent "$path"; then
       record_wt prune "ディレクトリが存在しない(管理情報だけが残っている)"
     else
       record_wt keep "$(hk_unsure "git は管理情報だけが残っている(prunable)と出すが、ディレクトリが無いと" "権限で読めない、など")"
@@ -270,6 +286,11 @@ while IFS=$'\t' read -r name sha track; do
     delete | ask)
       hk_parse_action "$(classify_branch "$name" "$sha")"
       [ "$action" = keep ] || reason="worktree ${wt_path} と一緒に消す。${reason}"
+      # worktree の行が ask なら、worktree は残りうる(承認されない、prune を実行できない)。残った worktree で
+      # チェックアウト中のブランチは消せないので、ブランチの行も ask にする
+      if [ "$wt_action" = ask ] && [ "$action" = delete ]; then
+        action=ask reason="${reason}。worktree の行が ask: ${wt_reason}"
+      fi
       ;;
     *)
       hk_parse_action "$(classify_branch "$name" "$sha")"
