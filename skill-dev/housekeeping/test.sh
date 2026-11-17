@@ -435,7 +435,7 @@ git config --unset-all housekeeping.protect
 in_lib hk_is_protected feature/x && pass "lib: 保護パターンを読み込む前は保護対象とみなす" || fail "lib: 読み込む前に保護対象でないと答えた"
 # git config を読めない(キーが無いのとは別の失敗)ときは、scan も apply も止まること。
 #   壊れた設定: --get-all が rc=128 を返す
-#   権限で読めない設定: --get-all はキーが無いときと同じ rc=1 を返す。--global の警告で見分ける
+#   権限で読めないグローバルの設定: --get-all はキーが無いときと同じ rc=1 を返す。git config --file の警告で見分ける
 printf '[broken\n' >"$root/bad.gitconfig"
 printf '[housekeeping]\n\tprotect = keep-me\n' >"$root/noperm.gitconfig" && chmod 000 "$root/noperm.gitconfig"
 for cfg in bad noperm; do
@@ -476,6 +476,27 @@ else
   pass "scan/apply: (chmod 000 でも読めてしまう(root など)ので、読めない XDG の設定の確認は飛ばす)"
 fi
 chmod 600 "$root/xdg/git/config"
+# git が「ファイルが無い」として扱うもの(リンク切れのグローバルの設定)と、git が読まないもの(GIT_CONFIG_NOSYSTEM のもとの
+# 読めないシステムの設定)では止まらないこと。止まると、scan も apply も一切使えなくなる
+ln -s "$root/no-such-file" "$root/dangling.gitconfig"
+mkdir -p "$root/dangling-home" "$root/dangling-xdg/git"
+ln -s "$root/no-such-file" "$root/dangling-home/.gitconfig"
+ln -s "$root/no-such-file" "$root/dangling-xdg/git/config"
+printf '[user]\n\tname = test\n' >"$root/noperm-system.gitconfig" && chmod 000 "$root/noperm-system.gitconfig"
+for env_case in "GIT_CONFIG_GLOBAL=$root/dangling.gitconfig" \
+  "HOME=$root/dangling-home XDG_CONFIG_HOME=$root/dangling-xdg" \
+  "GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_SYSTEM=$root/noperm-system.gitconfig"; do
+  set +e
+  # shellcheck disable=SC2086 # env_case は空白区切りの代入の並び
+  env -u GIT_CONFIG_GLOBAL $env_case "$scripts/scan.sh" >/dev/null 2>"$root/scan-env-cfg.err"
+  rc=$?
+  : | env -u GIT_CONFIG_GLOBAL $env_case "$scripts/apply.sh" >/dev/null 2>"$root/apply-env-cfg.err"
+  arc=$?
+  set -e
+  [ "$rc" = 0 ] && pass "scan: 止まらない($env_case)" || fail "scan: 止まった($env_case): $(cat "$root/scan-env-cfg.err")"
+  [ "$arc" = 0 ] && pass "apply: 止まらない($env_case)" || fail "apply: 止まった($env_case): $(cat "$root/apply-env-cfg.err")"
+done
+chmod 600 "$root/noperm-system.gitconfig"
 
 # --- apply ----------------------------------------------------------------
 # プロセスを確かめられなければ、worktree の行は消さずに「確かめられない」で飛ばすこと。

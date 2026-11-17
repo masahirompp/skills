@@ -57,14 +57,15 @@ hk_default_branch() {
 #
 # hk_load_protect <default-branch>: 保護パターンを一度だけ読み、改行区切りでグローバル変数 hk_protect に入れる。
 # 設定を読めなければ、何を読めなかったかを stderr に出して失敗を返す(呼び出し側は止まる)。
-#   - git config --get-all の終了コード 1 は「キーが無い」。それ以外は失敗
-#   - 権限で読めない ~/.gitconfig は、--get-all ではキーが無いときと同じ rc=1 になり、見分けられない。
-#     --global / --system を明示すると警告を stderr に出すので、それを失敗として扱う
-#   - ただし ~/.gitconfig があると、--global を明示しても、XDG の設定(${XDG_CONFIG_HOME:-$HOME/.config}/git/config)が
-#     読めないことには警告を出さない。そのため、git がグローバルの設定として読む候補のファイルごとに、
-#     読めるか、存在しないと確かめられるかを見る。システムの設定は、読めなければ git 自身が止まる(rc=128)
+#   - git config --get-all の終了コード 1 は「キーが無い」。それ以外は失敗。
+#     システム・リポジトリの設定や include したファイルは、読めなければ git 自身がここで止まる(rc=128)。
+#     GIT_CONFIG_NOSYSTEM が立っていれば、git はシステムの設定を読まないので、確かめない
+#   - グローバルの設定だけは、権限で読めなくても git は黙ってキーが無いときと同じ rc=1 を返し、見分けられない。
+#     そこで、git がグローバルの設定として読むファイルごとに git config --file で読み直し、stderr が空であることを求める。
+#     git config --file は、存在しないファイルやリンク切れには黙り(git もこれらを「ファイルが無い」として扱う)、
+#     権限で読めない・親を辿れないファイルには warning を出す。読めるかどうかの判定を git に任せ、自前では見ない
 hk_load_protect() {
-  local default=$1 p f xdg cfg rc err scope IFS=$' \t\n'
+  local default=$1 p f xdg cfg rc err IFS=$' \t\n'
   local -a global_files
   set -f # 呼び出し元の設定に頼らず、HOUSEKEEPING_PROTECT の glob を展開させない
   # stderr を値に混ぜない。エラー文は、失敗したときだけ取り直す
@@ -76,13 +77,6 @@ hk_load_protect() {
     return 1
   fi
   [ "$rc" = 0 ] || cfg=''
-  for scope in --system --global; do
-    err=$(git config "$scope" --get-all housekeeping.protect 2>&1 >/dev/null)
-    if [ -n "$err" ]; then
-      echo "error: git config $scope を読めない(保護パターンを確かめられない): $err" >&2
-      return 1
-    fi
-  done
   # GIT_CONFIG_GLOBAL があれば git はそれだけを読み、~/.gitconfig と XDG の設定は読まない
   if [ -n "${GIT_CONFIG_GLOBAL+x}" ]; then
     global_files=("$GIT_CONFIG_GLOBAL")
@@ -92,9 +86,10 @@ hk_load_protect() {
   fi
   for f in "${global_files[@]}"; do
     [ -n "$f" ] || continue
-    case $f in /*) ;; *) f=$PWD/$f ;; esac
-    if ! [ -r "$f" ] && ! hk_path_absent "$f"; then
-      echo "error: git config のファイル $f を読めない(保護パターンを確かめられない)" >&2
+    err=$(git config --file "$f" --get-all housekeeping.protect 2>&1 >/dev/null)
+    rc=$?
+    if [ -n "$err" ] || [ "$rc" -gt 1 ]; then
+      echo "error: git config のファイル $f を読めない(保護パターンを確かめられない): ${err:-(rc=$rc)}" >&2
       return 1
     fi
   done

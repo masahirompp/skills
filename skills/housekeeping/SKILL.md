@@ -108,7 +108,7 @@ entire.io は、記録用のブランチ `entire/checkpoints/v1` と、セッシ
 ## 設定と前提
 
 - 保護するブランチ名は glob パターンで足せる。リポジトリごとの設定は `git config --add housekeeping.protect 'release/*'` で、その場限りなら環境変数 `HOUSEKEEPING_PROTECT='release/* sandbox'` で指定する
-- 保護パターンの設定(`git config` のシステム・グローバル・リポジトリの各設定)を読めなければ、scan.sh も apply.sh も止まる。権限で読めない `~/.gitconfig` は、git 自身はキーが無いのと同じに扱って黙るので、`--global` を明示したときの警告で見分けている
+- 保護パターンの設定(`git config` のシステム・グローバル・リポジトリの各設定)を読めなければ、scan.sh も apply.sh も止まる。権限で読めないグローバルの設定(`~/.gitconfig`、XDG の設定、`GIT_CONFIG_GLOBAL`)は、git 自身はキーが無いのと同じに扱って黙るので、git がグローバルの設定として読むファイルごとに `git config --file` で読み直し、警告が出るかで見分けている。存在しないファイルやリンク切れは、git と同じく「ファイルが無い」として扱い、止まらない。`GIT_CONFIG_NOSYSTEM` が立っていれば、git と同じくシステムの設定は見ない
 - macOS で、Claude Code のサンドボックスの外で実行する前提。サンドボックスの中では、一時ディレクトリを作れない、ほかのプロセスが見えない、などで止まるか、どの worktree も「確かめられない」で残る
 - scan.sh は一時ディレクトリを `$TMPDIR`(未設定なら `/tmp`)の下に作り、終了時に消す。作れなければ、fetch を含めて何もせずに止まる
 - `git`・`gh`・`jq` が要る。jq が無ければ scan.sh は止まる。`lsof` と `ps` で worktree を使っているプロセスを調べる。lsof の結果に自分が出るだけでは、ほかのプロセスも見えている根拠にならないので、ps で見える自分のユーザーのプロセスが、すべて lsof に出ているかを確かめる。lsof や ps が無い、lsof に出ないプロセスがある、のどちらかなら、どの worktree も「確かめられない」として残す。ただし、ほかのユーザー(root を含む)のプロセスは、自分の権限の lsof にはカレントディレクトリが出ないので確かめられず、使用中と判定されない。worktree の中で `sudo -s` などを動かしたまま走査しない
