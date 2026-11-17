@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""review-loop の review_loop.py を、偽の claude と gh で検証する。GitHub にも API にも触れない。
+"""review-loop の review_loop.py(begin と end)を、偽の gh で検証する。GitHub には触れない。
 
     python3 skill-dev/review-loop/test.py         # 実行して後片付けする
     KEEP=1 python3 skill-dev/review-loop/test.py  # 作業ディレクトリを残す
@@ -17,22 +17,19 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = os.path.normpath(os.path.join(HERE, "../../skills/review-loop/scripts"))
 FAKES = os.path.join(HERE, "fakes")
 
-# 待ち時間を縮めて、本物のスクリプトを読み込んで実行する
+# 本物のスクリプトを読み込んで実行する
 RUNNER = """
-import json, os, sys
+import sys
 sys.dont_write_bytecode = True  # スキルのディレクトリに __pycache__ を作らない
 sys.path.insert(0, sys.argv[1])
 import review_loop as r
-r.LOCK_SETTLE_SECONDS = 0
-r.POLL_SECONDS = 0.1
-for k, v in json.loads(os.environ.get("OVERRIDES", "{}")).items():
-    setattr(r, k, v)
 sys.argv = ["review_loop.py"] + sys.argv[2:]
 sys.exit(r.main())
 """
 
 root = os.path.realpath(tempfile.mkdtemp(prefix="review-loop-test."))
 fails = 0
+end_out = {}
 
 
 def check(cond, label):
@@ -67,18 +64,52 @@ def setup():
 
 
 def env_for(**extra):
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("FAKE_", "REVIEW_LOOP"))}
-    env.update(PATH=FAKES + os.pathsep + env["PATH"], FAKE_DIR=os.path.join(root, "fake"),
-               CLAUDE_JOB_DIR="/should/be/stripped", CLAUDE_CODE_SESSION_ID="parent", TMPDIR=root)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("FAKE_")}
+    env.update(PATH=FAKES + os.pathsep + env["PATH"], FAKE_DIR=os.path.join(root, "fake"), TMPDIR=root)
     env.update(extra)
     return env
 
 
-def run(wt, *flags, overrides=None, **extra):
-    env = env_for(OVERRIDES=json.dumps(overrides or {}), **extra)
-    p = subprocess.run([sys.executable, "-c", RUNNER, SCRIPTS, "iterate", wt, *flags],
-                       env=env, capture_output=True, text=True)
+def run(wt, cmd, *flags, cwd=None, **extra):
+    # 親は worktree のトップを作業ディレクトリにして呼ぶ(begin が確かめる)
+    p = subprocess.run([sys.executable, "-c", RUNNER, SCRIPTS, cmd, wt, *flags], env=env_for(**extra), capture_output=True, text=True,
+                       cwd=cwd or (wt if os.path.isdir(wt) else root))
     return p.returncode, p.stdout, p.stderr
+
+
+def begin(wt, *flags, roles=("code-review",), **kw):
+    """begin を実行し、(終了コード, 標準出力の key=value の辞書, stderr) を返す。始められたら、全ての役の出力を置く。
+    roles が None なら --roles を付けない(既定の役)。"""
+    if roles is not None:
+        flags += ("--roles", ",".join(roles))
+    rc, out, err = run(wt, "begin", *flags, **kw)
+    out = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+    if rc == 0:
+        for key in out:
+            if key.startswith("out."):
+                review(out, key[len("out."):], f"{key[len('out.'):]} の指摘\n")
+    return rc, out, err
+
+
+def review(out, role, text):
+    """役の出力を、begin が示した置き場に書く。text が None なら消す。"""
+    path = out[f"out.{role}"]
+    if text is None:
+        os.remove(path)
+        return
+    with open(path, "w") as f:
+        f.write(text)
+
+
+def end(wt, *flags, **kw):
+    global end_out
+    rc, out, err = run(wt, "end", *flags, **kw)
+    end_out = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+    return rc, err
+
+
+def record_path(wt):
+    return os.path.join(sh("git", "rev-parse", "--absolute-git-dir", cwd=wt), "review-loop-attempt.json")
 
 
 def comments():
@@ -93,672 +124,357 @@ def state():
     cs = [c for c in comments() if c["login"] == "me"]
     if not cs:
         return None
-    body = cs[0]["body"]
-    raw = body.split("<!-- review-loop-state ", 1)[1].split(" -->", 1)[0]
+    raw = cs[0]["body"].split("<!-- review-loop-state ", 1)[1].split(" -->", 1)[0]
     return json.loads(raw)
 
 
-def calls():
-    try:
-        with open(os.path.join(root, "fake", "calls.jsonl")) as f:
-            return [json.loads(line) for line in f]
-    except FileNotFoundError:
-        return []
-
-
 def write_state(s):
-    body = "<!-- review-loop-state " + json.dumps(s) + " -->\nx"
+    body = "<!-- review-loop-state " + (s if isinstance(s, str) else json.dumps(s)) + " -->\nx"
     with open(os.path.join(root, "fake", "comments.json"), "w") as f:
         json.dump([{"id": 500, "login": "me", "created_at": "2026-01-01T00:00:00Z", "body": body, "edits": 0}], f)
 
 
-def alive(pid):
-    try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
+def base_state(**over):
+    s = {"run_id": "20260101T000000", "iter": 0, "attempts": [], "previous_run": None}
+    s.update(over)
+    return s
 
 
-def system_prompt(c):
-    """子の呼び出しの記録から、--append-system-prompt の値を取り出す。"""
-    return c["args"][c["args"].index("--append-system-prompt") + 1]
-
-
-def last_row():
-    """状態コメントの表のうち、最後の試行の行(合計の行の直前)を返す。"""
-    lines = comments()[0]["body"].splitlines()
-    return lines[lines.index(next(line for line in lines if line.startswith("| **合計**"))) - 1]
-
-
-def commit_and_push(wt, name):
+def commit(wt, name, push=True):
     with open(os.path.join(wt, name), "w") as f:
         f.write(name)
     sh("git", "add", "-A", cwd=wt)
     sh("git", "commit", "-qm", name, cwd=wt)
-    sh("git", "push", "-q", "origin", "feature", cwd=wt)
+    if push:
+        sh("git", "push", "-q", "origin", "feature", cwd=wt)
 
 
-# --- 成功 --------------------------------------------------------------------
+def table_rows():
+    return [line for line in comments()[0]["body"].splitlines() if line.startswith("| ") and not line.startswith("| SHA")]
+
+
+def leftovers():
+    """始められなかった試行が残したもの(作業ディレクトリの中身と、出力の置き場)。"""
+    top = os.path.join(root, "review-loop")
+    out = os.path.join(top, "out")
+    return (os.listdir(out) if os.path.isdir(out) else []) + [d for d, _, fs in os.walk(top) if fs]
+
+
+# --- 1反復: begin → end ------------------------------------------------------
 wt = setup()
-rc, out, err = run(wt)
-check(rc == 0, f"成功すると終了コード0({rc}) {err[-300:] if rc else ''}")
-check(out.startswith("===== 観点: code-review =====") and "code-review: 指摘1件" in out,
-      "標準出力はレビュー役の出力をつないだものだけ")
-s = state()
-check(s and s["iter"] == 1 and s["attempts"][0]["result"] == "completed", "状態コメントに反復1が記録される")
-check(s and s["lock"]["running"] is False, "ロックが解除される")
-check(s and s["attempts"][0]["tokens"] == {"input": 3 * 3500, "cache_read": 3 * 2000, "output": 3 * 300},
-      "トークン数はレビュー役3つの modelUsage の合計(入力はキャッシュを含む)")
-body = comments()[0]["body"]
-check("| 1.1万(うちキャッシュ読み込み 6000) | 900 |" in body, "入力と出力のトークン数を別の列に出す")
-workdir = err.rstrip().splitlines()[-1]
-check(os.path.isfile(os.path.join(workdir, "reviews.md")), "stderr の最後の行は作業ディレクトリ")
-with open(os.path.join(workdir, "reviews.md"), encoding="utf-8") as f:
-    joined = f.read()
-check(joined.strip() == out.strip(), "レビュー役の出力をつないだものは、作業ディレクトリの reviews.md にも残る")
-check(not [n for n in os.listdir(workdir) if n.startswith(("judge", "verdict"))], "判定役は起動せず、判定のファイルも作らない")
-check(workdir.startswith(os.path.join(root, "review-loop", "o_r", "7")), "作業ディレクトリは <tmp>/review-loop/<リポジトリ>/<PR>/<run>/<試行>")
-with open(os.path.join(workdir, "review-code-review.result.md"), encoding="utf-8") as f:
-    check(f.read() == "code-review: 指摘1件\n", "各レビューの result のテキストを review-*.result.md に残す")
-cs = calls()
-reviews = [c for c in cs if c["kind"] == "review"]
-check(len(reviews) == 3, "観点ごとに1プロセス起動する")
-check(all(not c["env_job_dir"] and not c["env_session_id"] for c in cs), "子の環境から CLAUDE_JOB_DIR などを外す")
-check(all(c["guard"] == "1" for c in cs), "子には REVIEW_LOOP_ACTIVE が渡る")
-check(not any(c["kind"] == "preflight-not-killed" for c in cs), "事前確認の子は init の直後に止める(モデルに問い合わせない)")
-check("===== 観点: security-review =====\nsecurity-review: 指摘1件\n===== ここまで: security-review =====" in joined,
-      "reviews.md は各レビューを役の名前で区切る")
-check(all("--append-system-prompt" in c["args"] for c in reviews), "運用上の制約を渡す")
-check(all(c["args"][c["args"].index("--model") + 1] == "opus" for c in reviews), "レビュー役には、既定でモデル opus を指定する")
-check(all("--model" not in c["args"] for c in cs if c["kind"] == "preflight"), "事前確認にはモデルを渡さない(モデルに問い合わせない)")
-check(not os.path.exists(os.path.join(workdir, "denials.txt")) and "拒否" not in joined,
-      "拒否がなければ denials.txt は作らず、reviews.md にも添えない")
-prompts = sorted(c["args"][-1] for c in reviews)
-check(prompts == ["/code-review high 7", "/code-review high 7", "/security-review"],
-      f"レビュー役のプロンプトは /<観点と引数>({{pr}} を展開)。{prompts}")
-check(os.path.isfile(os.path.join(workdir, "review-code-review-2.result.md"))
-      and "===== 観点: code-review =====" in joined and "===== 観点: code-review-2 =====" in joined,
-      "同じスキルを重ねた観点は、2つ目から名前に番号を付け、出力を分けて残す")
-
-# 2回目: 同じコメントを編集で更新する
-rc, out, err = run(wt)
-check(rc == 0 and state()["iter"] == 2, "同じ SHA で再実行できる")
-check(len(comments()) == 1 and comments()[0]["edits"] >= 2, "新しいコメントを作らず編集で更新する")
-
-# --- 前提チェック(状態に記録しない) ------------------------------------------
-before = json.dumps(state())
-with open(os.path.join(wt, "untracked.txt"), "w") as f:
+head = sh("git", "rev-parse", "HEAD", cwd=wt)
+rc, out, err = begin(wt)
+check(rc == 0 and out.get("pr") == "7" and out.get("sha") == head and out.get("attempt") == "1" and out.get("started", "").endswith("Z"),
+      "begin が pr、sha、attempt、started を出す")
+check(os.path.isdir(out.get("workdir", "")) and out["workdir"].startswith(os.path.join(root, "review-loop", "o_r", "7")),
+      "begin が作業ディレクトリを作る")
+check(os.stat(os.path.join(root, "review-loop")).st_mode & 0o777 == 0o700, "作業ディレクトリの起点は 0700")
+check(set(out) == {"pr", "sha", "attempt", "started", "workdir", "out.code-review"}
+      and not out["out.code-review"].startswith(out["workdir"]), "begin が、役の出力の置き場を、作業ディレクトリの外に作る")
+check(state() is None and comments() == [] and os.path.exists(record_path(wt)), "begin は GitHub に書かず、試行の記録を手元に置く")
+with open(os.path.join(wt, "debug.log"), "w") as f:  # .gitignore に当たるファイルは、混入に数えない
     f.write("x")
-rc, _, err = run(wt)
-check(rc == 2 and "クリーンでない" in err, "作業ツリーが汚れていれば終了コード2")
-os.remove(os.path.join(wt, "untracked.txt"))
-with open(os.path.join(wt, "x.log"), "w") as f:
-    f.write("ignored")
+rc, err = end(wt)
+s = state()
+check(rc == 0 and "完了: 反復 1" in err and end_out == {"workdir": out["workdir"], "roles": "code-review"},
+      "end が completed で終わり、作業ディレクトリと役の名前を出す")
+check(sorted(os.listdir(out["workdir"])) == ["review-code-review.md", "reviews.md"] and not os.path.exists(os.path.dirname(out["out.code-review"])),
+      "end が、役の出力を作業ディレクトリに集め、置き場を消す")
+check(s == {"run_id": s["run_id"], "iter": 1, "previous_run": None,
+            "attempts": [{"sha": head, "at": out["started"], "result": "completed", "roles": ["code-review"], "iter": 1}]},
+      "end が試行を completed として記録する(ロックも、連続失敗の回数も持たない)")
+check(not os.path.exists(record_path(wt)) and sh("git", "status", "--porcelain", "--ignored", cwd=wt) == "!! debug.log",
+      "試行の記録は end で消え、作業ツリーにも残らない")
+check(table_rows() == [f"| {head[:7]} | {out['started']} | completed(反復 1) |"] and "実行中" not in comments()[0]["body"],
+      "表に SHA、時刻、結果が出る")
 
-sh("git", "commit", "-q", "--allow-empty", "-m", "local", cwd=wt)
-rc, _, err = run(wt)
-check(rc == 2 and "push" in err, "push していなければ終了コード2")
+commit(wt, "b.txt")
+rc, out, _ = begin(wt)
+check(rc == 0 and out["attempt"] == "2" and out["workdir"].endswith("/2"), "2回目の begin は、別の作業ディレクトリを作る")
+rc, _ = end(wt)
+check(rc == 0 and state()["iter"] == 2 and len(state()["attempts"]) == 2 and len(comments()) == 1 and comments()[0]["edits"] == 1,
+      "2回目の end で反復が2になる。状態コメントは1つで、編集で更新する")
+
+# --- begin の前提 ------------------------------------------------------------
+wt = setup()
+with open(os.path.join(wt, "new.txt"), "w") as f:
+    f.write("x")
+rc, _, err = begin(wt)
+check(rc == 2 and "作業ツリーがクリーンでない" in err, "未コミットの変更があれば始めない")
+os.remove(os.path.join(wt, "new.txt"))
+commit(wt, "c.txt", push=False)
+rc, _, err = begin(wt)
+check(rc == 2 and "PR の head" in err, "push していなければ始めない")
+sh("git", "push", "-q", "origin", "feature", cwd=wt)
+for label, extra, word in (("PR がオープンでない", {"FAKE_PR_STATE": "MERGED"}, "オープンではない"),
+                           ("PR の作成者が自分でない", {"FAKE_PR_AUTHOR": "other"}, "作成者"),
+                           ("PR が無い", {"FAKE_NO_PR": "1"}, "PR を取得できない")):
+    rc, _, err = begin(wt, **extra)
+    check(rc == 2 and word in err, f"{label}なら始めない")
+rc, _, err = run("wt", "begin")
+check(rc == 2 and "絶対パス" in err, "worktree が相対パスなら始めない")
+rc, _, err = begin(wt, cwd=root)
+check(rc == 2 and "worktree のトップ" in err and "レビュー役はあなたの作業ディレクトリで動く" in err, "作業ディレクトリが worktree でなければ始めない")
+os.makedirs(os.path.join(wt, "sub"))
+rc, _, err = begin(os.path.join(wt, "sub"), cwd=os.path.join(wt, "sub"))
+check(rc == 2 and "トップではない" in err, "worktree のトップでなければ始めない")
+os.rmdir(os.path.join(wt, "sub"))
+for label, arg, word in (("役の名前として読めない", "code-review,bad name", "役の名前として読めない"), ("空の", "", "役の名前として読めない"),
+                         ("同じ名前を重ねた", "code-review,code-review", "同じ名前がある")):
+    rc, _, err = run(wt, "begin", "--roles", arg)
+    check(rc == 2 and word in err, f"{label} --roles は受け付けない")
+rc, _, err = run(wt, "end", "--failed", " ")
+check(rc == 2 and "--failed の理由が空" in err, "--failed の理由が空なら受け付けない")
+check(not os.path.exists(record_path(wt)) and leftovers() == [] and state() is None, "始めなかった begin は、何も残さない")
+
+# --- begin と end の対応 -----------------------------------------------------
+rc, err = end(wt)
+check(rc == 2 and "閉じる試行が無い" in err and state() is None, "begin していなければ、end は何も記録しない")
+rc, out, _ = begin(wt)
+rc2, _, err = begin(wt)
+check(rc == 0 and rc2 == 2 and "前の試行を end で閉じていない" in err and os.path.isdir(out["workdir"]), "begin を2回続けると、2回目は始めない")
+rc, _ = end(wt)
+rc2, err = end(wt)
+check(rc == 0 and rc2 == 2 and "閉じる試行が無い" in err and state()["iter"] == 1, "end を2回続けても、反復は1回しか進まない")
+
+# 前の end が、書き込みには成功していた(応答を受け取る前に止まった)場合は、二重に記録しない
+commit(wt, "d.txt")
+rc, out, _ = begin(wt)
+shutil.copy(record_path(wt), os.path.join(root, "saved-record.json"))
+rc, _ = end(wt)
+shutil.copy(os.path.join(root, "saved-record.json"), record_path(wt))
+rc2, err = end(wt)
+check(rc == 0 and rc2 == 0 and "既に記録されている" in err and state()["iter"] == 2 and len(state()["attempts"]) == 2
+      and not os.path.exists(record_path(wt)), "記録済みの試行で end をやり直しても、二重に記録しない")
+
+# 状態コメントへの書き込みが失敗したら、試行は開いたままで、やり直せる
+commit(wt, "e.txt")
+rc, _, _ = begin(wt)
+rc, err = end(wt, FAKE_FAIL_PATCH_FROM="1")
+check(rc == 2 and "失敗した" in err and state()["iter"] == 2 and os.path.exists(record_path(wt)), "end の書き込みが失敗すると、記録せずに止まる(試行は開いたまま)")
+os.remove(os.path.join(root, "fake", "patches"))
+rc, _ = end(wt)
+check(rc == 0 and state()["iter"] == 3, "もう一度 end を呼べば、記録できる")
+
+# --- end の検査 --------------------------------------------------------------
+wt = setup()
+head = sh("git", "rev-parse", "HEAD", cwd=wt)
+rc, out, _ = begin(wt)
+with open(os.path.join(wt, "stray.txt"), "w") as f:
+    f.write("x")
+rc, err = end(wt)
+s = state()
+check(rc == 1 and "failed: contamination" in err and "stray.txt" in err and "元に戻していない" in err, "作業ツリーが変わっていれば contamination")
+check(s["attempts"] == [{"sha": head, "at": out["started"], "result": "failed", "reason": "contamination"}] and s["iter"] == 0
+      and not os.path.exists(record_path(wt)), "contamination を失敗として記録する")
+check(os.path.exists(os.path.join(wt, "stray.txt")), "混入したファイルは消さない")
+with open(os.path.join(out["workdir"], "failure.txt")) as f:
+    check(f.read().startswith("contamination\n"), "失敗の詳細を作業ディレクトリに残す")
+os.remove(os.path.join(wt, "stray.txt"))
+
+rc, _, _ = begin(wt)
+commit(wt, "f.txt", push=False)
+rc, err = end(wt)
+check(rc == 1 and "failed: contamination" in err and "HEAD が変わった" in err, "HEAD が変わっていれば contamination")
 sh("git", "push", "-q", "origin", "feature", cwd=wt)
 
-rc, _, err = run(wt, FAKE_NO_PR="1")
-check(rc == 2 and "PR を取得できない" in err, "PR がなければ終了コード2")
-rc, _, err = run(wt, FAKE_SKILLS="mattpocock-skills:code-review")
-check(rc == 2 and "見つからない: code-review" in err, f"事前確認で観点スキルの欠落を検出する {err[-200:]}")
-check("見つからない: code-review(" in err, f"重ねた観点のスキルが欠けていても、スキル名は1回だけ出す {err[-200:]}")
-rc, _, err = run(wt, REVIEW_LOOP_ACTIVE="1")
-check(rc == 2 and "再帰" in err, "再帰ガード")
-rc, _, err = run("relative/path")
-check(rc == 2 and "絶対パス" in err, "worktree は絶対パスで指定する")
-os.makedirs(os.path.join(wt, "sub"))
-rc, _, err = run(os.path.join(wt, "sub"))
-check(rc == 2 and "トップではない" in err, "worktree のトップ以外は拒否する")
-check(json.dumps(state()) == before, "前提チェックの失敗は状態に記録しない")
-
-# --- 試行の失敗 --------------------------------------------------------------
-t = time.time()
-rc, _, err = run(wt, FAKE_REVIEW_code_review="deny", FAKE_REVIEW_security_review="hang")
-s = state()
-check(rc == 1 and "permission_denied" in err and "gh pr diff 7" in err, "権限の拒否は失敗にし、内容を出す")
-wd = err.rstrip().splitlines()[-1]
-with open(os.path.join(wd, "review-code-review.result.md"), encoding="utf-8") as f:
-    check(f.read() == "読めなかった\n", "失敗したレビューでも result のテキストを review-*.result.md に残す")
-check(s["attempts"][-1]["tokens"]["output"] >= 300, "拒否で終わった子のトークン数も記録する")
-check(time.time() - t < 30, "1つ失敗したら残りをすぐ止める")
-hung = [c for c in calls() if c["kind"] == "review" and c["name"] == "security-review"][-1]
-check(not alive(hung["pid"]), "止めた子のプロセスが残らない")
-check(s["consecutive_failures"] == 1 and s["attempts"][-1]["result"] == "failed", "失敗を記録し連続失敗を数える")
-check(s["iter"] == 2 and s["lock"]["running"] is False, "失敗しても反復は進まず、ロックは解除される")
-check(err.rstrip().splitlines()[-1].endswith("/3"), "失敗しても stderr の最後の行は作業ディレクトリ")
-
-rc, _, err = run(wt, FAKE_REVIEW_security_review="dirty")
-check(rc == 1 and "contamination" in err and "stray.txt" in err, "子が作業ツリーを変えたら失敗にする")
-check(os.path.exists(os.path.join(wt, "stray.txt")), "混入した変更は元に戻さない")
-os.remove(os.path.join(wt, "stray.txt"))
-check(state()["consecutive_failures"] == 2, "連続失敗が積み上がる")
-
-rc, _, err = run(wt, FAKE_REVIEW_code_review="empty")
-check(rc == 1 and "no_output" in err and "空でない result の行がない" in err, "result が空なら失敗")
-rc, _, err = run(wt)
-check(rc == 2 and "連続失敗" in err, "連続失敗3回で止まる")
-
-rc, _, err = run(wt, "--new-run")
-s = state()
-check(rc == 0 and s["iter"] == 1 and s["previous_run"]["iterations"] == 2 and len(s["attempts"]) == 1,
-      "--new-run で直前のシリーズを要約して始め直す")
-
-rc, _, err = run(wt, FAKE_REVIEW_code_review="fail")
-check(rc == 1 and "boom" in err, "子が異常終了したら stderr を添えて失敗")
-
-rc, _, err = run(wt, "--new-run", FAKE_REVIEW_security_review="hang", overrides={"REVIEW_TIMEOUT": 1})
-hung = [c for c in calls() if c["kind"] == "review" and c["name"] == "security-review"][-1]
-check(rc == 1 and "timeout" in err and not alive(hung["pid"]), "タイムアウトした子はグループごと止める")
-
-# SIGTERM で止められてもロックを解除し、子を止める
-env = env_for(OVERRIDES="{}", FAKE_REVIEW_code_review="hang")
-p = subprocess.Popen([sys.executable, "-c", RUNNER, SCRIPTS, "iterate", wt], env=env,
-                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-deadline = time.time() + 20
-while time.time() < deadline and not (state() or {}).get("lock", {}).get("running"):
-    time.sleep(0.2)
-time.sleep(1)
-p.send_signal(signal.SIGTERM)
-_, err = p.communicate(timeout=30)
-s = state()
-hung = [c for c in calls() if c["kind"] == "review" and c["name"] == "code-review"][-1]
-check(p.returncode == 1 and s["lock"]["running"] is False and "interrupted" in s["attempts"][-1]["reason"],
-      "SIGTERM でも失敗として記録し、ロックを解除する")
-check(not alive(hung["pid"]), "SIGTERM で子も止める")
-
-# --- ロック ------------------------------------------------------------------
-s = state()
-s["lock"] = {"running": True, "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "sha": "abcdef0", "nonce": "n"}
-write_state(s)
-rc, _, err = run(wt)
-check(rc == 2 and "実行中" in err and state()["lock"]["nonce"] == "n", "実行中のロックがあれば撤退する")
-
-s["lock"]["started_at"] = "2026-01-01T00:00:00Z"
-s["consecutive_failures"] = 2
-write_state(s)
-rc, _, err = run(wt)
-check(rc == 2 and "連続失敗" in err and state()["attempts"][-1]["result"] == "interrupted",
-      "古いロックの interrupted も連続失敗に数え、上限に達すれば止まる(片付けは記録される)")
-s["consecutive_failures"] = 0
-write_state(s)
-n = len(s["attempts"])
-rc, _, err = run(wt)
-s = state()
-check(rc == 0 and s["attempts"][n]["result"] == "interrupted" and s["attempts"][n]["sha"] == "abcdef0",
-      "古いロックは interrupted として記録してから取得する")
-
-
-def lock_started(minutes_ago):
-    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - minutes_ago * 60))
-
-
-# ロックを持ちうる長さは版ごとに違う。長さを記録していない旧版のロックは、旧版の長さ(75分)で見る
-s = state()
-s["lock"] = {"running": True, "started_at": lock_started(60), "sha": "abcdef0", "nonce": "old"}
-write_state(s)
-n = len(s["attempts"])
-rc, _, err = run(wt)
-check(rc == 2 and "実行中" in err and state()["lock"]["nonce"] == "old" and len(state()["attempts"]) == n,
-      "長さを記録していない旧版のロックは、60分たっていても奪わない")
-s["lock"]["started_at"] = lock_started(80)
-write_state(s)
-rc, _, err = run(wt)
-check(rc == 0 and state()["attempts"][n]["reason"] == "stale_lock", "旧版のロックも75分を超えれば片付ける")
-s = state()
-s["lock"] = {"running": True, "started_at": lock_started(60), "sha": "abcdef0", "nonce": "n", "stale_after": 55 * 60}
-write_state(s)
-n = len(s["attempts"])
-rc, _, err = run(wt)
-check(rc == 0 and state()["attempts"][n]["reason"] == "stale_lock", "ロックに記録した長さを超えれば片付ける")
-
-# --- 後片付けと中断 ----------------------------------------------------------
-rc, _, err = run(wt, FAKE_REVIEW_security_review="bg")
-g = [c for c in calls() if c["kind"] == "grandchild"][-1]["grandchild"]
-time.sleep(0.5)
-check(rc == 0 and not alive(g), "正常終了した子がグループに残した孫も止める")
-
-t = time.time()
-rc, _, err = run(wt, FAKE_REVIEW_code_review="slow", FAKE_REVIEW_security_review="slow")  # 既定の3つの役の全て
-check(rc == 0 and time.time() - t < 8, f"レビュー役は並列に動く({time.time() - t:.1f} 秒)")
-
-# スクリプトが SIGKILL されても、見張り役が子を止める
-env = env_for(OVERRIDES="{}", FAKE_REVIEW_code_review="hang")
-p = subprocess.Popen([sys.executable, "-c", RUNNER, SCRIPTS, "iterate", wt], env=env,
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-deadline = time.time() + 20
-while time.time() < deadline and not any(c["kind"] == "review" and c["name"] == "code-review" and c["pid"] != hung["pid"]
-                                         for c in calls()):
-    time.sleep(0.2)
-hung = [c for c in calls() if c["kind"] == "review" and c["name"] == "code-review"][-1]
-p.kill()
-p.wait()
-time.sleep(3)
-check(not alive(hung["pid"]), "スクリプトが SIGKILL されても子は止まる")
-s = state()
-s["lock"]["started_at"] = "2026-01-01T00:00:00Z"  # 古いロックとして片付けさせる
-s["consecutive_failures"] = 0
-write_state(s)
-rc, _, _ = run(wt)
-check(rc == 0, "SIGKILL 後に残ったロックは次回の起動で片付く")
-
-# 試行の開始前(事前確認中)に止められたら、何も記録せず終了コード2
-before = json.dumps(state())
-env = env_for(OVERRIDES="{}", FAKE_PREFLIGHT_DELAY="30")
-p = subprocess.Popen([sys.executable, "-c", RUNNER, SCRIPTS, "iterate", wt], env=env,
-                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-time.sleep(3)
-p.send_signal(signal.SIGTERM)
-_, err = p.communicate(timeout=30)
-check(p.returncode == 2 and "開始前" in err and json.dumps(state()) == before, "開始前の中断は記録せず終了コード2")
-
-# 読めない形の状態コメントは、--new-run の指示があるまで上書きしない(上限を黙って外さない)
-write_state({})
-rc, _, err = run(wt)
-check(rc == 2 and "読めない" in err and "--new-run" in err and state() == {}, "読めない状態コメントでは止まり、上書きしない")
-rc, _, err = run(wt, "--new-run")
-s = state()
-check(rc == 0 and s["iter"] == 1, "--new-run なら読めない状態コメントを上書きして始め直す")
-s["run_id"] = "../../escape"
-write_state(s)
-rc, _, err = run(wt)
-check(rc == 2 and not os.path.exists(os.path.join(root, "escape")),
-      "run_id の形を検証し、作業ディレクトリのパスに外の値を使わない")
-s["run_id"] = "20260101T000000"
-s["attempts"][0]["reason"] = 5
-write_state(s)
-rc, _, err = run(wt)
-check(rc == 2 and "読めない" in err, "表に出す値の型も検証する")
-run(wt, "--new-run")
-
-s = state()
-s["attempts"][0].pop("at")
-write_state(s)
-rc, _, err = run(wt)
-check(rc == 2 and "読めない" in err, "試行の記録の形が崩れていても止まる")
-run(wt, "--new-run")
-
-# 事前確認の最中にスクリプトが SIGKILL されても、事前確認の子は残らない
-env = env_for(OVERRIDES="{}", FAKE_PREFLIGHT_DELAY="60")
-n_pre = len([c for c in calls() if c["kind"] == "preflight"])
-p = subprocess.Popen([sys.executable, "-c", RUNNER, SCRIPTS, "iterate", wt], env=env,
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-deadline = time.time() + 20
-while time.time() < deadline and len([c for c in calls() if c["kind"] == "preflight"]) == n_pre:
-    time.sleep(0.2)
-pre = [c for c in calls() if c["kind"] == "preflight"][-1]
-p.kill()
-p.wait()
-time.sleep(3)
-check(not alive(pre["pid"]), "事前確認の子も見張り役が止める")
-
-rc, _, err = run(wt, overrides={"PERSPECTIVES": ["a:b x", "a_b y"]})
-check(rc == 2 and "名前が同じになる" in err, "出力ファイルの名前が同じになる観点は拒否する")
-rc, _, err = run(wt, overrides={"PERSPECTIVES": ["code-review high", "code-review max", "code-review-2 x"]})
-check(rc == 2 and "名前が同じになる" in err, "重ねたスキルに付けた番号が、ほかのスキル名と同じになる観点は拒否する")
-n = len(calls())
-rc, _, err = run(wt, "--perspective", "focus", "--perspective", "focus", "--focus", "a", "--focus", "b", FAKE_SKILLS="focus")
-check(rc == 2 and "名前が同じになる観点がある: focus-2" in err and not [c for c in calls()[n:] if c["kind"] == "review"],
-      f"重ねたスキルに付けた番号が、--focus の役の名前と同じになる観点は拒否する {err[-200:]}")
-rc, _, err = run(wt, "--perspective", "focus-1", "--focus", "a", FAKE_SKILLS="focus-1")
-check(rc == 2 and "名前が同じになる観点がある: focus-1" in err, f"スキル名が --focus の役の名前と同じになる観点は拒否する {err[-200:]}")
-
-# 試行の作業ディレクトリが既にあれば、前の出力と混ざらないよう失敗にする(failed: <種類> の行を出す)
-s = state()
-os.makedirs(os.path.join(root, "review-loop", "o_r", "7", s["run_id"], str(len(s["attempts"]) + 1)))
-rc, _, err = run(wt)
-check(rc == 1 and "failed: workdir_error" in err, "作業ディレクトリが既にあれば失敗にし、failed: の行に種類を出す")
-run(wt, "--new-run")
-
-# 起点が広い権限で作られていても、自分のものなら 0700 に絞って使う
-os.chmod(os.path.join(root, "review-loop"), 0o755)
-rc, _, err = run(wt)
-mode = os.stat(os.path.join(root, "review-loop")).st_mode & 0o777
-check(rc == 0 and mode == 0o700, f"起点が 0755 なら 0700 に直して使う({oct(mode)}) {err[-200:] if rc else ''}")
-
-# 失敗した試行でも、子が作業ツリーを変えていれば混入を優先して報告する
-rc, _, err = run(wt, FAKE_REVIEW_code_review="dirty", FAKE_REVIEW_security_review="deny")
-reason = state()["attempts"][-1]["reason"]
-check(rc == 1 and "failed: contamination" in err and "stray.txt" in err and "permission_denied" in err
-      and reason == "contamination", f"失敗した試行でも混入を確かめ、優先して報告する({reason})")
-os.remove(os.path.join(wt, "stray.txt"))
-
-# 子がブランチを切り替えたら(gh pr view が失敗する状態でも)混入として報告する
-rc, _, err = run(wt, FAKE_REVIEW_security_review="switch")
-check(rc == 1 and "failed: contamination" in err and "ブランチ が変わった" in err, "ブランチの切り替えは混入")
+rc, _, _ = begin(wt)
+sh("git", "switch", "-qc", "other", cwd=wt)  # 切り替えた先のブランチに PR は無い(gh pr view はブランチでは引けない)
+rc, err = end(wt)
+check(rc == 1 and "failed: contamination" in err and "ブランチが変わった: feature → other" in err
+      and state()["attempts"][-1]["reason"] == "contamination", "PR の無いブランチに切り替わっていても、contamination として記録する")
 sh("git", "switch", "-q", "feature", cwd=wt)
-sh("git", "branch", "-q", "-D", "other", cwd=wt)
+rc, err = end(wt)
+check(rc == 2 and "閉じる試行が無い" in err, "ブランチを戻して end を呼び直しても、completed にはならない")
+rc, _, _ = begin(wt)
+check(rc == 0 and len(state()["attempts"]) == 3, "失敗が3回続いても、begin は止まらない(連続失敗の上限は無い)")
+end(wt)
 
-# 状態コメントの表に合計の行を出し、--new-run でも前のシリーズの合計を残す
-body = comments()[0]["body"]
-check("| **合計** |" in body, "表に合計の行を出す")
-rc, _, err = run(wt, "--new-run")
+wt = setup()
+rc, _, _ = begin(wt)
+other = os.path.join(root, "other")
+sh("git", "clone", "-q", "-b", "feature", os.path.join(root, "origin.git"), other)
+for k, v in (("user.name", "t"), ("user.email", "t@example.com")):
+    sh("git", "config", k, v, cwd=other)
+commit(other, "pushed.txt")
+rc, err = end(wt)
+check(rc == 1 and "failed: head_changed" in err and state()["attempts"][-1]["reason"] == "head_changed",
+      "試行中に PR へ push があれば head_changed")
+
+wt = setup()
+rc, _, _ = begin(wt)
+rc, err = end(wt, "--failed", "code-review が結果を返さなかった | @someone <b> --> 終わり")
 s = state()
-check(rc == 0 and s["previous_run"]["tokens"]["output"] > 0 and "直前のシリーズ" in comments()[0]["body"],
-      "--new-run でも前のシリーズのトークン数の合計を残す")
+check(rc == 1 and "failed: reviewer_failed" in err and s["attempts"][-1]["reason"].startswith("reviewer_failed: code-review が結果を返さなかった")
+      and s["iter"] == 0, "--failed は、理由付きの失敗として記録する")
+row = table_rows()[-1]
+check("\\|" in row and "@​" in row and "&lt;b>" in row and "@someone" not in row.replace("@​", ""),
+      "理由の | と @ と < は、表を壊さず、メンションにもならない形で出る")
+rc, _, _ = begin(wt)
+rc, err = end(wt, "--failed", "x" * 300)
+check(rc == 1 and len(state()["attempts"][-1]["reason"]) == len("reviewer_failed: ") + 100, "理由は100文字までで記録する")
+check(table_rows()[-1].endswith("| failed: reviewer_failed: " + "x" * 100 + " |"), "表にも、理由が100文字まで出る")
+rc, _, _ = begin(wt)
+with open(os.path.join(wt, "stray.txt"), "w") as f:
+    f.write("x")
+rc, err = end(wt, "--failed", "タイムアウト")
+check(rc == 1 and "failed: contamination" in err and "--failed で閉じようとした: タイムアウト" in err
+      and state()["attempts"][-1]["reason"] == "contamination", "--failed でも、混入があれば混入を優先して記録する")
 
-# トークン数の記録に欠けたキーがあれば、読めない状態コメントとして扱う
-s["attempts"][0]["tokens"] = {"input": 1}
-write_state(s)
-rc, _, err = run(wt)
-check(rc == 2 and "読めない" in err, "トークン数の記録の形も検証する")
-run(wt, "--new-run")
+# --- シリーズ、読めない状態、旧版の状態 --------------------------------------
+wt = setup()
+write_state(base_state(iter=10, attempts=[{"sha": None, "at": "2026-01-01T00:00:00Z", "result": "completed", "iter": i} for i in range(1, 11)]))
+rc, out, _ = begin(wt)
+check(rc == 0 and out["attempt"] == "11" and "/20260101T000000/11" in out["workdir"], "反復が10回を超えても始められる(上限は無い)")
+rc, _ = end(wt)
+check(rc == 0 and state()["iter"] == 11, "11回目の反復を記録する")
+commit(wt, "g.txt")
+rc, out, _ = begin(wt, "--new-run")
+check(rc == 0 and out["attempt"] == "1" and state()["run_id"] == "20260101T000000" and state()["iter"] == 11,
+      "--new-run の begin は、状態コメントをまだ変えない")
+rc, _ = end(wt)
+s = state()
+check(rc == 0 and s["iter"] == 1 and s["previous_run"] == {"run_id": "20260101T000000", "iterations": 11}
+      and s["run_id"] != "20260101T000000" and len(s["attempts"]) == 1, "--new-run の end が、直前のシリーズを要約して始め直す")
+check("直前のシリーズ: run 20260101T000000(反復 11)" in comments()[0]["body"], "直前のシリーズが状態コメントに出る")
 
-# 試行中に PR にだけ別の push があったら、混入ではなく head_changed として失敗にする
-rc, _, err = run(wt, FAKE_REVIEW_security_review="remote")
-check(rc == 1 and "failed: head_changed" in err and "作者と内容を確かめる" in err,
-      "試行中の PR への push は head_changed とし、子の push の可能性を伝える")
-sh("git", "fetch", "-q", "origin", cwd=wt)
-sh("git", "reset", "-q", "--hard", "origin/feature", cwd=wt)
+for label, broken in (("JSON でない", "{broken"), ("iter が数でない", json.dumps(base_state(iter="1"))),
+                      ("attempts が無い", json.dumps({k: v for k, v in base_state().items() if k != "attempts"})),
+                      ("試行の sha が SHA でない", json.dumps(base_state(attempts=[{"sha": "zzz", "at": "x", "result": "completed"}])))):
+    wt = setup()
+    write_state(base_state())
+    begin(wt)
+    with open(os.path.join(wt, "stray.txt"), "w") as f:
+        f.write("x")
+    write_state(broken)
+    rc, err = end(wt)
+    check(rc == 2 and "状態コメント 500 を読めない" in err and "stray.txt" in err and comments()[0]["edits"] == 0 and os.path.exists(record_path(wt)),
+          f"試行中に状態コメントが読めなくなった({label})ら、end は記録せず、試行の間の変更は伝える")
+    os.remove(os.path.join(wt, "stray.txt"))
+    os.remove(record_path(wt))
+    rc, _, err = begin(wt)
+    check(rc == 2 and "読めない" in err and "--new-run" in err, f"状態コメントが読めない({label})なら始めない")
+rc, out, err = begin(wt, "--new-run")
+rc2, _ = end(wt)
+check(rc == 0 and rc2 == 0 and "新しいシリーズとして上書きする" in err and state()["iter"] == 1 and state()["previous_run"] is None,
+      "読めない状態コメントは、--new-run で上書きして始める")
 
-# マーカーを引用した自分の通常のコメントは、状態コメントとみなさない
-with open(os.path.join(root, "fake", "comments.json")) as f:
-    cs = json.load(f)
-cs.insert(0, {"id": 2, "login": "me", "created_at": "2024-01-01T00:00:00Z",
-              "body": "状態は `<!-- review-loop-state ... -->` に書かれる", "edits": 0})
-with open(os.path.join(root, "fake", "comments.json"), "w") as f:
-    json.dump(cs, f)
-rc, _, err = run(wt)
-quoted = next(c for c in comments() if c["id"] == 2)
-check(rc == 0 and quoted["edits"] == 0 and "件ある" not in err, "マーカーを引用しただけの自分のコメントは上書きしない")
-run(wt, "--new-run")
+# 旧版(ロックと上限を持ち、レビュー役を起動していた版)が書いた状態を読める
+wt = setup()
+head = sh("git", "rev-parse", "HEAD", cwd=wt)
+old = base_state(iter=1, safety_max=10, consecutive_failures=3,
+                 lock={"running": True, "started_at": "2026-01-01T02:00:00Z", "sha": head, "nonce": "old", "stale_after": 3300},
+                 previous_run={"run_id": "20251231T000000", "iterations": 2, "tokens": {"input": 5, "cache_read": 1, "output": 2}},
+                 attempts=[{"sha": head, "at": "2026-01-01T00:00:00Z", "result": "completed", "iter": 1, "model": "opus",
+                            "tokens": {"input": 100, "cache_read": 50, "output": 10, "cost": "形の違う欄"},
+                            "perspectives": ["code-review high {pr}", "security-review"], "instructed": ["code-review"]},
+                           {"sha": head, "at": "2026-01-01T01:00:00Z", "result": "failed", "reason": "permission_denied: review code-review",
+                            "tokens": {"input": 0, "cache_read": 0, "output": 0}}])
+write_state(old)
+rc, out, _ = begin(wt)
+rc2, _ = end(wt)
+s = state()
+check(rc == 0 and rc2 == 0 and out["attempt"] == "3" and s["iter"] == 2 and s["attempts"][:2] == old["attempts"],
+      "旧版の状態(ロック、連続失敗の回数、トークン数、観点の記録つき)を読め、試行の記録を保ったまま続けられる")
+check(table_rows()[1].endswith("| failed: permission_denied: review code-review |") and "トークン" not in comments()[0]["body"],
+      "旧版の試行も表に出る(トークン数の列は出さない)")
 
-# 同時にコメントを作った場合、負けた側は自分のコメントを消して撤退する
+# 状態コメントが試行の間に消されたら、作り直す
+wt = setup()
+write_state(base_state(iter=1, attempts=[{"sha": None, "at": "2026-01-01T00:00:00Z", "result": "completed", "iter": 1}]))
+rc, out, _ = begin(wt)
 os.remove(os.path.join(root, "fake", "comments.json"))
-rc, _, err = run(wt, FAKE_RACE="1")
-check(rc == 2 and "競合" in err and [c["id"] for c in comments()] == [50], "競合で負けたら自分のコメントを消す")
-os.remove(os.path.join(root, "fake", "comments.json"))
+rc, _ = end(wt)
+check(rc == 0 and state()["run_id"] == "20260101T000000" and state()["iter"] == 1, "状態コメントが試行の間に消えていたら、同じシリーズとして作り直す")
 
-rc, _, err = run(wt, FAKE_PR_STATE="MERGED")
-check(rc == 2 and "オープンではない" in err, "オープンでない PR は拒否する")
-rc, _, err = run(wt, FAKE_PR_AUTHOR="someone")
-check(rc == 2 and "自分" in err, "他人の PR は拒否する")
-
-rc, _, err = run(wt, FAKE_REVIEW_code_review="deny")
-body = comments()[0]["body"]
-check(rc == 1 and "gh pr diff" in err and "gh pr diff" not in body, "失敗の詳細は stderr にだけ出し、PR には種類だけを載せる")
-check(os.path.isfile(os.path.join(err.rstrip().splitlines()[-1], "failure.txt")), "失敗の詳細を作業ディレクトリに残す")
-run(wt, "--new-run")
-
-# 状態コメントへの書き込み(ロックの解除)に失敗したら、成功でもそう伝える(F10)
-patches = os.path.join(root, "fake", "patches")
-if os.path.exists(patches):
-    os.remove(patches)
-rc, _, err = run(wt, FAKE_FAIL_PATCH_FROM="2")  # 1回目(ロックの取得)は通し、2回目(解除)から失敗させる
-check(rc == 0 and "記録できなかった" in err and "反復回数が進んでいない" in err, "成功でも記録できなければ警告する")
-s = state()
-s["lock"] = {"running": False, "started_at": None, "sha": None, "nonce": None}
-write_state(s)
-
-# --- 安全上限と他人のコメント -------------------------------------------------
-s = state()
-s["iter"] = 10
-write_state(s)
-with open(os.path.join(root, "fake", "comments.json")) as f:
-    cs = json.load(f)
-cs.insert(0, {"id": 1, "login": "someone", "created_at": "2025-01-01T00:00:00Z",
-              "body": "<!-- review-loop-state {} -->", "edits": 0})
-with open(os.path.join(root, "fake", "comments.json"), "w") as f:
-    json.dump(cs, f)
-rc, _, err = run(wt)
-check(rc == 2 and "安全上限" in err, "反復が安全上限に達したら止まる")
-check(state() is not None and next(c for c in comments() if c["id"] == 1)["edits"] == 0, "他人のコメントは触らない")
-s = state()
-s["attempts"].append({"sha": "abcdef0", "at": "2026-01-01T00:00:00Z", "result": "failed", "reason": "x @someone"})
-s["iter"] = 0
-write_state(s)
-run(wt)
-body = next(c for c in comments() if c["login"] == "me")["body"]
-json_part, table = body.split("-->", 1)
-check("@" not in json_part and "@someone" not in table and "@\u200bsomeone" in table, "状態コメントに生の @ を含めない")
-
-# 拒否のイベントが stream に出たら、子が作業を続けていても、その時点で全体を止める
-run(wt, "--new-run")
-t = time.time()
-rc, _, err = run(wt, FAKE_REVIEW_code_review="denylive", FAKE_REVIEW_security_review="hang")
-check(rc == 1 and "permission_denied: review code-review" in err and "gh pr diff 7" in err and time.time() - t < 30,
-      "拒否のイベントが出たら、子の終了を待たずに permission_denied で止める")
-last = [c for c in calls() if c["kind"] == "review"][-3:]
-check(not any(alive(c["pid"]) for c in last), "拒否で止めたとき、どの子も残らない")
-
-# result の行が複数あれば、最上位の空でないものを全てつなぐ(最後の行だけを使うと本文が捨てられる)
-run(wt, "--new-run")
-def joined_of(err):
-    with open(os.path.join(err.rstrip().splitlines()[-1], "reviews.md"), encoding="utf-8") as f:
-        return f.read()
-
-
-for mode, final in (("multiempty", ""), ("multishort", "前のメッセージの内容から変わりません")):
-    rc, out, err = run(wt, FAKE_REVIEW_security_review=mode)
-    wd = err.rstrip().splitlines()[-1]
-    stdin = joined_of(err)
-    with open(os.path.join(wd, "review-security-review.result.md"), encoding="utf-8") as f:
-        saved = f.read()
-    check(rc == 0 and "security-review: 本文" in stdin and "バックグラウンドで実行しています" in stdin
-          and saved.index("バックグラウンド") < saved.index("本文") and (not final or final in saved)
-          and "サブエージェントの結果" not in saved,
-          f"result の行が複数あれば、最上位の空でないものを出た順につなぐ(最後の行が{'空' if not final else '短い文'})")
-    check(state()["attempts"][-1]["tokens"]["output"] == 3 * 300,
-          "トークン数は最後の result の行だけで数える(modelUsage は累計なので足さない)")
-rc, out, err = run(wt, FAKE_REVIEW_code_review="multierror")
-stdin = joined_of(err)
-check(rc == 0 and "code-review: 本文" in stdin and "API Error" not in stdin, "エラーの result の行はつながない")
-rc, _, err = run(wt, FAKE_REVIEW_code_review="multiallempty")
-check(rc == 1 and "no_output: review code-review" in err, "result の行が全て空なら no_output")
-
-# 設定のルールで、`;` でつないだコマンドの一部が拒否されただけなら止めず、内容を作業ディレクトリと stderr に残す
-rc, out, err = run(wt, FAKE_REVIEW_security_review="denyconfig")
-wd = err.rstrip().splitlines()[-1]
-with open(os.path.join(wd, "denials.txt"), encoding="utf-8") as f:
-    denials = f.read()
-check(rc == 0 and out.startswith("===== 観点:"), f"設定のルールでの拒否では試行を止めない {err[-300:] if rc else ''}")
-check("review security-review: Bash" in denials and "grep -n KEY .env" in denials
-      and "subcommandResults" in denials, "設定のルールでの拒否は作業ディレクトリの denials.txt に残す")
-check("設定のルールで拒否された" in err and "grep -n KEY .env" in err, "設定のルールでの拒否は stderr にも出す")
-stdin = joined_of(err)
-check("権限の設定で拒否された" in stdin and "review security-review: Bash" in stdin and stdin.strip() == out.strip(),
-      "止めなかった拒否は reviews.md と標準出力にも添える")
-
-# 分類器による拒否や、tool_use_id のない拒否は止める
-rc, _, err = run(wt, FAKE_REVIEW_security_review="denyclassifier")
-check(rc == 1 and "permission_denied: review security-review" in err, "分類器による拒否(decision_reason_type が classifier)は止める")
-rc, _, err = run(wt, FAKE_REVIEW_security_review="denynoid")
-check(rc == 1 and "permission_denied: review security-review" in err, "tool_use_id のない拒否は止める")
-run(wt, "--new-run")
-rc, _, err = run(wt, FAKE_REVIEW_security_review="denyrepeat")
-detail = err.split("failed: ", 1)[-1]
-check(rc == 1 and "permission_denied" in err and detail.count("gh pr diff 7") == 1,
-      "tool_use_id のない拒否が result の行ごとに載っても、1回だけ出す")
-run(wt, "--new-run")
-
-# ほかの観点の失敗で止めるときも、まだ動いている子の止めない拒否を記録に残す
-rc, _, err = run(wt, FAKE_REVIEW_code_review="failslow", FAKE_REVIEW_security_review="denyconfighang")
-wd = err.rstrip().splitlines()[-1]
-check(rc == 1 and "child_error: review code-review" in err and os.path.isfile(os.path.join(wd, "denials.txt")),
-      "ほかの観点の失敗で止めても、動いていた子の止めない拒否を denials.txt に残す")
-run(wt, "--new-run")
-
-# --- 観点の入れ替えと追加の指示 -----------------------------------------------
-n = len(calls())
-rc, out, err = run(wt, "--perspective", " /code-review\thigh  {pr} ", "--perspective", "mattpocock-skills:code-review PR #{pr}",
-                   "--instruct", "code-review=削除したファイルの中身は確かめない", "--instruct", " code-review = テストは見ない",
-                   "--instruct", "/mattpocock-skills:code-review=a=b PR #{pr}")
-new = calls()[n:]
-reviews = [c for c in new if c["kind"] == "review"]
-check(rc == 0 and {c["args"][-1] for c in reviews} == {"/code-review high 7", "/mattpocock-skills:code-review PR #7"},
-      f"--perspective を渡すと、既定の代わりにそれだけを使い、空白を詰めて起動する {err[-300:] if rc else ''}")
-by_name = {c["name"]: system_prompt(c) for c in reviews}
-check("削除したファイルの中身は確かめない\nテストは見ない" in by_name.get("code-review", ""),
-      "--instruct はその観点のシステムプロンプトに足し、同じ観点への指示は改行でつなぐ")
-check("削除したファイル" not in by_name.get("mattpocock-skills:code-review", "x"), "--instruct はほかの観点には渡さない")
-check(by_name.get("mattpocock-skills:code-review", "").endswith("\na=b PR #7"), "--instruct は最初の `=` で分け、スキル名の先頭の `/` を除き、{pr} を置き換える")
-check(all("依頼文" in system_prompt(c) for c in reviews),
-      "レビュー役に、サブエージェントに任せるときは制約と指示を依頼文に含めるよう頼む")
-check("削除したファイル" not in out, "追加の指示は reviews.md に混ぜない")
-last = state()["attempts"][-1]
-body = comments()[0]["body"]
-check(last.get("perspectives") == ["code-review high {pr}", "mattpocock-skills:code-review PR #{pr}"]
-      and last.get("instructed") == ["code-review", "mattpocock-skills:code-review"]
-      and "観点 code-review high {pr}, mattpocock-skills:code-review PR #{pr}、指示あり code-review, mattpocock-skills:code-review" in body
-      and "削除したファイル" not in body,
-      "既定と違う観点と、指示を渡した観点を状態コメントに残す(指示の本文は残さない)")
-rc, _, err = run(wt, "--perspective", "code-review high {pr}", "--perspective", "code-review low {pr}",
-                 "--perspective", "security-review")
-check(rc == 0 and "観点 code-review high {pr}, code-review low {pr}, security-review" in last_row(),
-      "スキル名が既定と同じでも、引数が違えば表に観点を出す")
-check("直前の試行と指示を渡した観点が違う" in err and "直前の試行と観点が違う" in err,
-      "直前の試行と観点や指示が違えば警告する")
-n = len(calls())
-rc, _, err = run(wt, "--perspective", "code-review high {pr}", "--perspective", "code-review low {pr}",
-                 "--instruct", "code-review=テストは見ない")
-new = calls()[n:]
-check(rc == 0 and sorted(c["args"][-1] for c in new if c["kind"] == "review") == ["/code-review high 7", "/code-review low 7"]
-      and all("テストは見ない" in system_prompt(c) for c in new if c["kind"] == "review"),
-      f"同じスキルを重ねた --perspective は、それぞれを起動し、そのスキルへの --instruct をどちらにも渡す {err[-300:] if rc else ''}")
-rc, _, err = run(wt, "--perspective", "security-review", "--perspective", "code-review high {pr}",
-                 "--perspective", "code-review high {pr}")
-last = state()["attempts"][-1]
-check(rc == 0 and "instructed" not in last and "、観点" not in last_row(),
-      "既定の観点を並べ替えただけなら、表に観点を出さない")
-rc, _, err = run(wt)
-last = state()["attempts"][-1]
-check(rc == 0 and "warn: 直前の試行と" not in err and len(last.get("perspectives", [])) == 3,
-      "直前の試行と同じなら警告せず、既定の観点も記録する")
-s = state()
-s["attempts"].append({"sha": "abcdef0", "at": "2026-01-01T00:00:00Z", "result": "interrupted", "reason": "stale_lock",
-                      "tokens": {"input": 0, "cache_read": 0, "output": 0}})
-write_state(s)
-rc, _, err = run(wt)
-check(rc == 0 and "warn: 直前の試行と" not in err, "古いロックを片付けた記録とは比べない")
-n = len(calls())
-rc, _, err = run(wt, "--model", " sonnet ")
-new = [c for c in calls()[n:] if c["kind"] == "review"]
-check(rc == 0 and new and all(c["args"][c["args"].index("--model") + 1] == "sonnet" for c in new)
-      and state()["attempts"][-1].get("model") == "sonnet" and "、モデル sonnet" in last_row(),
-      f"--model はレビュー役に渡し、既定と違えば状態コメントの表に出す {err[-300:] if rc else ''}")
-check("直前の試行とモデルが違う" in err, "直前の試行とモデルが違えば警告する")
-rc, _, err = run(wt)
-check(rc == 0 and "、モデル" not in last_row() and "直前の試行とモデルが違う" in err, "既定のモデルなら表に出さない")
-rc, _, err = run(wt, "--model", " ")
-check(rc == 2 and "--model" in err, "空の --model は終了コード2")
-before = json.dumps(state())
-rc, _, err = run(wt, "--model", "")
-check(rc == 2 and "--model" in err and json.dumps(state()) == before, "空文字の --model も既定に戻さず終了コード2")
-failures = state()["consecutive_failures"]
-rc, _, err = run(wt, "--model", "opsu-nonexistent", FAKE_REVIEW_security_review="badmodel")
-failed = err[err.index("failed:"):] if "failed:" in err else ""
-check(rc == 1 and failed.startswith("failed: child_error: review security-review")
-      and "--model のモデル opsu-nonexistent を使えない可能性がある" in failed
-      and state()["attempts"][-1]["result"] == "failed" and state()["consecutive_failures"] == failures + 1,
-      f"レビュー役が使えないモデルの印を出して失敗したら、試行の失敗として数え、failed: の詳細に添える {failed[:300]}")
-rc, _, err = run(wt, FAKE_REVIEW_security_review="fail")
-check(rc == 1 and "failed: child_error" in err and "使えない可能性" not in err, "印の無い失敗には、モデルのことを添えない")
-rc, _, err = run(wt, FAKE_REVIEW_security_review="quotemodel")
-check(rc == 1 and "failed: child_error" in err and "overloaded" in err and "使えない可能性" not in err,
-      "途中の result の本文が文言を引用しただけの失敗には、モデルのことを添えない")
-rc, _, err = run(wt, "--new-run")
-check(rc == 0, "新しいシリーズで続ける")
-rc, _, err = run(wt, "--model", "opsu-nonexistent", FAKE_REVIEW_security_review="badmodelstderr")
-failed = err[err.index("failed:"):] if "failed:" in err else ""
-check(rc == 1 and failed.startswith("failed: child_error: review security-review") and "result の行がない" in failed
-      and "--model のモデル opsu-nonexistent を使えない可能性がある" in failed,
-      f"result の行を出さず stderr にだけ印を出して失敗しても、failed: の詳細に添える {failed[:300]}")
-rc, _, _ = run(wt, "--instruct", "security-review=x", FAKE_REVIEW_security_review="fail")
-check(rc == 1 and state()["attempts"][-1].get("instructed") == ["security-review"], "失敗した試行にも、指示を渡した観点を残す")
-rc, _, err = run(wt, "--new-run", "--instruct", "security-review=x")
-check(rc == 0 and "warn: 直前の試行と" not in err, "シリーズの初回は警告しない")
-rc, _, _ = run(wt, "--perspective", "code-review " + "x" * 300)
-check(rc == 0 and len(state()["attempts"][-1]["perspectives"][0]) == 200, "状態コメントに記録する観点の長さを抑える")
-long_flags = [a for i in range(10) for a in ("--perspective", f"code-review{i} " + "x" * 300)]
-long_skills = ",".join(f"code-review{i}" for i in range(10))
-run(wt, *long_flags, FAKE_SKILLS=long_skills)
-limit = len(comments()[0]["body"]) + 500  # 長い観点の試行を2つは載せられない
-rc, _, _ = run(wt, *long_flags, overrides={"MAX_BODY_CHARS": limit}, FAKE_SKILLS=long_skills)
-s = state()
-check(rc == 0 and len(comments()[0]["body"]) <= limit and "perspectives" not in s["attempts"][-2]
-      and "perspectives" in s["attempts"][-1],
-      "本文が上限を超えるなら、古い試行から観点の記録を外す")
-
-before = json.dumps(state())
-for flags, label in ((("--instruct", "security-review"), "`=` のない --instruct"),
-                     (("--instruct", "=x"), "スキル名が空の --instruct"),
-                     (("--instruct", "code-review= "), "指示が空の --instruct"),
-                     (("--instruct", "nosuch=x"), "観点にないスキルへの --instruct"),
-                     (("--perspective", "code-review high {pr}", "--instruct", "security-review=x"),
-                      "--perspective で外した観点への --instruct"),
-                     (("--perspective", " "), "空の --perspective")):
-    rc, _, err = run(wt, *flags)
-    check(rc == 2, f"{label}: 終了コード2({rc}) {err.strip().splitlines()[-2:] if rc != 2 else ''}")
-rc, _, err = run(wt, "--instruct", "code-review-2=x")
-check(rc == 2 and "スキル名 code-review を書く" in err and "観点: code-review, security-review)" in err,
-      f"--instruct にレビュー役の名前を書いたら、書くべきスキル名を示す {err.strip().splitlines()[-1:]}")
-rc, _, err = run(wt, "--focus", "a", "--instruct", "focus-1=x")
-check(rc == 2 and "--focus のレビュー役" in err, "--instruct に --focus の役の名前を書いたら、対象にできないと示す")
-check(json.dumps(state()) == before, "観点の指定の誤りは状態に記録しない")
-
-# --- --focus -----------------------------------------------------------------
+# --- レビュー役の出力 --------------------------------------------------------
 wt = setup()
-n = len(calls())
-rc, out, err = run(wt, "--perspective", "code-review high {pr}", "--focus", "並行性と  タイミング", "--focus", "文書とコードの食い違い")
-wd = err.rstrip().splitlines()[-1]
-new = calls()[n:]
-prompts = [c["args"][-1] for c in new if c["kind"] == "review"]
-check(rc == 0 and len(prompts) == 3 and "/code-review high 7" in prompts
-      and any(p.startswith("PR #7 の差分を") and p.endswith("観点: 並行性と タイミング") for p in prompts),
-      f"--focus は、スキルを使わないレビュー役を観点ごとに足す(空白は詰める)。{prompts}")
-check("===== 観点: focus-1 =====" in out and "===== 観点: focus-2 =====" in out
-      and os.path.isfile(os.path.join(wd, "review-focus-2.result.md")),
-      "--focus のレビュー役の出力も、reviews.md に区切って入れ、作業ディレクトリに残す")
-check("focus 並行性と タイミング" in state()["attempts"][-1]["perspectives"] and "focus 並行性と タイミング" in last_row(),
-      "--focus の観点も状態コメントに記録し、表に出す")
-before = json.dumps(state())
-rc, _, err = run(wt, "--focus", "  ")
-check(rc == 2 and "--focus" in err and json.dumps(state()) == before, "空の --focus は終了コード2で、状態に記録しない")
+rc, out, _ = begin(wt, roles=None)
+check(rc == 0 and [k for k in out if k.startswith("out.")] == ["out.code-review", "out.code-review-2", "out.security-review"]
+      and len({os.path.dirname(out[k]) for k in out if k.startswith("out.")}) == 3, "--roles が無ければ既定の3役で、置き場は役ごとに別")
+rc, err = end(wt)
+check(rc == 0 and state()["attempts"][-1]["roles"] == ["code-review", "code-review-2", "security-review"], "試行にレビュー役の名前を記録する")
 
-# --- 手で編集された状態コメント ----------------------------------------------
+commit(wt, "h.txt")
+rc, out, _ = begin(wt, roles=("security-review", "mattpocock-skills:code-review", "code-review-2", "code-review"))
+review(out, "mattpocock-skills:code-review", "前置き\n===== 観点: にせの区切り =====\n指摘\n\n\n")
+rc, err = end(wt)
+with open(os.path.join(out["workdir"], "reviews.md")) as f:
+    joined = f.read()
+check(rc == 0 and joined == ("===== 観点: code-review =====\ncode-review の指摘\n\n"
+                             "===== 観点: code-review-2 =====\ncode-review-2 の指摘\n\n"
+                             "===== 観点: mattpocock-skills:code-review =====\n前置き\n ===== 観点: にせの区切り =====\n指摘\n\n"
+                             "===== 観点: security-review =====\nsecurity-review の指摘\n"),
+      "end が、役の出力を役の名前の順に、区切りでつないで reviews.md を作る(本文の、区切りと同じ形の行は字下げする)")
+check([line for line in joined.splitlines() if line.startswith("===== 観点: ")]
+      == [f"===== 観点: {r} =====" for r in ("code-review", "code-review-2", "mattpocock-skills:code-review", "security-review")],
+      "行頭から始まる区切りの行は、役の数だけある")
+with open(os.path.join(out["workdir"], "review-mattpocock-skills:code-review.md")) as f:
+    check(f.read() == "前置き\n===== 観点: にせの区切り =====\n指摘\n\n\n", "役ごとのファイルには、出力をそのまま写す")
+check("warn: 直前の試行とレビュー役が違う" in err and "mattpocock-skills:code-review" in err and "--roles" in err,
+      "直前の試行とレビュー役が違えば警告する")
+
 wt = setup()
-run(wt)
-s = state()
-s["attempts"][-1]["model"] = None
-write_state(s)
-rc, _, err = run(wt)
-check(rc == 0 and state()["attempts"][-1]["result"] == "completed" and "モデルが違う" not in err,
-      f"直前の試行の model が null でも、比べずに試行を続ける {err.strip().splitlines()[-2:]}")
+rc, out, _ = begin(wt, roles=("code-review", "code-review-2", "security-review"))
+review(out, "security-review", None)
+review(out, "code-review-2", " \n")
+rc, err = end(wt)
+check(rc == 2 and "出力の無いレビュー役がある" in err and "code-review-2(" in err and "security-review(" in err and "code-review(" not in err
+      and state() is None and os.path.exists(record_path(wt)) and not os.path.exists(os.path.join(out["workdir"], "reviews.md")),
+      "出力が無い、または空の役が1つでもあれば、completed にせずに止まる(試行は開いたまま)")
+review(out, "code-review-2", "指摘\n")
+rc, err = end(wt, "--failed", "security-review: スキルを呼べなかった")
+check(rc == 1 and "roles" not in state()["attempts"][-1] and not os.path.exists(os.path.join(out["workdir"], "reviews.md"))
+      and not os.path.exists(os.path.dirname(out["out.code-review"])), "--failed で閉じた試行では、reviews.md を作らず、置き場は消す")
 
-# 手で編集された stale_after でも、実行中のロックを奪わず、永久にも止まらない
+# end を、begin と違う一時ディレクトリの設定で呼んでも、begin の作業ディレクトリを使う
 wt = setup()
-run(wt)
-for value in (True, -1, 0, "x"):
-    s = state()
-    s["lock"] = {"running": True, "started_at": lock_started(1), "sha": "abcdef0", "nonce": "live", "stale_after": value}
-    write_state(s)
-    rc, _, err = run(wt)
-    check(rc == 2 and "実行中" in err and state()["lock"]["nonce"] == "live",
-          f"stale_after={value!r} でも、1分前のロックは奪わない")
-# 数でない値は、記録の無い旧版のロックと同じ75分で見る(下限の55分に丸めない)
-for value in ("x", True, None):
-    s = state()
-    s["lock"] = {"running": True, "started_at": lock_started(60), "sha": "abcdef0", "nonce": "live", "stale_after": value}
-    write_state(s)
-    rc, _, err = run(wt)
-    check(rc == 2 and "実行中" in err and state()["lock"]["nonce"] == "live",
-          f"stale_after={value!r} は旧版の長さで見て、60分前のロックも奪わない")
-s["lock"].update(stale_after=3300.0, started_at=lock_started(1))
-write_state(s)
-rc, _, err = run(wt, "--new-run")
-check(rc == 2 and "実行中" in err and state()["lock"]["nonce"] == "live",
-      "小数の stale_after も読めて、--new-run でも実行中のロックを上書きしない")
-s["lock"].update(stale_after=10 ** 9, started_at=lock_started(600))
-write_state(s)
-rc, _, err = run(wt)
-check(rc == 0 and state()["attempts"][-2]["reason"] == "stale_lock", "大きな stale_after でも、10時間前のロックは片付ける")
+rc, out, _ = begin(wt)
+with open(os.path.join(wt, "stray.txt"), "w") as f:
+    f.write("x")
+os.makedirs(os.path.join(root, "elsewhere"))
+rc, err = end(wt, TMPDIR=os.path.join(root, "elsewhere"))
+check(rc == 1 and os.path.exists(os.path.join(out["workdir"], "failure.txt")) and os.listdir(os.path.join(root, "elsewhere")) == [],
+      "end は、begin が記録した作業ディレクトリに詳細を残す")
 
-if os.environ.get("KEEP"):
-    print("作業ディレクトリ:", root)
-else:
+# --- 始められなかった begin の後片付け ----------------------------------------
+wt = setup()
+write_state(base_state())
+os.makedirs(os.path.join(root, "review-loop", "o_r", "7", "20260101T000000", "1"))
+rc, _, err = begin(wt)
+check(rc == 2 and "作業ディレクトリが既にある" in err and state() == base_state() and not os.path.exists(record_path(wt)) and leftovers() == []
+      and os.path.isdir(os.path.join(root, "review-loop", "o_r", "7", "20260101T000000", "1")),
+      "作業ディレクトリが既にあれば始めず、何も記録しない(前からあった作業ディレクトリは消さない)")
+
+wt = setup()
+os.makedirs(record_path(wt) + ".dir")
+os.symlink(record_path(wt) + ".dir", record_path(wt))  # 記録の置き場がディレクトリで、置き換えられない
+rc, _, err = begin(wt)
+check(rc == 2 and "試行の記録" in err, "試行の記録を置けなければ始めない")
+os.remove(record_path(wt))
+check(leftovers() == [], "試行の記録を置けなかった begin は、作りかけの作業ディレクトリと置き場を残さない")
+
+with open(record_path(wt), "w") as f:
+    f.write("{")
+rc, _, err = begin(wt)
+rc2, err2 = end(wt)
+check(rc == 2 and rc2 == 2 and "ファイルを消してから" in err and "ファイルを消してから" in err2, "試行の記録が壊れていたら、消すよう案内して止まる")
+os.remove(record_path(wt))
+
+# begin がシグナルで止められたら、何も残さない
+p = subprocess.Popen([sys.executable, "-c", RUNNER, SCRIPTS, "begin", wt], env=env_for(FAKE_SLEEP="30"), cwd=wt,
+                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+time.sleep(2)  # 偽の gh が止まっている間に送る
+p.send_signal(signal.SIGTERM)
+_, err = p.communicate(timeout=60)
+check(p.returncode == 2 and "SIGTERM" in err and not os.path.exists(record_path(wt)) and leftovers() == [],
+      "begin が SIGTERM で止められたら、終了コード2で、何も残さない")
+rc, out, _ = begin(wt)
+check(rc == 0 and out["attempt"] == "1", "そのあとの begin は、普通に始められる")
+
+if not os.environ.get("KEEP"):
     shutil.rmtree(root, ignore_errors=True)
-print(f"\n{'全て成功' if fails == 0 else f'{fails} 件失敗'}")
+else:
+    print("作業ディレクトリ:", root)
+print("\n失敗 %d 件" % fails if fails else "\n全て成功")
 sys.exit(1 if fails else 0)

@@ -27,8 +27,8 @@ import uuid
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, "../../.."))
 sys.dont_write_bytecode = True
-sys.path.insert(0, os.path.join(REPO, "skills/review-loop/scripts"))
-import review_loop as rl  # noqa: E402  子の起動と stream の読み取りを、本番と同じものにする
+sys.path.insert(0, HERE)
+import claude_p as rl  # noqa: E402  子を `claude -p` で起動し、stream を読む部品(本番が `claude -p` で起動していた版から写した)
 
 CASES = os.path.join(HERE, "cases")
 GIT_ID = ["-c", "user.name=dev", "-c", "user.email=dev@example.com", "-c", "commit.gpgsign=false"]
@@ -71,7 +71,7 @@ CONFIGS = {
     "prove": {"prompt": PROVE_PROMPT, "system": OWN_COPY},
 }
 
-# PR ありの形(--pr)。本番の review_loop.py と同じ引数とシステムプロンプトで起動する。{pr} は PR 番号に置き換わる
+# PR ありの形(--pr)。本番が `claude -p` で起動していた版と同じ引数とシステムプロンプトで起動する。{pr} は PR 番号に置き換わる
 CONFIGS_PR = {
     "code-review": {"prompt": "/code-review high {pr}", "system": rl.REVIEW_CONSTRAINT},
     "security-review": {"prompt": "/security-review", "system": rl.REVIEW_CONSTRAINT},
@@ -368,7 +368,7 @@ def run_trial(case, config, n, template, root, out, keep, model):
         elif not text.strip():
             meta["status"] = "no_output"
         elif meta["denials_blocking"]:
-            meta["status"] = "denied"  # 本番なら試行を止める拒否。出力は残すが、集計では分ける
+            meta["status"] = "denied"  # 本番が claude -p で起動していた版なら、試行を止めた拒否。出力は残すが、集計では分ける
         else:
             meta["status"] = "ok"
     except Exception as e:  # 1つの試行の失敗で全体を止めない
@@ -471,7 +471,7 @@ def main():
     r.add_argument("--jobs", type=int, default=4)
     r.add_argument("--model", default=MODEL, help=f"子のモデル(既定 {MODEL})")
     r.add_argument("--pr", action="store_true",
-                   help="PR ありの形で回す(publish.py create で作った検証用の PR を、本番と同じ引数でレビューさせる)")
+                   help="PR ありの形で回す(publish.py create で作った検証用の PR を、PR 番号を渡してレビューさせる)")
     r.add_argument("--keep", action="store_true", help="一時ディレクトリ(題材と試行の複製)を残す")
     r.set_defaults(fn=cmd_run)
     args = ap.parse_args()

@@ -28,7 +28,10 @@ if args[:2] == ["pr", "view"]:
     if os.environ.get("FAKE_NO_PR"):
         print("no pull requests found for branch", file=sys.stderr)
         sys.exit(1)
-    branch = subprocess.run(["git", "symbolic-ref", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
+    if len(args) > 2 and args[2].isdigit():  # 番号で引くときは、今のブランチに関係なく、PR のブランチを見る
+        branch = "feature"
+    else:
+        branch = subprocess.run(["git", "symbolic-ref", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
     out = subprocess.run(["git", "ls-remote", "origin", f"refs/heads/{branch}"], capture_output=True, text=True).stdout
     if not out:  # 本物の gh と同じく、PR のないブランチでは失敗する
         print(f"no pull requests found for branch \"{branch}\"", file=sys.stderr)
@@ -38,6 +41,9 @@ if args[:2] == ["pr", "view"]:
                       "author": {"login": os.environ.get("FAKE_PR_AUTHOR", ME)},
                       "url": "https://github.com/o/r/pull/7"}))
 elif args[:2] == ["api", "user"]:
+    if os.environ.get("FAKE_SLEEP"):  # begin の途中で止まっている状態を作る
+        import time
+        time.sleep(float(os.environ["FAKE_SLEEP"]))
     print(ME)
 elif args[0] == "api" and "--paginate" in args:
     for c in load():
@@ -52,9 +58,6 @@ elif args[0] == "api" and "-X" in args:
         sys.exit(0)
     body = json.load(sys.stdin)["body"]
     if method == "POST":
-        if os.environ.get("FAKE_RACE"):  # 同時に起動した別の試行が、一瞬先にコメントを作っていた
-            other = body.replace('"nonce":"', '"nonce":"other')
-            cs.append({"id": 50, "login": ME, "created_at": "2026-10-24T00:00:00Z", "body": other, "edits": 0})
         cid = max([c["id"] for c in cs], default=100) + 1
         cs.append({"id": cid, "login": ME, "created_at": f"2026-10-25T00:00:{len(cs):02d}Z", "body": body, "edits": 0})
     else:

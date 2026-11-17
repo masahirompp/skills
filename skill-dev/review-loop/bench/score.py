@@ -421,8 +421,8 @@ def cmd_report(args):
         st = collections.Counter(m["status"] for _, m in rows if m["config"] == c)
         bad = "、".join(f"{k} {v}" for k, v in sorted(st.items()) if k not in SCORED) or "なし"
         L.append(f"| {c} | {sum(st.values())} | {st['ok']} | {st['denied']} | {bad} |")
-    L += ["", "denied は、レビューの出力はあるが、本番の review_loop.py なら試行を止める権限の拒否(auto mode の分類器など)が"
-          "あった試行。本番では、その反復が permission_denied で失敗になる。", "",
+    L += ["", "denied は、レビューの出力はあるが、権限の拒否(auto mode の分類器など)があった試行。本番がレビュー役を claude -p で"
+          "起動していた版では、その反復を permission_denied で失敗にしていた(今の本番は、拒否を検出しない)。", "",
           "検出と余計な指摘の集計は、出力のある試行(ok と denied)を数える。", ""]
 
     L += ["## 検出(埋め込んだ不具合)", "",
