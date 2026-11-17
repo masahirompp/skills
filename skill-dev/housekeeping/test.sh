@@ -408,6 +408,17 @@ bad_rc=$?
 set -e
 [ "$bad_rc" != 0 ] && grep -q 'JSON の配列として読めない' "$root/scan-bad.err" && ! grep -q '^delete' "$root/scan-bad.out" &&
   pass "scan: 読めない PR 一覧では止まる" || fail "scan: 読めない PR 一覧で止まらない(rc=$bad_rc)"
+# PR 一覧の件数が上限に達していれば止まること(gh は上限で黙って切るので、古いオープン PR のベースが delete になりうる)
+pr_total=$(jq length "$root/prs.json")
+set +e
+HOUSEKEEPING_PR_LIMIT=$pr_total "$scripts/scan.sh" >"$root/scan-limit.out" 2>"$root/scan-limit.err"
+limit_rc=$?
+HOUSEKEEPING_PR_LIMIT=$((pr_total + 1)) "$scripts/scan.sh" >/dev/null 2>"$root/scan-underlimit.err"
+underlimit_rc=$?
+set -e
+[ "$limit_rc" != 0 ] && grep -q '上限(.*件)に達して' "$root/scan-limit.err" && ! grep -q '^delete' "$root/scan-limit.out" &&
+  pass "scan: PR 一覧が上限に達していれば止まる" || fail "scan: PR 一覧が上限に達しているのに止まらない(rc=$limit_rc)"
+[ "$underlimit_rc" = 0 ] && pass "scan: PR 一覧が上限未満なら止まらない" || fail "scan: PR 一覧が上限未満なのに止まった: $(cat "$root/scan-underlimit.err")"
 
 # 保護パターン: 空白区切りの HOUSEKEEPING_PROTECT と git config の両方が効くこと
 protected() { HOUSEKEEPING_PROTECT='release/* sandbox' bash -c '. "$1/lib.sh" && hk_load_protect main && hk_is_protected "$2"' _ "$scripts" "$1"; }

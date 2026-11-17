@@ -38,15 +38,23 @@ hk_load_protect "$default" || exit 1
 url=$(git remote get-url "$hk_remote" 2>/dev/null)
 slug=$(printf '%s\n' "$url" | sed -E 's#^(git@[^:]+:|ssh://([^@/]+@)?[^/]+/|https?://([^@/]+@)?[^/]+/)##; s#\.git$##; s#/$##')
 owner=$(printf '%s\n' "${slug%%/*}" | tr '[:upper:]' '[:lower:]')
+pr_limit=${HOUSEKEEPING_PR_LIMIT:-1000}
+case $pr_limit in '' | *[!0-9]* | 0*) echo "error: HOUSEKEEPING_PR_LIMIT は正の整数で指定する($pr_limit)" >&2; exit 1 ;; esac
 if [ -n "${HOUSEKEEPING_PR_JSON:-}" ]; then
   cp "$HOUSEKEEPING_PR_JSON" "$tmp/prs.json"
-elif ! gh pr list -R "$slug" --state all --limit "${HOUSEKEEPING_PR_LIMIT:-1000}" \
+elif ! gh pr list -R "$slug" --state all --limit "$pr_limit" \
   --json number,state,headRefName,headRefOid,headRepositoryOwner,baseRefName >"$tmp/prs.json" 2>"$tmp/gh.err"; then
   echo "error: PR 一覧を取得できない($slug): $(cat "$tmp/gh.err")" >&2
   exit 1
 fi
 # 読めない PR 一覧で進むと、jq が空を返してオープン PR やスタックした PR の保護が外れる
 jq -e 'type == "array"' "$tmp/prs.json" >/dev/null 2>&1 || { echo "error: PR 一覧を JSON の配列として読めない" >&2; exit 1; }
+# gh pr list は、上限を超える分を黙って落とす(新しい順に上限まで返し、成功で終わる)。件数が上限に達していれば、
+# 範囲の外の古い PR が欠けている可能性があり、その PR のベースや head のブランチが「PR なし」として判定される
+pr_count=$(jq length "$tmp/prs.json" 2>/dev/null) && [ -n "$pr_count" ] ||
+  { echo "error: PR 一覧の件数を読めない" >&2; exit 1; }
+[ "$pr_count" -lt "$pr_limit" ] ||
+  { echo "error: PR 一覧が上限($pr_limit 件)に達していて、古い PR が欠けている可能性がある。HOUSEKEEPING_PR_LIMIT を増やして走査し直す" >&2; exit 1; }
 # オープン PR のベースブランチの一覧("base<TAB>#number")。ブランチごとに jq を呼ぶと、その失敗が「ベースではない」に見える
 jq -r '.[] | select(.state == "OPEN") | "\(.baseRefName)\t#\(.number)"' "$tmp/prs.json" >"$tmp/open-bases" 2>/dev/null ||
   { echo "error: PR 一覧からオープン PR のベースブランチを読めない" >&2; exit 1; }
