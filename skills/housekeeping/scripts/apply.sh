@@ -30,17 +30,15 @@ skip() {
   printf 'skipped\t%s\n' "$*"
   status=1
 }
-# kind ごとに、削除できる action の行だけを返す。prune は worktree だけ
-rows() { printf '%s\n' "$input" | awk -F'\t' -v k="$1" '$2 == k && ($1 == "delete" || $1 == "ask" || ($1 == "prune" && k == "worktree"))'; }
+# 受け付ける (action, kind) の組(awk の条件式)。定義はここだけにし、rows と未知の行の検出の両方で使う。prune は worktree だけ
+accepted='(($1 == "delete" || $1 == "ask") && ($2 == "worktree" || $2 == "branch" || $2 == "remote")) || ($1 == "prune" && $2 == "worktree")'
+# kind ごとに、受け付ける行だけを返す
+rows() { printf '%s\n' "$input" | awk -F'\t' -v k="$1" "\$2 == k && ($accepted)"; }
 
-# 上の rows に当たらない行(keep・end・空行を除く)は、消さずに知らせる
+# 受け付けない行(keep・end・空行を除く)は、消さずに知らせる
 while IFS= read -r line; do
   skip "未知の行のため扱わない: $line"
-done < <(printf '%s\n' "$input" | awk -F'\t' '
-  $0 == "" || $1 == "keep" || $1 == "end" { next }
-  ($2 == "worktree" && ($1 == "delete" || $1 == "ask" || $1 == "prune")) { next }
-  (($2 == "branch" || $2 == "remote") && ($1 == "delete" || $1 == "ask")) { next }
-  { print }')
+done < <(printf '%s\n' "$input" | awk -F'\t' "\$0 == \"\" || \$1 == \"keep\" || \$1 == \"end\" { next } !($accepted)")
 
 # 1. ディレクトリが消えた worktree の管理情報
 # git worktree prune は、承認した行に関係なく prunable なものを全て消す。git は、存在するのに読めないだけの

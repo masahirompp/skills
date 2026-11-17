@@ -22,6 +22,8 @@ fail() {
   printf 'FAIL  %s\n' "$*"
   fails=$((fails + 1))
 }
+# unreadable <path>: chmod 000 にしたものが実際に読めないか。root で実行すると読めてしまい、読めないときの確認の前提が崩れる
+unreadable() { [ "$(id -u)" != 0 ] && ! [ -r "$1" ]; }
 
 git init -q --bare -b main "$root/origin.git"
 git clone -q "$root/origin.git" "$root/repo" 2>/dev/null
@@ -339,13 +341,18 @@ done
 
 # 存在するのに読めない worktree(git は prunable と出す)を、prune にも、そのブランチを delete にもしないこと
 chmod 000 "$root/wt/wt-dirty"
-scan_with /nonexistent scan-noperm-wt
-chmod 755 "$root/wt/wt-dirty"
-got=$(row scan-noperm-wt worktree wt-dirty)
-[ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"ディレクトリが無いと確かめられない"* ]] &&
-  pass "scan: 読めない worktree は prune にしない" || fail "scan: 読めない worktree wt-dirty → ${got:-(出力なし)}"
-got=$(row scan-noperm-wt branch wt-dirty)
-[ "${got%%$'\t'*}" = keep ] && pass "scan: 読めない worktree のブランチを残す" || fail "scan: 読めない worktree のブランチ wt-dirty → ${got:-(出力なし)}"
+if unreadable "$root/wt/wt-dirty"; then
+  scan_with /nonexistent scan-noperm-wt
+  chmod 755 "$root/wt/wt-dirty"
+  got=$(row scan-noperm-wt worktree wt-dirty)
+  [ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"ディレクトリが無いと確かめられない"* ]] &&
+    pass "scan: 読めない worktree は prune にしない" || fail "scan: 読めない worktree wt-dirty → ${got:-(出力なし)}"
+  got=$(row scan-noperm-wt branch wt-dirty)
+  [ "${got%%$'\t'*}" = keep ] && pass "scan: 読めない worktree のブランチを残す" || fail "scan: 読めない worktree のブランチ wt-dirty → ${got:-(出力なし)}"
+else
+  chmod 755 "$root/wt/wt-dirty"
+  pass "scan: (chmod 000 でも読めてしまう(root など)ので、読めない worktree の確認は飛ばす)"
+fi
 
 # git リポジトリを読めないときは、git の出力を添えて止まること
 set +e
@@ -455,6 +462,10 @@ in_lib hk_is_protected feature/x && pass "lib: 保護パターンを読み込む
 printf '[broken\n' >"$root/bad.gitconfig"
 printf '[housekeeping]\n\tprotect = keep-me\n' >"$root/noperm.gitconfig" && chmod 000 "$root/noperm.gitconfig"
 for cfg in bad noperm; do
+  if [ "$cfg" = noperm ] && ! unreadable "$root/noperm.gitconfig"; then
+    pass "scan/apply: (chmod 000 でも読めてしまう(root など)ので、権限で読めない設定の確認は飛ばす)"
+    continue
+  fi
   set +e
   GIT_CONFIG_GLOBAL="$root/$cfg.gitconfig" "$scripts/scan.sh" >"$root/scan-$cfg-cfg.out" 2>"$root/scan-$cfg-cfg.err"
   rc=$?
@@ -491,13 +502,18 @@ kill "$merged_pid" 2>/dev/null; wait "$merged_pid" 2>/dev/null || true
 # prune の行を受けても、存在するのに読めないだけの worktree(prunable に含まれる)があれば、git worktree prune をしないこと
 # (prune は承認した行に関係なく、prunable なものを全て消す)
 chmod 000 "$root/wt/wt-dirty"
-set +e
-awk -F'\t' '$1 == "prune"' "$root/scan.tsv" | "$scripts/apply.sh" >"$root/apply-noperm.out"
-set -e
-noperm_listed=$(git worktree list --porcelain | grep -c '/wt/wt-dirty$' || true)
-chmod 755 "$root/wt/wt-dirty"
-[ "$noperm_listed" = 1 ] && grep -q 'worktree prune: .*wt-dirty は prunable だが、ディレクトリが無いと確かめられない' "$root/apply-noperm.out" &&
-  pass "apply: 読めない worktree があれば prune しない" || fail "apply: 読めない worktree の管理情報を prune した: $(cat "$root/apply-noperm.out")"
+if unreadable "$root/wt/wt-dirty"; then
+  set +e
+  awk -F'\t' '$1 == "prune"' "$root/scan.tsv" | "$scripts/apply.sh" >"$root/apply-noperm.out"
+  set -e
+  noperm_listed=$(git worktree list --porcelain | grep -c '/wt/wt-dirty$' || true)
+  chmod 755 "$root/wt/wt-dirty"
+  [ "$noperm_listed" = 1 ] && grep -q 'worktree prune: .*wt-dirty は prunable だが、ディレクトリが無いと確かめられない' "$root/apply-noperm.out" &&
+    pass "apply: 読めない worktree があれば prune しない" || fail "apply: 読めない worktree の管理情報を prune した: $(cat "$root/apply-noperm.out")"
+else
+  chmod 755 "$root/wt/wt-dirty"
+  pass "apply: (chmod 000 でも読めてしまう(root など)ので、読めない worktree の確認は飛ばす)"
+fi
 
 # 判定の関数が出さない行(branch の prune、未知の action)は消さずに知らせること
 set +e

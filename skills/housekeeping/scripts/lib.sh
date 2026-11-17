@@ -31,7 +31,8 @@ hk_mktemp_dir() {
   if [ -n "${TMPDIR:-}" ]; then
     d=$(mktemp -d "${TMPDIR%/}/housekeeping.XXXXXX" 2>/dev/null)
   else
-    d=$(mktemp -d /tmp/housekeeping.XXXXXX 2>/dev/null) || d=$(mktemp -d -t housekeeping 2>/dev/null)
+    # -t のテンプレートには X を含める(GNU mktemp は X が足りないと失敗する。BSD は末尾に乱数を足す)
+    d=$(mktemp -d /tmp/housekeeping.XXXXXX 2>/dev/null) || d=$(mktemp -d -t housekeeping.XXXXXX 2>/dev/null)
   fi
   if [ -n "$d" ] && [ -d "$d" ]; then
     printf '%s\n' "$d"
@@ -71,10 +72,12 @@ hk_default_branch() {
 hk_load_protect() {
   local p cfg rc err scope IFS=$' \t\n'
   set -f # 呼び出し元の設定に頼らず、HOUSEKEEPING_PROTECT の glob を展開させない
-  cfg=$(git config --get-all housekeeping.protect 2>&1)
+  # stderr を値に混ぜない。エラー文は、失敗したときだけ取り直す
+  cfg=$(git config --get-all housekeeping.protect 2>/dev/null)
   rc=$?
   if [ "$rc" -gt 1 ]; then
-    echo "error: git config を読めない(保護パターンを確かめられない): $cfg" >&2
+    err=$(git config --get-all housekeeping.protect 2>&1 >/dev/null)
+    echo "error: git config を読めない(保護パターンを確かめられない): ${err:-(rc=$rc)}" >&2
     return 1
   fi
   [ "$rc" = 0 ] || cfg=''
