@@ -1,0 +1,20 @@
+{
+  "name": "session-timeline",
+  "version": "0.4.0",
+  "description": "セッションで何をしているかを、LLM が名付けた工程(実装・レビュー・修正など)の縦のタイムラインとまとめで表示する。工程を押すと会話のその位置へ移動する。",
+  "author": {
+    "name": "masahirompp",
+    "url": "https://github.com/masahirompp"
+  },
+  "repository": "https://github.com/masahirompp/skills",
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "autoOpen": {
+      "type": "boolean",
+      "title": "セッション開始時にタイムラインを開く",
+      "description": "オンにすると、/timeline を打たなくてもセッション開始時にペインが開く。端末の幅が足りないときは、広げるか /timeline を打つまで表示を待つ。",
+      "default": true
+    }
+  }
+}

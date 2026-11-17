@@ -9,6 +9,11 @@
       "name": "masahirompp-skills",
       "source": "./",
       "description": "masahirompp の Claude Code 用 Agent Skills 集。cycle-rewrite(サイクル型リライト開発ワークフローの管理)などを含む。"
+    },
+    {
+      "name": "session-timeline",
+      "source": "./plugins/session-timeline",
+      "description": "セッションの工程(実装・レビュー・修正など)をタイムラインとまとめで表示する mod。工程を押すと会話のその位置へ移動する。"
     }
   ]
 }
