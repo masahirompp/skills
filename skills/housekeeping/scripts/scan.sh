@@ -178,7 +178,7 @@ record_wt() {
 }
 
 handle_wt() {
-  local name=${branch:-"(detached)"} rp action reason proc op st='' dirty ign
+  local name=${branch:-"(detached)"} rp action reason proc op wt_status='' dirty ign
   if [ "$path" = "$main_wt" ]; then
     [ -z "$branch" ] || printf '%s\tkeep\t%s\t%s\n' "$branch" "$path" "メインの作業ツリー" >>"$tmp/wt-branches"
     return
@@ -193,9 +193,12 @@ handle_wt() {
     fi
     return
   fi
-  rp=$(cd "$path" && pwd -P)
+  rp=$(cd "$path" 2>/dev/null && pwd -P) || rp=''
   if [ -n "$locked" ]; then
     action=keep reason="ロックされている(git worktree lock)"
+  elif [ -z "$rp" ]; then
+    # 解決できないまま進むと、実行中の場所か・使用中かを空のパスと比べることになる
+    action=keep reason=$(hk_unsure "実行中の場所か・プロセスが使用中か" "worktree のパスを解決できない")
   elif [ "$cwd" = "$rp" ] || [ "${cwd#"$rp"/}" != "$cwd" ]; then
     action=keep reason="このスキャンを実行している作業ディレクトリ"
   elif [ -n "$cwds_err" ]; then
@@ -206,10 +209,10 @@ handle_wt() {
     action=keep reason=$(hk_unsure "進行中の操作(rebase など)があるか")
   elif [ -n "$op" ]; then
     action=keep reason="進行中の操作がある($op)"
-  elif ! st=$(git -C "$path" status --porcelain --ignored 2>/dev/null); then
+  elif ! wt_status=$(git -C "$path" status --porcelain --ignored 2>/dev/null); then
     # 未コミットの変更と、一緒に消える ignored ファイルの両方をこの出力で見る。読めなければどちらも確かめられない
     action=keep reason=$(hk_unsure "未コミットの変更と ignored ファイルを" "git status を読めない")
-  elif ! dirty=$(printf '%s\n' "$st" | awk '$0 != "" && !/^!! /'); then
+  elif ! dirty=$(printf '%s\n' "$wt_status" | awk '$0 != "" && !/^!! /'); then
     action=keep reason=$(hk_unsure "未コミットの変更を" "git status の出力を読めない")
   elif [ -n "$dirty" ]; then
     action=keep reason="未コミットの変更・未追跡ファイルが $(printf '%s\n' "$dirty" | wc -l | tr -d ' ') 件ある"
@@ -221,8 +224,8 @@ handle_wt() {
     action=keep reason="detached HEAD が $default 未取り込みのコミットを指している"
   fi
   if [ "$action" != keep ]; then
-    # st は上の git status --porcelain --ignored の出力(読めなかった worktree はここに来ない)
-    if ! ign=$(printf '%s\n' "$st" | awk '/^!! / && n++ < 5 { print substr($0, 4) }' | paste -sd, -); then
+    # wt_status は上の git status --porcelain --ignored の出力(読めなかった worktree はここに来ない)
+    if ! ign=$(printf '%s\n' "$wt_status" | awk '/^!! / && n++ < 5 { print substr($0, 4) }' | paste -sd, -); then
       action=keep reason=$(hk_unsure "一緒に消える ignored ファイルを")
     elif [ -n "$ign" ]; then
       reason="${reason}。一緒に消える ignored ファイル: $ign"
