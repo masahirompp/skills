@@ -16,10 +16,8 @@ set -uo pipefail
 hk_check_repo || exit 1
 default=$(hk_default_branch)
 [ -n "$default" ] || { echo "error: 既定ブランチを特定できない" >&2; exit 1; }
-# 削除の直前に確かめ直す入力のうち、保護パターンは読めなければ止まる。
-# プロセスの一覧は読めなくても止まらず、worktree の行を「確かめられない」で飛ばす(ブランチの行は消せる)
+# 削除の直前に確かめ直す入力のうち、保護パターンは読めなければ止まる
 hk_load_protect "$default" || exit 1
-if cwds=$(hk_process_cwds); then cwds_err=''; else cwds_err=$cwds cwds=''; fi
 
 # 承認済みの行は変数で持つ
 input=$(grep -v '^action	')
@@ -39,6 +37,17 @@ rows() { printf '%s\n' "$input" | awk -F'\t' -v k="$1" "\$2 == k && ($accepted)"
 while IFS= read -r line; do
   skip "未知の行のため扱わない: $line"
 done < <(printf '%s\n' "$input" | awk -F'\t' "\$0 == \"\" || \$1 == \"keep\" { next } !($accepted)")
+
+# プロセスの一覧は、worktree を消す行が無いと確かめられたときだけ取らない。読めなくても止まらず、worktree の行を
+# 「確かめられない」で飛ばす(ブランチの行は消せる)
+cwds='' cwds_err=''
+if wt_rows=$(rows worktree | awk -F'\t' '$1 != "prune"') && [ -z "$wt_rows" ]; then
+  :
+elif cwds=$(hk_process_cwds); then
+  cwds_err=''
+else
+  cwds_err=$cwds cwds=''
+fi
 
 # 1. ディレクトリが消えた worktree の管理情報
 # git worktree prune は、承認した行に関係なく prunable なものを全て消す。git は、存在するのに読めないだけの
