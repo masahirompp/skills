@@ -166,12 +166,12 @@ reviews = [c for c in cs if c["kind"] == "review"]
 check(len(reviews) == 3, "観点ごとに1プロセス起動する")
 check(all(not c["env_job_dir"] and not c["env_session_id"] for c in cs), "子の環境から CLAUDE_JOB_DIR などを外す")
 check(all(c["guard"] == "1" for c in cs), "子には REVIEW_LOOP_ACTIVE が渡る")
-check(not any(c["kind"] == "preflight-not-killed" for c in cs), "事前確認の子は init の直後に止める")
+check(not any(c["kind"] == "preflight-not-killed" for c in cs), "事前確認の子は init の直後に止める(モデルに問い合わせない)")
 check("===== 観点: security-review =====\nsecurity-review: 指摘1件\n===== ここまで: security-review =====" in joined,
       "reviews.md は各レビューを役の名前で区切る")
 check(all("--append-system-prompt" in c["args"] for c in reviews), "運用上の制約を渡す")
-check(all(c["args"][c["args"].index("--model") + 1] == "opus" for c in reviews + [c for c in cs if c["kind"] == "preflight"]),
-      "レビュー役と事前確認には、既定でモデル opus を指定する")
+check(all(c["args"][c["args"].index("--model") + 1] == "opus" for c in reviews), "レビュー役には、既定でモデル opus を指定する")
+check(all("--model" not in c["args"] for c in cs if c["kind"] == "preflight"), "事前確認にはモデルを渡さない(モデルに問い合わせない)")
 check(not os.path.exists(os.path.join(workdir, "denials.txt")) and "拒否" not in joined,
       "拒否がなければ denials.txt は作らず、reviews.md にも添えない")
 prompts = sorted(c["args"][-1] for c in reviews)
@@ -290,6 +290,30 @@ rc, _, err = run(wt)
 s = state()
 check(rc == 0 and s["attempts"][n]["result"] == "interrupted" and s["attempts"][n]["sha"] == "abcdef0",
       "古いロックは interrupted として記録してから取得する")
+
+
+def lock_started(minutes_ago):
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - minutes_ago * 60))
+
+
+# ロックを持ちうる長さは版ごとに違う。長さを記録していない旧版のロックは、旧版の長さ(75分)で見る
+s = state()
+s["lock"] = {"running": True, "started_at": lock_started(60), "sha": "abcdef0", "nonce": "old"}
+write_state(s)
+n = len(s["attempts"])
+rc, _, err = run(wt)
+check(rc == 2 and "実行中" in err and state()["lock"]["nonce"] == "old" and len(state()["attempts"]) == n,
+      "長さを記録していない旧版のロックは、60分たっていても奪わない")
+s["lock"]["started_at"] = lock_started(80)
+write_state(s)
+rc, _, err = run(wt)
+check(rc == 0 and state()["attempts"][n]["reason"] == "stale_lock", "旧版のロックも75分を超えれば片付ける")
+s = state()
+s["lock"] = {"running": True, "started_at": lock_started(60), "sha": "abcdef0", "nonce": "n", "stale_after": 55 * 60}
+write_state(s)
+n = len(s["attempts"])
+rc, _, err = run(wt)
+check(rc == 0 and state()["attempts"][n]["reason"] == "stale_lock", "ロックに記録した長さを超えれば片付ける")
 
 # --- 後片付けと中断 ----------------------------------------------------------
 rc, _, err = run(wt, FAKE_REVIEW_security_review="bg")
@@ -611,15 +635,37 @@ rc, _, err = run(wt)
 check(rc == 0 and "warn: 直前の試行と" not in err, "古いロックを片付けた記録とは比べない")
 n = len(calls())
 rc, _, err = run(wt, "--model", " sonnet ")
-new = [c for c in calls()[n:] if c["kind"] in ("review", "preflight")]
+new = [c for c in calls()[n:] if c["kind"] == "review"]
 check(rc == 0 and new and all(c["args"][c["args"].index("--model") + 1] == "sonnet" for c in new)
       and state()["attempts"][-1].get("model") == "sonnet" and "、モデル sonnet" in last_row(),
-      f"--model はレビュー役と事前確認に渡し、既定と違えば状態コメントの表に出す {err[-300:] if rc else ''}")
+      f"--model はレビュー役に渡し、既定と違えば状態コメントの表に出す {err[-300:] if rc else ''}")
 check("直前の試行とモデルが違う" in err, "直前の試行とモデルが違えば警告する")
 rc, _, err = run(wt)
 check(rc == 0 and "、モデル" not in last_row() and "直前の試行とモデルが違う" in err, "既定のモデルなら表に出さない")
 rc, _, err = run(wt, "--model", " ")
 check(rc == 2 and "--model" in err, "空の --model は終了コード2")
+before = json.dumps(state())
+rc, _, err = run(wt, "--model", "")
+check(rc == 2 and "--model" in err and json.dumps(state()) == before, "空文字の --model も既定に戻さず終了コード2")
+failures = state()["consecutive_failures"]
+rc, _, err = run(wt, "--model", "opsu-nonexistent", FAKE_REVIEW_security_review="badmodel")
+failed = err[err.index("failed:"):] if "failed:" in err else ""
+check(rc == 1 and failed.startswith("failed: child_error: review security-review")
+      and "--model のモデル opsu-nonexistent を使えない可能性がある" in failed
+      and state()["attempts"][-1]["result"] == "failed" and state()["consecutive_failures"] == failures + 1,
+      f"レビュー役が使えないモデルの印を出して失敗したら、試行の失敗として数え、failed: の詳細に添える {failed[:300]}")
+rc, _, err = run(wt, FAKE_REVIEW_security_review="fail")
+check(rc == 1 and "failed: child_error" in err and "使えない可能性" not in err, "印の無い失敗には、モデルのことを添えない")
+rc, _, err = run(wt, FAKE_REVIEW_security_review="quotemodel")
+check(rc == 1 and "failed: child_error" in err and "overloaded" in err and "使えない可能性" not in err,
+      "途中の result の本文が文言を引用しただけの失敗には、モデルのことを添えない")
+rc, _, err = run(wt, "--new-run")
+check(rc == 0, "新しいシリーズで続ける")
+rc, _, err = run(wt, "--model", "opsu-nonexistent", FAKE_REVIEW_security_review="badmodelstderr")
+failed = err[err.index("failed:"):] if "failed:" in err else ""
+check(rc == 1 and failed.startswith("failed: child_error: review security-review") and "result の行がない" in failed
+      and "--model のモデル opsu-nonexistent を使えない可能性がある" in failed,
+      f"result の行を出さず stderr にだけ印を出して失敗しても、failed: の詳細に添える {failed[:300]}")
 rc, _, _ = run(wt, "--instruct", "security-review=x", FAKE_REVIEW_security_review="fail")
 check(rc == 1 and state()["attempts"][-1].get("instructed") == ["security-review"], "失敗した試行にも、指示を渡した観点を残す")
 rc, _, err = run(wt, "--new-run", "--instruct", "security-review=x")
@@ -671,6 +717,44 @@ check("focus 並行性と タイミング" in state()["attempts"][-1]["perspecti
 before = json.dumps(state())
 rc, _, err = run(wt, "--focus", "  ")
 check(rc == 2 and "--focus" in err and json.dumps(state()) == before, "空の --focus は終了コード2で、状態に記録しない")
+
+# --- 手で編集された状態コメント ----------------------------------------------
+wt = setup()
+run(wt)
+s = state()
+s["attempts"][-1]["model"] = None
+write_state(s)
+rc, _, err = run(wt)
+check(rc == 0 and state()["attempts"][-1]["result"] == "completed" and "モデルが違う" not in err,
+      f"直前の試行の model が null でも、比べずに試行を続ける {err.strip().splitlines()[-2:]}")
+
+# 手で編集された stale_after でも、実行中のロックを奪わず、永久にも止まらない
+wt = setup()
+run(wt)
+for value in (True, -1, 0, "x"):
+    s = state()
+    s["lock"] = {"running": True, "started_at": lock_started(1), "sha": "abcdef0", "nonce": "live", "stale_after": value}
+    write_state(s)
+    rc, _, err = run(wt)
+    check(rc == 2 and "実行中" in err and state()["lock"]["nonce"] == "live",
+          f"stale_after={value!r} でも、1分前のロックは奪わない")
+# 数でない値は、記録の無い旧版のロックと同じ75分で見る(下限の55分に丸めない)
+for value in ("x", True, None):
+    s = state()
+    s["lock"] = {"running": True, "started_at": lock_started(60), "sha": "abcdef0", "nonce": "live", "stale_after": value}
+    write_state(s)
+    rc, _, err = run(wt)
+    check(rc == 2 and "実行中" in err and state()["lock"]["nonce"] == "live",
+          f"stale_after={value!r} は旧版の長さで見て、60分前のロックも奪わない")
+s["lock"].update(stale_after=3300.0, started_at=lock_started(1))
+write_state(s)
+rc, _, err = run(wt, "--new-run")
+check(rc == 2 and "実行中" in err and state()["lock"]["nonce"] == "live",
+      "小数の stale_after も読めて、--new-run でも実行中のロックを上書きしない")
+s["lock"].update(stale_after=10 ** 9, started_at=lock_started(600))
+write_state(s)
+rc, _, err = run(wt)
+check(rc == 0 and state()["attempts"][-2]["reason"] == "stale_lock", "大きな stale_after でも、10時間前のロックは片付ける")
 
 if os.environ.get("KEEP"):
     print("作業ディレクトリ:", root)

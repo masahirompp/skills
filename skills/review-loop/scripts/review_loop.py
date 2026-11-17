@@ -57,6 +57,12 @@ PERSPECTIVES = [
 # 指摘の数と質がモデルで変わり、親のモデルに引きずられると反復や PR の間で比べられないので固定する
 MODEL = "opus"
 
+# 使えないモデルを渡したときに、claude が出すもの(本物で観測した形)。レビュー役が失敗したとき、stderr の
+# タグか result の本文にこれがあれば、失敗の詳細にモデルを使えない可能性を添える。止め方は変えない(ほかの
+# 失敗と同じく試行の失敗として記録する)。これ以外の形のモデルのエラー(未観測)は、添えずに通常の詳細だけになる
+UNKNOWN_MODEL_STDERR = "[claude-code:unrecognized_model]"
+UNKNOWN_MODEL_RESULT = "There's an issue with the selected model"
+
 # --focus で足す、スキルを使わないレビュー役のプロンプト
 FOCUS_PROMPT = "PR #{pr} の差分を、次の観点でレビューし、具体的な指摘を file:line 付きの箇条書きで出してください。\n\n観点: {focus}"
 
@@ -69,7 +75,10 @@ MARGIN = 5 * 60               # Bash の制限時間に対する余裕(事前確
 LOCK_MARGIN = 15 * 60         # ロックを持ったまま行う git・gh の呼び出し(各 COMMAND_TIMEOUT まで)の余裕
 BASH_TIMEOUT = 90 * 60        # SKILL.md で Bash ツールに指定する制限時間
 BASH_TIMEOUT_MAX = 120 * 60   # Bash ツールの最大制限時間
-STALE_LOCK_AFTER = REVIEW_TIMEOUT + LOCK_MARGIN
+STALE_LOCK_AFTER = REVIEW_TIMEOUT + LOCK_MARGIN  # ロックに stale_after として記録し、読む側はその値で古さを決める
+# stale_after を記録する前の版(判定役を含む)がロックを持ちうる長さ。main に入ったその版はどれも
+# REVIEW_TIMEOUT 40分 + JUDGE_TIMEOUT 20分 + LOCK_MARGIN 15分で、75分がその最大
+LEGACY_STALE_LOCK_AFTER = 75 * 60
 WATCHDOG_GRACE = 60           # 子の見張り役が、親のタイムアウトに加えて待つ時間
 LOCK_SETTLE_SECONDS = 3       # nonce を書いてから読み直すまで
 POLL_SECONDS = 2
@@ -245,7 +254,17 @@ def add_tokens(tokens, data):
         tokens["output"] += m.get("outputTokens", 0)
 
 
-def check_result(label, rc, base, attempt, tail):
+def model_hint(stderr, error_result, model):
+    """子の失敗に、使えないモデルを渡したときの印(本物で観測した形)があれば、失敗の詳細に添える文を返す。
+
+    照らすのは stderr と、失敗で終わった最後の result の行の本文だけ。途中の result の行は、レビューの本文が
+    この文言を引用しうる(このスキル自身を変える PR など)ので見ない。"""
+    if UNKNOWN_MODEL_STDERR in stderr or UNKNOWN_MODEL_RESULT in error_result:
+        return f"\n(--model のモデル {model} を使えない可能性がある。名前の誤りか、使う権限が無い)"
+    return ""
+
+
+def check_result(label, rc, base, attempt, tail, model):
     """子の結果を読んでトークン数を attempt に足し、成功の条件を全て満たすか確かめる。結果のテキストを返す。
 
     結果のテキストは StreamTail.texts を出た順につないだもの。サブエージェントをバックグラウンドで動かす
@@ -255,10 +274,12 @@ def check_result(label, rc, base, attempt, tail):
     に書く(stream はツールの出力まで含んで大きいので、親はこちらを読む)。
     トークン数と成否は最後の result の行で見る(どの行の modelUsage にもセッション全体の値が入るので、足すと
     二重に数える)。"""
+    with open(base + ".stderr.txt", encoding="utf-8", errors="replace") as f:
+        full_err = f.read()
     if not tail.results:
-        with open(base + ".stderr.txt", encoding="utf-8", errors="replace") as f:
-            err = f.read().strip()[-1000:]
-        raise AttemptFailed("child_error", label, f"result の行がない(終了コード {rc})。stderr: {err}{sandbox_hint(err)}")
+        err = full_err.strip()[-1000:]
+        raise AttemptFailed("child_error", label, f"result の行がない(終了コード {rc})。stderr: {err}{sandbox_hint(err)}"
+                            f"{model_hint(full_err, '', model)}")
     text = "\n\n".join(tail.texts())
     with open(base + ".result.md", "w", encoding="utf-8") as f:
         f.write(text + "\n")
@@ -268,8 +289,10 @@ def check_result(label, rc, base, attempt, tail):
     if denials:
         raise AttemptFailed("permission_denied", label, summarize_denials(denials))
     if rc != 0 or data.get("subtype") != "success" or data.get("is_error"):
+        errored = data.get("subtype") != "success" or data.get("is_error")
         raise AttemptFailed("child_error", label, f"終了コード {rc}、subtype {data.get('subtype')}、"
-                            f"is_error {data.get('is_error')}: {str(data.get('result') or '')[:500]}")
+                            f"is_error {data.get('is_error')}: {str(data.get('result') or '')[:500]}"
+                            f"{model_hint(full_err, str(data.get('result') or '') if errored else '', model)}")
     if not text:
         raise AttemptFailed("no_output", label, "空でない result の行がない")
     return text
@@ -533,11 +556,11 @@ def snapshot(wt):
     }
 
 
-def preflight(wt, env, perspectives, model):
+def preflight(wt, env, perspectives):
     """子を1回だけ起動し、init を受け取ったらすぐ止める。API を呼ぶ前に止まるので費用はほぼかからない。"""
     err_file = tempfile.TemporaryFile(mode="w+")
     try:
-        p = subprocess.Popen(watched(["claude", "-p", "--model", model, "--output-format", "stream-json", "--verbose", "ok"],
+        p = subprocess.Popen(watched(["claude", "-p", "--output-format", "stream-json", "--verbose", "ok"],
                                      PREFLIGHT_TIMEOUT),
                              cwd=wt, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                              stderr=err_file, text=True, start_new_session=True)
@@ -769,6 +792,18 @@ def render(state):
     return "\n".join(lines)
 
 
+def lock_stale_after(lock):
+    """ロックを古いとみなすまでの秒数。ロックに記録した stale_after を使う。
+
+    状態コメントは手で編集されうるので、値は信じすぎない。数でなければ、記録の無い旧版のロックと同じ長さで
+    見る。数でも、STALE_LOCK_AFTER より短くはしない(実行中のロックを奪わない)し、Bash ツールの最大制限時間
+    より長くもしない(それより長く生きている試行は無いので、永久に止まらない)。"""
+    v = lock.get("stale_after", LEGACY_STALE_LOCK_AFTER)
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v:  # v != v は NaN
+        v = LEGACY_STALE_LOCK_AFTER
+    return min(max(v, STALE_LOCK_AFTER), BASH_TIMEOUT_MAX)
+
+
 def acquire_lock(sc, head, new_run):
     """ロックを取り、状態と nonce を返す。
 
@@ -782,7 +817,9 @@ def acquire_lock(sc, head, new_run):
         log(f"warn: 状態コメント {sc.id} を読めないので、新しいシリーズとして上書きする")
     if state is not None and state["lock"]["running"]:
         age = (now() - parse_iso(state["lock"]["started_at"])).total_seconds()
-        if age < STALE_LOCK_AFTER:
+        # 古さは、ロックを書いた版が持ちうる長さで決める。版ごとに長さが違うので、自分の値で決めると、
+        # 長く持つ版の実行中のロックを奪ってしまう
+        if age < lock_stale_after(state["lock"]):
             raise Precondition(f"別の試行が実行中(開始 {state['lock']['started_at']})。二重起動の可能性がある")
         log(f"warn: 古いロックが残っていた(開始 {state['lock']['started_at']})。前回の試行を interrupted として記録する")
         state["attempts"].append({"sha": state["lock"].get("sha"), "at": state["lock"]["started_at"],
@@ -794,7 +831,8 @@ def acquire_lock(sc, head, new_run):
         state = new_state({"run_id": state["run_id"], "iterations": state["iter"],
                            "tokens": total_tokens(state["attempts"])})
     nonce = uuid.uuid4().hex
-    state["lock"] = {"running": True, "started_at": iso(now()), "sha": head, "nonce": nonce}
+    state["lock"] = {"running": True, "started_at": iso(now()), "sha": head, "nonce": nonce,
+                     "stale_after": STALE_LOCK_AFTER}
     try:
         sc.write(state)
         time.sleep(LOCK_SETTLE_SECONDS)
@@ -869,7 +907,7 @@ def run_reviews(wt, env, pr, workdir, children, attempt, perspectives, instructi
                 children.finish(p)
                 tail.poll()  # 終わる直前に書かれた行を読み残さない
                 record_tolerated(f"review {name}", tail, workdir)
-                results[name] = check_result(f"review {name}", rc, base, attempt, tail)
+                results[name] = check_result(f"review {name}", rc, base, attempt, tail, model)
                 log(f"review {name}: 完了")
             if running:
                 time.sleep(POLL_SECONDS)
@@ -932,7 +970,7 @@ def iterate(worktree, new_run, ctx, perspective_args, instruct_args, focus_args=
     os.environ[GUARD_ENV] = "1"
     check_tools()
     focuses = focus_config(focus_args)
-    model = " ".join((model or MODEL).split())
+    model = MODEL if model is None else " ".join(model.split())
     if not model:
         raise Precondition("--model が空")
     perspectives, instructions = review_config(perspective_args, instruct_args, focuses)
@@ -949,7 +987,7 @@ def iterate(worktree, new_run, ctx, perspective_args, instruct_args, focus_args=
     if start["head"] != start["pr_head"]:
         raise Precondition(f"ローカルの HEAD({start['head'][:7]})が PR の head({start['pr_head'][:7]})と"
                            "一致しない。push してから実行する")
-    preflight(wt, env, perspectives, model)
+    preflight(wt, env, perspectives)
     instructions = {name: expand(text, start) for name, text in instructions.items()}  # 以後は {pr} を置き換えた値
 
     sc = StateComment(wt, start["number"], me)
@@ -1033,6 +1071,8 @@ def warn_option_change(attempts, attempt):
         if key in ("perspectives", "model") and key not in prev:  # 記録する前の版で書かれた試行
             continue
         if key == "model":
+            if not isinstance(prev[key], str):  # 手で編集されて null になっているなど。比べられない
+                continue
             before, after = [prev[key]], [attempt[key]]
         else:
             before, after = sorted(prev.get(key) or []), sorted(attempt.get(key) or [])
