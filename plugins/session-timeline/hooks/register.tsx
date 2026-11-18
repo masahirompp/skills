@@ -67,6 +67,11 @@ let conversation = 0
  */
 let switched: 'clear' | 'resume' | undefined
 let adopting: Promise<void> = Promise.resolve()
+/**
+ * Whether this module has opened the pane: it stays up through /clear and /resume,
+ * so the conversation moved to fills in as it is taken up.
+ */
+let isPaneOpened = false
 
 function enqueue(job: () => Promise<void>): void {
   queue = queue.then(job).catch(() => undefined)
@@ -271,6 +276,7 @@ async function fillHistory($: EngineInterface, mine: number, talk: number): Prom
 }
 
 async function openPane($: EngineInterface): Promise<boolean> {
+  isPaneOpened = true
   const { isPlaced } = await $.ui.open({ id: PANE, title: TITLE })
   await askFill($)
   return isPlaced
@@ -469,8 +475,8 @@ export const register: Register = (on, options) => {
 
   on('turn.start', async ($, e, next) => {
     if (!e.agentId) {
-      // With autoOpen the pane stands as the session started: the history /resume brought fills in as the turn begins.
-      await adopt($, isAutoOpen, e.text)
+      // Where the pane stands (autoOpen, or /timeline before the switch), the history /resume brought fills in as the turn begins.
+      await adopt($, isAutoOpen || isPaneOpened, e.text)
       isReplying = true
       await startTurn($, e.text).catch(() => undefined)
     }

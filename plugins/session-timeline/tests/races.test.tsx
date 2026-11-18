@@ -351,3 +351,34 @@ test('a regroup still out as /clear comes writes nothing into the next conversat
   await sleep(400)
   expect(w.keys).toEqual([])
 })
+
+test('with autoOpen off, a pane opened by /timeline fills in what /resume brought as the next turn starts', { options: { autoOpen: false } }, async ($, on) => {
+  let history: unknown[] = []
+  const w = world($, on, { history: () => history })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  history = [msg('user', '前の会話の作業'), msg('assistant', '前の会話の作業 済み')]
+  await liveTurn($, '前の会話の作業', 'old')
+  await sleep(200)
+  // A /clear between leaves the pane up all the same.
+  await $.session.end(end('clear'))
+  history = [msg('user', '<command-name>/clear</command-name>')]
+  await $.session.end(end('resume'))
+  history = [...RESUMED, msg('user', '続きの作業')]
+  await liveTurn($, '続きの作業', 'next')
+  await sleep(500)
+  expect(w.judged.filter(p => p.includes('再開先の作業A')).length).toBe(1)
+  expect(w.judged.filter(p => p.includes('再開先の作業B')).length).toBe(1)
+  expect(w.judged.filter(p => p.includes('続きの作業')).length).toBe(1)
+})
+
+test('with autoOpen off and no pane opened, /resume fills in nothing until /timeline', { options: { autoOpen: false } }, async ($, on) => {
+  let history: unknown[] = []
+  const w = world($, on, { history: () => history })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.session.end(end('resume'))
+  history = [...RESUMED, msg('user', '続きの作業')]
+  await liveTurn($, '続きの作業', 'next')
+  await sleep(400)
+  expect(w.judged.filter(p => p.includes('再開先の作業A')).length).toBe(0)
+})
