@@ -6,7 +6,7 @@ import { stretchesOf, timed, timesOf, transcriptPathOf } from './backfill'
 import { BOUNDARY_TOOLS, MAX_STEPS, SYSTEM, briefOf, fold, outcomeOf, parseVerdict, promptOf } from './classify'
 import type { Step, Stretch, Verdict } from './classify'
 import { RECAP_SYSTEM, REGROUP_SYSTEM, groupsByKind, mergeSameKind, parseGroups, parseRecap, recapPrompt, regroupPrompt } from './group'
-import { capped, isNewModel, markRows, marksOf, observed, slotOf } from './marks'
+import { capped, isNewModel, markRows, marksOf, observed, placeOf } from './marks'
 import { cells, clockOf, colorOf, durationOf, padCells, usageLine } from './view'
 
 const PANE = 'session-timeline'
@@ -195,7 +195,9 @@ async function classifyLive($: EngineInterface, done: Stretch): Promise<void> {
   const ended: Stretch = { ...done, end: await $.clock.now() }
   await update($, live, l => (l ? { ...l, isClassifying: true } : { since: done.start ?? 0, steps: 0, isClassifying: true }))
   const verdict = await judge($, ended, (await read($, phases)).slice(-6))
-  await update($, phases, list => fold(list, ended, verdict, 'live'))
+  // The marks so far: a change of model or a compaction since the last phase's work began starts a new phase.
+  const breaks = (await read($, marks)).map(m => m.at)
+  await update($, phases, list => fold(list, ended, verdict, 'live', breaks))
   scheduleRegroup($)
   const isGathering = stretch !== undefined
   await update($, live, l => (isGathering && l ? { ...l, isClassifying: false } : null))
@@ -278,12 +280,14 @@ async function fillHistory($: EngineInterface, mine: number, jsonl: string): Pro
   if (past.length === 0) return epoch === mine
 
   let done: Phase[] = []
+  // The marks are in before the phases are judged: a phase ends where a mark stands.
+  const breaks = (await read($, marks)).map(m => m.at)
   if (epoch !== mine) return false
   await update($, backfill, () => ({ done: 0, total: past.length }))
   for (const s of past) {
     const verdict = await judge($, s, done.slice(-6))
     if (epoch !== mine) return false
-    done = fold(done, s, verdict, 'past')
+    done = fold(done, s, verdict, 'past', breaks)
     const now = done
     await update($, phases, list => [...now, ...list.filter(p => !p.id.startsWith('past-'))])
     await update($, backfill, b => (b ? { ...b, done: b.done + 1 } : b))
@@ -577,16 +581,25 @@ export const register: Register = (on, options) => {
     }
 
     // Each mark goes ahead of the first phase that starts after it; one after them all, ahead of "now".
-    const starts = rows.map(r => r.members[0]?.start)
-    const slots = noted.map(m => slotOf(starts, m.at))
-    const marksAt = (i: number) => noted.filter((_, k) => slots[k] === i).map(markLine)
+    // One that falls among a row's phases parts the row there: the work begun before it stays above it.
+    const places = noted.map(m => placeOf(rows.map(r => r.members.map(p => p.start)), m.at))
+    const marksAt = (row: number, member: number) =>
+      noted.filter((_, k) => places[k]?.row === row && places[k]?.member === member).map(markLine)
 
-    const drawn = rows.map(({ group: g, members, isPending }, i) => {
+    const drawn = rows.flatMap(({ group: g, members: all, isPending }, i) => {
+      const cuts = [...new Set(places.filter(p => p.row === i && p.member > 0).map(p => p.member))].sort((a, b) => a - b)
+      const edges = [0, ...cuts, all.length]
+      return edges.slice(0, -1).map((from, n) => drawPart(g, all.slice(from, edges[n + 1]), isPending, i, from, n === cuts.length))
+    })
+
+    /** A row, or the part of one between two marks: the row's name on each part, what it came to on the last. */
+    function drawPart(g: Group, members: Phase[], isPending: boolean, i: number, from: number, isLast: boolean) {
       const isOpen = open.has(g.id)
       const ms = spent(members)
       const anchor = members.find(p => p.anchor)?.anchor
       const canOpen = members.length > 1
       const isSide = g.isSide === true
+      const key = from === 0 ? g.id : `${g.id}@${from}`
       const line = [
         <Text dimColor>{clockOf(members[0]?.start)}  </Text>,
         isSide ? <Text dimColor>↳ </Text> : <Text color={colorOf(g.label)}>{isPending ? '○ ' : '● '}</Text>,
@@ -594,7 +607,7 @@ export const register: Register = (on, options) => {
           {padCells(isSide ? `脇道: ${g.label}` : g.label, labelW)}
         </Text>,
         <Text dimColor={isSide}>{padCells(ms > 0 ? durationOf(ms) : '', 8)}</Text>,
-        g.note ? isSide ? <Text dimColor>{g.note}</Text> : <Text color="warning">{g.note}</Text> : null,
+        g.note && isLast ? isSide ? <Text dimColor>{g.note}</Text> : <Text color="warning">{g.note}</Text> : null,
         canOpen ? <Text dimColor>  {isOpen ? '▾' : '▸'}{members.length}</Text> : null,
       ]
       const press = async () => {
@@ -602,12 +615,12 @@ export const register: Register = (on, options) => {
         if (anchor) await jump(anchor)
       }
       return (
-        <Box key={g.id} flexDirection="column">
-          {marksAt(i)}
-          <Button key={'go-' + g.id} plain onPress={press}>
+        <Box key={key} flexDirection="column">
+          {marksAt(i, from)}
+          <Button key={'go-' + key} plain onPress={press}>
             {line}
           </Button>
-          {g.summary ? (
+          {g.summary && isLast ? (
             <Text dimColor wrap="truncate-end">
               {'       │  '}
               {g.summary}
@@ -646,7 +659,7 @@ export const register: Register = (on, options) => {
           <Text dimColor>{'       │'}</Text>
         </Box>
       )
-    })
+    }
 
     const summary = await read($, recap)
     const tokens = await read($, usage)
@@ -671,7 +684,7 @@ export const register: Register = (on, options) => {
       <Box flexDirection="column">
         {progress}
         {drawn}
-        {marksAt(rows.length)}
+        {marksAt(rows.length, 0)}
         <Button key="now" plain onPress={toLatest}>
           <Text dimColor>{current ? clockOf(current.since) : clockOf(now)}  </Text>
           <Text color="suggestion">◉ </Text>

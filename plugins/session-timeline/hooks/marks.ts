@@ -124,3 +124,14 @@ export function slotOf(starts: readonly (number | undefined)[], at: number): num
   const i = starts.findIndex(s => s !== undefined && s >= at)
   return i < 0 ? starts.length : i
 }
+
+/**
+ * Where a mark at `at` is drawn among the timeline's rows, each given as the starts of the phases it
+ * holds: ahead of phase `member` of row `row`, the first phase of them all that starts at or after it.
+ * A `member` past 0 parts the row in two there. Past the last phase: `row` is the number of rows.
+ */
+export function placeOf(rows: readonly (readonly (number | undefined)[])[], at: number): { row: number; member: number } {
+  const flat = rows.flatMap((starts, row) => starts.map((start, member) => ({ row, member, start })))
+  const found = flat[slotOf(flat.map(u => u.start), at)]
+  return found ? { row: found.row, member: found.member } : { row: rows.length, member: 0 }
+}

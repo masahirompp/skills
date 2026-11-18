@@ -12,6 +12,8 @@ export type Phase = {
   /** Absent for a past phase whose times the transcript file did not give. */
   start?: number
   end?: number
+  /** When the last stretch folded into it began: a mark after this parts the phase from the work that follows. */
+  lastStart?: number
   /** A tool_use_id of the main conversation inside the phase, to scroll to. */
   anchor?: string
   /** The main conversation's tool calls it holds: what a backfill skips. */

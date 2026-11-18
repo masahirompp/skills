@@ -97,8 +97,18 @@ export function parseVerdict(text: string): Verdict | undefined {
   }
 }
 
-/** Folds a classified stretch into the phases: extends the last, or starts one named `prefix-n`. */
-export function fold(phases: readonly Phase[], stretch: Stretch, v: Verdict, prefix: string): Phase[] {
+/**
+ * Folds a classified stretch into the phases: extends the last, or starts one named `prefix-n`.
+ * `breaks` are the times of the marks (a change of model, a compaction): a stretch begun after one
+ * never extends a phase whose work began before it, so the mark has a place between the two.
+ */
+export function fold(
+  phases: readonly Phase[],
+  stretch: Stretch,
+  v: Verdict,
+  prefix: string,
+  breaks: readonly number[] = [],
+): Phase[] {
   const errors = stretch.steps.filter(s => s.isError).length
   const steps = stretch.steps.length + stretch.subSteps
   const ids = stretch.steps.map(s => s.id)
@@ -107,7 +117,10 @@ export function fold(phases: readonly Phase[], stretch: Stretch, v: Verdict, pre
   const last = phases[phases.length - 1]
   // Same kind as the last (レビュー 2回目 after レビュー 1回目 too) on the same topic folds in: the last keeps its label.
   const isSameTopic = !v.topic || !last?.topic || v.topic === last.topic
-  if (last && isSameTopic && (v.continues || kindOf(v.label) === kindOf(last.label))) {
+  const from = last?.lastStart ?? last?.start
+  const to = stretch.start
+  const isParted = from !== undefined && to !== undefined && breaks.some(at => from < at && at <= to)
+  if (last && isSameTopic && !isParted && (v.continues || kindOf(v.label) === kindOf(last.label))) {
     const merged: Phase = {
       ...last,
       note: v.note || last.note,
@@ -119,6 +132,7 @@ export function fold(phases: readonly Phase[], stretch: Stretch, v: Verdict, pre
       toolIds: [...last.toolIds, ...ids].slice(-300),
       ...(end !== undefined ? { end } : {}),
       ...(last.start === undefined && stretch.start !== undefined ? { start: stretch.start } : {}),
+      ...(stretch.start !== undefined ? { lastStart: stretch.start } : {}),
       ...(last.anchor === undefined && anchor !== undefined ? { anchor } : {}),
     }
     return [...phases.slice(0, -1), merged]
