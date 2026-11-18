@@ -52,6 +52,8 @@ def load(run_dir):
                     last_cost = e
                     continue
                 u = e.get("uuid")
+                if e.get("type") == "queue-operation":  # uuid が無い。続きの写しとの重なりは、時刻と中身で除く
+                    u = ("q", e.get("timestamp"), e.get("operation"), e.get("content"))
                 if e.get("isSidechain") or (u and u in seen):
                     continue
                 if u:
@@ -85,7 +87,7 @@ def exit_code(result_text, is_error):
 
 def walk(events):
     """記録を、操作(tool_use と、その結果)、発言、通知に分ける。"""
-    calls, by_id, items = [], {}, []
+    calls, by_id, by_task, items = [], {}, {}, []
     for e in events:
         t = e.get("type")
         m = e.get("message") or {}
@@ -100,6 +102,23 @@ def walk(events):
                     items.append(call)
                 elif x.get("type") == "text" and x.get("text", "").strip():
                     items.append({"kind": "say", "text": x["text"], "ts": ts(e), "at": e["_at"], "usage": m.get("usage")})
+        elif t == "queue-operation" and "<task-notification>" in str(e.get("content") or ""):
+            # バックグラウンドの役の完了。enqueue が完了の時刻、remove が親に渡った時刻
+            text = e["content"]
+            tid = re.search(r"<tool-use-id>(.*?)</tool-use-id>", text)
+            task = re.search(r"<task-id>(.*?)</task-id>", text)
+            call = by_id.get(tid.group(1)) if tid else by_task.get(task and task.group(1))
+            if call is None:
+                continue
+            if task:
+                by_task[task.group(1)] = call
+            if e.get("operation") == "enqueue":
+                note = {"kind": "notify", "text": text, "ts": ts(e), "at": e["_at"]}
+                items.append(note)
+                call.setdefault("notes", []).append(note)
+                call["notified"] = note  # 最後の通知(役が、自分のバックグラウンドの仕事を待って2度知らせることがある)
+            elif e.get("operation") == "remove":
+                call["delivered_ts"] = ts(e)
         elif t == "user":
             if isinstance(c, str):
                 if c.lstrip().startswith("<task-notification>"):
@@ -109,7 +128,7 @@ def walk(events):
                     call = by_id.get(note["tool_use_id"])
                     if call is not None and "notified" not in call:
                         call["notified"] = note
-                elif not c.lstrip().startswith("<"):
+                elif not c.lstrip().startswith(("<", "Another Claude session sent a message", "[SYSTEM NOTIFICATION", "(Re-invocation of")):
                     items.append({"kind": "prompt", "text": c, "ts": ts(e), "at": e["_at"]})
                 else:
                     items.append({"kind": "inject", "text": c, "ts": ts(e), "at": e["_at"]})
@@ -166,7 +185,7 @@ def analyze(run_dir):
     drive = json.load(open(os.path.join(run_dir, "drive.json"), encoding="utf-8")) if os.path.exists(os.path.join(run_dir, "drive.json")) else {}
     events, costs = load(run_dir)
     calls, items = walk(events)
-    workdir = meta.get("workdir", "")
+    workdir = meta.get("slot_dir") or meta.get("workdir", "")
     pr = str(meta.get("pr", ""))
 
     # ---- スキルとして呼ばれたか ----
@@ -266,13 +285,24 @@ def analyze(run_dir):
             "pr_body_edit": [c["at"] for c in after if has(c, r"gh pr edit|gh api[^\n]*pulls")][:3],
         })
 
+    # ---- 作業ディレクトリを移したか(バックグラウンドのセッションは、編集の前に worktree へ移るよう指示される) ----
+    moved = [{"at": c["at"], "tool": c["name"], "input": json.dumps(c["input"], ensure_ascii=False)[:300]} for c in calls
+             if c["name"] in ("EnterWorktree", "ExitWorktree") or (c["name"] == "Bash" and "git worktree" in c["input"].get("command", ""))]
+    cwds = []
+    for e in events:
+        if e.get("cwd") and (not cwds or cwds[-1]["cwd"] != e["cwd"]):
+            cwds.append({"cwd": e["cwd"], "at": e["_at"]})
+
     # ---- 作業ディレクトリの外への参照(機械的な照合。誤検知がある) ----
     outside = []
     for c in calls:
         blob = json.dumps(c["input"], ensure_ascii=False)
         hits = set(re.findall(r"(?<![\w/.-])masahirompp/(?!rlbench-)[\w.-]+", blob))  # GitHub の、題材でないリポジトリ
         hits |= set(re.findall(r"/Users/[\w.-]+/(?:ghq|\.claude/(?:projects|jobs))[\w./-]*", blob))
-        hits = {h for h in hits if workdir not in h}
+        # ホームの記録や、システムの一時ディレクトリ、ルートからの検索(別セッションが「既にある記録」を探しに行く)
+        hits |= set(re.findall(r"~/\.claude[\w./-]*|\bcd ~|\bfind / |(?<![\w/])\.claude/projects|/var/folders/[\w/]+/T(?![\w/]*tmp\.)", blob))
+        own_jobs = tuple(f".claude/jobs/{x['id']}/" for x in drive.get("sessions", []))  # 別セッション自身の一時ディレクトリ
+        hits = {h for h in hits if workdir not in h and not any(o in h for o in own_jobs)}
         if hits:
             outside.append({"at": c["at"], "tool": c["name"], "hits": sorted(hits)[:5], "input": blob[:300]})
 
@@ -284,8 +314,13 @@ def analyze(run_dir):
         loop_items = items[:last_prompt]
     sizes = [(context_size(x.get("usage")), x["at"]) for x in loop_items if x.get("usage")]
     sizes = [s for s in sizes if s[0]]
+    # 費用の記録は、セッションを止めたときに書かれる。止めてから続けたセッションは、前の分を引き継いだ累計を書く
+    # (止めずに続けた写しは、引き継がない)。累計になっていれば最後の値を、なっていなければ合計を使う
+    vals = [c.get("totalCostUSD") or 0 for c in costs]
+    cumulative = all(b >= a for a, b in zip(vals, vals[1:]))
+    used = costs[-1:] if cumulative else costs
     model_usage, total_cost, api_ms = {}, 0.0, 0
-    for c in costs:
+    for c in used:
         total_cost += c.get("totalCostUSD") or 0
         api_ms += c.get("totalAPIDuration") or 0
         for mname, u in (c.get("modelUsage") or {}).items():
@@ -293,8 +328,21 @@ def analyze(run_dir):
             for k, v in u.items():
                 if isinstance(v, (int, float)):
                     agg[k] = agg.get(k, 0) + v
+    n_debrief = sum(1 for x in drive.get("sessions", []) if x.get("debrief"))
+    loop_costs = vals[:len(vals) - n_debrief] if n_debrief else vals
+    loop_cost = (loop_costs[-1] if cumulative else sum(loop_costs)) if loop_costs else None
 
     prompts = [x for x in items if x["kind"] == "prompt"]
+    # 別セッションが動いていた時間: 利用者の発言から、次の発言の直前の操作まで(答えを待った時間を除く。自己申告のターンは別)
+    spans = []
+    for i, x in enumerate(items):
+        if x["kind"] == "prompt":
+            spans.append([x["ts"], x["ts"]])
+        elif spans and x.get("ts"):
+            spans[-1][1] = max(spans[-1][1], x["ts"])
+    turn_seconds = [secs(a, b) for a, b in spans]
+    n_loop_turns = len(turn_seconds) - (1 if drive.get("debrief") is not None else 0)
+    active_seconds = sum(turn_seconds[:n_loop_turns])
     first, last = (events[0], events[-1]) if events else ({}, {})
     all_ts = [ts(e) for e in events if ts(e)]
 
@@ -317,8 +365,8 @@ def analyze(run_dir):
     result = {
         "case": meta.get("case"), "outcome": meta.get("outcome"), "plugin": meta.get("plugin"), "launch": meta.get("launch"),
         "skill_invocation": {"via_skill_tool": [c["at"] for c in loop_calls], "read_skill_md_by_path": [c["at"] for c in read_skill_md]},
-        "wall_seconds": meta.get("wall_seconds"), "session_seconds": secs(min(all_ts), max(all_ts)) if all_ts else None,
-        "cost_usd": round(total_cost, 4), "api_seconds": round(api_ms / 1000), "model_usage": model_usage,
+        "active_seconds": active_seconds, "turn_seconds": turn_seconds, "wall_seconds": meta.get("wall_seconds"), "session_seconds": secs(min(all_ts), max(all_ts)) if all_ts else None,
+        "cost_usd": round(total_cost, 4), "loop_cost_usd": loop_cost and round(loop_cost, 4), "cost_states": vals, "api_seconds": round(api_ms / 1000), "model_usage": model_usage,
         "iterations": iterations, "checks": checks,
         "questions": [{"sent": t.get("sent", "")[:200], "decision": t.get("decision"), "rule": t.get("rule"),
                        "output_head": t.get("output", "")[:600]} for t in drive.get("turns", [])],
@@ -326,7 +374,7 @@ def analyze(run_dir):
         "repro_commands": repro_cmds,
         "commits_added": [c for c in meta.get("commits", [])][1:] if meta.get("commits") else [],
         "context_tokens": {"at_end": sizes[-1] if sizes else None, "max": max(sizes) if sizes else None},
-        "outside_access": outside,
+        "outside_access": outside, "worktree_moves": moved, "cwds": cwds,
         "reported": {"pr_body_history": reported, "debrief": drive.get("debrief")},
         "prompts": [{"at": p["at"], "text": p["text"][:200]} for p in prompts],
     }
@@ -400,7 +448,7 @@ def write_summary(run_dir, meta, r):
     L.append(f"- 起動: `{r.get('launch')}`、{meta.get('claude_version')}")
     inv = r["skill_invocation"]
     L.append(f"- スキルとして呼ばれたか: Skill ツールで {len(inv['via_skill_tool'])} 回({', '.join(inv['via_skill_tool']) or '無い'})。SKILL.md をパスで読んだ: {len(inv['read_skill_md_by_path'])} 回")
-    L.append(f"- 所要: {mmss(r['wall_seconds'])}(起動から終了まで。答えるまでの待ちと自己申告を含む)。費用: ${r['cost_usd']}(cost-state の合計。自己申告のターンを含む)")
+    L.append(f"- 所要: {mmss(r['active_seconds'])}(別セッションが動いていた時間。答えを待った時間と、自己申告のターンを除く。ターンごと: {[mmss(x) for x in r['turn_seconds']]})。費用: ループ ${r['loop_cost_usd']}、自己申告のターンを含めて ${r['cost_usd']}(cost-state: {r['cost_states']})")
     ce = r["context_tokens"]
     L.append(f"- 親の文脈: 終了時 {ce['at_end'][0] if ce['at_end'] else '—'} トークン({ce['at_end'][1] if ce['at_end'] else ''})、最大 {ce['max'][0] if ce['max'] else '—'}({ce['max'][1] if ce['max'] else ''})")
     L.append(f"- 足されたコミット: {len(r['commits_added'])}({', '.join(c['sha'] for c in r['commits_added'])})\n")
@@ -428,6 +476,11 @@ def write_summary(run_dir, meta, r):
     L.append("\n## 判断を仰いだやりとり\n")
     for q in r["questions"]:
         L.append(f"- 渡した文: {short(q['sent'], 100)} → 判定: {q['decision']}({q.get('rule') or ''})\n  - 最後の出力(先頭): {short(q['output_head'], 400)}")
+    L.append("\n## 作業ディレクトリ(記録の cwd の移り変わり)と、worktree の操作\n")
+    for c in r["cwds"]:
+        L.append(f"- {c['at']}: `{c['cwd']}`")
+    for m in r["worktree_moves"]:
+        L.append(f"- {m['at']} {m['tool']}: `{short(m['input'], 200)}`")
     L.append("\n## 作業ディレクトリの外への参照(機械的な照合)\n")
     for o in r["outside_access"][:30]:
         L.append(f"- {o['at']} {o['tool']}: {o['hits']} — `{short(o['input'], 160)}`")

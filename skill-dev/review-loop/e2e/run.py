@@ -7,7 +7,8 @@
 run は、次を順に行う。
   1. 検証用のリポジトリ(bench/cases/<題材>/github.json)に、題材の head から、試し用のブランチ(e2e-<時刻>)と PR を作る。
      PR の本文は、題材の PR の本文を写す。題材の PR と、そのブランチには書き込まない
-  2. ブランチを <work-root>/<枠> に取り出し、その中で `claude --bg` を起動して、依頼文を渡す
+  2. リポジトリを <work-root>/<枠> に取り出し、PR のブランチの worktree(<枠>/.claude/worktrees/pr)を作って、
+     その中で `claude --bg` を起動して、依頼文を渡す
   3. 別セッションのターンが終わるたびに、最後の出力を cases.json の答え方に照らし、答えて続ける(`--resume --bg`)か、終える
   4. 終わったら、手順から外れた箇所を別セッションに尋ね(自己申告)、セッションを止めて、記録を結果のディレクトリに写す
   5. analyze.py で集計する
@@ -20,6 +21,7 @@ run は、次を順に行う。
 """
 import argparse
 import datetime
+import glob
 import hashlib
 import json
 import os
@@ -140,19 +142,28 @@ def start(workdir, args, prompt):
     raise RuntimeError(f"起動したセッション {short} が一覧に出ない")
 
 
-def jsonl_path(workdir, session_id):
-    slug = re.sub(r"[^A-Za-z0-9]", "-", os.path.realpath(workdir))
-    return os.path.join(os.path.expanduser("~/.claude/projects"), slug, session_id + ".jsonl")
+def jsonl_path(session_id):
+    """セッションの記録の場所。記録は、セッションの作業ディレクトリの名前の下に置かれる。別セッションが
+    自分で worktree に移ると、置き場も変わるので、セッション ID で探す。まだ無ければ、空の文字列。"""
+    found = glob.glob(os.path.join(os.path.expanduser("~/.claude/projects"), "*", session_id + ".jsonl"))
+    return max(found, key=os.path.getmtime) if found else ""
 
 
-def turn_state(path):
-    """記録から、ターンが終わったか、最後の出力、利用者の発言の数を読む。(終わったか, 最後の出力, 発言の数)
+def session_cwd(short, fallback):
+    """別セッションの、いまの作業ディレクトリ(自分で worktree に移っていれば、その先)。続きは、そこで起動する。"""
+    a = agent(short)
+    cwd = a and a.get("cwd")
+    return cwd if cwd and os.path.isdir(cwd) else fallback
+
+
+def turn_state(path, sent):
+    """記録から、sent(最後に渡した文)へのターンが終わったかと、最後の出力を読む。(終わったか, 最後の出力)
 
     続きのセッションの記録は、前のセッションの履歴の写しから始まる。写しの末尾を「終わった」と読み違えないように、
-    呼ぶ側は、発言の数が、自分が渡した数に届いているかを見る。"""
-    if not os.path.exists(path):
-        return False, "", 0
-    done, texts, prompts = False, [], 0
+    渡した文が記録に現れたあとの終わりだけを数える。"""
+    if not path or not os.path.exists(path):
+        return False, ""
+    done, texts, seen = False, [], False
     with open(path, encoding="utf-8") as f:
         for line in f:
             try:
@@ -169,26 +180,26 @@ def turn_state(path):
                 c = (e.get("message") or {}).get("content")
                 if isinstance(c, str) or (isinstance(c, list) and any(x.get("type") == "text" for x in c)):
                     texts = []
-                if isinstance(c, str) and not c.lstrip().startswith("<"):
-                    prompts += 1
+                if isinstance(c, str) and c.strip() == sent.strip():
+                    seen = True
             elif t == "assistant":
                 done = False
                 c = (e.get("message") or {}).get("content") or []
                 if any(x.get("type") == "tool_use" for x in c):
                     texts = []
                 texts += [x["text"] for x in c if x.get("type") == "text"]
-    return done, "\n".join(texts).strip(), prompts
+    return done and seen, "\n".join(texts).strip()
 
 
-def wait_turn(short, path, deadline, nth):
+def wait_turn(short, sid, deadline, sent):
     """ターンの終わりを待つ。('done' | 'waiting' | 'timeout' | 'gone', 最後の出力)"""
     while True:
         a = agent(short)
+        path = jsonl_path(sid)
         if a is None:
-            return "gone", turn_state(path)[1]
+            return "gone", turn_state(path, sent)[1]
         status = a.get("status")
-        done, text, prompts = turn_state(path)
-        done = done and prompts >= nth
+        done, text = turn_state(path, sent)
         if status == "waiting":
             return "waiting", text
         if status != "busy" and done:
@@ -204,18 +215,27 @@ def stop(short):
     sh(["claude", "stop", short], check=False)
 
 
-def drive(conf, workdir, base_args, out_dir, pr):
-    """別セッションを起動し、答えながら終わりまで回す。やりとりの記録を返す。"""
+def drive(conf, workdir, base_args, out_dir, pr, prior=None):
+    """別セッションを起動し、答えながら終わりまで回す。やりとりの記録を返す。
+
+    prior(前の実行の drive.json)を渡すと、起動せずに、最後のセッションの続きから回す(仕組みの側だけが
+    途中で止まったときのため)。"""
     deadline = time.time() + conf["max_minutes"] * 60
-    prompt = conf["prompt"].format(pr=pr)
-    short, sid = start(workdir, base_args, prompt)
-    sessions = [{"id": short, "session_id": sid}]
     turns, replies, final_next, outcome = [], 0, False, None
-    log(f"起動した: {short}({sid})。`claude logs {short}` で様子を見られる")
-    sent = prompt
+    if prior:
+        sessions = prior["sessions"]
+        turns = [t for t in prior.get("turns", []) if t.get("state") == "done" and t.get("decision") == "reply"]
+        replies = len(turns)
+        short, sid = sessions[-1]["id"], sessions[-1]["session_id"]
+        sent = turns[-1]["reply"] if turns else conf["prompt"].format(pr=pr)
+        log(f"続きから回す: {short}({sid})")
+    else:
+        sent = conf["prompt"].format(pr=pr)
+        short, sid = start(workdir, base_args, sent)
+        sessions = [{"id": short, "session_id": sid}]
+        log(f"起動した: {short}({sid})。`claude logs {short}` で様子を見られる")
     while outcome is None:
-        path = jsonl_path(workdir, sid)
-        state, text = wait_turn(short, path, deadline, len(turns) + 1)
+        state, text = wait_turn(short, sid, deadline, sent)
         turn = {"sent": sent, "state": state, "at": datetime.datetime.now().isoformat(timespec="seconds"),
                 "session": short, "output": text}
         turns.append(turn)
@@ -239,21 +259,24 @@ def drive(conf, workdir, base_args, out_dir, pr):
             break
         reply = rule["reply"] if rule else conf["default_reply"]
         turn["decision"] = "reply"
+        turn["reply"] = reply
         turn["rule"] = rule["label"] if rule else "(想定に無い質問。default_reply)"
         final_next = bool(rule and rule.get("final"))
         replies += 1
         log(f"判断を仰がれた({turn['rule']})。答えて続ける")
+        cwd = session_cwd(short, workdir)
         stop(short)
-        short, sid = start(workdir, ["--resume", sid, *base_args], reply)
-        sessions.append({"id": short, "session_id": sid})
+        short, sid = start(cwd, ["--resume", sid, *base_args], reply)
+        sessions.append({"id": short, "session_id": sid, "cwd": cwd})
         sent = reply
     # 終わったあとに、手順から外れた箇所を尋ねる(自己申告。ループの結果には影響しない)
     debrief = None
     if outcome in ("ended", "max_replies") and conf.get("debrief"):
+        cwd = session_cwd(short, workdir)
         stop(short)
-        short, sid = start(workdir, ["--resume", sid, *base_args], conf["debrief"])
-        sessions.append({"id": short, "session_id": sid, "debrief": True})
-        state, debrief = wait_turn(short, jsonl_path(workdir, sid), time.time() + 5 * 60, len(turns) + 1)
+        short, sid = start(cwd, ["--resume", sid, *base_args], conf["debrief"])
+        sessions.append({"id": short, "session_id": sid, "cwd": cwd, "debrief": True})
+        state, debrief = wait_turn(short, sid, time.time() + 5 * 60, conf["debrief"])
     for s in sessions:
         stop(s["id"])
     time.sleep(3)  # 止めたときに、費用の記録が書かれる
@@ -271,14 +294,15 @@ def save(out_dir, name, data):
             f.write("\n")
 
 
-def collect_records(workdir, sessions, out_dir):
+def collect_records(sessions, out_dir):
     """セッションとサブエージェントの記録を、結果のディレクトリに写す(大きいので、コミットしない)。"""
     dst = os.path.join(out_dir, "records")
     os.makedirs(dst, exist_ok=True)
     for i, s in enumerate(sessions):
-        src = jsonl_path(workdir, s["session_id"])
-        if os.path.exists(src):
-            shutil.copy(src, os.path.join(dst, f"{i:02d}-{s['session_id']}.jsonl"))
+        src = jsonl_path(s["session_id"])
+        if not src:
+            continue
+        shutil.copy(src, os.path.join(dst, f"{i:02d}-{s['session_id']}.jsonl"))
         sub = os.path.join(os.path.dirname(src), s["session_id"], "subagents")
         if os.path.isdir(sub):
             shutil.copytree(sub, os.path.join(dst, f"{i:02d}-subagents"), dirs_exist_ok=True)
@@ -306,22 +330,26 @@ def run(args):
     run_id = secrets.token_hex(4)
     out_dir = os.path.abspath(args.out or os.path.join(HERE, "runs", f"{args.case}-{stamp}"))
     os.makedirs(out_dir)
-    workdir = os.path.join(os.path.expanduser(args.work_root), args.slot)
-    lock = workdir + ".lock"
-    if not os.path.isdir(workdir):
-        raise SystemExit(f"枠 {workdir} が無い。作って、そこで一度 claude を起動し、信頼のダイアログで承認する")
+    slot_dir = os.path.join(os.path.expanduser(args.work_root), args.slot)
+    lock = slot_dir + ".lock"
+    if not os.path.isdir(slot_dir):
+        raise SystemExit(f"枠 {slot_dir} が無い。作って、そこで一度 claude を起動し、信頼のダイアログで承認する")
     try:
         os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
     except FileExistsError:
-        raise SystemExit(f"枠 {workdir} は、ほかの実行が使っている({lock})。--slot で別の枠を選ぶ")
+        raise SystemExit(f"枠 {slot_dir} は、ほかの実行が使っている({lock})。--slot で別の枠を選ぶ")
     branch = f"{BRANCH_PREFIX}{stamp.lower()}"
+    # 別セッションは、枠に取り出したリポジトリの、PR のブランチの worktree で起動する。バックグラウンドのセッションは
+    # 「編集の前に worktree に隔離する」指示を受けるので、枠のトップで起動すると、自分で detached の worktree を作って移る
+    # (2026-11-18 の2回で起きた)。作業ディレクトリが初めから .claude/worktrees/ の下なら、移らない
+    workdir = os.path.join(slot_dir, ".claude", "worktrees", "pr")
     plugin = plugin_info(args.plugin_dir)
     base_args = ["--model", args.model, "--permission-mode", "auto", "--disallowedTools", "AskUserQuestion"]
     if args.plugin_dir:  # 作業ツリーの版を読ませるときは、導入済みの版を無効にする
         base_args += ["--plugin-dir", os.path.abspath(args.plugin_dir),
                       "--settings", json.dumps({"enabledPlugins": {PLUGIN_ID: False}})]
     meta = {"case": args.case, "expect": conf.get("expect"), "run_id": run_id, "started": stamp, "repo": gj["repo"],
-            "base_head": gj["head"], "branch": branch, "workdir": workdir, "model": args.model,
+            "base_head": gj["head"], "branch": branch, "slot_dir": slot_dir, "workdir": workdir, "model": args.model,
             "launch": "claude --bg " + " ".join(base_args), "plugin": plugin,
             "claude_version": sh(["claude", "--version"]).strip()}
     if not args.plugin_dir and plugin["installed_skill_sha256"] != plugin["repo_skill_sha256"]:
@@ -329,34 +357,61 @@ def run(args):
     pr = None
     try:
         pr, url = create_trial_pr(gj, branch)
-        meta.update(pr=pr, pr_url=url)
+        meta.update(pr=pr, pr_url=url, base_args=base_args, keep=args.keep)
         save(out_dir, "meta.json", meta)
         log(f"試し用の PR を作った: {url}")
-        empty(workdir)
-        sh(["git", "clone", "-q", "--branch", branch, f"git@github.com:{gj['repo']}.git", workdir])
-        t0 = time.time()
-        result = drive(conf, workdir, base_args, out_dir, pr)
-        meta["wall_seconds"] = round(time.time() - t0)
-        meta["outcome"] = result["outcome"]
-        collect_records(workdir, result["sessions"], out_dir)
-        view = json.loads(sh(["gh", "pr", "view", str(pr), "-R", gj["repo"], "--json", "body,headRefOid,commits,state"]))
-        save(out_dir, "pr-body.md", view["body"].replace("\r\n", "\n"))
-        meta["final_head"] = view["headRefOid"]
-        meta["commits"] = [{"sha": c["oid"][:7], "title": c["messageHeadline"]} for c in view["commits"]]
-        save(out_dir, "pr.diff", sh(["gh", "api", f"repos/{gj['repo']}/compare/{gj['head']}...{view['headRefOid']}",
-                                     "-H", "Accept: application/vnd.github.diff"], check=False))
-        save(out_dir, "meta.json", meta)
+        empty(slot_dir)
+        sh(["git", "clone", "-q", f"git@github.com:{gj['repo']}.git", slot_dir])
+        sh(["git", "worktree", "add", "-q", workdir, branch], cwd=slot_dir)
+        drive_and_collect(conf, meta, out_dir)
     finally:
-        save(out_dir, "meta.json", meta)
+        finish(meta, out_dir)
+
+
+def drive_and_collect(conf, meta, out_dir, prior=None):
+    t0 = time.time()
+    result = drive(conf, meta["workdir"], meta["base_args"], out_dir, meta["pr"], prior)
+    meta["wall_seconds"] = round(time.time() - t0) + (meta.get("wall_seconds") or 0)
+    meta["outcome"] = result["outcome"]
+    collect_records(result["sessions"], out_dir)
+    view = json.loads(sh(["gh", "pr", "view", str(meta["pr"]), "-R", meta["repo"], "--json", "body,headRefOid,commits,state"]))
+    save(out_dir, "pr-body.md", view["body"].replace("\r\n", "\n"))
+    meta["final_head"] = view["headRefOid"]
+    meta["commits"] = [{"sha": c["oid"][:7], "title": c["messageHeadline"]} for c in view["commits"]]
+    save(out_dir, "pr.diff", sh(["gh", "api", f"repos/{meta['repo']}/compare/{meta['base_head']}...{view['headRefOid']}",
+                                 "-H", "Accept: application/vnd.github.diff"], check=False))
+
+
+def finish(meta, out_dir):
+    """結果を書き、後片付けをして、集計する。"""
+    save(out_dir, "meta.json", meta)
+    slot_dir = meta.get("slot_dir") or meta["workdir"]
+    lock = slot_dir + ".lock"
+    if os.path.exists(lock):
         os.remove(lock)
-        if pr and not args.keep:
-            close_trial_pr(gj["repo"], pr, branch)
-            empty(workdir)
-            log("試し用の PR を閉じ、ブランチと写しを消した")
-        elif pr:
-            log(f"残した: PR #{pr}、ブランチ {branch}、写し {workdir}")
+    if meta.get("pr") and not meta.get("keep"):
+        close_trial_pr(meta["repo"], meta["pr"], meta["branch"])
+        empty(slot_dir)
+        log("試し用の PR を閉じ、ブランチと写しを消した")
+    elif meta.get("pr"):
+        log(f"残した: PR #{meta['pr']}、ブランチ {meta['branch']}、写し {meta['workdir']}")
     subprocess.run([sys.executable, os.path.join(HERE, "analyze.py"), out_dir], check=False)
     log(f"結果: {out_dir}")
+
+
+def cont(args):
+    """仕組みの側だけが途中で止まった実行を、別セッションの続きから回す。"""
+    out_dir = os.path.abspath(args.dir)
+    with open(os.path.join(out_dir, "meta.json"), encoding="utf-8") as f:
+        meta = json.load(f)
+    with open(os.path.join(out_dir, "drive.json"), encoding="utf-8") as f:
+        prior = json.load(f)
+    meta.setdefault("base_args", ["--model", meta["model"], "--permission-mode", "auto", "--disallowedTools", "AskUserQuestion"])
+    meta["continued"] = True
+    try:
+        drive_and_collect(load_config(meta["case"]), meta, out_dir, prior)
+    finally:
+        finish(meta, out_dir)
 
 
 def main():
@@ -371,11 +426,15 @@ def main():
     r.add_argument("--work-root", default="~/rlbench-e2e")
     r.add_argument("--slot", default="s1", help="取り出す先の枠(<work-root> の下の、信頼済みのディレクトリ)")
     r.add_argument("--out")
+    c = sub.add_parser("continue", help="仕組みの側だけが途中で止まった実行を、別セッションの続きから回す")
+    c.add_argument("dir")
     a = sub.add_parser("analyze")
     a.add_argument("dir")
     args = ap.parse_args()
     if args.cmd == "run":
         run(args)
+    elif args.cmd == "continue":
+        cont(args)
     else:
         sys.exit(subprocess.run([sys.executable, os.path.join(HERE, "analyze.py"), args.dir]).returncode)
 

@@ -1,0 +1,58 @@
+diff --git a/skill-dev/review-loop/test.py b/skill-dev/review-loop/test.py
+index ef5717d..db8e8cc 100644
+--- a/skill-dev/review-loop/test.py
++++ b/skill-dev/review-loop/test.py
+@@ -569,11 +569,19 @@ def system_prompt(c):
+       "--instruct はその観点のシステムプロンプトに足し、同じ観点への指示は改行でつなぐ")
+ check("削除したファイル" not in by_name.get("mattpocock-skills:code-review", "x"), "--instruct はほかの観点には渡さない")
+ check(judge and "観点 code-review に利用者が与えた追加の指示" in judge[0]["stdin"], "追加の指示は判定役の入力にも添える")
+-check(state()["attempts"][-1].get("perspectives") == ["code-review", "mattpocock-skills:code-review"]
+-      and "観点 code-review, mattpocock-skills:code-review" in comments()[0]["body"],
+-      "既定と違う観点で回したら、観点の名前を状態コメントに残す")
++check(state()["attempts"][-1].get("perspectives") == ["code-review high {pr}", "mattpocock-skills:code-review PR #{pr}"]
++      and "観点 code-review high {pr}, mattpocock-skills:code-review PR #{pr}" in comments()[0]["body"],
++      "既定と違う観点で回したら、渡した観点を状態コメントに残す")
+ rc, _, _ = run(wt)
+ check(rc == 0 and "perspectives" not in state()["attempts"][-1], "既定の観点で回したら、観点の名前は残さない")
++default = ["code-review high {pr}", "security-review", "mattpocock-skills:code-review PR #{pr}"]  # PERSPECTIVES と同じ
++rc, _, _ = run(wt, *(a for s in default for a in ("--perspective", s)))
++check(rc == 0 and "perspectives" not in state()["attempts"][-1], "既定と同じ観点を --perspective で渡したら、観点は残さない")
++weaker = ["code-review low {pr}"] + default[1:]
++rc, _, _ = run(wt, *(a for s in weaker for a in ("--perspective", s)))
++check(rc == 0 and state()["attempts"][-1].get("perspectives") == weaker
++      and "観点 code-review low {pr}, " in comments()[0]["body"],
++      "スキル名が既定と同じでも引数が違えば、渡した観点を状態コメントに残す")
+ 
+ before = json.dumps(state())
+ for flags, label in ((("--instruct", "security-review"), "`=` のない --instruct"),
+diff --git a/skills/review-loop/SKILL.md b/skills/review-loop/SKILL.md
+index d66563d..790e6df 100644
+--- a/skills/review-loop/SKILL.md
++++ b/skills/review-loop/SKILL.md
+@@ -52,7 +52,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/review_loop.py iterate <worktree の絶対
+ ```
+ 
+ - `--instruct <スキル名>=<指示>`: その観点のレビュー役だけに、追加の指示を渡す。スキルの引数ではなくシステムプロンプトに足し、スキルの手順より優先するよう添える(引数の読み方はスキルごとに違い、`security-review` のように引数を取らないものもあるため)。判定役の入力にも添えるので、指示で外した範囲を「観点の欠落」とは扱わない。繰り返せて、同じ観点への指示は改行でつながる。使う観点にないスキル名を書くと、終了コード2で止まる。指示は LLM への依頼なので、守られる保証はない
+-- `--perspective <スキル名と引数>`: 1つでも渡すと、`PERSPECTIVES` の代わりに渡したものだけを使う。書き方は `PERSPECTIVES` の要素と同じ。既定と違う観点で回した試行は、状態コメントの表に観点の名前が載る
++- `--perspective <スキル名と引数>`: 1つでも渡すと、`PERSPECTIVES` の代わりに渡したものだけを使う。書き方は `PERSPECTIVES` の要素と同じ。既定と違う観点(スキル名が同じで引数だけ違うものを含む)で回した試行は、状態コメントの表に渡した観点がそのまま載る
+ 
+ どちらも、利用者に指示されたときだけ付ける。観点を外すとレビューの範囲が狭まり、指示は観点の検査を緩めるため。失敗の対処として有効そうなら、自分では付けずに利用者に提案する(「失敗したとき」)。付けたら、利用者が変えるよう言うまで、以後の反復でも毎回同じものを付ける。スクリプトは反復をまたいでオプションを覚えないので、付け忘れると既定に戻る。
+ 
+diff --git a/skills/review-loop/scripts/review_loop.py b/skills/review-loop/scripts/review_loop.py
+index ef8d01c..462c6b1 100755
+--- a/skills/review-loop/scripts/review_loop.py
++++ b/skills/review-loop/scripts/review_loop.py
+@@ -959,9 +959,10 @@ def iterate(worktree, new_run, ctx, specs=None, instructs=None):
+             raise Precondition(f"連続失敗が {MAX_CONSECUTIVE_FAILURES} 回に達した。原因を取り除いてから、利用者の指示で --new-run する")
+ 
+         attempt = {"sha": start["head"], "at": state["lock"]["started_at"], "result": "failed", "tokens": new_tokens()}
+-        names = [skill_name(s) for s in perspectives]
+-        if names != [skill_name(s) for s in PERSPECTIVES]:  # 既定と違う観点で回したことを、表から読めるようにする
+-            attempt["perspectives"] = names
++        # 既定と違う観点で回したことを、表から読めるようにする。スキル名が同じでも引数(レベルなど)が
++        # 違えばレビューの深さが変わるので、スキル名ではなく渡された書き方のまま比べ、そのまま残す
++        if perspectives != PERSPECTIVES:
++            attempt["perspectives"] = list(perspectives)
+         ctx["attempt"] = attempt
+         ctx["workdir"] = make_workdir(start, state["run_id"], len(state["attempts"]) + 1)
+         log(f"作業ディレクトリ: {ctx['workdir']}")

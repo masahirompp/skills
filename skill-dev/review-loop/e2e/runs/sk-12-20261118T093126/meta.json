@@ -1,0 +1,41 @@
+{
+  "case": "sk-12",
+  "expect": "PR の前提が実物と合わない。直す前に、判断を仰いで止まるはず",
+  "run_id": "63be737b",
+  "started": "20261118T093126",
+  "repo": "masahirompp/rlbench-sk-12",
+  "base_head": "0f6501d758d08e1828047d0a74ab586ce193b14d",
+  "branch": "e2e-20261118t093126",
+  "workdir": "/Users/masahirompp/rlbench-e2e/s1",
+  "model": "claude-opus-5-5",
+  "launch": "claude --bg --model claude-opus-5-5 --permission-mode auto --disallowedTools AskUserQuestion",
+  "plugin": {
+    "mode": "installed",
+    "repo_head": "7da57a0ab5c6580ef6e138dbec362c47b81537e6",
+    "repo_skill_sha256": "804fb51f4c0850e6",
+    "installed_version": "8c327cac4744",
+    "installed_skill_sha256": "804fb51f4c0850e6",
+    "used_skill_sha256": "804fb51f4c0850e6"
+  },
+  "claude_version": "2.1.327 (Claude Code)",
+  "pr": 3,
+  "pr_url": "https://github.com/masahirompp/rlbench-sk-12/pull/3",
+  "base_args": [
+    "--model",
+    "claude-opus-5-5",
+    "--permission-mode",
+    "auto",
+    "--disallowedTools",
+    "AskUserQuestion"
+  ],
+  "continued": true,
+  "wall_seconds": 85,
+  "outcome": "ended",
+  "final_head": "0f6501d758d08e1828047d0a74ab586ce193b14d",
+  "commits": [
+    {
+      "sha": "0f6501d",
+      "title": "review-loop: result の行をすべてつなぎ、設定のルールでの拒否では試行を止めない"
+    }
+  ]
+}
