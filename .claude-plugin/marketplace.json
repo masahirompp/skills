@@ -13,7 +13,7 @@
     {
       "name": "dev-tools",
       "source": "./plugins/dev-tools",
-      "description": "開発作業の道具。review-loop(PR のレビューループ)、housekeeping(マージ済みブランチの後片付け)、issue-check(着手前の課題の判定)。"
+      "description": "開発作業の道具。review-loop(PR のレビューループ)、housekeeping(マージ済みブランチの後片付け)、issue-check(着手前の課題の判定)、next-issues(次のリリースの issue の選定と出荷)。"
     },
     {
       "name": "session-timeline",
