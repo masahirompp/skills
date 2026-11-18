@@ -7,7 +7,7 @@ import type { Times } from './backfill'
 import { BOUNDARY_TOOLS, MAX_STEPS, SYSTEM, briefOf, fold, outcomeOf, parseVerdict, promptOf } from './classify'
 import type { Step, Stretch, Verdict } from './classify'
 import { RECAP_SYSTEM, REGROUP_SYSTEM, groupsByKind, mergeSameKind, parseGroups, parseRecap, recapPrompt, regroupPrompt } from './group'
-import { capped, isNewModel, markReader, markRows, observed, placeOf } from './marks'
+import { capped, isNewModel, joined, markReader, markRows, observed, placeOf } from './marks'
 import { cells, clockOf, colorOf, durationOf, padCells, usageLine } from './view'
 
 const PANE = 'session-timeline'
@@ -28,7 +28,10 @@ const transcriptPath = atom({ plugin: 'session-timeline', key: 'transcriptPath' 
 const liveFromIndex = atom({ plugin: 'session-timeline', key: 'liveFromIndex' } as const, -1)
 /** The model changes and compactions, oldest first: those before `liveSince` read off the transcript, the rest seen live. */
 const marks = atom({ plugin: 'session-timeline', key: 'marks' } as const, [] as Mark[], { shape: 'marks-1' })
-/** When the live recording began, a reset leaving it be: the transcript's marks from before it are the backfill's. 0 unknown. */
+/**
+ * When the live recording began, a reset leaving it be: the transcript's marks from before it are the backfill's.
+ * 0 not settled yet: `liveStart` settles it where it is first needed.
+ */
 const liveSince = atom({ plugin: 'session-timeline', key: 'liveSince' } as const, 0)
 /**
  * Whether the transcript's marks from before `liveSince` are in. Apart from `isBackfilled`: the phases
@@ -205,10 +208,26 @@ async function classifyLive($: EngineInterface, done: Stretch): Promise<void> {
 }
 
 /**
+ * When the live recording began, settled as now where nothing has settled it; 0 where the clock cannot be read.
+ * Not `session.start`'s alone to settle: a process that moves to another conversation (/clear, /resume)
+ * goes on with an empty state and no `session.start`.
+ */
+async function liveStart($: EngineInterface): Promise<number> {
+  const known = await read($, liveSince)
+  if (known > 0) return known
+  const now = await $.clock.now().catch(() => 0)
+  if (now <= 0) return 0
+  await update($, liveSince, at => (at > 0 ? at : now))
+  return read($, liveSince)
+}
+
+/**
  * Notes the model the main conversation runs on, where it is another than the one last seen.
  * `isStart`: the session is beginning, so a first sighting is the model it began on.
  */
 async function noteModel($: EngineInterface, isStart = false): Promise<void> {
+  // Before the sighting's own time: what is seen live is never earlier than where the live recording began.
+  await liveStart($)
   const model = await $.session.model().catch(() => undefined)
   if (typeof model !== 'string' || model === '') return
   if (!isNewModel(await read($, marks), model)) return
@@ -230,10 +249,14 @@ const MAX_RANGES = 4096
  */
 async function readTranscript($: EngineInterface): Promise<Transcript | undefined> {
   try {
+    // Neither the path nor the directory need be in the state: no prompt may have come yet, and after a
+    // /clear or a /resume no `session.start` has. The session tells both.
     let path = await read($, transcriptPath)
+    if (!path) path = (await $.session.info().catch(() => undefined))?.transcriptPath ?? ''
     if (!path) {
       const configDir = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${(await $.env.get('HOME')) ?? ''}/.claude`
-      path = transcriptPathOf(configDir, await read($, cwd), await $.session.id())
+      const dir = (await read($, cwd)) || (await $.session.cwd().catch(() => ''))
+      path = transcriptPathOf(configDir, dir, await $.session.id())
     }
     const marks = markReader()
     const times = timeReader()
@@ -268,14 +291,17 @@ async function readTranscript($: EngineInterface): Promise<Transcript | undefine
 }
 
 /**
- * Puts the transcript's marks from before the live recording ahead of the ones it saw, which it leaves as they are.
+ * Puts the transcript's marks from before the live recording ahead of the ones it saw, which it leaves as they are
+ * (but that a first sighting with no model before it in the transcript is the model the conversation began on).
  * Only a transcript that was read is given here: the earlier reading's marks it replaces are lost to it.
  */
 async function fillMarks($: EngineInterface, mine: number, found: readonly Mark[]): Promise<void> {
-  const since = await read($, liveSince)
+  const since = await liveStart($)
+  // With no time to part the transcript's marks from the live ones, they are owed still.
+  if (since <= 0) return
   const past = found.filter(m => m.at < since)
   if (epoch !== mine) return
-  await update($, marks, list => capped([...past, ...list.filter(m => m.at >= since)]))
+  await update($, marks, list => joined(past, list.filter(m => m.at >= since)))
   if (epoch !== mine) return
   await update($, isMarksFilled, () => true)
 }
@@ -404,8 +430,10 @@ async function endTurn($: EngineInterface, answer: string): Promise<void> {
     isRecapWanted = true
     scheduleRegroup($)
   })
-  // The transcript's path may be known only since this turn's prompt: marks it could not give before, it may now.
-  if (isFillAsked) retryMarks($)
+  // The transcript's path may be known only since this turn's prompt, the file there only since its answer: marks
+  // it could not give before, it may now. Asked whether or not this module opened the pane: after a /clear or
+  // a /resume the pane stays open with no open asked of this conversation.
+  retryMarks($)
 }
 
 /** A finished tool call: into its stretch, or counted as a subagent's step when `s` is none. */
@@ -446,10 +474,7 @@ export const register: Register = (on, options) => {
       if (count >= 0) await update($, liveFromIndex, () => count)
       isSessionStart = count === 0
     }
-    if ((await read($, liveSince)) <= 0) {
-      const now = await $.clock.now().catch(() => 0)
-      if (now > 0) await update($, liveSince, () => now)
-    }
+    await liveStart($)
     // The model the session begins on; after a reload, the same one adds nothing. Loaded into a session
     // under way, the model is not the one it began on: the transcript's marks tell what came before.
     await noteModel($, isSessionStart).catch(() => undefined)
@@ -513,6 +538,7 @@ export const register: Register = (on, options) => {
     if (!e.agentId && e.trigger !== 'precompute' && done.skip === undefined) {
       const { tokensBefore: before, tokensAfter: after } = done
       const record = async () => {
+        await liveStart($)
         const at = await $.clock.now()
         const mark: Mark = {
           kind: 'compact',

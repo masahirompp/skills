@@ -44,6 +44,20 @@ export function observed(marks: readonly Mark[], model: string, at: number, isMi
 }
 
 /**
+ * The marks seen live, behind the transcript's from before them. Where the transcript holds no model
+ * before them, the first seen live is the model the conversation began on, midway no more.
+ */
+export function joined(past: readonly Mark[], seen: readonly Mark[]): Mark[] {
+  if (past.some(m => m.kind === 'model')) return capped([...past, ...seen])
+  const begun = seen.map((m): Mark => {
+    if (m.kind !== 'model' || !m.isMidway) return m
+    const { isMidway: _, ...rest } = m
+    return rest
+  })
+  return capped([...past, ...begun])
+}
+
+/**
  * The model changes and compactions of the main conversation, read off the
  * transcript file's lines: the model of each assistant row where it differs
  * from the row before, and each compaction boundary.
