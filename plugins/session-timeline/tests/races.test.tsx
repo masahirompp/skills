@@ -72,6 +72,8 @@ function world(
     return { value: (typeof h === 'function' ? h() : (h ?? [])) as never }
   })
   on('session.id', () => ({ value: 's' }))
+  on('session.cwd', () => ({ value: '/' }))
+  on('session.end', (_, e) => ({ sessionId: e.sessionId }))
   on('env.get', () => ({ value: undefined }) as never)
   on('fs.read', () => ({ deny: 'no transcript here' }) as never)
   on('ui.open', async () => {
@@ -164,4 +166,119 @@ test('opening twice at once backfills the history once', async ($, on) => {
   await sleep(400)
   expect(w.judged.length).toBe(2)
   expect((await labels($)).filter(t => /^(調査|実装)\s/.test(t)).length).toBe(2)
+})
+
+// /clear and /resume swap the conversation in the same process: `session.end` comes with
+// the reason, and no `session.start` after it. The engine starts the state afresh then;
+// the kit does not, and the plugin clears it itself as the next conversation is taken up.
+
+const end = (reason: 'clear' | 'resume') => ({ reason, sessionId: 's', resume: { id: 's' } }) as never
+const edit = (id: string) => ({ tool_use_id: id, tool: 'Edit', input: { file_path: `/${id}` } })
+/** The conversation /resume brings in: two turns, each with an edit. */
+const RESUMED = [
+  msg('user', '再開先の作業A'),
+  msg('assistant', '', [edit('ra')]),
+  msg('assistant', 'A 済み'),
+  msg('user', '再開先の作業B'),
+  msg('assistant', '', [edit('rb')]),
+  msg('assistant', 'B 済み'),
+]
+
+async function liveTurn($: T[0], text: string, toolId: string): Promise<void> {
+  await $.turn.start({ text, turnId: text })
+  await $.tool.call({ tool: 'Edit', file_path: `/${toolId}`, old_string: 'a', new_string: 'b', tool_use_id: toolId } as never)
+  await $.turn.complete({ answer: `${text} 済み`, durationMs: 1, isAborted: false, turnId: text, reason: 'completed' } as never)
+}
+
+test('after /resume, /timeline fills in the history of the conversation moved to', { options: { autoOpen: false } }, async ($, on) => {
+  let history: unknown[] = []
+  const w = world($, on, { history: () => history, label: n => ['前の作業', '調査', '実装'][n - 1] ?? 'その他' })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await liveTurn($, '前の会話の作業', 'old')
+  await sleep(300)
+  expect(w.judged.length).toBe(1)
+
+  await $.session.end(end('resume'))
+  history = RESUMED
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await sleep(400)
+  const judgedNow = w.judged.slice(1).join('\n')
+  expect(judgedNow).toContain('再開先の作業A')
+  expect(judgedNow).toContain('再開先の作業B')
+  expect(judgedNow).not.toContain('前の会話の作業')
+  const texts = await labels($)
+  // The phase of the conversation left behind is gone; the two resumed ones are there.
+  expect(texts.some(t => t.startsWith('前の作業'))).toBe(false)
+  expect(texts.filter(t => /^(調査|実装)\s/.test(t)).length).toBe(2)
+})
+
+test('a turn between /resume and /timeline is judged once, not again by the backfill', { options: { autoOpen: false } }, async ($, on) => {
+  let history: unknown[] = []
+  const w = world($, on, { history: () => history })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.session.end(end('resume'))
+  // The history holds the turn's prompt as it starts. A turn of text alone has no tool call to tell it by.
+  history = [...RESUMED, msg('user', '移ったあとの作業')]
+  await $.turn.start({ text: '移ったあとの作業', turnId: 't1' })
+  history = [...history, msg('assistant', '済み')]
+  await $.turn.complete({ answer: '済み', durationMs: 1, isAborted: false, turnId: 't1', reason: 'completed' } as never)
+  await sleep(300)
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await sleep(400)
+  expect(w.judged.filter(p => p.includes('移ったあとの作業')).length).toBe(1)
+  expect(w.judged.filter(p => p.includes('再開先の作業A')).length).toBe(1)
+  expect(w.judged.length).toBe(3)
+})
+
+test('with autoOpen, the history /resume brought fills in as the next turn starts', async ($, on) => {
+  let history: unknown[] = []
+  const w = world($, on, { history: () => history })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await sleep(100)
+  await $.session.end(end('resume'))
+  history = [...RESUMED, msg('user', '続きの作業')]
+  await liveTurn($, '続きの作業', 'next')
+  await sleep(500)
+  expect(w.judged.filter(p => p.includes('再開先の作業B')).length).toBe(1)
+  expect(w.judged.filter(p => p.includes('続きの作業')).length).toBe(1)
+  expect(w.judged.length).toBe(3)
+})
+
+test('after /clear, the record of the command is not filled in as a phase', { options: { autoOpen: false } }, async ($, on) => {
+  let history: unknown[] = []
+  const w = world($, on, { history: () => history })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await liveTurn($, '消す前の作業', 'old')
+  await sleep(300)
+  await $.session.end(end('clear'))
+  history = [msg('user', '<command-name>/clear</command-name>')]
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await sleep(300)
+  expect(w.judged.length).toBe(1)
+  expect((await labels($)).some(t => t.includes('まだ工程がありません'))).toBe(true)
+  await liveTurn($, '消したあとの作業', 'new')
+  await sleep(300)
+  expect(w.judged.length).toBe(2)
+  expect(w.judged[1]).toContain('消したあとの作業')
+})
+
+test('a stretch of the conversation left behind does not land in the next', { options: { autoOpen: false } }, async ($, on) => {
+  let history: unknown[] = []
+  let isMoved = false
+  world($, on, { history: () => history, modelDelay: 60, label: () => (isMoved ? '新' : '旧') })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await liveTurn($, '前の会話の作業', 'old')
+  // Its judgment is still out as the conversation is swapped.
+  await sleep(20)
+  await $.session.end(end('resume'))
+  isMoved = true
+  history = RESUMED
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await sleep(600)
+  const texts = await labels($)
+  expect(texts.some(t => t.startsWith('旧'))).toBe(false)
+  expect(texts.some(t => t.startsWith('新'))).toBe(true)
 })
