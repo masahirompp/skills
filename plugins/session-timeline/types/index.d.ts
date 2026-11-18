@@ -47,9 +47,13 @@ export type Backfill = { done: number; total: number } | null
 /**
  * A fact off the engine, not a judgment: the model the main conversation was seen to run on, or a compaction.
  * A model mark is a sighting; the timeline draws one only where the model differs from the one before.
+ *
+ * The model before a sighting is the mark's before it. `prev` names it where that mark was dropped as
+ * the oldest. With neither, the sighting is the model the session began on, unless `isMidway`: seen
+ * first by a recording that began after the session did, so what ran before is not known.
  */
 export type Mark =
-  | { kind: 'model'; at: number; model: string }
+  | { kind: 'model'; at: number; model: string; prev?: string; isMidway?: boolean }
   | { kind: 'compact'; at: number; trigger: string; before?: number; after?: number }
 
 declare module 'claude-code' {
@@ -68,6 +72,7 @@ declare module 'claude-code' {
       cwd: string
       transcriptPath: string
       marks: Shaped<Mark[]>
+      isMarksFilled: boolean
       liveSince: number
     }
   }

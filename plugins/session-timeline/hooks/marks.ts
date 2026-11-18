@@ -19,10 +19,28 @@ export function isNewModel(marks: readonly Mark[], model: string): boolean {
   return !(last?.kind === 'model' && bare(last.model) === bare(model))
 }
 
-/** The marks with the model seen at `at` added, unless it is the model last seen. */
-export function observed(marks: readonly Mark[], model: string, at: number): Mark[] {
+/**
+ * The newest MAX_MARKS of the marks. The model before the oldest sighting kept is
+ * written on it where the mark that told it is dropped: it stays the change it was.
+ */
+export function capped(marks: readonly Mark[]): Mark[] {
+  if (marks.length <= MAX_MARKS) return [...marks]
+  const kept = marks.slice(-MAX_MARKS)
+  const dropped = marks.slice(0, -MAX_MARKS).findLast(m => m.kind === 'model')
+  const i = kept.findIndex(m => m.kind === 'model')
+  const first = kept[i]
+  if (dropped?.kind === 'model' && first?.kind === 'model') kept[i] = { ...first, prev: dropped.model }
+  return kept
+}
+
+/**
+ * The marks with the model seen at `at` added, unless it is the model last seen.
+ * `isMidway`: the sighting is not known to be the session's first, where the marks hold none before it.
+ */
+export function observed(marks: readonly Mark[], model: string, at: number, isMidway = false): Mark[] {
   if (!isNewModel(marks, model)) return [...marks]
-  return [...marks, { kind: 'model' as const, at, model }].slice(-MAX_MARKS)
+  const isFirst = !marks.some(m => m.kind === 'model')
+  return capped([...marks, { kind: 'model' as const, at, model, ...(isFirst && isMidway ? { isMidway } : {}) }])
 }
 
 /**
@@ -64,23 +82,29 @@ export function marksOf(jsonl: string): Mark[] {
       if (typeof model === 'string' && model !== '' && !model.startsWith('<')) out = observed(out, model, at)
     }
   }
-  return out.slice(-MAX_MARKS)
+  return capped(out)
 }
 
 const TRIGGERS: Record<string, string> = { auto: '自動', manual: '手動', plugin: 'プラグイン' }
 
 export type MarkRow = { key: string; at: number; text: string }
 
-/** The marks as lines to draw, oldest first: the first model as the one the session began on, later ones as changes. */
+/**
+ * The marks as lines to draw, oldest first: a model as a change from the one before it, or as the one
+ * the session began on where none was before it. A sighting with no known past is the model alone.
+ */
 export function markRows(marks: readonly Mark[]): MarkRow[] {
   const rows: MarkRow[] = []
   let model: string | undefined
   for (const m of [...marks].sort((a, b) => a.at - b.at)) {
     if (m.kind === 'model') {
-      if (model !== undefined && bare(model) === bare(m.model)) continue
-      const text =
-        model === undefined ? `モデル ${shortModel(m.model)}(開始時)` : `モデル ${shortModel(model)} → ${shortModel(m.model)}`
+      const before = model ?? m.prev
       model = m.model
+      if (before !== undefined && bare(before) === bare(m.model)) continue
+      const text =
+        before !== undefined
+          ? `モデル ${shortModel(before)} → ${shortModel(m.model)}`
+          : `モデル ${shortModel(m.model)}${m.isMidway ? '' : '(開始時)'}`
       rows.push({ key: `mark-model-${m.at}`, at: m.at, text })
     } else {
       const how = TRIGGERS[m.trigger]

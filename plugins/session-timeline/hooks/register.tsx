@@ -6,7 +6,7 @@ import { stretchesOf, timed, timesOf, transcriptPathOf } from './backfill'
 import { BOUNDARY_TOOLS, MAX_STEPS, SYSTEM, briefOf, fold, outcomeOf, parseVerdict, promptOf } from './classify'
 import type { Step, Stretch, Verdict } from './classify'
 import { RECAP_SYSTEM, REGROUP_SYSTEM, groupsByKind, mergeSameKind, parseGroups, parseRecap, recapPrompt, regroupPrompt } from './group'
-import { MAX_MARKS, isNewModel, markRows, marksOf, observed, slotOf } from './marks'
+import { capped, isNewModel, markRows, marksOf, observed, slotOf } from './marks'
 import { cells, clockOf, colorOf, durationOf, padCells, usageLine } from './view'
 
 const PANE = 'session-timeline'
@@ -29,6 +29,11 @@ const liveFromIndex = atom({ plugin: 'session-timeline', key: 'liveFromIndex' } 
 const marks = atom({ plugin: 'session-timeline', key: 'marks' } as const, [] as Mark[], { shape: 'marks-1' })
 /** When the live recording began (or was last reset): the transcript's marks from before it are the backfill's. 0 unknown. */
 const liveSince = atom({ plugin: 'session-timeline', key: 'liveSince' } as const, 0)
+/**
+ * Whether the transcript's marks from before `liveSince` are in. Apart from `isBackfilled`: the phases
+ * can be filled in without the transcript, and were by versions that kept no marks.
+ */
+const isMarksFilled = atom({ plugin: 'session-timeline', key: 'isMarksFilled' } as const, false)
 
 // The stretch being gathered and the classifications in flight: a reload drops
 // them, and the next stretch starts afresh.
@@ -196,13 +201,16 @@ async function classifyLive($: EngineInterface, done: Stretch): Promise<void> {
   await update($, live, l => (isGathering && l ? { ...l, isClassifying: false } : null))
 }
 
-/** Notes the model the main conversation runs on, where it is another than the one last seen. */
-async function noteModel($: EngineInterface): Promise<void> {
+/**
+ * Notes the model the main conversation runs on, where it is another than the one last seen.
+ * `isStart`: the session is beginning, so a first sighting is the model it began on.
+ */
+async function noteModel($: EngineInterface, isStart = false): Promise<void> {
   const model = await $.session.model().catch(() => undefined)
   if (typeof model !== 'string' || model === '') return
   if (!isNewModel(await read($, marks), model)) return
   const at = await $.clock.now()
-  await update($, marks, list => observed(list, model, at))
+  await update($, marks, list => observed(list, model, at, !isStart))
 }
 
 /** The transcript file's text; undefined where it cannot be read. */
@@ -227,7 +235,22 @@ async function fillMarks($: EngineInterface, mine: number, jsonl: string): Promi
   const since = await read($, liveSince)
   const past = marksOf(jsonl).filter(m => m.at < since)
   if (epoch !== mine) return
-  await update($, marks, list => [...past, ...list.filter(m => m.at >= since)].slice(-MAX_MARKS))
+  await update($, marks, list => capped([...past, ...list.filter(m => m.at >= since)]))
+  if (epoch !== mine) return
+  await update($, isMarksFilled, () => true)
+}
+
+/**
+ * Asks for the transcript's marks again where they are not in yet: the transcript
+ * could not be read the last time, or the phases were filled in with no marks kept.
+ */
+function retryMarks($: EngineInterface): void {
+  const mine = epoch
+  enqueue(async () => {
+    if (epoch !== mine || (await read($, isMarksFilled))) return
+    const jsonl = await readTranscript($)
+    if (jsonl !== undefined) await fillMarks($, mine, jsonl)
+  })
 }
 
 /** The conversation's messages, or none where the session cannot give them. */
@@ -291,11 +314,15 @@ async function openPane($: EngineInterface): Promise<boolean> {
         }
       }
     })
-  } else if ((await read($, phases)).length > 0) {
-    // Phases recorded before regrouping or the recap existed: make them now.
-    const isMissingRecap = (await read($, recap)) === null
-    if (isMissingRecap) isRecapWanted = true
-    if (isMissingRecap || (await read($, groups)).length === 0) scheduleRegroup($)
+  } else {
+    // The marks are owed whatever became of the phases' backfill: asked for on every open until they are in.
+    retryMarks($)
+    if ((await read($, phases)).length > 0) {
+      // Phases recorded before regrouping or the recap existed: make them now.
+      const isMissingRecap = (await read($, recap)) === null
+      if (isMissingRecap) isRecapWanted = true
+      if (isMissingRecap || (await read($, groups)).length === 0) scheduleRegroup($)
+    }
   }
   return isPlaced
 }
@@ -318,6 +345,7 @@ async function reset($: EngineInterface): Promise<void> {
   // A mark recorded while this runs is newer than `now`, and so is kept as well.
   const now = await $.clock.now()
   await update($, liveSince, () => now)
+  await update($, isMarksFilled, () => false)
   await noteModel($).catch(() => undefined)
 }
 
@@ -336,6 +364,8 @@ async function endTurn($: EngineInterface, answer: string): Promise<void> {
     isRecapWanted = true
     scheduleRegroup($)
   })
+  // The transcript's path may be known only since this turn's prompt: marks it could not give before, it may now.
+  if (isFillAsked) retryMarks($)
 }
 
 /** A finished tool call: into its stretch, or counted as a subagent's step when `s` is none. */
@@ -369,16 +399,20 @@ export const register: Register = (on, options) => {
     // A fresh module has no backfill running: progress left by one a reload cut short is stale.
     await update($, backfill, () => null)
     // Where the live recording begins, once per session: the backfill covers the messages before it.
+    // The session itself begins here only where this is the first start the state has seen, with nothing said yet.
+    let isSessionStart = false
     if ((await read($, liveFromIndex)) < 0) {
       const count = await messageCount($)
       if (count >= 0) await update($, liveFromIndex, () => count)
+      isSessionStart = count === 0
     }
     if ((await read($, liveSince)) <= 0) {
       const now = await $.clock.now().catch(() => 0)
       if (now > 0) await update($, liveSince, () => now)
     }
-    // The model the session begins on; after a reload, the same one adds nothing.
-    await noteModel($).catch(() => undefined)
+    // The model the session begins on; after a reload, the same one adds nothing. Loaded into a session
+    // under way, the model is not the one it began on: the transcript's marks tell what came before.
+    await noteModel($, isSessionStart).catch(() => undefined)
     // Unasked, the pane waits undrawn until the terminal is wide enough or the person opens it.
     if (isAutoOpen) void openPane($).catch(() => undefined)
     return next(e)
@@ -447,7 +481,7 @@ export const register: Register = (on, options) => {
           ...(before !== undefined ? { before } : {}),
           ...(after !== undefined ? { after } : {}),
         }
-        await update($, marks, list => [...list, mark].slice(-MAX_MARKS))
+        await update($, marks, list => capped([...list, mark]))
       }
       await record().catch(() => undefined)
     }
