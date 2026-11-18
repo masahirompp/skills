@@ -36,7 +36,7 @@ skill-dev/                  # 開発用資産（どのプラグインにも含�
 | [cycle-rewrite](plugins/cycle-rewrite/skills/cycle-rewrite/SKILL.md) | cycle-rewrite | サイクル型リライト開発ワークフローの管理。PoC/プロトタイプをサイクル単位でゼロから書き直し、仕様と学び（PRODUCT.md・ADR・CONTEXT.md・プロジェクトスキル）を永続資産として積み上げる開発方式のオーケストレーション |
 | [housekeeping](plugins/dev-tools/skills/housekeeping/SKILL.md) | dev-tools | git リポジトリの後片付け。PR マージ済み・ローカルでマージ済みのブランチと worktree をまとめて削除する。作業中のものと監査用ブランチ（entire.io の `entire/*`）は残す |
 | [issue-check](plugins/dev-tools/skills/issue-check/SKILL.md) | dev-tools | 開発・企画・施策の依頼を着手前に判定する。課題は本物か、提案された手段はその課題を解くかを、依頼の重さに応じた深さで確かめ、判定だけを返す。作業自体は行わない |
-| [next-issues](plugins/dev-tools/skills/next-issues/SKILL.md) | dev-tools | 次の1回の本番リリースで出す issue を選び、計画の承認、PR 作成とレビュー、マージ、本番リリースと本番での確認までを一続きで終わらせる。選ぶ前に候補を issue-check で判定する。`/dev-tools:next-issues` と名指しで呼んだときだけ動く |
+| [next-issues](plugins/dev-tools/skills/next-issues/SKILL.md) | dev-tools | 次の1回の本番リリースで出す issue を選び、計画の承認、PR 作成とレビュー、マージ、本番リリースと本番での確認までを一続きで終わらせる。選ぶ前に候補を issue-check で判定する。最後に続けるかを決め、続けるなら次の回を新しいセッションで始める指示文を渡す。`/dev-tools:next-issues` と名指しで呼んだときだけ動く |
 | [review-loop](plugins/dev-tools/skills/review-loop/SKILL.md) | dev-tools | 自分の PR のレビューループ。レビュースキルを並行に実行し、指摘のうち再現できたものだけを直す、を直す対象が無くなるまで回す |
 
 ## mod 一覧
