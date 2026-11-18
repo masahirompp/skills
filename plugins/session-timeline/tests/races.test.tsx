@@ -41,7 +41,16 @@ type World = {
 function world(
   $: T[0],
   on: T[1],
-  opts: { label?: (n: number) => string; isModelDown?: boolean; history?: unknown[] | (() => unknown[]); modelDelay?: number; openDelay?: number; toolDelay?: number } = {},
+  opts: {
+    label?: (n: number) => string
+    isModelDown?: boolean
+    history?: unknown[] | (() => unknown[])
+    modelDelay?: number
+    openDelay?: number
+    toolDelay?: number
+    /** The regroup and the recap answer, and only the one named waits `modelDelay`. */
+    slow?: 'regroup' | 'recap'
+  } = {},
 ): World {
   const w: World = { judged: [], historyReads: 0 }
   let clock = Date.UTC(2026, 10, 17, 1, 0, 0)
@@ -52,7 +61,15 @@ function world(
     const isJudge = e.system !== REGROUP_SYSTEM && e.system !== RECAP_SYSTEM
     if (isJudge) w.judged.push(e.prompt)
     const label = opts.label?.(w.judged.length) ?? NAMES[(w.judged.length - 1) % NAMES.length]!
-    if (opts.modelDelay) await sleep(opts.modelDelay)
+    if (opts.slow) {
+      if (opts.modelDelay && (e.system === REGROUP_SYSTEM ? 'regroup' : e.system === RECAP_SYSTEM ? 'recap' : '') === opts.slow) {
+        await sleep(opts.modelDelay)
+      }
+      if (e.system === REGROUP_SYSTEM) return { value: { isAnswered: true, text: JSON.stringify([{ from: 1, label: 'まとまり' }]), usage } }
+      if (e.system === RECAP_SYSTEM) {
+        return { value: { isAnswered: true, text: JSON.stringify({ goal: '前の会話の目的', status: '', next: '', sides: [] }), usage } }
+      }
+    } else if (opts.modelDelay) await sleep(opts.modelDelay)
     if (!isJudge) {
       return { value: { isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage } as never }
     }
@@ -281,4 +298,56 @@ test('a stretch of the conversation left behind does not land in the next', { op
   const texts = await labels($)
   expect(texts.some(t => t.startsWith('旧'))).toBe(false)
   expect(texts.some(t => t.startsWith('新'))).toBe(true)
+})
+
+/** Every write of the conversation's derived state once `isOn` is set. */
+function writesOf(on: T[1]): { isOn: boolean; keys: string[] } {
+  const w = { isOn: false, keys: [] as string[] }
+  on('state.set', (_, e, next) => {
+    if (w.isOn && ['groups', 'recap', 'usage', 'phases', 'live'].includes(e.key)) w.keys.push(e.key)
+    return next(e)
+  })
+  return w
+}
+
+test('a recap still out as /clear comes writes nothing into the next conversation', { options: { autoOpen: false } }, async ($, on) => {
+  let history: unknown[] = []
+  const w = writesOf(on)
+  world($, on, { history: () => history, slow: 'recap', modelDelay: 150 })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  history = [msg('user', '前の会話の作業'), msg('assistant', '前の会話の作業 済み')]
+  await liveTurn($, '前の会話の作業', 'old')
+  // The turn is over and its recap waits on Haiku as the person types /clear.
+  await sleep(50)
+  await $.session.end(end('clear'))
+  history = [msg('user', '<command-name>/clear</command-name>')]
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  w.isOn = true
+  await sleep(400)
+  expect(w.keys).toEqual([])
+  expect((await labels($)).some(t => t.includes('前の会話の目的') || t.startsWith('Haiku'))).toBe(false)
+})
+
+test('a regroup still out as /clear comes writes nothing into the next conversation', { options: { autoOpen: false } }, async ($, on) => {
+  let history: unknown[] = []
+  const w = writesOf(on)
+  world($, on, { history: () => history, slow: 'regroup', modelDelay: 150 })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  for (const n of [1, 2]) {
+    history = [...history, msg('user', `作業${n}`), msg('assistant', `作業${n} 済み`)]
+    await liveTurn($, `作業${n}`, `a${n}`)
+    await sleep(100)
+  }
+  // The third phase makes the regroup ask Haiku.
+  history = [...history, msg('user', '作業3'), msg('assistant', '作業3 済み')]
+  await liveTurn($, '作業3', 'a3')
+  await sleep(50)
+  await $.session.end(end('clear'))
+  history = [msg('user', '<command-name>/clear</command-name>')]
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  w.isOn = true
+  await sleep(400)
+  expect(w.keys).toEqual([])
 })

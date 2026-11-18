@@ -72,8 +72,12 @@ function enqueue(job: () => Promise<void>): void {
   queue = queue.then(job).catch(() => undefined)
 }
 
-/** Adds a model call's tokens to the running total, answered or not: a failed call can still cost. */
-async function track($: EngineInterface, r: ModelCompleteResult): Promise<void> {
+/**
+ * Adds a model call's tokens to the running total, answered or not: a failed call can still cost.
+ * `mine` is the conversation that asked: a call answered after /clear or /resume adds nothing to the next.
+ */
+async function track($: EngineInterface, r: ModelCompleteResult, mine: number): Promise<void> {
+  if (conversation !== mine) return
   const u = r.usage
   await update($, usage, t => ({
     calls: t.calls + 1,
@@ -90,17 +94,20 @@ function scheduleRegroup($: EngineInterface): void {
   isRegroupQueued = true
   enqueue(async () => {
     isRegroupQueued = false
-    await regroup($)
-    if (isRecapWanted) {
+    // Of the conversation it runs in: one swapped in under it writes nothing more.
+    const mine = conversation
+    await regroup($, mine)
+    if (isRecapWanted && conversation === mine) {
       isRecapWanted = false
-      await writeRecap($)
+      await writeRecap($, mine)
     }
   })
 }
 
 /** The whole session's fine phases, cut again into the phases a person would name. */
-async function regroup($: EngineInterface): Promise<void> {
+async function regroup($: EngineInterface, mine: number): Promise<void> {
   const list = await read($, phases)
+  if (conversation !== mine) return
   if (list.length <= 2) {
     await update($, groups, () => groupsByKind(list))
     return
@@ -114,7 +121,8 @@ async function regroup($: EngineInterface): Promise<void> {
     effort: 'low',
     timeoutMs: 45000,
   })
-  await track($, r)
+  await track($, r, mine)
+  if (conversation !== mine) return
   const parsed = r.isAnswered ? parseGroups(r.text, list) : undefined
   // A failed regroup keeps the last good one; new phases show as not yet grouped.
   if (!parsed && previous.length > 0) return
@@ -122,7 +130,7 @@ async function regroup($: EngineInterface): Promise<void> {
 }
 
 /** Where the session stands, from the phases, the person's prompts and the last answer. */
-async function writeRecap($: EngineInterface): Promise<void> {
+async function writeRecap($: EngineInterface, mine: number): Promise<void> {
   const grouped = await read($, groups)
   if (grouped.length === 0) return
   const messages = await $.session.messages()
@@ -140,9 +148,9 @@ async function writeRecap($: EngineInterface): Promise<void> {
     effort: 'low',
     timeoutMs: 45000,
   })
-  await track($, r)
+  await track($, r, mine)
   const next = r.isAnswered ? parseRecap(r.text) : null
-  if (next) await update($, recap, () => next)
+  if (next && conversation === mine) await update($, recap, () => next)
 }
 
 async function gather($: EngineInterface): Promise<Stretch> {
@@ -177,7 +185,7 @@ function finish($: EngineInterface, done: Stretch): void {
   enqueue(() => classifyLive($, done, mine))
 }
 
-async function judge($: EngineInterface, done: Stretch, recent: readonly Phase[]): Promise<Verdict> {
+async function judge($: EngineInterface, done: Stretch, recent: readonly Phase[], mine: number): Promise<Verdict> {
   const r = await $.model.complete({
     model: 'haiku',
     system: SYSTEM,
@@ -186,7 +194,7 @@ async function judge($: EngineInterface, done: Stretch, recent: readonly Phase[]
     effort: 'low',
     timeoutMs: 30000,
   })
-  await track($, r)
+  await track($, r, mine)
   return (
     (r.isAnswered ? parseVerdict(r.text) : undefined) ?? {
       continues: recent.length > 0,
@@ -201,7 +209,7 @@ async function classifyLive($: EngineInterface, done: Stretch, mine: number): Pr
   if (conversation !== mine) return
   const ended: Stretch = { ...done, end: await $.clock.now() }
   await update($, live, l => (l ? { ...l, isClassifying: true } : { since: done.start ?? 0, steps: 0, isClassifying: true }))
-  const verdict = await judge($, ended, (await read($, phases)).slice(-6))
+  const verdict = await judge($, ended, (await read($, phases)).slice(-6), mine)
   if (conversation !== mine) return
   await update($, phases, list => fold(list, ended, verdict, 'live'))
   scheduleRegroup($)
@@ -234,7 +242,7 @@ async function messageCount($: EngineInterface): Promise<number> {
  * Classifies the history before the live recording began and puts it ahead of the
  * live phases. Returns false where a reset made it stale before it finished.
  */
-async function fillHistory($: EngineInterface, mine: number): Promise<boolean> {
+async function fillHistory($: EngineInterface, mine: number, talk: number): Promise<boolean> {
   const all = await $.session.messages()
   if (!Array.isArray(all)) return true
   // Only what came before the live recording: a turn it saw, text alone included, is its own.
@@ -252,7 +260,7 @@ async function fillHistory($: EngineInterface, mine: number): Promise<boolean> {
   if (epoch !== mine) return false
   await update($, backfill, () => ({ done: 0, total: past.length }))
   for (const s of past) {
-    const verdict = await judge($, s, done.slice(-6))
+    const verdict = await judge($, s, done.slice(-6), talk)
     if (epoch !== mine) return false
     done = fold(done, s, verdict, 'past')
     const now = done
@@ -275,10 +283,11 @@ async function askFill($: EngineInterface): Promise<void> {
   isFillAsked = true
   if (isFirstAsk && !(await read($, isBackfilled))) {
     const mine = epoch
+    const talk = conversation
     enqueue(async () => {
       try {
         // Marked done only once it is: a backfill a reload cuts short runs again on the next open.
-        if (await fillHistory($, mine)) await update($, isBackfilled, () => true)
+        if (await fillHistory($, mine, talk)) await update($, isBackfilled, () => true)
       } finally {
         if (epoch === mine) {
           await update($, backfill, () => null)
@@ -377,7 +386,9 @@ async function endTurn($: EngineInterface, answer: string): Promise<void> {
   s.answer = answer
   close($)
   // Asked once the turn's last stretch is classified, so the recap reads the regroup that takes it in.
+  const mine = conversation
   enqueue(async () => {
+    if (conversation !== mine) return
     isRecapWanted = true
     scheduleRegroup($)
   })
