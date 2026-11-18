@@ -60,7 +60,8 @@ export function joined(past: readonly Mark[], seen: readonly Mark[]): Mark[] {
 /**
  * The model changes and compactions of the main conversation, read off the
  * transcript file's lines: the model of each assistant row where it differs
- * from the row before, and each compaction boundary.
+ * from the row before, and each compaction boundary. The first model is the one the
+ * conversation began on, unless a boundary is written ahead of it: by the file's order, not by time.
  */
 export function marksOf(jsonl: string): Mark[] {
   const reader = markReader()
@@ -100,7 +101,10 @@ export function markReader(): { take: (line: string) => void; marks: () => Mark[
     } else if (row.type === 'assistant') {
       const model = row.message?.model
       // `<synthetic>` rows are the engine's own notices, not a model's answer.
-      if (typeof model === 'string' && model !== '' && !model.startsWith('<')) out = observed(out, model, at)
+      // A boundary written ahead of the first answer: the file carries on a compacted conversation, whose
+      // earlier rows are in another. Its first model is midway, not the one the conversation began on.
+      const isCarried = out.some(m => m.kind === 'compact')
+      if (typeof model === 'string' && model !== '' && !model.startsWith('<')) out = observed(out, model, at, isCarried)
     }
   }
   return { take, marks: () => capped(out) }
