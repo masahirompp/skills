@@ -58,12 +58,6 @@ npx skills add masahirompp/skills
 
 ### Claude Code プラグイン
 
-以前の `masahirompp-skills` プラグインは `cycle-rewrite` と `dev-tools` に分かれた。入れていた場合は、先に外す(マーケットプレイスから消えたので、残しておいても読み込みに失敗するだけで、更新されない):
-
-```
-/plugin uninstall masahirompp-skills@masahirompp
-```
-
 Claude Code のプラグインとしてインストールする。使うものだけを入れればよい:
 
 ```
