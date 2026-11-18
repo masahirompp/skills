@@ -115,4 +115,4 @@ docs と昇格の変更をコミットし(例: `docs: cycle N 棚卸し`)、`git
 
 ## 11. 次へ
 
-次サイクル(cycle-start)か、収束していれば通常開発への移行(transition-check)を提案する。cycle-start は別セッションで始める前提で、起動用の短い指示文(使い捨て。コミットしない)を渡して終える。中身は「タグ `cycle-N` 済みという現在地」と「次の一手 = /cycle-rewrite cycle-start」だけにし、学びや仕様は docs にあるので重複させない。
+次サイクル(cycle-start)か、収束していれば通常開発への移行(transition-check)を提案する。cycle-start は別セッションで始める前提で、起動用の短い指示文(使い捨て。コミットしない)を渡して終える。中身は「タグ `cycle-N` 済みという現在地」と「次の一手 = cycle-start」だけにし(呼び出し名は、このセッションのスキル一覧に出ている名前で書く。プラグインで入れていれば `/cycle-rewrite:cycle-rewrite cycle-start`、`~/.claude/skills/` に直接置いていれば `/cycle-rewrite cycle-start`)、学びや仕様は docs にあるので重複させない。
