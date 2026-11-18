@@ -205,8 +205,8 @@ async function noteModel($: EngineInterface): Promise<void> {
   await update($, marks, list => observed(list, model, at))
 }
 
-/** The transcript file's text, or none where it cannot be read. */
-async function readTranscript($: EngineInterface): Promise<string> {
+/** The transcript file's text; undefined where it cannot be read. */
+async function readTranscript($: EngineInterface): Promise<string | undefined> {
   try {
     let path = await read($, transcriptPath)
     if (!path) {
@@ -215,11 +215,14 @@ async function readTranscript($: EngineInterface): Promise<string> {
     }
     return await $.fs.read(path)
   } catch {
-    return ''
+    return undefined
   }
 }
 
-/** Puts the transcript's marks from before the live recording ahead of the ones it saw. */
+/**
+ * Puts the transcript's marks from before the live recording ahead of the ones it saw.
+ * Only a transcript that was read is given here: the marks it replaces are lost to it.
+ */
 async function fillMarks($: EngineInterface, mine: number, jsonl: string): Promise<void> {
   const since = await read($, liveSince)
   const past = marksOf(jsonl).filter(m => m.at < since)
@@ -277,8 +280,9 @@ async function openPane($: EngineInterface): Promise<boolean> {
         // Marked done only once it is: a backfill a reload cuts short runs again on the next open.
         const jsonl = await readTranscript($)
         // The marks first: they cost no model call, and stand while the phases are judged.
-        await fillMarks($, mine, jsonl)
-        if (await fillHistory($, mine, jsonl)) await update($, isBackfilled, () => true)
+        // Where the transcript cannot be read, the marks recorded so far stand as they are.
+        if (jsonl !== undefined) await fillMarks($, mine, jsonl)
+        if (await fillHistory($, mine, jsonl ?? '')) await update($, isBackfilled, () => true)
       } finally {
         if (epoch === mine) {
           await update($, backfill, () => null)
@@ -309,10 +313,11 @@ async function reset($: EngineInterface): Promise<void> {
   await update($, expanded, () => [])
   await update($, recap, () => null)
   await update($, isBackfilled, () => false)
-  // The marks are read again off the transcript; where it cannot be read, the model now running still stands.
+  // The marks from before now are read again off the transcript by the open after this. They are not
+  // dropped here: the transcript's replace them once it is read, and where it cannot be, they stand.
+  // A mark recorded while this runs is newer than `now`, and so is kept as well.
   const now = await $.clock.now()
   await update($, liveSince, () => now)
-  await update($, marks, () => [])
   await noteModel($).catch(() => undefined)
 }
 
