@@ -5,7 +5,7 @@
 #   KEEP=1 skill-dev/housekeeping/test.sh # 作業ディレクトリを残す
 set -euo pipefail
 
-scripts=$(cd "$(dirname "$0")/../../skills/housekeeping/scripts" && pwd)
+scripts=$(cd "$(dirname "$0")/../../plugins/dev-tools/skills/housekeeping/scripts" && pwd)
 root=$(cd "$(mktemp -d "${TMPDIR:-/tmp}/hk-test.XXXXXX")" && pwd -P)
 busy_pid=''
 cleanup() {

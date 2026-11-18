@@ -1,0 +1,11 @@
+{
+  "name": "dev-tools",
+  "description": "どのリポジトリでも使う開発作業の道具。review-loop(自分の PR のレビューループ)、housekeeping(マージ済みブランチと worktree の後片付け)、issue-check(着手前の課題の妥当性の判定)。",
+  "author": {
+    "name": "masahirompp",
+    "url": "https://github.com/masahirompp"
+  },
+  "repository": "https://github.com/masahirompp/skills",
+  "skills": "./skills/",
+  "license": "MIT"
+}
