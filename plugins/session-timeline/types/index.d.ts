@@ -44,6 +44,14 @@ export type Usage = { calls: number; input: number; output: number; cacheRead: n
 /** How far filling in the history before the mod loaded has got. */
 export type Backfill = { done: number; total: number } | null
 
+/**
+ * A fact off the engine, not a judgment: the model the main conversation was seen to run on, or a compaction.
+ * A model mark is a sighting; the timeline draws one only where the model differs from the one before.
+ */
+export type Mark =
+  | { kind: 'model'; at: number; model: string }
+  | { kind: 'compact'; at: number; trigger: string; before?: number; after?: number }
+
 declare module 'claude-code' {
   interface PluginState {
     'session-timeline': {
@@ -59,6 +67,8 @@ declare module 'claude-code' {
       isBackfilled: boolean
       cwd: string
       transcriptPath: string
+      marks: Shaped<Mark[]>
+      liveSince: number
     }
   }
 }

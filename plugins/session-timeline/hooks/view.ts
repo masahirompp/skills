@@ -15,7 +15,7 @@ export function costOf(u: Usage): number {
   )
 }
 
-function kilo(n: number): string {
+export function kilo(n: number): string {
   return n < 1000 ? String(n) : n < 100_000 ? `${(n / 1000).toFixed(1)}k` : `${Math.round(n / 1000)}k`
 }
 

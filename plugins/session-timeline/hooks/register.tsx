@@ -1,12 +1,12 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelCompleteResult, Register } from 'claude-code'
 
-import type { Backfill, Group, Live, Phase, Recap, Usage } from '../types'
+import type { Backfill, Group, Live, Mark, Phase, Recap, Usage } from '../types'
 import { stretchesOf, timed, timesOf, transcriptPathOf } from './backfill'
-import type { Times } from './backfill'
 import { BOUNDARY_TOOLS, MAX_STEPS, SYSTEM, briefOf, fold, outcomeOf, parseVerdict, promptOf } from './classify'
 import type { Step, Stretch, Verdict } from './classify'
 import { RECAP_SYSTEM, REGROUP_SYSTEM, groupsByKind, mergeSameKind, parseGroups, parseRecap, recapPrompt, regroupPrompt } from './group'
+import { MAX_MARKS, isNewModel, markRows, marksOf, observed, slotOf } from './marks'
 import { cells, clockOf, colorOf, durationOf, padCells, usageLine } from './view'
 
 const PANE = 'session-timeline'
@@ -25,6 +25,10 @@ const cwd = atom({ plugin: 'session-timeline', key: 'cwd' } as const, '')
 const transcriptPath = atom({ plugin: 'session-timeline', key: 'transcriptPath' } as const, '')
 /** How many messages the conversation held when the live recording began: the backfill covers those alone. -1 unknown. */
 const liveFromIndex = atom({ plugin: 'session-timeline', key: 'liveFromIndex' } as const, -1)
+/** The model changes and compactions, oldest first: those before `liveSince` read off the transcript, the rest seen live. */
+const marks = atom({ plugin: 'session-timeline', key: 'marks' } as const, [] as Mark[], { shape: 'marks-1' })
+/** When the live recording began (or was last reset): the transcript's marks from before it are the backfill's. 0 unknown. */
+const liveSince = atom({ plugin: 'session-timeline', key: 'liveSince' } as const, 0)
 
 // The stretch being gathered and the classifications in flight: a reload drops
 // them, and the next stretch starts afresh.
@@ -192,21 +196,37 @@ async function classifyLive($: EngineInterface, done: Stretch): Promise<void> {
   await update($, live, l => (isGathering && l ? { ...l, isClassifying: false } : null))
 }
 
-/** Each tool call's times from the transcript file, or none where it cannot be read. */
-async function readTimes($: EngineInterface): Promise<Times> {
+/** Notes the model the main conversation runs on, where it is another than the one last seen. */
+async function noteModel($: EngineInterface): Promise<void> {
+  const model = await $.session.model().catch(() => undefined)
+  if (typeof model !== 'string' || model === '') return
+  if (!isNewModel(await read($, marks), model)) return
+  const at = await $.clock.now()
+  await update($, marks, list => observed(list, model, at))
+}
+
+/** The transcript file's text, or none where it cannot be read. */
+async function readTranscript($: EngineInterface): Promise<string> {
   try {
     let path = await read($, transcriptPath)
     if (!path) {
       const configDir = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${(await $.env.get('HOME')) ?? ''}/.claude`
       path = transcriptPathOf(configDir, await read($, cwd), await $.session.id())
     }
-    return timesOf(await $.fs.read(path))
+    return await $.fs.read(path)
   } catch {
-    return new Map()
+    return ''
   }
 }
 
-/** Classifies the history before the mod loaded and puts it ahead of the live phases. */
+/** Puts the transcript's marks from before the live recording ahead of the ones it saw. */
+async function fillMarks($: EngineInterface, mine: number, jsonl: string): Promise<void> {
+  const since = await read($, liveSince)
+  const past = marksOf(jsonl).filter(m => m.at < since)
+  if (epoch !== mine) return
+  await update($, marks, list => [...past, ...list.filter(m => m.at >= since)].slice(-MAX_MARKS))
+}
+
 /** The conversation's messages, or none where the session cannot give them. */
 async function messageCount($: EngineInterface): Promise<number> {
   const messages = await $.session.messages().catch(() => undefined)
@@ -217,7 +237,7 @@ async function messageCount($: EngineInterface): Promise<number> {
  * Classifies the history before the live recording began and puts it ahead of the
  * live phases. Returns false where a reset made it stale before it finished.
  */
-async function fillHistory($: EngineInterface, mine: number): Promise<boolean> {
+async function fillHistory($: EngineInterface, mine: number, jsonl: string): Promise<boolean> {
   const all = await $.session.messages()
   if (!Array.isArray(all)) return true
   // Only what came before the live recording: a turn it saw, text alone included, is its own.
@@ -228,7 +248,7 @@ async function fillHistory($: EngineInterface, mine: number): Promise<boolean> {
   const known = new Set([...existing.flatMap(p => p.toolIds), ...(stretch?.steps.map(s => s.id) ?? [])])
   const liveStarts = [...existing.map(p => p.start), stretch?.start].filter((n): n is number => n !== undefined)
   const liveFrom = liveStarts.length > 0 ? Math.min(...liveStarts) : undefined
-  const past = timed(stretchesOf(messages, known), await readTimes($), liveFrom)
+  const past = timed(stretchesOf(messages, known), timesOf(jsonl), liveFrom)
   if (past.length === 0) return epoch === mine
 
   let done: Phase[] = []
@@ -255,7 +275,10 @@ async function openPane($: EngineInterface): Promise<boolean> {
     enqueue(async () => {
       try {
         // Marked done only once it is: a backfill a reload cuts short runs again on the next open.
-        if (await fillHistory($, mine)) await update($, isBackfilled, () => true)
+        const jsonl = await readTranscript($)
+        // The marks first: they cost no model call, and stand while the phases are judged.
+        await fillMarks($, mine, jsonl)
+        if (await fillHistory($, mine, jsonl)) await update($, isBackfilled, () => true)
       } finally {
         if (epoch === mine) {
           await update($, backfill, () => null)
@@ -286,6 +309,11 @@ async function reset($: EngineInterface): Promise<void> {
   await update($, expanded, () => [])
   await update($, recap, () => null)
   await update($, isBackfilled, () => false)
+  // The marks are read again off the transcript; where it cannot be read, the model now running still stands.
+  const now = await $.clock.now()
+  await update($, liveSince, () => now)
+  await update($, marks, () => [])
+  await noteModel($).catch(() => undefined)
 }
 
 async function startTurn($: EngineInterface, text: string): Promise<void> {
@@ -340,6 +368,12 @@ export const register: Register = (on, options) => {
       const count = await messageCount($)
       if (count >= 0) await update($, liveFromIndex, () => count)
     }
+    if ((await read($, liveSince)) <= 0) {
+      const now = await $.clock.now().catch(() => 0)
+      if (now > 0) await update($, liveSince, () => now)
+    }
+    // The model the session begins on; after a reload, the same one adds nothing.
+    await noteModel($).catch(() => undefined)
     // Unasked, the pane waits undrawn until the terminal is wide enough or the person opens it.
     if (isAutoOpen) void openPane($).catch(() => undefined)
     return next(e)
@@ -374,6 +408,8 @@ export const register: Register = (on, options) => {
   on('turn.start', async ($, e, next) => {
     if (!e.agentId) {
       isReplying = true
+      // A change of model is noted where the first turn runs on it.
+      await noteModel($).catch(() => undefined)
       await startTurn($, e.text).catch(() => undefined)
     }
     return next(e)
@@ -388,6 +424,27 @@ export const register: Register = (on, options) => {
       // Kept past a reload: the rows the reply drew may not be drawn again before the person asks.
       const row = latestRow ?? latestTool
       if (row) await update($, savedLatest, () => row).catch(() => undefined)
+    }
+    return done
+  })
+
+  on('session.compact', async ($, e, next) => {
+    const done = await next(e)
+    // The main conversation's own, installed: a precompute changes nothing yet, a skip nothing at all.
+    if (!e.agentId && e.trigger !== 'precompute' && done.skip === undefined) {
+      const { tokensBefore: before, tokensAfter: after } = done
+      const record = async () => {
+        const at = await $.clock.now()
+        const mark: Mark = {
+          kind: 'compact',
+          at,
+          trigger: e.trigger,
+          ...(before !== undefined ? { before } : {}),
+          ...(after !== undefined ? { after } : {}),
+        }
+        await update($, marks, list => [...list, mark].slice(-MAX_MARKS))
+      }
+      await record().catch(() => undefined)
     }
     return done
   })
@@ -428,10 +485,21 @@ export const register: Register = (on, options) => {
       </Text>
     ) : null
 
+    const noted = markRows(await read($, marks))
+    const markLine = (m: (typeof noted)[number]) => (
+      <Box key={m.key} flexDirection="column">
+        <Text dimColor wrap="truncate-end">
+          {clockOf(m.at)}  ◇ {m.text}
+        </Text>
+        <Text dimColor>{'       │'}</Text>
+      </Box>
+    )
+
     if (list.length === 0 && !current) {
       return (
         <Box flexDirection="column">
           {progress}
+          {noted.map(markLine)}
           <Text dimColor>まだ工程がありません。作業が進むと、区切りごとに工程名が付きます。</Text>
         </Box>
       )
@@ -469,6 +537,11 @@ export const register: Register = (on, options) => {
       if (r.deny) await $.ui.toast(`最新の会話へ移動できませんでした: ${r.deny}`)
     }
 
+    // Each mark goes ahead of the first phase that starts after it; one after them all, ahead of "now".
+    const starts = rows.map(r => r.members[0]?.start)
+    const slots = noted.map(m => slotOf(starts, m.at))
+    const marksAt = (i: number) => noted.filter((_, k) => slots[k] === i).map(markLine)
+
     const drawn = rows.map(({ group: g, members, isPending }, i) => {
       const isOpen = open.has(g.id)
       const ms = spent(members)
@@ -491,6 +564,7 @@ export const register: Register = (on, options) => {
       }
       return (
         <Box key={g.id} flexDirection="column">
+          {marksAt(i)}
           <Button key={'go-' + g.id} plain onPress={press}>
             {line}
           </Button>
@@ -558,6 +632,7 @@ export const register: Register = (on, options) => {
       <Box flexDirection="column">
         {progress}
         {drawn}
+        {marksAt(rows.length)}
         <Button key="now" plain onPress={toLatest}>
           <Text dimColor>{current ? clockOf(current.since) : clockOf(now)}  </Text>
           <Text color="suggestion">◉ </Text>
