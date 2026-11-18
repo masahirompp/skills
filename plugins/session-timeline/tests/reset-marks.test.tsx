@@ -3,7 +3,7 @@ import type { TestBody } from 'claude-code/testing'
 
 import { RECAP_SYSTEM, REGROUP_SYSTEM } from '../hooks/group'
 
-// /timeline reset replaces the marks with what the transcript gives, and loses none where it gives nothing.
+// /timeline reset loses no mark where the transcript cannot be read, nor one recorded while it runs.
 
 declare function setTimeout(fn: () => void, ms: number): unknown
 const settle = () => new Promise<void>(r => setTimeout(r, 300))
@@ -101,8 +101,8 @@ test('a mark recorded while a reset is under way is kept', async ($, on) => {
   world($, on, { model: () => 'claude-fable-5-2', start: Date.UTC(2026, 10, 17, 1, 0, 0), jsonl: () => jsonl })
   let isResetting = false
   on('state.set', async (_, e, next) => {
-    // The engine compacts as the reset writes where its live recording begins.
-    if (isResetting && e.key === 'liveSince') {
+    // The engine compacts as the reset asks for the transcript's marks again.
+    if (isResetting && e.key === 'isMarksFilled') {
       isResetting = false
       const set = await next(e)
       await $.session.compact({ trigger: 'auto', messages: [SUMMARY] } as never)

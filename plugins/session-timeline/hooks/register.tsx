@@ -28,7 +28,7 @@ const transcriptPath = atom({ plugin: 'session-timeline', key: 'transcriptPath' 
 const liveFromIndex = atom({ plugin: 'session-timeline', key: 'liveFromIndex' } as const, -1)
 /** The model changes and compactions, oldest first: those before `liveSince` read off the transcript, the rest seen live. */
 const marks = atom({ plugin: 'session-timeline', key: 'marks' } as const, [] as Mark[], { shape: 'marks-1' })
-/** When the live recording began (or was last reset): the transcript's marks from before it are the backfill's. 0 unknown. */
+/** When the live recording began, a reset leaving it be: the transcript's marks from before it are the backfill's. 0 unknown. */
 const liveSince = atom({ plugin: 'session-timeline', key: 'liveSince' } as const, 0)
 /**
  * Whether the transcript's marks from before `liveSince` are in. Apart from `isBackfilled`: the phases
@@ -268,8 +268,8 @@ async function readTranscript($: EngineInterface): Promise<Transcript | undefine
 }
 
 /**
- * Puts the transcript's marks from before the live recording ahead of the ones it saw.
- * Only a transcript that was read is given here: the marks it replaces are lost to it.
+ * Puts the transcript's marks from before the live recording ahead of the ones it saw, which it leaves as they are.
+ * Only a transcript that was read is given here: the earlier reading's marks it replaces are lost to it.
  */
 async function fillMarks($: EngineInterface, mine: number, found: readonly Mark[]): Promise<void> {
   const since = await read($, liveSince)
@@ -382,11 +382,9 @@ async function reset($: EngineInterface): Promise<void> {
   await update($, expanded, () => [])
   await update($, recap, () => null)
   await update($, isBackfilled, () => false)
-  // The marks from before now are read again off the transcript by the open after this. They are not
-  // dropped here: the transcript's replace them once it is read, and where it cannot be, they stand.
-  // A mark recorded while this runs is newer than `now`, and so is kept as well.
-  const now = await $.clock.now()
-  await update($, liveSince, () => now)
+  // The marks seen live stand as they are: the engine told them, and the transcript holds less (no model
+  // that answered nothing, not always a compaction's tokens after). `liveSince` stays where it is, so the
+  // open after this reads again off the transcript only the marks from before the live recording began.
   await update($, isMarksFilled, () => false)
   await noteModel($).catch(() => undefined)
 }
