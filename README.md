@@ -1,34 +1,43 @@
 # skills
 
-masahirompp の Claude Code 用 [Agent Skills](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview) 集。[Claude Code plugin](https://code.claude.com/docs/en/plugins) として配布している（このリポジトリが plugin marketplace 兼、全スキルを同梱するプラグイン `masahirompp-skills`）。スキルとは別に、Claude Code の画面を拡張する mod（関数フックのプラグイン）を `plugins/` に置いている。
+masahirompp の Claude Code 用 [Agent Skills](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview) 集。[Claude Code plugin](https://code.claude.com/docs/en/plugins) として配布している。このリポジトリは plugin marketplace で、系統ごとに3つのプラグインを載せている。
+
+| プラグイン | 中身 |
+| --- | --- |
+| `cycle-rewrite` | サイクル型リライト開発ワークフロー（スキル cycle-rewrite） |
+| `dev-tools` | どのリポジトリでも使う開発作業の道具（スキル review-loop・housekeeping・issue-check・next-issues） |
+| `session-timeline` | Claude Code の画面を拡張する mod（関数フック） |
 
 ## 構成
 
-`skills/` 配下の各ディレクトリが1スキル。[Agent Skills の仕様](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/skill-authoring-best-practices)に従い、`SKILL.md`（YAML frontmatter の `name` はディレクトリ名と一致、`description` は 1024 文字以内。`description` に `: ` などを含む場合は `>-` のブロックスカラーで書く。Claude Code は寛容に読むが、`npx skills` は厳密な YAML パーサーを使うため、そのままだと読み込みに失敗する）と、必要に応じて `references/` などの補助ファイルを置く。スキルを追加するときは `skills/` にディレクトリを足すだけでプラグインに含まれる。
+プラグインは `plugins/<plugin-name>/` に1つずつ置き、スキルはその中の `skills/<skill-name>/` に置く。各スキルは[Agent Skills の仕様](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/skill-authoring-best-practices)に従い、`SKILL.md`（YAML frontmatter の `name` はディレクトリ名と一致、`description` は 1024 文字以内。`description` に `: ` などを含む場合は `>-` のブロックスカラーで書く。Claude Code は寛容に読むが、`npx skills` は厳密な YAML パーサーを使うため、そのままだと読み込みに失敗する）と、必要に応じて `references/` などの補助ファイルを置く。スキルを追加するときは、合うプラグインの `skills/` にディレクトリを足すだけでそのプラグインに含まれる。
 
 ```
 .claude-plugin/
-├── plugin.json       # プラグイン定義（名前 "masahirompp-skills"、skills/ を参照）
-└── marketplace.json  # マーケットプレイス定義（名前 "masahirompp"。masahirompp-skills と plugins/ の mod を載せる）
-skills/
-└── <skill-name>/
-    ├── SKILL.md      # frontmatter (name, description) + 本文
-    └── references/   # 必要時に読み込まれる詳細ドキュメント
+└── marketplace.json        # マーケットプレイス定義（名前 "masahirompp"。plugins/ の3つを載せる）
 plugins/
-└── <mod-name>/       # mod 1 つが 1 プラグイン（独自の .claude-plugin/plugin.json と hooks/ を持つ）
+├── cycle-rewrite/          # スキルのプラグイン
+│   ├── .claude-plugin/plugin.json   # skills/ を参照
+│   └── skills/
+│       └── <skill-name>/
+│           ├── SKILL.md    # frontmatter (name, description) + 本文
+│           └── references/ # 必要時に読み込まれる詳細ドキュメント
+├── dev-tools/              # スキルのプラグイン（構成は cycle-rewrite と同じ）
+└── session-timeline/       # mod（独自の .claude-plugin/plugin.json と hooks/ を持つ）
+skill-dev/                  # 開発用資産（どのプラグインにも含まれない）
 ```
 
-`skill-dev/` はスキル本体ではなく開発用資産（eval 定義・fixture 生成スクリプト・ベンチマーク履歴、スクリプトのテストと偽コマンド）。プラグインには含まれず、Claude Code には読み込ませない。
+`skill-dev/` はスキル本体ではなく開発用資産（eval 定義・fixture 生成スクリプト・ベンチマーク履歴、スクリプトのテストと偽コマンド）。プラグインのディレクトリの外にあるので、インストール時にプラグインのキャッシュへ複製されず、Claude Code にも読み込まれない。
 
 ## スキル一覧
 
-| スキル | 概要 |
-| --- | --- |
-| [cycle-rewrite](skills/cycle-rewrite/SKILL.md) | サイクル型リライト開発ワークフローの管理。PoC/プロトタイプをサイクル単位でゼロから書き直し、仕様と学び（PRODUCT.md・ADR・CONTEXT.md・プロジェクトスキル）を永続資産として積み上げる開発方式のオーケストレーション |
-| [housekeeping](skills/housekeeping/SKILL.md) | git リポジトリの後片付け。PR マージ済み・ローカルでマージ済みのブランチと worktree をまとめて削除する。作業中のものと監査用ブランチ（entire.io の `entire/*`）は残す |
-| [issue-check](skills/issue-check/SKILL.md) | 開発・企画・施策の依頼を着手前に判定する。課題は本物か、提案された手段はその課題を解くかを、依頼の重さに応じた深さで確かめ、判定だけを返す。作業自体は行わない |
-| [next-issues](skills/next-issues/SKILL.md) | 次の1回の本番リリースで出す issue を選び、計画の承認、PR 作成とレビュー、マージ、本番リリースと本番での確認までを一続きで終わらせる。選ぶ前に候補を issue-check で判定する。`/masahirompp-skills:next-issues` と名指しで呼んだときだけ動く |
-| [review-loop](skills/review-loop/SKILL.md) | 自分の PR のレビューループ。レビュースキルを並行に実行し、指摘のうち再現できたものだけを直す、を直す対象が無くなるまで回す |
+| スキル | プラグイン | 概要 |
+| --- | --- | --- |
+| [cycle-rewrite](plugins/cycle-rewrite/skills/cycle-rewrite/SKILL.md) | cycle-rewrite | サイクル型リライト開発ワークフローの管理。PoC/プロトタイプをサイクル単位でゼロから書き直し、仕様と学び（PRODUCT.md・ADR・CONTEXT.md・プロジェクトスキル）を永続資産として積み上げる開発方式のオーケストレーション |
+| [housekeeping](plugins/dev-tools/skills/housekeeping/SKILL.md) | dev-tools | git リポジトリの後片付け。PR マージ済み・ローカルでマージ済みのブランチと worktree をまとめて削除する。作業中のものと監査用ブランチ（entire.io の `entire/*`）は残す |
+| [issue-check](plugins/dev-tools/skills/issue-check/SKILL.md) | dev-tools | 開発・企画・施策の依頼を着手前に判定する。課題は本物か、提案された手段はその課題を解くかを、依頼の重さに応じた深さで確かめ、判定だけを返す。作業自体は行わない |
+| [next-issues](plugins/dev-tools/skills/next-issues/SKILL.md) | dev-tools | 次の1回の本番リリースで出す issue を選び、計画の承認、PR 作成とレビュー、マージ、本番リリースと本番での確認までを一続きで終わらせる。選ぶ前に候補を issue-check で判定する。`/dev-tools:next-issues` と名指しで呼んだときだけ動く |
+| [review-loop](plugins/dev-tools/skills/review-loop/SKILL.md) | dev-tools | 自分の PR のレビューループ。レビュースキルを並行に実行し、指摘のうち再現できたものだけを直す、を直す対象が無くなるまで回す |
 
 ## mod 一覧
 
@@ -50,26 +59,21 @@ npx skills add masahirompp/skills
 
 ### Claude Code プラグイン
 
-Claude Code のプラグインとしてインストールする:
+Claude Code のプラグインとしてインストールする。使うものだけを入れればよい:
 
 ```
 /plugin marketplace add masahirompp/skills
-/plugin install masahirompp-skills@masahirompp
-```
-
-インストール後、各スキルは `masahirompp-skills:<skill-name>`（例: `/masahirompp-skills:cycle-rewrite`）として呼び出せる。更新は `/plugin marketplace update masahirompp`。
-
-mod は個別にインストールする（skills CLI では入らない）:
-
-```
-/plugin marketplace add masahirompp/skills
+/plugin install cycle-rewrite@masahirompp
+/plugin install dev-tools@masahirompp
 /plugin install session-timeline@masahirompp
 ```
+
+インストール後、各スキルは `<プラグイン名>:<スキル名>`（例: `/cycle-rewrite:cycle-rewrite`、`/dev-tools:review-loop`）として呼び出せる。更新は `/plugin marketplace update masahirompp`。mod（session-timeline）は skills CLI では入らない。
 
 プラグインを使わず user scope に直接置く場合はシンボリックリンクを張る:
 
 ```sh
-ln -s ../../ghq/github.com/masahirompp/skills/skills/cycle-rewrite ~/.claude/skills/cycle-rewrite
+ln -s ../../ghq/github.com/masahirompp/skills/plugins/cycle-rewrite/skills/cycle-rewrite ~/.claude/skills/cycle-rewrite
 ```
 
 ## 開発（eval の回し方）

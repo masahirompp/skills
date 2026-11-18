@@ -37,7 +37,8 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 BENCH = os.path.join(os.path.dirname(HERE), "bench")
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
-PLUGIN_ID = "masahirompp-skills@masahirompp"
+PLUGIN_ID = "dev-tools@masahirompp"
+PLUGIN_SUBDIR = os.path.join("plugins", "dev-tools")
 BRANCH_PREFIX = "e2e-"
 REPO_PREFIX = "rlbench-"
 STRIP_ENV = ("CLAUDE_JOB_DIR", "CLAUDE_CODE_SESSION_KIND", "CLAUDE_CODE_SESSION_ID")
@@ -77,7 +78,7 @@ def plugin_info(plugin_dir):
     installed = [p for p in json.loads(sh(["claude", "plugin", "list", "--json"])) if p["id"] == PLUGIN_ID and p.get("enabled")]
     info = {"mode": "plugin-dir" if plugin_dir else "installed",
             "repo_head": sh(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT).strip(),
-            "repo_skill_sha256": digest(os.path.join(REPO_ROOT, "skills", "review-loop", "SKILL.md"))}
+            "repo_skill_sha256": digest(os.path.join(REPO_ROOT, PLUGIN_SUBDIR, "skills", "review-loop", "SKILL.md"))}
     if installed:
         p = installed[0]
         info["installed_version"] = p["version"]
@@ -428,7 +429,7 @@ def main():
     r = sub.add_parser("run")
     r.add_argument("case")
     r.add_argument("--keep", action="store_true", help="試し用の PR、ブランチ、写しを残す")
-    r.add_argument("--plugin-dir", help="導入済みの版の代わりに、このディレクトリのプラグインを読ませる(例: リポジトリのルート)")
+    r.add_argument("--plugin-dir", help="導入済みの版の代わりに、このディレクトリのプラグインを読ませる(例: リポジトリの plugins/dev-tools)")
     r.add_argument("--model", default="claude-opus-5-5")
     r.add_argument("--max-minutes", type=int)
     r.add_argument("--work-root", default="~/rlbench-e2e")
