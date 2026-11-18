@@ -54,24 +54,31 @@ export function stretchesOf(messages: readonly SessionMessage[], known: Readonly
 
 /** Each tool call's start and end, read off the transcript file's lines. */
 export function timesOf(jsonl: string): Map<string, { start?: number; end?: number }> {
+  const reader = timeReader()
+  for (const line of jsonl.split('\n')) reader.take(line)
+  return reader.times
+}
+
+/** `timesOf`, a line at a time: a transcript file too large for one read is taken in as it comes, never held whole. */
+export function timeReader(): { take: (line: string) => void; times: Map<string, { start?: number; end?: number }> } {
   const times = new Map<string, { start?: number; end?: number }>()
-  for (const line of jsonl.split('\n')) {
-    if (!line.includes('"tool_use') && !line.includes('"tool_result')) continue
+  const take = (line: string): void => {
+    if (!line.includes('"tool_use') && !line.includes('"tool_result')) return
     let row: { type?: string; timestamp?: string; message?: { content?: unknown } }
     try {
       row = JSON.parse(line)
     } catch {
-      continue
+      return
     }
     const t = row.timestamp ? Date.parse(row.timestamp) : NaN
     const content = row.message?.content
-    if (Number.isNaN(t) || !Array.isArray(content)) continue
+    if (Number.isNaN(t) || !Array.isArray(content)) return
     for (const b of content as { type?: string; id?: string; tool_use_id?: string }[]) {
       if (b.type === 'tool_use' && b.id) times.set(b.id, { ...times.get(b.id), start: t })
       if (b.type === 'tool_result' && b.tool_use_id) times.set(b.tool_use_id, { ...times.get(b.tool_use_id), end: t })
     }
   }
-  return times
+  return { take, times }
 }
 
 /**

@@ -49,9 +49,16 @@ export function observed(marks: readonly Mark[], model: string, at: number, isMi
  * from the row before, and each compaction boundary.
  */
 export function marksOf(jsonl: string): Mark[] {
+  const reader = markReader()
+  for (const line of jsonl.split('\n')) reader.take(line)
+  return reader.marks()
+}
+
+/** `marksOf`, a line at a time: a transcript file too large for one read is taken in as it comes, never held whole. */
+export function markReader(): { take: (line: string) => void; marks: () => Mark[] } {
   let out: Mark[] = []
-  for (const line of jsonl.split('\n')) {
-    if (!line.includes('"model"') && !line.includes('compact_boundary')) continue
+  const take = (line: string): void => {
+    if (!line.includes('"model"') && !line.includes('compact_boundary')) return
     let row: {
       type?: string
       subtype?: string
@@ -63,10 +70,10 @@ export function marksOf(jsonl: string): Mark[] {
     try {
       row = JSON.parse(line)
     } catch {
-      continue
+      return
     }
     const at = row.timestamp ? Date.parse(row.timestamp) : NaN
-    if (Number.isNaN(at) || row.isSidechain === true) continue
+    if (Number.isNaN(at) || row.isSidechain === true) return
     if (row.type === 'system' && row.subtype === 'compact_boundary') {
       const meta = row.compactMetadata
       out.push({
@@ -82,7 +89,7 @@ export function marksOf(jsonl: string): Mark[] {
       if (typeof model === 'string' && model !== '' && !model.startsWith('<')) out = observed(out, model, at)
     }
   }
-  return capped(out)
+  return { take, marks: () => capped(out) }
 }
 
 const TRIGGERS: Record<string, string> = { auto: '自動', manual: '手動', plugin: 'プラグイン' }

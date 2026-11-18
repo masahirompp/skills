@@ -2,11 +2,12 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelCompleteResult, Register } from 'claude-code'
 
 import type { Backfill, Group, Live, Mark, Phase, Recap, Usage } from '../types'
-import { stretchesOf, timed, timesOf, transcriptPathOf } from './backfill'
+import { stretchesOf, timeReader, timed, transcriptPathOf } from './backfill'
+import type { Times } from './backfill'
 import { BOUNDARY_TOOLS, MAX_STEPS, SYSTEM, briefOf, fold, outcomeOf, parseVerdict, promptOf } from './classify'
 import type { Step, Stretch, Verdict } from './classify'
 import { RECAP_SYSTEM, REGROUP_SYSTEM, groupsByKind, mergeSameKind, parseGroups, parseRecap, recapPrompt, regroupPrompt } from './group'
-import { capped, isNewModel, markRows, marksOf, observed, placeOf } from './marks'
+import { capped, isNewModel, markReader, markRows, observed, placeOf } from './marks'
 import { cells, clockOf, colorOf, durationOf, padCells, usageLine } from './view'
 
 const PANE = 'session-timeline'
@@ -215,15 +216,52 @@ async function noteModel($: EngineInterface, isStart = false): Promise<void> {
   await update($, marks, list => observed(list, model, at, !isStart))
 }
 
-/** The transcript file's text; undefined where it cannot be read. */
-async function readTranscript($: EngineInterface): Promise<string | undefined> {
+/** What the timeline takes from the transcript file: the marks, and each tool call's times. */
+type Transcript = { marks: Mark[]; times: Times }
+
+/** How much of the transcript file one ranged read asks for: `$.fs.read` answers 4 MiB at most. */
+const RANGE_BYTES = 2 * 1024 * 1024
+/** Ranged reads of one file, at most: a read that never comes back empty is given up on. */
+const MAX_RANGES = 4096
+
+/**
+ * Reads the transcript file; undefined where it cannot be read. A file over the 4 MiB one
+ * read may answer is read by ranges, its lines taken in as they come: transcripts grow well past that.
+ */
+async function readTranscript($: EngineInterface): Promise<Transcript | undefined> {
   try {
     let path = await read($, transcriptPath)
     if (!path) {
       const configDir = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${(await $.env.get('HOME')) ?? ''}/.claude`
       path = transcriptPathOf(configDir, await read($, cwd), await $.session.id())
     }
-    return await $.fs.read(path)
+    const marks = markReader()
+    const times = timeReader()
+    const take = (line: string) => {
+      marks.take(line)
+      times.take(line)
+    }
+    // Whole where it fits. The read is refused for a file too large as for one missing: the ranges tell which.
+    const whole = await $.fs.read(path).catch(() => undefined)
+    if (whole !== undefined) {
+      for (const line of whole.split('\n')) take(line)
+    } else {
+      // A range's edge may cut a line, or a character in it (U+FFFD there, inside a string: the row still parses).
+      let rest = ''
+      let n = 0
+      for (;;) {
+        if (n >= MAX_RANGES) return undefined
+        const text = await $.fs.read(path, { offset: n * RANGE_BYTES, length: RANGE_BYTES })
+        // Past the file's end the read is empty.
+        if (text === '') break
+        n += 1
+        const lines = (rest + text).split('\n')
+        rest = lines.pop() ?? ''
+        for (const line of lines) take(line)
+      }
+      take(rest)
+    }
+    return { marks: marks.marks(), times: times.times }
   } catch {
     return undefined
   }
@@ -233,9 +271,9 @@ async function readTranscript($: EngineInterface): Promise<string | undefined> {
  * Puts the transcript's marks from before the live recording ahead of the ones it saw.
  * Only a transcript that was read is given here: the marks it replaces are lost to it.
  */
-async function fillMarks($: EngineInterface, mine: number, jsonl: string): Promise<void> {
+async function fillMarks($: EngineInterface, mine: number, found: readonly Mark[]): Promise<void> {
   const since = await read($, liveSince)
-  const past = marksOf(jsonl).filter(m => m.at < since)
+  const past = found.filter(m => m.at < since)
   if (epoch !== mine) return
   await update($, marks, list => capped([...past, ...list.filter(m => m.at >= since)]))
   if (epoch !== mine) return
@@ -250,8 +288,8 @@ function retryMarks($: EngineInterface): void {
   const mine = epoch
   enqueue(async () => {
     if (epoch !== mine || (await read($, isMarksFilled))) return
-    const jsonl = await readTranscript($)
-    if (jsonl !== undefined) await fillMarks($, mine, jsonl)
+    const transcript = await readTranscript($)
+    if (transcript) await fillMarks($, mine, transcript.marks)
   })
 }
 
@@ -265,7 +303,7 @@ async function messageCount($: EngineInterface): Promise<number> {
  * Classifies the history before the live recording began and puts it ahead of the
  * live phases. Returns false where a reset made it stale before it finished.
  */
-async function fillHistory($: EngineInterface, mine: number, jsonl: string): Promise<boolean> {
+async function fillHistory($: EngineInterface, mine: number, times: Times): Promise<boolean> {
   const all = await $.session.messages()
   if (!Array.isArray(all)) return true
   // Only what came before the live recording: a turn it saw, text alone included, is its own.
@@ -276,7 +314,7 @@ async function fillHistory($: EngineInterface, mine: number, jsonl: string): Pro
   const known = new Set([...existing.flatMap(p => p.toolIds), ...(stretch?.steps.map(s => s.id) ?? [])])
   const liveStarts = [...existing.map(p => p.start), stretch?.start].filter((n): n is number => n !== undefined)
   const liveFrom = liveStarts.length > 0 ? Math.min(...liveStarts) : undefined
-  const past = timed(stretchesOf(messages, known), timesOf(jsonl), liveFrom)
+  const past = timed(stretchesOf(messages, known), times, liveFrom)
   if (past.length === 0) return epoch === mine
 
   let done: Phase[] = []
@@ -305,11 +343,11 @@ async function openPane($: EngineInterface): Promise<boolean> {
     enqueue(async () => {
       try {
         // Marked done only once it is: a backfill a reload cuts short runs again on the next open.
-        const jsonl = await readTranscript($)
+        const transcript = await readTranscript($)
         // The marks first: they cost no model call, and stand while the phases are judged.
         // Where the transcript cannot be read, the marks recorded so far stand as they are.
-        if (jsonl !== undefined) await fillMarks($, mine, jsonl)
-        if (await fillHistory($, mine, jsonl ?? '')) await update($, isBackfilled, () => true)
+        if (transcript) await fillMarks($, mine, transcript.marks)
+        if (await fillHistory($, mine, transcript?.times ?? new Map())) await update($, isBackfilled, () => true)
       } finally {
         if (epoch === mine) {
           await update($, backfill, () => null)
