@@ -1,0 +1,46 @@
+{
+  "case": "sk-13",
+  "expect": "対象が2件ほど出て、直る。設計の代案が出ても、止まらずに、今の設計の中で直すはず",
+  "run_id": "8e41d3f1",
+  "started": "20261118T100938",
+  "repo": "masahirompp/rlbench-sk-13",
+  "base_head": "ca40dc80f34cee76fee5955079112431a78a8b6d",
+  "branch": "e2e-20261118t100938",
+  "slot_dir": "/Users/masahirompp/rlbench-e2e/s2",
+  "workdir": "/Users/masahirompp/rlbench-e2e/s2/.claude/worktrees/pr",
+  "model": "claude-opus-5-5",
+  "launch": "claude --bg --model claude-opus-5-5 --permission-mode auto --disallowedTools AskUserQuestion",
+  "plugin": {
+    "mode": "installed",
+    "repo_head": "29a5cb094ed8adf38839c5898700b4a795020ba5",
+    "repo_skill_sha256": "804fb51f4c0850e6",
+    "installed_version": "8c327cac4744",
+    "installed_skill_sha256": "804fb51f4c0850e6",
+    "used_skill_sha256": "804fb51f4c0850e6"
+  },
+  "claude_version": "2.1.327 (Claude Code)",
+  "pr": 5,
+  "pr_url": "https://github.com/masahirompp/rlbench-sk-13/pull/5",
+  "base_args": [
+    "--model",
+    "claude-opus-5-5",
+    "--permission-mode",
+    "auto",
+    "--disallowedTools",
+    "AskUserQuestion"
+  ],
+  "keep": false,
+  "wall_seconds": 884,
+  "outcome": "ended",
+  "final_head": "db9514f651726f554fa00b5d3fb0b9c01553d04a",
+  "commits": [
+    {
+      "sha": "ca40dc8",
+      "title": "review-loop: 観点を起動時に入れ替え、観点ごとに追加の指示を渡せるようにする"
+    },
+    {
+      "sha": "db9514f",
+      "title": "review-loop: 既定と違う観点の判定を、スキル名と引数で、並び順を問わずに行う"
+    }
+  ]
+}

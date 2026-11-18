@@ -1,0 +1,70 @@
+diff --git a/skill-dev/review-loop/test.py b/skill-dev/review-loop/test.py
+index ef5717d..3b73534 100644
+--- a/skill-dev/review-loop/test.py
++++ b/skill-dev/review-loop/test.py
+@@ -569,11 +569,29 @@ def system_prompt(c):
+       "--instruct はその観点のシステムプロンプトに足し、同じ観点への指示は改行でつなぐ")
+ check("削除したファイル" not in by_name.get("mattpocock-skills:code-review", "x"), "--instruct はほかの観点には渡さない")
+ check(judge and "観点 code-review に利用者が与えた追加の指示" in judge[0]["stdin"], "追加の指示は判定役の入力にも添える")
+-check(state()["attempts"][-1].get("perspectives") == ["code-review", "mattpocock-skills:code-review"]
+-      and "観点 code-review, mattpocock-skills:code-review" in comments()[0]["body"],
+-      "既定と違う観点で回したら、観点の名前を状態コメントに残す")
++check(state()["attempts"][-1].get("perspectives") == ["code-review high 7", "mattpocock-skills:code-review PR #7"]
++      and "観点 code-review high 7, mattpocock-skills:code-review PR #7" in comments()[0]["body"],
++      "既定と違う観点で回したら、その観点を引数ごと状態コメントに残す")
+ rc, _, _ = run(wt)
+-check(rc == 0 and "perspectives" not in state()["attempts"][-1], "既定の観点で回したら、観点の名前は残さない")
++check(rc == 0 and "perspectives" not in state()["attempts"][-1], "既定の観点で回したら、観点は残さない")
++rc, _, _ = run(wt, "--perspective", "code-review medium {pr}", "--perspective", "security-review",
++               "--perspective", "mattpocock-skills:code-review PR #{pr}")
++check(rc == 0 and state()["attempts"][-1].get("perspectives")
++      == ["code-review medium 7", "security-review", "mattpocock-skills:code-review PR #7"]
++      and "観点 code-review medium 7, security-review" in comments()[0]["body"],
++      "引数だけ既定と違う観点で回しても、既定と違うとして残す")
++rc, _, _ = run(wt, "--perspective", "mattpocock-skills:code-review PR #{pr}", "--perspective", "security-review",
++               "--perspective", "code-review high {pr}")
++check(rc == 0 and "perspectives" not in state()["attempts"][-1], "既定と同じ観点を並び順だけ変えて回したら、観点は残さない")
++
++# 以前の版が書いた状態(観点の記録がないもの、スキル名だけを記録したもの)も読める
++old = state()
++old["attempts"] = [{k: v for k, v in a.items() if k != "perspectives"} for a in old["attempts"]]
++old["attempts"][0]["perspectives"] = ["code-review", "mattpocock-skills:code-review"]
++write_state(old)
++rc, _, err = run(wt)
++check(rc == 0 and "観点 code-review, mattpocock-skills:code-review" in comments()[0]["body"],
++      f"観点をスキル名だけで記録した状態も読める {err[-300:] if rc else ''}")
+ 
+ before = json.dumps(state())
+ for flags, label in ((("--instruct", "security-review"), "`=` のない --instruct"),
+diff --git a/skills/review-loop/SKILL.md b/skills/review-loop/SKILL.md
+index d66563d..beb8608 100644
+--- a/skills/review-loop/SKILL.md
++++ b/skills/review-loop/SKILL.md
+@@ -52,7 +52,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/review_loop.py iterate <worktree の絶対
+ ```
+ 
+ - `--instruct <スキル名>=<指示>`: その観点のレビュー役だけに、追加の指示を渡す。スキルの引数ではなくシステムプロンプトに足し、スキルの手順より優先するよう添える(引数の読み方はスキルごとに違い、`security-review` のように引数を取らないものもあるため)。判定役の入力にも添えるので、指示で外した範囲を「観点の欠落」とは扱わない。繰り返せて、同じ観点への指示は改行でつながる。使う観点にないスキル名を書くと、終了コード2で止まる。指示は LLM への依頼なので、守られる保証はない
+-- `--perspective <スキル名と引数>`: 1つでも渡すと、`PERSPECTIVES` の代わりに渡したものだけを使う。書き方は `PERSPECTIVES` の要素と同じ。既定と違う観点で回した試行は、状態コメントの表に観点の名前が載る
++- `--perspective <スキル名と引数>`: 1つでも渡すと、`PERSPECTIVES` の代わりに渡したものだけを使う。書き方は `PERSPECTIVES` の要素と同じ。既定と違う観点(スキル名か引数が違う。並び順だけの違いは含めない)で回した試行は、状態コメントの表に、その試行で使った観点が `{pr}` を置き換えた形で載る
+ 
+ どちらも、利用者に指示されたときだけ付ける。観点を外すとレビューの範囲が狭まり、指示は観点の検査を緩めるため。失敗の対処として有効そうなら、自分では付けずに利用者に提案する(「失敗したとき」)。付けたら、利用者が変えるよう言うまで、以後の反復でも毎回同じものを付ける。スクリプトは反復をまたいでオプションを覚えないので、付け忘れると既定に戻る。
+ 
+diff --git a/skills/review-loop/scripts/review_loop.py b/skills/review-loop/scripts/review_loop.py
+index ef8d01c..92082ec 100755
+--- a/skills/review-loop/scripts/review_loop.py
++++ b/skills/review-loop/scripts/review_loop.py
+@@ -959,9 +959,11 @@ def iterate(worktree, new_run, ctx, specs=None, instructs=None):
+             raise Precondition(f"連続失敗が {MAX_CONSECUTIVE_FAILURES} 回に達した。原因を取り除いてから、利用者の指示で --new-run する")
+ 
+         attempt = {"sha": start["head"], "at": state["lock"]["started_at"], "result": "failed", "tokens": new_tokens()}
+-        names = [skill_name(s) for s in perspectives]
+-        if names != [skill_name(s) for s in PERSPECTIVES]:  # 既定と違う観点で回したことを、表から読めるようにする
+-            attempt["perspectives"] = names
++        # 既定と違う観点で回したことを、表から読めるようにする。観点はスキル名と引数で、並び順は問わない。
++        # 記録するのは {pr} を置き換えた後の形(子に渡すのと同じ)。以前の版はスキル名だけを書いていた
++        used = [expand(s, start) for s in perspectives]
++        if sorted(used) != sorted(expand(s, start) for s in PERSPECTIVES):
++            attempt["perspectives"] = used
+         ctx["attempt"] = attempt
+         ctx["workdir"] = make_workdir(start, state["run_id"], len(state["attempts"]) + 1)
+         log(f"作業ディレクトリ: {ctx['workdir']}")

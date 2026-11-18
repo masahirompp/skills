@@ -245,7 +245,9 @@ def drive(conf, workdir, base_args, out_dir, pr, prior=None):
             log(f"ターンが終わらずに止まった: {state}")
             break
         rule = None
-        if final_next or re.search(conf["end_match"], text):
+        # 判断を仰ぐ出力にも「最後にレビューした SHA」が入ることがある(2026-11-18 の sk-12)。仰いでいれば、終了と読まない
+        asking = bool(conf.get("ask_match") and re.search(conf["ask_match"], text))
+        if final_next or (re.search(conf["end_match"], text) and not asking):
             turn["decision"] = "end"
             outcome = "ended"
             break

@@ -1,8 +1,9 @@
 {
-  "_comment": "題材ごとの、別セッションへの答え方。別セッションのターンが終わるたびに、最後の出力を上から順に照らす。end_match に当たれば終了。answers の match(正規表現)に当たれば reply を返す(final が true なら、次のターンの終わりで終了)。どれにも当たらなければ default_reply。",
+  "_comment": "題材ごとの、別セッションへの答え方。別セッションのターンが終わるたびに、最後の出力を上から順に照らす。ask_match に当たらず、end_match に当たれば終了。answers の match(正規表現)に当たれば reply を返す(final が true なら、次のターンの終わりで終了)。どれにも当たらなければ default_reply。",
   "defaults": {
     "prompt": "PR #{pr} のレビューループを回してください。",
     "end_match": "最後にレビューした\\s*`?SHA",
+    "ask_match": "決めてほしい|判断を仰|判断していただ|ご判断ください|判断をお願い",
     "default_reply": "あなたの勧める道で進めてください。",
     "max_replies": 4,
     "max_minutes": 60,
