@@ -58,6 +58,12 @@ npx skills add masahirompp/skills
 
 ### Claude Code プラグイン
 
+以前の `masahirompp-skills` プラグインは `cycle-rewrite` と `dev-tools` に分かれた。入れていた場合は、先に外す(マーケットプレイスから消えたので、残しておいても読み込みに失敗するだけで、更新されない):
+
+```
+/plugin uninstall masahirompp-skills@masahirompp
+```
+
 Claude Code のプラグインとしてインストールする。使うものだけを入れればよい:
 
 ```
@@ -68,8 +74,6 @@ Claude Code のプラグインとしてインストールする。使うもの�
 ```
 
 インストール後、各スキルは `<プラグイン名>:<スキル名>`（例: `/cycle-rewrite:cycle-rewrite`、`/dev-tools:review-loop`）として呼び出せる。更新は `/plugin marketplace update masahirompp`。mod（session-timeline）は skills CLI では入らない。
-
-以前の `masahirompp-skills` プラグインは `cycle-rewrite` と `dev-tools` に分かれた。入れていた場合は `/plugin uninstall masahirompp-skills@masahirompp` で外し、上の2つを入れ直す。
 
 プラグインを使わず user scope に直接置く場合はシンボリックリンクを張る:
 
