@@ -525,3 +525,27 @@ test('a prompt said while the pane reads the history is kept, though the history
   await settle()
   expect(await listed($)).toEqual(['https://github.com/o/r/issues/9', 'https://github.com/o/r/issues/1'])
 })
+
+const TOKYO = 'https://ja.wikipedia.org/wiki/東京'
+const TOKYO_HREF = 'https://ja.wikipedia.org/wiki/%E6%9D%B1%E4%BA%AC'
+
+test('a URL argument holding Japanese is listed whole as the call goes, not cut as a sentence is', async ($, on) => {
+  engine(on, () => [])
+  on('tool.call', () => ({ text: 'page', result: {} }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: '調べて', turnId: 't1' })
+  await $.tool.call({ tool: 'WebFetch', url: TOKYO, prompt: 'read', tool_use_id: 'f1' })
+  await settle()
+  expect(await listed($)).toEqual([TOKYO_HREF])
+})
+
+test('a URL argument holding Japanese is listed whole when the history is read again', { options: { autoOpen: false } }, async ($, on) => {
+  engine(on, () => [
+    { role: 'user', text: '調べて', toolUses: [] },
+    { role: 'assistant', text: '', toolUses: [{ tool_use_id: 'f1', tool: 'WebFetch', input: { url: TOKYO, prompt: 'read' }, text: 'page' }] },
+  ])
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await settle()
+  expect(await listed($)).toEqual([TOKYO_HREF])
+})

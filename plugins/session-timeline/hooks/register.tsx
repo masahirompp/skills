@@ -7,7 +7,8 @@ import type { Times } from './backfill'
 import { BOUNDARY_TOOLS, MAX_STEPS, SYSTEM, briefOf, fold, outcomeOf, parseVerdict, promptOf } from './classify'
 import type { Step, Stretch, Verdict } from './classify'
 import { RECAP_SYSTEM, REGROUP_SYSTEM, groupsByKind, mergeSameKind, parseGroups, parseRecap, recapPrompt, regroupPrompt } from './group'
-import { addLinks, callMentions, mentionsOf, NOT_ARGUMENTS } from './links'
+import type { Mention } from './links'
+import { addLinks, mentionsOf, NOT_ARGUMENTS, toolMentions } from './links'
 import { cells, clockOf, colorOf, durationOf, padCells, usageLine } from './view'
 
 const PANE = 'session-timeline'
@@ -163,7 +164,7 @@ async function writeRecap($: EngineInterface, mine: number): Promise<void> {
 }
 
 /** The URLs said in the conversation `mine` as it goes: a prompt, an answer, a tool call's arguments. */
-async function noteLinks($: EngineInterface, mentions: readonly string[], mine: number): Promise<void> {
+async function noteLinks($: EngineInterface, mentions: readonly Mention[], mine: number): Promise<void> {
   if (conversation !== mine) return
   for (const said of saidDuringRescan) said.push(...mentions)
   // Checked again as the change applies: the read beneath `update` (and its retry) can outlast a switch,
@@ -172,7 +173,7 @@ async function noteLinks($: EngineInterface, mentions: readonly string[], mine: 
 }
 
 /** What is said while a rescan is out, one list per rescan: the messages it read may not hold it yet. */
-const saidDuringRescan = new Set<string[]>()
+const saidDuringRescan = new Set<Mention[]>()
 
 /**
  * The links of the whole conversation, read again from its messages: the history before the mod loaded, or /resume's.
@@ -181,7 +182,7 @@ const saidDuringRescan = new Set<string[]>()
  */
 async function rescan($: EngineInterface): Promise<void> {
   const mine = conversation
-  const said: string[] = []
+  const said: Mention[] = []
   saidDuringRescan.add(said)
   try {
     const messages = await $.session.messages().catch(() => undefined)
@@ -560,7 +561,7 @@ export const register: Register = (on, options) => {
     if (!e.agentId) {
       // The tool's arguments alone: what rides beside them (consent, requestMeta) is no one's pick.
       const args = Object.fromEntries(Object.entries(e).filter(([k]) => !NOT_ARGUMENTS.includes(k)))
-      await noteLinks($, callMentions(e.tool, args), mine).catch(() => undefined)
+      await noteLinks($, toolMentions(e.tool, args), mine).catch(() => undefined)
     }
     const outcome = outcomeOf(e.tool, ran.result ?? ran.text)
     const step: Step = {

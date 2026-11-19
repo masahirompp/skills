@@ -48,12 +48,15 @@ function trimEnd(url: string): string {
   }
 }
 
+/** A host to open: not a template (`https://${host}/x`) nor a bare word (`https://foo`). */
+const OPENABLE_RE = /^https?:\/\/[^/?#]+\.[^/?#]+|^https?:\/\/localhost/
+
 /** The URLs a text holds, in order, as written. */
 export function urlsIn(text: string): string[] {
   const out: string[] = []
   for (const m of text.matchAll(TOKEN_RE)) {
     const u = m[1] ?? trimEnd(m[0])
-    if (/^https?:\/\/[^/?#]+\.[^/?#]+|^https?:\/\/localhost/.test(u)) out.push(u)
+    if (OPENABLE_RE.test(u)) out.push(u)
   }
   return out
 }
@@ -120,25 +123,41 @@ export function callMentions(tool: string, args: Readonly<Record<string, unknown
   return out
 }
 
-/** Every text a URL can be said in, in order: the messages' words and their tool calls' arguments. */
-export function mentionsOf(messages: readonly SessionMessage[]): string[] {
-  const out: string[] = []
+/**
+ * Where a URL is said: a text, whose URLs are cut where the words around them
+ * begin, or a whole URL (a tool call's argument), its ends known, taken as it is.
+ */
+export type Mention = string | { readonly url: string }
+
+/** A tool call's URL arguments, each a whole URL: none is cut short as a URL in a sentence is (`…/wiki/東京`). */
+export function toolMentions(tool: string, args: Readonly<Record<string, unknown>>): Mention[] {
+  return callMentions(tool, args).map(url => ({ url }))
+}
+
+/** Everything a URL can be said in, in order: the messages' words and their tool calls' arguments. */
+export function mentionsOf(messages: readonly SessionMessage[]): Mention[] {
+  const out: Mention[] = []
   for (const m of messages) {
     if (m.text) out.push(m.text)
-    for (const u of m.toolUses ?? []) out.push(...callMentions(u.tool, u.input ?? {}))
+    for (const u of m.toolUses ?? []) out.push(...toolMentions(u.tool, u.input ?? {}))
   }
   return out
+}
+
+function urlsOf(mention: Mention): string[] {
+  if (typeof mention === 'string') return urlsIn(mention)
+  return OPENABLE_RE.test(mention.url) ? [mention.url] : []
 }
 
 /**
  * The links found in `mentions`, put ahead of `known`: a link said again moves
  * to the front, its `seen` raised. Newest first, at most MAX_LINKS.
  */
-export function addLinks(known: readonly FoundLink[], mentions: readonly string[]): FoundLink[] {
+export function addLinks(known: readonly FoundLink[], mentions: readonly Mention[]): FoundLink[] {
   const byKey = new Map(known.map(l => [l.key, l]))
   let seen = Math.max(0, ...known.map(l => l.seen))
-  for (const text of mentions) {
-    for (const url of urlsIn(text)) {
+  for (const mention of mentions) {
+    for (const url of urlsOf(mention)) {
       const link = linkOf(url)
       if (!link) continue
       seen += 1
