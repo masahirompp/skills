@@ -218,3 +218,62 @@ test('what a tool wrote into a file is not listed when the history is read again
   await settle()
   expect(await listed($)).toEqual(['https://docs.example.com/mods', 'https://github.com/o/r/issues/44'])
 })
+
+// A search answer as the model reads it: other repositories' issues among the hits.
+const SEARCH =
+  'Web search results for query: "ink flicker"\n\nLinks: [{"title":"Flicker on resize","url":"https://github.com/x/y/issues/7"},{"title":"Fix flicker","url":"https://github.com/x/y/pull/8"}]'
+const SEARCH_RESULT = {
+  query: 'ink flicker',
+  results: [
+    {
+      tool_use_id: 'srv-1',
+      content: [
+        { title: 'Flicker on resize', url: 'https://github.com/x/y/issues/7' },
+        { title: 'Fix flicker', url: 'https://github.com/x/y/pull/8' },
+      ],
+    },
+  ],
+  durationSeconds: 1,
+}
+const FETCHED = 'See https://github.com/x/z/issues/9 for the bug.'
+const GREPPED = '/w/a.ts:3: // https://github.com/x/w/commit/abcdef1'
+
+test('GitHub issues a search, a fetched page or a file shows are not listed; the PR gh made is', async ($, on) => {
+  engine(on, () => [])
+  on('tool.call', (_, e) => {
+    if (e.tool === 'Bash') return { text: 'https://github.com/o/r/pull/56\n', result: {} }
+    if (e.tool === 'WebSearch') return { text: SEARCH, result: SEARCH_RESULT }
+    if (e.tool === 'WebFetch') return { text: FETCHED, result: {} }
+    return { text: GREPPED, result: {} }
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: '続けて', turnId: 't1' })
+  await $.tool.call({ tool: 'Bash', command: 'gh pr create --fill', tool_use_id: 'b1' })
+  await $.tool.call({ tool: 'WebSearch', query: 'ink flicker', mode: 'standard', tool_use_id: 's1' } as never)
+  await $.tool.call({ tool: 'WebFetch', url: 'https://docs.example.com/x', prompt: 'read', tool_use_id: 'f1' })
+  await $.tool.call({ tool: 'Grep', pattern: 'github', tool_use_id: 'g1' } as never)
+  await $.turn.complete({ answer: '調べました', durationMs: 10, isAborted: false, turnId: 't1', reason: 'completed' } as never)
+  await settle()
+  expect(await listed($)).toEqual(['https://docs.example.com/x', 'https://github.com/o/r/pull/56'])
+})
+
+test('the same outputs read again from the history are not listed either', { options: { autoOpen: false } }, async ($, on) => {
+  engine(on, () => [
+    { role: 'user', text: '続けて', toolUses: [] },
+    {
+      role: 'assistant',
+      text: '',
+      toolUses: [
+        { tool_use_id: 'b1', tool: 'Bash', input: { command: 'gh pr create --fill' }, text: 'https://github.com/o/r/pull/56\n' },
+        { tool_use_id: 's1', tool: 'WebSearch', input: { query: 'ink flicker', mode: 'standard' }, text: SEARCH, result: SEARCH_RESULT },
+        { tool_use_id: 'f1', tool: 'WebFetch', input: { url: 'https://docs.example.com/x', prompt: 'read' }, text: FETCHED },
+        { tool_use_id: 'g1', tool: 'Grep', input: { pattern: 'github' }, text: GREPPED },
+      ],
+    },
+    { role: 'assistant', text: '調べました', toolUses: [] },
+  ])
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await settle()
+  expect(await listed($)).toEqual(['https://docs.example.com/x', 'https://github.com/o/r/pull/56'])
+})

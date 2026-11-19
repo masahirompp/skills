@@ -105,14 +105,24 @@ const CONTENT_ARGS: Readonly<Record<string, readonly string[]>> = {
 export const NOT_ARGUMENTS: readonly string[] = ['tool', 'tool_use_id', 'agentId', 'consent', 'requestMeta']
 
 /**
+ * Whether a tool's output can name what the work made: a command's (`gh pr
+ * create` prints the PR) or an MCP server's (a tracker's new issue). A search,
+ * a fetched page or a file read shows others' issues nobody chose.
+ */
+export function isMakerTool(tool: string): boolean {
+  return tool === 'Bash' || tool.startsWith('mcp__')
+}
+
+/**
  * Where a tool call says URLs: the arguments that name what it acts on (a
- * command, a URL to fetch), less what it writes into a file; then its output.
+ * command, a URL to fetch), less what it writes into a file; then its output,
+ * where the tool is one that makes things.
  */
 export function callMentions(tool: string, args: Readonly<Record<string, unknown>>, output?: string): Mention[] {
   const skip = CONTENT_ARGS[tool] ?? []
   const named = Object.fromEntries(Object.entries(args).filter(([k]) => !skip.includes(k)))
   const out: Mention[] = [{ text: JSON.stringify(named), isOutput: false }]
-  if (output) out.push({ text: output, isOutput: true })
+  if (output && isMakerTool(tool)) out.push({ text: output, isOutput: true })
   return out
 }
 
