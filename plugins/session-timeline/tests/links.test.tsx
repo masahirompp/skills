@@ -32,6 +32,19 @@ test('URLs are cut where the text around them begins', () => {
   expect(urlsIn('https://${host}/x and https://foo')).toEqual([])
 })
 
+test('a note in parentheses after a URL is not the URL; parentheses of its own are', () => {
+  expect(addLinks([], ['PR を作った: https://github.com/o/r/pull/58(ドラフト)']).map(l => [l.kind, l.href])).toEqual([
+    ['PR', 'https://github.com/o/r/pull/58'],
+  ])
+  expect(addLinks([], ['see https://github.com/o/r/pull/58(#58)']).map(l => [l.kind, l.href])).toEqual([
+    ['PR', 'https://github.com/o/r/pull/58'],
+  ])
+  expect(urlsIn('https://github.com/o/r/commit/e26d750abc(直し)')).toEqual(['https://github.com/o/r/commit/e26d750abc'])
+  // The URL's characters stop at the note's Japanese: the opening paren left is cut.
+  expect(urlsIn('https://docs.example.com/a(下書き)')).toEqual(['https://docs.example.com/a'])
+  expect(urlsIn('(https://example.com/a_(b))')).toEqual(['https://example.com/a_(b)'])
+})
+
 test('a Markdown link is the URL in its parentheses, its text a URL too', () => {
   // Claude's answers write a link as `[URL](URL)`.
   const text = '作りました: [https://github.com/o/r/pull/5](https://github.com/o/r/pull/5)。'

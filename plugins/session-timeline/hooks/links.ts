@@ -16,13 +16,22 @@ const MD_LINK_RE = /\[[^\]\n]*\]\((https?:\/\/[^\s()]*(?:\([^\s()]*\)[^\s()]*)*)
 
 const TOKEN_RE = new RegExp(`${MD_LINK_RE.source}|${URL_RE.source}`, 'g')
 
-/** Cuts what text around a URL leaves on its end: a sentence's stop, a Markdown link's closing paren. */
+/**
+ * A GitHub issue, pull request or commit up to its number, a parenthesis right after:
+ * the number ends the page, so `(` there begins a note (`…/pull/58(#58)`), not the URL.
+ */
+const GITHUB_NOTE_RE = /^(https?:\/\/github\.com\/[^/\s]+\/[^/\s]+\/(?:(?:pull|issues)\/\d+|commit\/[0-9a-f]{7,40}))\(.*$/
+
+/**
+ * Cuts what text around a URL leaves on its end: a sentence's stop, a Markdown link's closing paren,
+ * an opening paren or bracket whose note the URL's characters stop short of (`…/a(ドラフト)`).
+ */
 function trimEnd(url: string): string {
-  let u = url
+  let u = url.replace(GITHUB_NOTE_RE, '$1')
   for (;;) {
     const last = u.at(-1)
     if (last === undefined) return u
-    if ('.,;:!?\'"*'.includes(last)) {
+    if ('.,;:!?\'"*(['.includes(last)) {
       u = u.slice(0, -1)
       continue
     }
