@@ -1,6 +1,6 @@
 {
   "name": "session-timeline",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "セッションで何をしているかを、LLM が名付けた工程(実装・レビュー・修正など)の縦のタイムラインとまとめで表示する。工程を押すと会話のその位置へ移動する。",
   "author": {
     "name": "masahirompp",

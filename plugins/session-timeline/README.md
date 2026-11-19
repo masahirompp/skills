@@ -62,3 +62,7 @@ claude plugin test plugins/session-timeline
 ```
 
 型チェックは、Claude Code が一度読み込んで `.claude-plugin/types/` を書き出したあとに `tsc -p plugins/session-timeline` で行う。
+
+### リリース
+
+`.claude-plugin/plugin.json` に `version` を書いているので、プラグインの更新で利用者に届くのは、この版を上げたときだけである(マージしただけでは届かない)。修正を溜めてまとめて届けるために、版を上げずにマージすることがある。そのため、マージ済みの修正が届いていなくても、版を上げていなければ想定どおりである。届けるときは、修正なら3つ目の番号、機能の追加なら2つ目の番号を上げる。
