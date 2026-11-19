@@ -8,7 +8,6 @@ import { BOUNDARY_TOOLS, MAX_STEPS, SYSTEM, briefOf, fold, outcomeOf, parseVerdi
 import type { Step, Stretch, Verdict } from './classify'
 import { RECAP_SYSTEM, REGROUP_SYSTEM, groupsByKind, mergeSameKind, parseGroups, parseRecap, recapPrompt, regroupPrompt } from './group'
 import { addLinks, callMentions, mentionsOf, NOT_ARGUMENTS, rescanLinks } from './links'
-import type { Mention } from './links'
 import { cells, clockOf, colorOf, durationOf, padCells, usageLine } from './view'
 
 const PANE = 'session-timeline'
@@ -163,8 +162,8 @@ async function writeRecap($: EngineInterface, mine: number): Promise<void> {
   if (next && conversation === mine) await update($, recap, () => next)
 }
 
-/** The URLs said in the conversation `mine` as it goes: a prompt, an answer, a tool call and what it gave back. */
-async function noteLinks($: EngineInterface, mentions: readonly Mention[], mine: number): Promise<void> {
+/** The URLs said in the conversation `mine` as it goes: a prompt, an answer, a tool call's arguments. */
+async function noteLinks($: EngineInterface, mentions: readonly string[], mine: number): Promise<void> {
   if (conversation !== mine) return
   // Checked again as the change applies: the read beneath `update` (and its retry) can outlast a switch,
   // whose clearing the change would otherwise fill with the last conversation's links.
@@ -506,7 +505,7 @@ export const register: Register = (on, options) => {
       // Where the pane stands (autoOpen, or /timeline before the switch), the history /resume brought fills in as the turn begins.
       await adopt($, isAutoOpen || isPaneOpened, e.text)
       isReplying = true
-      await noteLinks($, [{ text: e.text, isOutput: false }], conversation).catch(() => undefined)
+      await noteLinks($, [e.text], conversation).catch(() => undefined)
       await startTurn($, e.text).catch(() => undefined)
     }
     return next(e)
@@ -516,7 +515,7 @@ export const register: Register = (on, options) => {
   on('turn.step', async function* ($, e, next) {
     const mine = conversation
     const r = yield* next(e)
-    if (!e.agentId && r.answer) await noteLinks($, [{ text: r.answer, isOutput: false }], mine).catch(() => undefined)
+    if (!e.agentId && r.answer) await noteLinks($, [r.answer], mine).catch(() => undefined)
     return r
   })
 
@@ -525,7 +524,7 @@ export const register: Register = (on, options) => {
     if (!e.agentId) {
       isReplying = false
       repliedAt = Date.now()
-      await noteLinks($, [{ text: e.answer, isOutput: false }], conversation).catch(() => undefined)
+      await noteLinks($, [e.answer], conversation).catch(() => undefined)
       await endTurn($, e.answer).catch(() => undefined)
       // Kept past a reload: the rows the reply drew may not be drawn again before the person asks.
       const row = latestRow ?? latestTool
@@ -547,8 +546,7 @@ export const register: Register = (on, options) => {
     if (!e.agentId) {
       // The tool's arguments alone: what rides beside them (consent, requestMeta) is no one's pick.
       const args = Object.fromEntries(Object.entries(e).filter(([k]) => !NOT_ARGUMENTS.includes(k)))
-      const output = typeof ran.text === 'string' ? ran.text : JSON.stringify(ran.result ?? '')
-      await noteLinks($, callMentions(e.tool, args, output), mine).catch(() => undefined)
+      await noteLinks($, callMentions(e.tool, args), mine).catch(() => undefined)
     }
     const outcome = outcomeOf(e.tool, ran.result ?? ran.text)
     const step: Step = {

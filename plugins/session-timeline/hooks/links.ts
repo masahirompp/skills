@@ -79,18 +79,6 @@ export function linkOf(url: string): Omit<FoundLink, 'seen'> | undefined {
 }
 
 /**
- * Whether a URL found in a tool's output is listed: only what work makes and
- * names (an issue, a PR, a commit). A fetched page or a search answer holds
- * dozens of other URLs nobody chose.
- */
-export function isNamedKind(link: Omit<FoundLink, 'seen'>): boolean {
-  return link.kind !== 'URL'
-}
-
-/** Where the URLs of a conversation's messages are said: chosen (prompts, answers, tool arguments) or only seen in output. */
-export type Mention = { text: string; isOutput: boolean }
-
-/**
  * The arguments that hold what a tool writes into a file, not a target it
  * names: a page's script tags or a README's references are nobody's pick.
  */
@@ -105,33 +93,23 @@ const CONTENT_ARGS: Readonly<Record<string, readonly string[]>> = {
 export const NOT_ARGUMENTS: readonly string[] = ['tool', 'tool_use_id', 'agentId', 'consent', 'requestMeta']
 
 /**
- * Whether a tool's output can name what the work made: a command's (`gh pr
- * create` prints the PR) or an MCP server's (a tracker's new issue). A search,
- * a fetched page or a file read shows others' issues nobody chose.
- */
-export function isMakerTool(tool: string): boolean {
-  return tool === 'Bash' || tool.startsWith('mcp__')
-}
-
-/**
  * Where a tool call says URLs: the arguments that name what it acts on (a
- * command, a URL to fetch), less what it writes into a file; then its output,
- * where the tool is one that makes things.
+ * command, a URL to fetch), less what it writes into a file. Never its output:
+ * a listing, a search or a page shows URLs nobody chose, and what the work
+ * made (a PR) Claude names in its answer.
  */
-export function callMentions(tool: string, args: Readonly<Record<string, unknown>>, output?: string): Mention[] {
+export function callMentions(tool: string, args: Readonly<Record<string, unknown>>): string[] {
   const skip = CONTENT_ARGS[tool] ?? []
   const named = Object.fromEntries(Object.entries(args).filter(([k]) => !skip.includes(k)))
-  const out: Mention[] = [{ text: JSON.stringify(named), isOutput: false }]
-  if (output && isMakerTool(tool)) out.push({ text: output, isOutput: true })
-  return out
+  return [JSON.stringify(named)]
 }
 
-/** Every place a URL can be said in the messages, in order. */
-export function mentionsOf(messages: readonly SessionMessage[]): Mention[] {
-  const out: Mention[] = []
+/** Every text a URL can be said in, in order: the messages' words and their tool calls' arguments. */
+export function mentionsOf(messages: readonly SessionMessage[]): string[] {
+  const out: string[] = []
   for (const m of messages) {
-    if (m.text) out.push({ text: m.text, isOutput: false })
-    for (const u of m.toolUses ?? []) out.push(...callMentions(u.tool, u.input ?? {}, u.text))
+    if (m.text) out.push(m.text)
+    for (const u of m.toolUses ?? []) out.push(...callMentions(u.tool, u.input ?? {}))
   }
   return out
 }
@@ -140,13 +118,13 @@ export function mentionsOf(messages: readonly SessionMessage[]): Mention[] {
  * The links found in `mentions`, put ahead of `known`: a link said again moves
  * to the front, its `seen` raised. Newest first, at most MAX_LINKS.
  */
-export function addLinks(known: readonly FoundLink[], mentions: readonly Mention[]): FoundLink[] {
+export function addLinks(known: readonly FoundLink[], mentions: readonly string[]): FoundLink[] {
   const byKey = new Map(known.map(l => [l.key, l]))
   let seen = Math.max(0, ...known.map(l => l.seen))
-  for (const { text, isOutput } of mentions) {
+  for (const text of mentions) {
     for (const url of urlsIn(text)) {
       const link = linkOf(url)
-      if (!link || (isOutput && !isNamedKind(link))) continue
+      if (!link) continue
       seen += 1
       byKey.set(link.key, { ...link, seen })
     }
@@ -159,7 +137,7 @@ export function addLinks(known: readonly FoundLink[], mentions: readonly Mention
  * `known` holds and the messages do not yet (a turn still being written) stay
  * ahead, newest.
  */
-export function rescanLinks(known: readonly FoundLink[], mentions: readonly Mention[]): FoundLink[] {
+export function rescanLinks(known: readonly FoundLink[], mentions: readonly string[]): FoundLink[] {
   const fresh = addLinks([], mentions)
   const keys = new Set(fresh.map(l => l.key))
   const missing = known.filter(l => !keys.has(l.key)).sort((a, b) => a.seen - b.seen)

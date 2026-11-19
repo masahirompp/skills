@@ -36,7 +36,7 @@ test('a Markdown link is the URL in its parentheses, its text a URL too', () => 
   // Claude's answers write a link as `[URL](URL)`.
   const text = '作りました: [https://github.com/o/r/pull/5](https://github.com/o/r/pull/5)。'
   expect(urlsIn(text)).toEqual(['https://github.com/o/r/pull/5'])
-  expect(addLinks([], [{ text, isOutput: false }]).map(l => [l.kind, l.href])).toEqual([['PR', 'https://github.com/o/r/pull/5']])
+  expect(addLinks([], [text]).map(l => [l.kind, l.href])).toEqual([['PR', 'https://github.com/o/r/pull/5']])
   expect(urlsIn('[docs](https://example.com/a_(b)) と [https://x.example.com/p](https://x.example.com/p)')).toEqual([
     'https://example.com/a_(b)',
     'https://x.example.com/p',
@@ -57,26 +57,16 @@ test('GitHub issues, PRs and commits are named by number however the URL goes on
   expect(linkOf('https://claude.ai/code/artifact/abc')?.label).toBe('claude.ai/code/artifact/abc')
 })
 
-test('a link said again moves to the front; a page only seen in output is left out', () => {
-  const one = addLinks(
-    [],
-    [
-      { text: 'https://github.com/o/r/issues/1 と https://docs.example.com/a', isOutput: false },
-      // A search answer's pages: nobody chose them.
-      { text: 'https://blog.example.com/x https://github.com/o/r/pull/2', isOutput: true },
-    ],
-  )
+test('a link said again moves to the front', () => {
+  const one = addLinks([], ['https://github.com/o/r/issues/1 と https://docs.example.com/a', 'https://github.com/o/r/pull/2'])
   expect(one.map(l => l.label)).toEqual(['o/r#2', 'docs.example.com/a', 'o/r#1'])
-  const two = addLinks(one, [{ text: 'https://github.com/o/r/issues/1#issuecomment-9', isOutput: false }])
+  const two = addLinks(one, ['https://github.com/o/r/issues/1#issuecomment-9'])
   expect(two.map(l => l.label)).toEqual(['o/r#1', 'o/r#2', 'docs.example.com/a'])
 })
 
 test('a rescan reads the order off the messages and keeps what they lack yet ahead', () => {
-  const live = addLinks([], [{ text: 'https://github.com/o/r/pull/9', isOutput: false }])
-  const again = rescanLinks(live, [
-    { text: 'https://github.com/o/r/issues/1', isOutput: false },
-    { text: 'https://github.com/o/r/issues/2', isOutput: false },
-  ])
+  const live = addLinks([], ['https://github.com/o/r/pull/9'])
+  const again = rescanLinks(live, ['https://github.com/o/r/issues/1', 'https://github.com/o/r/issues/2'])
   expect(again.map(l => l.label)).toEqual(['o/r#9', 'o/r#2', 'o/r#1'])
 })
 
@@ -120,14 +110,20 @@ test('the pane lists the links of the history and of the live turns, each one to
   await $.turn.start({ text: '続けて', turnId: 't1' })
   await $.tool.call({ tool: 'Bash', command: 'gh pr create --fill', tool_use_id: 'tu-pr' })
   await $.tool.call({ tool: 'WebFetch', url: 'https://docs.example.com/mods', prompt: 'read', tool_use_id: 'tu-fetch' })
-  await $.turn.complete({ answer: 'PR を作りました', durationMs: 10, isAborted: false, turnId: 't1', reason: 'completed' } as never)
+  await $.turn.complete({
+    answer: 'PR を作りました: https://github.com/o/r/pull/56',
+    durationMs: 10,
+    isAborted: false,
+    turnId: 't1',
+    reason: 'completed',
+  } as never)
   await settle()
 
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^リンク$/ })).toBeTruthy()
   const hrefs = (await ui.findAll({ type: 'Link' })).map(l => l.props.href)
-  // Newest first: the page fetched, the PR made, then the issue the history named.
-  expect(hrefs).toEqual(['https://docs.example.com/mods', 'https://github.com/o/r/pull/56', 'https://github.com/o/r/issues/44'])
+  // Newest first: the PR the answer named, the page fetched, then the issue the history named.
+  expect(hrefs).toEqual(['https://github.com/o/r/pull/56', 'https://docs.example.com/mods', 'https://github.com/o/r/issues/44'])
   expect(await ui.find({ type: 'Text', text: /^PR / })).toBeTruthy()
   await ui.unmount()
 })
@@ -275,13 +271,19 @@ const SEARCH_RESULT = {
 }
 const FETCHED = 'See https://github.com/x/z/issues/9 for the bug.'
 const GREPPED = '/w/a.ts:3: // https://github.com/x/w/commit/abcdef1'
+const TRACKED = '[{"number":3,"url":"https://github.com/o/r/issues/3"}]'
+// `gh pr list --json url` as it prints: a read, not a PR this work made.
+const PR_LIST =
+  '[{"url":"https://github.com/masahirompp/skills/pull/59"},{"url":"https://github.com/masahirompp/skills/pull/58"},{"url":"https://github.com/masahirompp/skills/pull/57"}]\n'
+const PR_ANSWER = 'PR を作りました: https://github.com/o/r/pull/56'
 
-test('GitHub issues a search, a fetched page or a file shows are not listed; the PR gh made is', async ($, on) => {
+test("no tool's output is listed, a command's nor a search's; the PR Claude names in its answer is", async ($, on) => {
   engine(on, () => [])
   on('tool.call', (_, e) => {
     if (e.tool === 'Bash') return { text: 'https://github.com/o/r/pull/56\n', result: {} }
     if (e.tool === 'WebSearch') return { text: SEARCH, result: SEARCH_RESULT }
     if (e.tool === 'WebFetch') return { text: FETCHED, result: {} }
+    if (e.tool.startsWith('mcp__')) return { text: TRACKED, result: {} }
     return { text: GREPPED, result: {} }
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
@@ -290,12 +292,17 @@ test('GitHub issues a search, a fetched page or a file shows are not listed; the
   await $.tool.call({ tool: 'WebSearch', query: 'ink flicker', mode: 'standard', tool_use_id: 's1' } as never)
   await $.tool.call({ tool: 'WebFetch', url: 'https://docs.example.com/x', prompt: 'read', tool_use_id: 'f1' })
   await $.tool.call({ tool: 'Grep', pattern: 'github', tool_use_id: 'g1' } as never)
+  await $.tool.call({ tool: 'mcp__tracker__list', query: 'open', tool_use_id: 'm1' } as never)
   await $.turn.complete({ answer: '調べました', durationMs: 10, isAborted: false, turnId: 't1', reason: 'completed' } as never)
   await settle()
-  expect(await listed($)).toEqual(['https://docs.example.com/x', 'https://github.com/o/r/pull/56'])
+  expect(await listed($)).toEqual(['https://docs.example.com/x'])
+  await $.turn.start({ text: '続けて', turnId: 't2' })
+  await $.turn.complete({ answer: PR_ANSWER, durationMs: 10, isAborted: false, turnId: 't2', reason: 'completed' } as never)
+  await settle()
+  expect(await listed($)).toEqual(['https://github.com/o/r/pull/56', 'https://docs.example.com/x'])
 })
 
-test('the same outputs read again from the history are not listed either', { options: { autoOpen: false } }, async ($, on) => {
+test("no output is listed when the history is read again; the answer's PR is", { options: { autoOpen: false } }, async ($, on) => {
   engine(on, () => [
     { role: 'user', text: '続けて', toolUses: [] },
     {
@@ -306,14 +313,15 @@ test('the same outputs read again from the history are not listed either', { opt
         { tool_use_id: 's1', tool: 'WebSearch', input: { query: 'ink flicker', mode: 'standard' }, text: SEARCH, result: SEARCH_RESULT },
         { tool_use_id: 'f1', tool: 'WebFetch', input: { url: 'https://docs.example.com/x', prompt: 'read' }, text: FETCHED },
         { tool_use_id: 'g1', tool: 'Grep', input: { pattern: 'github' }, text: GREPPED },
+        { tool_use_id: 'm1', tool: 'mcp__tracker__list', input: { query: 'open' }, text: TRACKED },
       ],
     },
-    { role: 'assistant', text: '調べました', toolUses: [] },
+    { role: 'assistant', text: PR_ANSWER, toolUses: [] },
   ])
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.command.run({ command: 'timeline', args: '' } as never)
   await settle()
-  expect(await listed($)).toEqual(['https://docs.example.com/x', 'https://github.com/o/r/pull/56'])
+  expect(await listed($)).toEqual(['https://github.com/o/r/pull/56', 'https://docs.example.com/x'])
 })
 
 const end = (reason: 'clear' | 'resume') => ({ reason, sessionId: 's', resume: { id: 's' } }) as never
@@ -366,12 +374,13 @@ for (const reason of ['clear', 'resume'] as const) {
     let history: readonly SessionMessage[] = []
     engine(on, () => history)
     const h = holdLinks(on)
-    on('tool.call', () => ({ text: 'https://github.com/o/r/pull/56\n', result: {} }))
+    on('tool.call', () => ({ text: 'page', result: {} }))
     await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
     await $.command.run({ command: 'timeline', args: '' } as never)
-    await $.turn.start({ text: 'PR を作って', turnId: 't1' })
+    await $.turn.start({ text: 'ページを読んで', turnId: 't1' })
     h.isArmed = true
-    const calling = $.tool.call({ tool: 'Bash', command: 'gh pr create --fill', tool_use_id: 'b1' })
+    // A URL argument: still listed, so the write is one the switch could catch out.
+    const calling = $.tool.call({ tool: 'WebFetch', url: 'https://docs.example.com/mods', prompt: 'read', tool_use_id: 'f1' })
     await untilHeld(h)
     await $.session.end(end(reason))
     history = reason === 'clear' ? [{ role: 'user', text: '<command-name>/clear</command-name>', toolUses: [] }] : []
@@ -382,3 +391,27 @@ for (const reason of ['clear', 'resume'] as const) {
     expect(await listed($)).toEqual([])
   })
 }
+
+test('the PRs a read-only command lists are not listed, live or read again', async ($, on) => {
+  const history: SessionMessage[] = []
+  engine(on, () => history)
+  on('tool.call', () => ({ text: PR_LIST, result: {} }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'PR を見て', turnId: 't1' })
+  await $.tool.call({ tool: 'Bash', command: 'gh pr list --state all --json url --limit 3', tool_use_id: 'b1' })
+  await $.turn.complete({ answer: '見ました', durationMs: 10, isAborted: false, turnId: 't1', reason: 'completed' } as never)
+  await settle()
+  expect(await listed($)).toEqual([])
+  history.push(
+    { role: 'user', text: 'PR を見て', toolUses: [] },
+    {
+      role: 'assistant',
+      text: '',
+      toolUses: [{ tool_use_id: 'b1', tool: 'Bash', input: { command: 'gh pr list --state all --json url --limit 3' }, text: PR_LIST }],
+    },
+    { role: 'assistant', text: '見ました', toolUses: [] },
+  )
+  await $.command.run({ command: 'timeline', args: 'reset' } as never)
+  await settle()
+  expect(await listed($)).toEqual([])
+})
