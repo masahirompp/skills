@@ -330,7 +330,7 @@ async function askFill($: EngineInterface): Promise<void> {
   }
 }
 
-/** Forgets every phase, the grouping and the recap, so the next open rebuilds them from the history. */
+/** Forgets every phase, the grouping, the recap and the links, so the next open rebuilds them from the history. */
 async function reset($: EngineInterface): Promise<void> {
   // A backfill under way stops writing; the open after this asks for a new one over the whole history.
   epoch += 1
@@ -342,6 +342,8 @@ async function reset($: EngineInterface): Promise<void> {
   await update($, groups, () => [])
   await update($, expanded, () => [])
   await update($, recap, () => null)
+  // Read again from the history as the pane opens after this, none of the old kept ahead.
+  await update($, links, () => [])
   await update($, isBackfilled, () => false)
 }
 

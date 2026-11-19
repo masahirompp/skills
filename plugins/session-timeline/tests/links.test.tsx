@@ -242,6 +242,21 @@ test('a URL Claude writes mid-turn is listed as the turn goes, though the turn e
   expect(await listed($)).toEqual(['https://github.com/o/r/issues/44'])
 })
 
+test("after /timeline reset the links are the history's alone", async ($, on) => {
+  engine(on, () => [
+    { role: 'user', text: 'https://github.com/o/r/issues/1 を直して', toolUses: [] },
+    { role: 'assistant', text: '直しました', toolUses: [] },
+  ])
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'https://old.example.com/gone も見て', turnId: 't1' })
+  await $.turn.complete({ answer: 'ok', durationMs: 10, isAborted: false, turnId: 't1', reason: 'completed' } as never)
+  await settle()
+  expect(await listed($)).toContain('https://old.example.com/gone')
+  await $.command.run({ command: 'timeline', args: 'reset' } as never)
+  await settle()
+  expect(await listed($)).toEqual(['https://github.com/o/r/issues/1'])
+})
+
 // A search answer as the model reads it: other repositories' issues among the hits.
 const SEARCH =
   'Web search results for query: "ink flicker"\n\nLinks: [{"title":"Flicker on resize","url":"https://github.com/x/y/issues/7"},{"title":"Fix flicker","url":"https://github.com/x/y/pull/8"}]'
