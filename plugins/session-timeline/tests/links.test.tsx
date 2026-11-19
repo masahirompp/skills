@@ -3,7 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
 import { REGROUP_SYSTEM, RECAP_SYSTEM } from '../hooks/group'
-import { addLinks, callMentions, linkOf, rescanLinks, urlsIn } from '../hooks/links'
+import { addLinks, callMentions, linkOf, urlsIn } from '../hooks/links'
 
 const PANE = {
   plugin: 'session-timeline',
@@ -64,10 +64,34 @@ test('a link said again moves to the front', () => {
   expect(two.map(l => l.label)).toEqual(['o/r#1', 'o/r#2', 'docs.example.com/a'])
 })
 
-test('a rescan reads the order off the messages and keeps what they lack yet ahead', () => {
-  const live = addLinks([], ['https://github.com/o/r/pull/9'])
-  const again = rescanLinks(live, ['https://github.com/o/r/issues/1', 'https://github.com/o/r/issues/2'])
-  expect(again.map(l => l.label)).toEqual(['o/r#9', 'o/r#2', 'o/r#1'])
+test("opening the pane lists the history's links alone, dropping those it lacks", { options: { autoOpen: false } }, async ($, on) => {
+  engine(on, () => [
+    { role: 'user', text: 'https://github.com/o/r/issues/1 を直して', toolUses: [] },
+    { role: 'assistant', text: 'https://github.com/o/r/issues/2 も見ました', toolUses: [] },
+  ])
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  // Said live, but the history (after /compact, say) does not hold it.
+  await $.turn.start({ text: 'https://old.example.com/gone も見て', turnId: 't1' })
+  await $.turn.complete({ answer: 'ok', durationMs: 10, isAborted: false, turnId: 't1', reason: 'completed' } as never)
+  await settle()
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await settle()
+  expect(await listed($)).toEqual(['https://github.com/o/r/issues/2', 'https://github.com/o/r/issues/1'])
+})
+
+test('a link the history holds past the kept 40 does not come back on top as the pane opens', { options: { autoOpen: false } }, async ($, on) => {
+  const many = Array.from({ length: 45 }, (_, i) => `https://github.com/o/r/issues/${i + 1}`).join(' ')
+  engine(on, () => [
+    { role: 'user', text: many, toolUses: [] },
+    { role: 'assistant', text: '見ました', toolUses: [] },
+  ])
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'https://github.com/o/r/issues/1 から', turnId: 't1' })
+  await $.turn.complete({ answer: 'ok', durationMs: 10, isAborted: false, turnId: 't1', reason: 'completed' } as never)
+  await settle()
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await settle()
+  expect((await listed($))[0]).toBe('https://github.com/o/r/issues/45')
 })
 
 test('the pane lists the links of the history and of the live turns, each one to open', async ($, on) => {
@@ -469,4 +493,22 @@ test('a URL inside a command or a prompt is not listed when the history is read 
   await $.command.run({ command: 'timeline', args: '' } as never)
   await settle()
   expect(await listed($)).toEqual(['https://docs.example.com/mods'])
+})
+
+test('a prompt said while the pane reads the history is kept, though the history read lacks it', { options: { autoOpen: false } }, async ($, on) => {
+  engine(on, () => [
+    { role: 'user', text: 'https://github.com/o/r/issues/1 を直して', toolUses: [] },
+    { role: 'assistant', text: '直しました', toolUses: [] },
+  ])
+  // Held at the rescan's write, its read of the messages done.
+  const h = holdLinks(on)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  h.isArmed = true
+  const opening = $.command.run({ command: 'timeline', args: '' } as never)
+  await untilHeld(h)
+  await $.turn.start({ text: 'https://github.com/o/r/issues/9 も', turnId: 't1' })
+  h.release()
+  await opening
+  await settle()
+  expect(await listed($)).toEqual(['https://github.com/o/r/issues/9', 'https://github.com/o/r/issues/1'])
 })

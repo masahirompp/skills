@@ -7,7 +7,7 @@ import type { Times } from './backfill'
 import { BOUNDARY_TOOLS, MAX_STEPS, SYSTEM, briefOf, fold, outcomeOf, parseVerdict, promptOf } from './classify'
 import type { Step, Stretch, Verdict } from './classify'
 import { RECAP_SYSTEM, REGROUP_SYSTEM, groupsByKind, mergeSameKind, parseGroups, parseRecap, recapPrompt, regroupPrompt } from './group'
-import { addLinks, callMentions, mentionsOf, NOT_ARGUMENTS, rescanLinks } from './links'
+import { addLinks, callMentions, mentionsOf, NOT_ARGUMENTS } from './links'
 import { cells, clockOf, colorOf, durationOf, padCells, usageLine } from './view'
 
 const PANE = 'session-timeline'
@@ -165,17 +165,31 @@ async function writeRecap($: EngineInterface, mine: number): Promise<void> {
 /** The URLs said in the conversation `mine` as it goes: a prompt, an answer, a tool call's arguments. */
 async function noteLinks($: EngineInterface, mentions: readonly string[], mine: number): Promise<void> {
   if (conversation !== mine) return
+  for (const said of saidDuringRescan) said.push(...mentions)
   // Checked again as the change applies: the read beneath `update` (and its retry) can outlast a switch,
   // whose clearing the change would otherwise fill with the last conversation's links.
   await update($, links, known => (conversation === mine ? addLinks(known, mentions) : known))
 }
 
-/** The links of the whole conversation, read again from its messages: the history before the mod loaded, or /resume's. */
+/** What is said while a rescan is out, one list per rescan: the messages it read may not hold it yet. */
+const saidDuringRescan = new Set<string[]>()
+
+/**
+ * The links of the whole conversation, read again from its messages: the history before the mod loaded, or /resume's.
+ * They replace what was kept: a link the messages lack (gone with /compact, or seen live another way) is dropped.
+ * Only what was said after the read began (a first prompt as the pane opens) stays ahead.
+ */
 async function rescan($: EngineInterface): Promise<void> {
   const mine = conversation
-  const messages = await $.session.messages().catch(() => undefined)
-  if (!Array.isArray(messages) || conversation !== mine) return
-  await update($, links, known => (conversation === mine ? rescanLinks(known, mentionsOf(messages)) : known))
+  const said: string[] = []
+  saidDuringRescan.add(said)
+  try {
+    const messages = await $.session.messages().catch(() => undefined)
+    if (!Array.isArray(messages) || conversation !== mine) return
+    await update($, links, known => (conversation === mine ? addLinks(addLinks([], mentionsOf(messages)), said) : known))
+  } finally {
+    saidDuringRescan.delete(said)
+  }
 }
 
 async function gather($: EngineInterface): Promise<Stretch> {

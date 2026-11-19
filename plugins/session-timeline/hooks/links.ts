@@ -138,18 +138,3 @@ export function addLinks(known: readonly FoundLink[], mentions: readonly string[
   }
   return [...byKey.values()].sort((a, b) => b.seen - a.seen).slice(0, MAX_LINKS)
 }
-
-/**
- * The links of the whole conversation, read afresh from its messages; those
- * `known` holds and the messages do not yet (a turn still being written) stay
- * ahead, newest.
- */
-export function rescanLinks(known: readonly FoundLink[], mentions: readonly string[]): FoundLink[] {
-  const fresh = addLinks([], mentions)
-  const keys = new Set(fresh.map(l => l.key))
-  const missing = known.filter(l => !keys.has(l.key)).sort((a, b) => a.seen - b.seen)
-  const top = Math.max(0, ...fresh.map(l => l.seen))
-  return [...missing.map((l, i) => ({ ...l, seen: top + i + 1 })), ...fresh]
-    .sort((a, b) => b.seen - a.seen)
-    .slice(0, MAX_LINKS)
-}
