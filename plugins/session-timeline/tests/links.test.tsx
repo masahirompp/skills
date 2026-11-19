@@ -219,6 +219,29 @@ test('what a tool wrote into a file is not listed when the history is read again
   expect(await listed($)).toEqual(['https://docs.example.com/mods', 'https://github.com/o/r/issues/44'])
 })
 
+test('a URL Claude writes mid-turn is listed as the turn goes, though the turn ends on other words', async ($, on) => {
+  engine(on, () => [])
+  const answers = ['issue https://github.com/o/r/issues/44 を見ます', '完了しました']
+  on('turn.step', async function* (_, e) {
+    const answer = e.agentId ? 'https://sub.example.com/a' : (answers[e.index] ?? '')
+    return { turnId: e.turnId, index: e.index, answer, toolUses: [], stopReason: 'end_turn', usage: null }
+  })
+  on('tool.call', () => ({ text: 'a.ts\n', result: {} }))
+  const step = async (index: number, agentId?: string) => {
+    for await (const _ of $.turn.step({ turnId: 't1', index, model: 'claude-opus-5-5', messageCount: 1 + index * 2, agentId })) void _
+  }
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: '続けて', turnId: 't1' })
+  await step(0)
+  await $.tool.call({ tool: 'Bash', command: 'ls', tool_use_id: 'b1' })
+  // A subagent's steps are its own conversation's.
+  await step(0, 'sub-1')
+  await step(1)
+  await $.turn.complete({ answer: '完了しました', durationMs: 10, isAborted: false, turnId: 't1', reason: 'completed' } as never)
+  await settle()
+  expect(await listed($)).toEqual(['https://github.com/o/r/issues/44'])
+})
+
 // A search answer as the model reads it: other repositories' issues among the hits.
 const SEARCH =
   'Web search results for query: "ink flicker"\n\nLinks: [{"title":"Flicker on resize","url":"https://github.com/x/y/issues/7"},{"title":"Fix flicker","url":"https://github.com/x/y/pull/8"}]'

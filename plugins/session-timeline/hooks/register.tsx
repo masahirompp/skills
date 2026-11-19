@@ -508,6 +508,14 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // What Claude writes mid-turn, before a tool call, is said as each response ends: the turn's last words are not all of it.
+  on('turn.step', async function* ($, e, next) {
+    const mine = conversation
+    const r = yield* next(e)
+    if (!e.agentId && r.answer) await noteLinks($, [{ text: r.answer, isOutput: false }], mine).catch(() => undefined)
+    return r
+  })
+
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
     if (!e.agentId) {
