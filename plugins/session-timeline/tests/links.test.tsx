@@ -1,4 +1,6 @@
+import type { On, SessionMessage } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
+import type { Engine } from 'claude-code/testing'
 
 import { REGROUP_SYSTEM, RECAP_SYSTEM } from '../hooks/group'
 import { addLinks, linkOf, rescanLinks, urlsIn } from '../hooks/links'
@@ -128,4 +130,91 @@ test('the pane lists the links of the history and of the live turns, each one to
   expect(hrefs).toEqual(['https://docs.example.com/mods', 'https://github.com/o/r/pull/56', 'https://github.com/o/r/issues/44'])
   expect(await ui.find({ type: 'Text', text: /^PR / })).toBeTruthy()
   await ui.unmount()
+})
+
+/** The engine beneath the mod, with `history` as the conversation's messages. */
+function engine(on: On, history: () => readonly SessionMessage[]): void {
+  let clock = Date.UTC(2026, 10, 19, 1, 0, 0)
+  const u = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
+  on('session.messages', () => ({ value: history() as SessionMessage[] }))
+  on('model.complete', (_, e) => {
+    if (e.system === REGROUP_SYSTEM) return { value: { isAnswered: true, text: '[]', usage: u } }
+    if (e.system === RECAP_SYSTEM) return { value: { isAnswered: false, reason: 'aborted', usage: u } }
+    return { value: { isAnswered: true, text: JSON.stringify({ continues: false, label: '実装', note: '', summary: '' }), usage: u } }
+  })
+  on('clock.now', () => ({ value: (clock += 60_000) }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('command.register', () => ({ value: { command: 'timeline' } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+  on('turn.complete', () => ({ text: '' }))
+}
+
+/** The pages the pane's links open, top first. */
+async function listed($: Engine): Promise<string[]> {
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const out = (await ui.findAll({ type: 'Link' })).map(l => String(l.props.href))
+  await ui.unmount()
+  return out
+}
+
+const HTML = '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>\n<!-- see https://www.chartjs.org/docs -->'
+
+test('what a tool writes into a file, and what rides beside its arguments, is not listed', async ($, on) => {
+  engine(on, () => [])
+  on('tool.call', () => ({ text: 'ok', result: {} }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'https://github.com/o/r/issues/44 を直して', turnId: 't1' })
+  await $.tool.call({ tool: 'Write', file_path: '/w/index.html', content: HTML, tool_use_id: 'w1' })
+  await $.tool.call({
+    tool: 'Edit',
+    file_path: '/w/README.md',
+    old_string: 'https://old.example.com/a',
+    new_string: 'https://new.example.com/b',
+    tool_use_id: 'e1',
+  })
+  await $.tool.call({ tool: 'NotebookEdit', notebook_path: '/w/n.ipynb', new_source: 'https://nb.example.com/c', tool_use_id: 'n1' } as never)
+  // Not the tool's arguments: the person's words for a press, a hook's request meta.
+  await $.tool.call({
+    tool: 'Bash',
+    command: 'ls',
+    tool_use_id: 'b1',
+    consent: 'The user pressed "1: Yes" on https://consent.example.com/prompt',
+  } as never)
+  await $.tool.call({
+    tool: 'mcp__docs__search',
+    query: 'x',
+    tool_use_id: 'm1',
+    requestMeta: { 'anthropic/sources': JSON.stringify([{ url: 'https://sources.example.com/a' }]) },
+  } as never)
+  await $.tool.call({ tool: 'WebFetch', url: 'https://docs.example.com/mods', prompt: 'read', tool_use_id: 'f1' })
+  await $.turn.complete({ answer: 'できました', durationMs: 10, isAborted: false, turnId: 't1', reason: 'completed' } as never)
+  await settle()
+  expect(await listed($)).toEqual(['https://docs.example.com/mods', 'https://github.com/o/r/issues/44'])
+})
+
+test('what a tool wrote into a file is not listed when the history is read again', { options: { autoOpen: false } }, async ($, on) => {
+  engine(on, () => [
+    { role: 'user', text: 'https://github.com/o/r/issues/44 を直して', toolUses: [] },
+    {
+      role: 'assistant',
+      text: '',
+      toolUses: [
+        { tool_use_id: 'w1', tool: 'Write', input: { file_path: '/w/index.html', content: HTML }, text: 'ok' },
+        {
+          tool_use_id: 'e1',
+          tool: 'Edit',
+          input: { file_path: '/w/README.md', old_string: 'https://old.example.com/a', new_string: 'https://new.example.com/b' },
+          text: 'ok',
+        },
+        { tool_use_id: 'n1', tool: 'NotebookEdit', input: { notebook_path: '/w/n.ipynb', new_source: 'https://nb.example.com/c' }, text: 'ok' },
+        { tool_use_id: 'f1', tool: 'WebFetch', input: { url: 'https://docs.example.com/mods', prompt: 'read' }, text: 'page' },
+      ],
+    },
+    { role: 'assistant', text: 'できました', toolUses: [] },
+  ])
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await settle()
+  expect(await listed($)).toEqual(['https://docs.example.com/mods', 'https://github.com/o/r/issues/44'])
 })

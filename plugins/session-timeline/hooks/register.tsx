@@ -7,7 +7,7 @@ import type { Times } from './backfill'
 import { BOUNDARY_TOOLS, MAX_STEPS, SYSTEM, briefOf, fold, outcomeOf, parseVerdict, promptOf } from './classify'
 import type { Step, Stretch, Verdict } from './classify'
 import { RECAP_SYSTEM, REGROUP_SYSTEM, groupsByKind, mergeSameKind, parseGroups, parseRecap, recapPrompt, regroupPrompt } from './group'
-import { addLinks, mentionsOf, rescanLinks } from './links'
+import { addLinks, callMentions, mentionsOf, NOT_ARGUMENTS, rescanLinks } from './links'
 import type { Mention } from './links'
 import { cells, clockOf, colorOf, durationOf, padCells, usageLine } from './view'
 
@@ -533,16 +533,10 @@ export const register: Register = (on, options) => {
     const mine = conversation
     const ran = await next(e)
     if (!e.agentId) {
-      const { tool: _tool, tool_use_id: _id, agentId: _agent, ...input } = e as unknown as Record<string, unknown>
+      // The tool's arguments alone: what rides beside them (consent, requestMeta) is no one's pick.
+      const args = Object.fromEntries(Object.entries(e).filter(([k]) => !NOT_ARGUMENTS.includes(k)))
       const output = typeof ran.text === 'string' ? ran.text : JSON.stringify(ran.result ?? '')
-      await noteLinks(
-        $,
-        [
-          { text: JSON.stringify(input), isOutput: false },
-          { text: output, isOutput: true },
-        ],
-        mine,
-      ).catch(() => undefined)
+      await noteLinks($, callMentions(e.tool, args, output), mine).catch(() => undefined)
     }
     const outcome = outcomeOf(e.tool, ran.result ?? ran.text)
     const step: Step = {

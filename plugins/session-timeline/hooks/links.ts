@@ -90,15 +90,38 @@ export function isNamedKind(link: Omit<FoundLink, 'seen'>): boolean {
 /** Where the URLs of a conversation's messages are said: chosen (prompts, answers, tool arguments) or only seen in output. */
 export type Mention = { text: string; isOutput: boolean }
 
+/**
+ * The arguments that hold what a tool writes into a file, not a target it
+ * names: a page's script tags or a README's references are nobody's pick.
+ */
+const CONTENT_ARGS: Readonly<Record<string, readonly string[]>> = {
+  Write: ['content'],
+  Edit: ['old_string', 'new_string'],
+  MultiEdit: ['edits'],
+  NotebookEdit: ['new_source'],
+}
+
+/** The keys `tool.call`'s input carries beside the tool's own arguments. */
+export const NOT_ARGUMENTS: readonly string[] = ['tool', 'tool_use_id', 'agentId', 'consent', 'requestMeta']
+
+/**
+ * Where a tool call says URLs: the arguments that name what it acts on (a
+ * command, a URL to fetch), less what it writes into a file; then its output.
+ */
+export function callMentions(tool: string, args: Readonly<Record<string, unknown>>, output?: string): Mention[] {
+  const skip = CONTENT_ARGS[tool] ?? []
+  const named = Object.fromEntries(Object.entries(args).filter(([k]) => !skip.includes(k)))
+  const out: Mention[] = [{ text: JSON.stringify(named), isOutput: false }]
+  if (output) out.push({ text: output, isOutput: true })
+  return out
+}
+
 /** Every place a URL can be said in the messages, in order. */
 export function mentionsOf(messages: readonly SessionMessage[]): Mention[] {
   const out: Mention[] = []
   for (const m of messages) {
     if (m.text) out.push({ text: m.text, isOutput: false })
-    for (const u of m.toolUses ?? []) {
-      out.push({ text: JSON.stringify(u.input ?? {}), isOutput: false })
-      if (u.text) out.push({ text: u.text, isOutput: true })
-    }
+    for (const u of m.toolUses ?? []) out.push(...callMentions(u.tool, u.input ?? {}, u.text))
   }
   return out
 }
