@@ -64,7 +64,7 @@ grilling は mattpocock/skills のプラグインに入っている。入れて�
 `next-issues` が、着手できる issue を選び、1回の本番リリースまでを終える。
 `next-issues` はラベルを読むだけで書き換えない。状態のラベルが無い issue と `ready-for-agent` だけを候補にし、価値のラベルを優先度に使う。
 振り分けで次に片付けると決めた issue があれば、番号を引数で渡すと、ラベルより優先して候補の先頭に置く（例: `/dev-tools:next-issues 53`）。
-`next-issues` は、`needs-triage` の issue（2件以上なら全体の振り分けを勧める）、着手前の判定で詰める必要があると分かった issue（やらない候補を含む）、着手できる候補が無いときの次の一手として、`issue-triage` を勧める。
+`next-issues` は、`needs-triage` の issue（まだ評価していないものが多ければ、全体の振り分けも添える）、着手前の判定で詰める必要があると分かった issue（やらない候補を含む）、着手できる候補が無いときの次の一手として、`issue-triage` を勧める。
 範囲外で見つけた問題は起票し、次の振り分けに回る。
 
 ## issue-check を呼ぶ場所
