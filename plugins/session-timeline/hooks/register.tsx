@@ -166,28 +166,38 @@ async function writeRecap($: EngineInterface, mine: number): Promise<void> {
 /** The URLs said in the conversation `mine` as it goes: a prompt, an answer, a tool call's arguments. */
 async function noteLinks($: EngineInterface, mentions: readonly Mention[], mine: number): Promise<void> {
   if (conversation !== mine) return
-  for (const said of saidDuringRescan) said.push(...mentions)
+  for (const said of saidDuringRescan) if (said.mine === mine) said.list.push(...mentions)
   // Checked again as the change applies: the read beneath `update` (and its retry) can outlast a switch,
   // whose clearing the change would otherwise fill with the last conversation's links.
   await update($, links, known => (conversation === mine ? addLinks(known, mentions) : known))
 }
 
-/** What is said while a rescan is out, one list per rescan: the messages it read may not hold it yet. */
-const saidDuringRescan = new Set<Mention[]>()
+/** What is said in conversation `mine` from when a rescan is on its way, the pane's opening included. */
+type Said = { readonly mine: number; readonly list: Mention[] }
+
+/** What is said while a rescan is on its way, one list per rescan: the messages it reads may not hold it yet. */
+const saidDuringRescan = new Set<Said>()
+
+/** Begins keeping what is said in this conversation, for a rescan to come; stopped by `saidDuringRescan.delete`. */
+function keepSaid(): Said {
+  const said: Said = { mine: conversation, list: [] }
+  saidDuringRescan.add(said)
+  return said
+}
 
 /**
  * The links of the whole conversation, read again from its messages: the history before the mod loaded, or /resume's.
  * They replace what was kept: a link the messages lack (gone with /compact, or seen live another way) is dropped.
- * Only what was said after the read began (a first prompt as the pane opens) stays ahead.
+ * Only what was said after `said` began (a first prompt as the pane opens) stays ahead.
  */
-async function rescan($: EngineInterface): Promise<void> {
-  const mine = conversation
-  const said: Mention[] = []
-  saidDuringRescan.add(said)
+async function rescan($: EngineInterface, from?: Said): Promise<void> {
+  // What was kept for another conversation is not this one's: the rescan keeps its own from here.
+  const said = from && from.mine === conversation ? from : keepSaid()
+  const mine = said.mine
   try {
     const messages = await $.session.messages().catch(() => undefined)
     if (!Array.isArray(messages) || conversation !== mine) return
-    await update($, links, known => (conversation === mine ? addLinks(addLinks([], mentionsOf(messages)), said) : known))
+    await update($, links, known => (conversation === mine ? addLinks(addLinks([], mentionsOf(messages)), said.list) : known))
   } finally {
     saidDuringRescan.delete(said)
   }
@@ -312,10 +322,16 @@ async function fillHistory($: EngineInterface, mine: number, talk: number): Prom
 
 async function openPane($: EngineInterface): Promise<boolean> {
   isPaneOpened = true
-  const { isPlaced } = await $.ui.open({ id: PANE, title: TITLE })
-  await rescan($)
-  await askFill($)
-  return isPlaced
+  // Kept from before the pane opens: a prompt said while it does (autoOpen's first) is not in the messages the rescan reads.
+  const said = keepSaid()
+  try {
+    const { isPlaced } = await $.ui.open({ id: PANE, title: TITLE })
+    await rescan($, said)
+    await askFill($)
+    return isPlaced
+  } finally {
+    saidDuringRescan.delete(said)
+  }
 }
 
 /** Asks for the backfill once per conversation; where it is done, makes the grouping or recap still missing. */

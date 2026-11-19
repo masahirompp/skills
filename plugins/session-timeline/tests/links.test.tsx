@@ -165,8 +165,8 @@ test('the pane lists the links of the history and of the live turns, each one to
   await ui.unmount()
 })
 
-/** The engine beneath the mod, with `history` as the conversation's messages. */
-function engine(on: On, history: () => readonly SessionMessage[]): void {
+/** The engine beneath the mod, with `history` as the conversation's messages; the pane opens once `opening` is done. */
+function engine(on: On, history: () => readonly SessionMessage[], opening: () => Promise<void> = async () => undefined): void {
   let clock = Date.UTC(2026, 10, 19, 1, 0, 0)
   const u = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
   on('session.messages', () => ({ value: history() as SessionMessage[] }))
@@ -176,7 +176,10 @@ function engine(on: On, history: () => readonly SessionMessage[]): void {
     return { value: { isAnswered: true, text: JSON.stringify({ continues: false, label: '実装', note: '', summary: '' }), usage: u } }
   })
   on('clock.now', () => ({ value: (clock += 60_000) }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.open', async () => {
+    await opening()
+    return { value: { isPlaced: true } }
+  })
   on('command.register', () => ({ value: { command: 'timeline' } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('turn.start', (_, e) => ({ turnId: e.turnId }))
@@ -548,4 +551,33 @@ test('a URL argument holding Japanese is listed whole when the history is read a
   await $.command.run({ command: 'timeline', args: '' } as never)
   await settle()
   expect(await listed($)).toEqual([TOKYO_HREF])
+})
+
+// The pane opens as the session starts (autoOpen), unwaited; the first prompt comes while it is opening.
+// As in the test above, the messages the rescan reads do not hold that prompt yet.
+test('a prompt said while the pane is still opening is kept after the history is read', async ($, on) => {
+  let isHeld = false
+  let release!: () => void
+  const gate = new Promise<void>(r => (release = r))
+  engine(
+    on,
+    () => [
+      { role: 'user', text: 'https://github.com/o/r/issues/1 を直して', toolUses: [] },
+      { role: 'assistant', text: '直しました', toolUses: [] },
+    ],
+    async () => {
+      isHeld = true
+      await gate
+    },
+  )
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await untilHeld({
+    get isHeld() {
+      return isHeld
+    },
+  })
+  await $.turn.start({ text: 'https://github.com/o/r/issues/9 を見て', turnId: 't1' })
+  release()
+  await settle()
+  expect(await listed($)).toEqual(['https://github.com/o/r/issues/9', 'https://github.com/o/r/issues/1'])
 })
