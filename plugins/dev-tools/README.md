@@ -13,8 +13,8 @@ open な issue は、振り分ける、詰める、片付ける、の3つの工�
 
 | 工程 | スキル | 人間の関わり方 | 1回の単位 | 回すとき |
 |---|---|---|---|---|
-| 振り分ける | `/dev-tools:issue-triage`(引数なし) | 振り分けの表をまとめて承認する | open な issue 全体 | 振り分けていない issue が溜まったとき、着手できる issue が無くなったとき |
-| 詰める | `/dev-tools:issue-triage <番号>`(中で `issue-check` と grilling を使う) | 問いに1つずつ答えて決める | issue 1件 | 「詰める」に振り分けた issue のうち、価値の高いものから |
+| 振り分ける | `/dev-tools:issue-triage`（引数なし） | 振り分けの表をまとめて承認する | open な issue 全体 | 振り分けていない issue が溜まったとき、着手できる issue が無くなったとき |
+| 詰める | `/dev-tools:issue-triage <番号>`（中で `issue-check` と grilling を使う） | 問いに1つずつ答えて決める | issue 1件 | 「詰める」に振り分けた issue のうち、価値の高いものから |
 | 片付ける | `/dev-tools:next-issues`（中で `issue-check` と `review-loop` を使う） | 計画、マージ、本番リリースの直前に承認する | 本番リリース1回 | 着手できる issue があるとき |
 
 ```
@@ -62,9 +62,9 @@ grilling は mattpocock/skills のプラグインに入っている。入れて�
 ### 片付ける
 
 `next-issues` が、着手できる issue を選び、1回の本番リリースまでを終える。
-`next-issues` は、振り分けのラベルを「ラベルの移り変わり」に従って扱い、価値のラベルを候補を選ぶときの優先度に使う。
+`next-issues` はラベルを読むだけで書き換えない。状態のラベルが無い issue と `ready-for-agent` だけを候補にし、価値のラベルを優先度に使う。
 振り分けで次に片付けると決めた issue があれば、番号を引数で渡すと、ラベルより優先して候補の先頭に置く（例: `/dev-tools:next-issues 53`）。
-`next-issues` は、着手前の判定で詰める必要があると分かった issue と、着手できる候補が無いときの次の一手として、`issue-triage` を勧める。
+`next-issues` は、`needs-triage` の issue、着手前の判定で詰める必要があると分かった issue（やらない候補を含む）、着手できる候補が無いときの次の一手として、`issue-triage` を勧める。
 範囲外で見つけた問題は起票し、次の振り分けに回る。
 
 ## issue-check を呼ぶ場所
