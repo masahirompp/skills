@@ -315,3 +315,70 @@ test('the same outputs read again from the history are not listed either', { opt
   await settle()
   expect(await listed($)).toEqual(['https://docs.example.com/x', 'https://github.com/o/r/pull/56'])
 })
+
+const end = (reason: 'clear' | 'resume') => ({ reason, sessionId: 's', resume: { id: 's' } }) as never
+const tick = () => new Promise<void>(r => setTimeout(r, 5))
+
+/** Holds the first read of the links once `isArmed` is set, until `release`: a write still out as the conversation is swapped. */
+function holdLinks(on: On): { isArmed: boolean; isHeld: boolean; release: () => void } {
+  let release!: () => void
+  const gate = new Promise<void>(r => (release = r))
+  const h = { isArmed: false, isHeld: false, release: () => release() }
+  on('state.get', async (_, e, next) => {
+    if (h.isArmed && !h.isHeld && e.key === 'links') {
+      h.isHeld = true
+      await gate
+    }
+    return next(e)
+  })
+  on('session.end', (_, e) => ({ sessionId: (e as { sessionId: string }).sessionId }) as never)
+  on('session.cwd', () => ({ value: '/' }))
+  return h
+}
+
+async function untilHeld(h: { isHeld: boolean }): Promise<void> {
+  for (let i = 0; i < 200 && !h.isHeld; i++) await tick()
+  expect(h.isHeld).toBe(true)
+}
+
+for (const reason of ['clear', 'resume'] as const) {
+  test(`a rescan still out as /${reason} comes lists none of the conversation before`, { options: { autoOpen: false } }, async ($, on) => {
+    let history: readonly SessionMessage[] = [
+      { role: 'user', text: 'https://github.com/o/r/issues/1 を直して', toolUses: [] },
+      { role: 'assistant', text: '直しました', toolUses: [] },
+    ]
+    engine(on, () => history)
+    const h = holdLinks(on)
+    await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+    h.isArmed = true
+    const opening = $.command.run({ command: 'timeline', args: '' } as never)
+    await untilHeld(h)
+    await $.session.end(end(reason))
+    history = reason === 'clear' ? [{ role: 'user', text: '<command-name>/clear</command-name>', toolUses: [] }] : []
+    await $.turn.start({ text: '新しい話', turnId: 't2' })
+    h.release()
+    await opening
+    await settle()
+    expect(await listed($)).toEqual([])
+  })
+
+  test(`a tool call's links still out as /${reason} comes are not listed in the next`, { options: { autoOpen: false } }, async ($, on) => {
+    let history: readonly SessionMessage[] = []
+    engine(on, () => history)
+    const h = holdLinks(on)
+    on('tool.call', () => ({ text: 'https://github.com/o/r/pull/56\n', result: {} }))
+    await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+    await $.command.run({ command: 'timeline', args: '' } as never)
+    await $.turn.start({ text: 'PR を作って', turnId: 't1' })
+    h.isArmed = true
+    const calling = $.tool.call({ tool: 'Bash', command: 'gh pr create --fill', tool_use_id: 'b1' })
+    await untilHeld(h)
+    await $.session.end(end(reason))
+    history = reason === 'clear' ? [{ role: 'user', text: '<command-name>/clear</command-name>', toolUses: [] }] : []
+    await $.turn.start({ text: '新しい話', turnId: 't2' })
+    h.release()
+    await calling
+    await settle()
+    expect(await listed($)).toEqual([])
+  })
+}

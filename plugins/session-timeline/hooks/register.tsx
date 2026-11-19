@@ -166,7 +166,9 @@ async function writeRecap($: EngineInterface, mine: number): Promise<void> {
 /** The URLs said in the conversation `mine` as it goes: a prompt, an answer, a tool call and what it gave back. */
 async function noteLinks($: EngineInterface, mentions: readonly Mention[], mine: number): Promise<void> {
   if (conversation !== mine) return
-  await update($, links, known => addLinks(known, mentions))
+  // Checked again as the change applies: the read beneath `update` (and its retry) can outlast a switch,
+  // whose clearing the change would otherwise fill with the last conversation's links.
+  await update($, links, known => (conversation === mine ? addLinks(known, mentions) : known))
 }
 
 /** The links of the whole conversation, read again from its messages: the history before the mod loaded, or /resume's. */
@@ -174,7 +176,7 @@ async function rescan($: EngineInterface): Promise<void> {
   const mine = conversation
   const messages = await $.session.messages().catch(() => undefined)
   if (!Array.isArray(messages) || conversation !== mine) return
-  await update($, links, known => rescanLinks(known, mentionsOf(messages)))
+  await update($, links, known => (conversation === mine ? rescanLinks(known, mentionsOf(messages)) : known))
 }
 
 async function gather($: EngineInterface): Promise<Stretch> {
