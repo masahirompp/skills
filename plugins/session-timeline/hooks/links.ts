@@ -7,6 +7,15 @@ export const MAX_LINKS = 40
 
 const URL_RE = /https?:\/\/[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+/g
 
+/**
+ * A Markdown link, `[text](URL)`, its URL the group: tried before a bare URL,
+ * so a link whose text is the URL itself (`[https://…](https://…)`) is one URL,
+ * not the two run together. The URL may hold balanced parentheses.
+ */
+const MD_LINK_RE = /\[[^\]\n]*\]\((https?:\/\/[^\s()]*(?:\([^\s()]*\)[^\s()]*)*)\)/g
+
+const TOKEN_RE = new RegExp(`${MD_LINK_RE.source}|${URL_RE.source}`, 'g')
+
 /** Cuts what text around a URL leaves on its end: a sentence's stop, a Markdown link's closing paren. */
 function trimEnd(url: string): string {
   let u = url
@@ -33,8 +42,8 @@ function trimEnd(url: string): string {
 /** The URLs a text holds, in order, as written. */
 export function urlsIn(text: string): string[] {
   const out: string[] = []
-  for (const m of text.matchAll(URL_RE)) {
-    const u = trimEnd(m[0])
+  for (const m of text.matchAll(TOKEN_RE)) {
+    const u = m[1] ?? trimEnd(m[0])
     if (/^https?:\/\/[^/?#]+\.[^/?#]+|^https?:\/\/localhost/.test(u)) out.push(u)
   }
   return out

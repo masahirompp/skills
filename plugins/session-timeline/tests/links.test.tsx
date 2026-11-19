@@ -30,6 +30,17 @@ test('URLs are cut where the text around them begins', () => {
   expect(urlsIn('https://${host}/x and https://foo')).toEqual([])
 })
 
+test('a Markdown link is the URL in its parentheses, its text a URL too', () => {
+  // Claude's answers write a link as `[URL](URL)`.
+  const text = '作りました: [https://github.com/o/r/pull/5](https://github.com/o/r/pull/5)。'
+  expect(urlsIn(text)).toEqual(['https://github.com/o/r/pull/5'])
+  expect(addLinks([], [{ text, isOutput: false }]).map(l => [l.kind, l.href])).toEqual([['PR', 'https://github.com/o/r/pull/5']])
+  expect(urlsIn('[docs](https://example.com/a_(b)) と [https://x.example.com/p](https://x.example.com/p)')).toEqual([
+    'https://example.com/a_(b)',
+    'https://x.example.com/p',
+  ])
+})
+
 test('GitHub issues, PRs and commits are named by number however the URL goes on', () => {
   expect(linkOf('https://github.com/o/r/pull/51/files#diff-1')).toEqual({
     key: 'https://github.com/o/r/pull/51',
