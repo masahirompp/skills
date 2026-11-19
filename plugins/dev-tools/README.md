@@ -74,7 +74,8 @@ open な issue は、振り分ける、詰める、片付ける、の3つの工�
 ### 片付ける
 
 `next-issues` が、着手できる issue を選び、1回の本番リリースまでを終える。
-今の `next-issues` は振り分けのラベルを見ずに候補を選ぶので、振り分けで次に片付けると決めた issue の番号を引数で渡す（例: `/dev-tools:next-issues 53`）。
+`next-issues` は振り分けのラベルを人間の決定として扱い、`ready-for-human` と `needs-info` を候補から外し、`needs-triage` には `issue-triage <番号>` を勧める。
+価値の順には並べないので、振り分けで次に片付けると決めた issue があれば、番号を引数で渡す（例: `/dev-tools:next-issues 53`）。
 `next-issues` は、着手前の判定で詰める必要がある issue のうち優先の高いものと、着手できる候補が無いときの次の一手として、`issue-triage` を勧める。
 範囲外で見つけた問題は起票し、次の振り分けに回る。
 
