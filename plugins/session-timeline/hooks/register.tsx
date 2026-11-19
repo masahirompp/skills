@@ -1,12 +1,14 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelCompleteResult, Register } from 'claude-code'
 
-import type { Backfill, Group, Live, Phase, Recap, Usage } from '../types'
+import type { Backfill, FoundLink, Group, Live, Phase, Recap, Usage } from '../types'
 import { stretchesOf, timed, timesOf, transcriptPathOf } from './backfill'
 import type { Times } from './backfill'
 import { BOUNDARY_TOOLS, MAX_STEPS, SYSTEM, briefOf, fold, outcomeOf, parseVerdict, promptOf } from './classify'
 import type { Step, Stretch, Verdict } from './classify'
 import { RECAP_SYSTEM, REGROUP_SYSTEM, groupsByKind, mergeSameKind, parseGroups, parseRecap, recapPrompt, regroupPrompt } from './group'
+import { addLinks, mentionsOf, rescanLinks } from './links'
+import type { Mention } from './links'
 import { cells, clockOf, colorOf, durationOf, padCells, usageLine } from './view'
 
 const PANE = 'session-timeline'
@@ -23,6 +25,9 @@ const backfill = atom({ plugin: 'session-timeline', key: 'backfill' } as const, 
 const isBackfilled = atom({ plugin: 'session-timeline', key: 'isBackfilled' } as const, false)
 const cwd = atom({ plugin: 'session-timeline', key: 'cwd' } as const, '')
 const transcriptPath = atom({ plugin: 'session-timeline', key: 'transcriptPath' } as const, '')
+const links = atom({ plugin: 'session-timeline', key: 'links' } as const, [] as FoundLink[], { shape: 'links-1' })
+/** How many links the pane shows; the rest are counted. */
+const SHOWN_LINKS = 8
 /** How many messages the conversation held when the live recording began: the backfill covers those alone. -1 unknown. */
 const liveFromIndex = atom({ plugin: 'session-timeline', key: 'liveFromIndex' } as const, -1)
 
@@ -158,6 +163,20 @@ async function writeRecap($: EngineInterface, mine: number): Promise<void> {
   if (next && conversation === mine) await update($, recap, () => next)
 }
 
+/** The URLs said in the conversation `mine` as it goes: a prompt, an answer, a tool call and what it gave back. */
+async function noteLinks($: EngineInterface, mentions: readonly Mention[], mine: number): Promise<void> {
+  if (conversation !== mine) return
+  await update($, links, known => addLinks(known, mentions))
+}
+
+/** The links of the whole conversation, read again from its messages: the history before the mod loaded, or /resume's. */
+async function rescan($: EngineInterface): Promise<void> {
+  const mine = conversation
+  const messages = await $.session.messages().catch(() => undefined)
+  if (!Array.isArray(messages) || conversation !== mine) return
+  await update($, links, known => rescanLinks(known, mentionsOf(messages)))
+}
+
 async function gather($: EngineInterface): Promise<Stretch> {
   if (!stretch) {
     // Set before the first await: two calls arriving together share one stretch.
@@ -278,6 +297,7 @@ async function fillHistory($: EngineInterface, mine: number, talk: number): Prom
 async function openPane($: EngineInterface): Promise<boolean> {
   isPaneOpened = true
   const { isPlaced } = await $.ui.open({ id: PANE, title: TITLE })
+  await rescan($)
   await askFill($)
   return isPlaced
 }
@@ -371,12 +391,16 @@ function adopt($: EngineInterface, isFilled: boolean, prompt?: string): Promise<
     await update($, expanded, () => [])
     await update($, recap, () => null)
     await update($, savedLatest, () => '')
+    await update($, links, () => [])
     await update($, usage, () => ({ calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }))
     const here = await $.session.cwd().catch(() => '')
     if (here) await update($, cwd, () => here)
     // After /clear there is nothing to fill: the one message before is the record of the command.
     await update($, isBackfilled, () => reason === 'clear')
-    if (reason === 'resume' && isFilled) await askFill($)
+    if (reason === 'resume' && isFilled) {
+      await rescan($)
+      await askFill($)
+    }
   })().catch(() => undefined)
   return adopting
 }
@@ -478,6 +502,7 @@ export const register: Register = (on, options) => {
       // Where the pane stands (autoOpen, or /timeline before the switch), the history /resume brought fills in as the turn begins.
       await adopt($, isAutoOpen || isPaneOpened, e.text)
       isReplying = true
+      await noteLinks($, [{ text: e.text, isOutput: false }], conversation).catch(() => undefined)
       await startTurn($, e.text).catch(() => undefined)
     }
     return next(e)
@@ -488,6 +513,7 @@ export const register: Register = (on, options) => {
     if (!e.agentId) {
       isReplying = false
       repliedAt = Date.now()
+      await noteLinks($, [{ text: e.answer, isOutput: false }], conversation).catch(() => undefined)
       await endTurn($, e.answer).catch(() => undefined)
       // Kept past a reload: the rows the reply drew may not be drawn again before the person asks.
       const row = latestRow ?? latestTool
@@ -504,7 +530,20 @@ export const register: Register = (on, options) => {
     const s = e.agentId ? undefined : await gather($).catch(() => undefined)
     if (s) running.set(s, (running.get(s) ?? 0) + 1)
     if (!e.agentId) latestTool = e.tool_use_id
+    const mine = conversation
     const ran = await next(e)
+    if (!e.agentId) {
+      const { tool: _tool, tool_use_id: _id, agentId: _agent, ...input } = e as unknown as Record<string, unknown>
+      const output = typeof ran.text === 'string' ? ran.text : JSON.stringify(ran.result ?? '')
+      await noteLinks(
+        $,
+        [
+          { text: JSON.stringify(input), isOutput: false },
+          { text: output, isOutput: true },
+        ],
+        mine,
+      ).catch(() => undefined)
+    }
     const outcome = outcomeOf(e.tool, ran.result ?? ran.text)
     const step: Step = {
       id: e.tool_use_id,
@@ -518,7 +557,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button } = $.ui.resolve(e)
+    const { Box, Text, Button, Link } = $.ui.resolve(e)
     const list = await read($, phases)
     const grouped = await read($, groups)
     const open = new Set(await read($, expanded))
@@ -532,11 +571,29 @@ export const register: Register = (on, options) => {
       </Text>
     ) : null
 
+    const found = await read($, links)
+    const linkW = Math.max(20, (e.props.bodyColumns ?? 70) - 8)
+    const linkRows = found.slice(0, SHOWN_LINKS).map(l => (
+      <Box key={'link-' + l.key} flexDirection="row">
+        <Text dimColor>{padCells(l.kind, 7)}</Text>
+        <Link href={l.href} label={cells(l.label) > linkW ? padCells(l.label, linkW - 1) + '…' : l.label} />
+      </Box>
+    ))
+    const linkSection =
+      linkRows.length > 0 ? (
+        <Box flexDirection="column" marginTop={1}>
+          <Text bold>リンク</Text>
+          {linkRows}
+          {found.length > SHOWN_LINKS ? <Text dimColor>ほか {found.length - SHOWN_LINKS} 件</Text> : null}
+        </Box>
+      ) : null
+
     if (list.length === 0 && !current) {
       return (
         <Box flexDirection="column">
           {progress}
           <Text dimColor>まだ工程がありません。作業が進むと、区切りごとに工程名が付きます。</Text>
+          {linkSection}
         </Box>
       )
     }
@@ -678,6 +735,7 @@ export const register: Register = (on, options) => {
             {recapRows}
           </Box>
         ) : null}
+        {linkSection}
         {tokens.calls > 0 ? (
           <Box marginTop={1}>
             <Text dimColor wrap="truncate-end">
