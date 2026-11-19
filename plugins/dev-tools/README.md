@@ -43,16 +43,9 @@ open な issue は、振り分ける、詰める、片付ける、の3つの工�
 `/dev-tools:issue-triage` を引数なしで呼ぶと、open な issue を見比べ、解く価値（高、中、低）と準備の度合いで4つに振り分ける。
 価値と準備の付け方は [issue-triage の SKILL.md](skills/issue-triage/SKILL.md) が定める。
 
-| 振り分け | 状態のラベル | 次に扱うもの |
-|---|---|---|
-| 着手できる | `ready-for-agent` | 片付ける（`next-issues`） |
-| 着手できる（作業そのものに人間が要る） | `ready-for-human` | 人間 |
-| 詰める | `needs-triage` | 詰める |
-| 待つ | `needs-info` | 次の振り分け（見直すきっかけが来たかを確かめる） |
-| やらない | `wontfix` | 閉じる |
-
-価値は `priority:high` / `priority:medium` / `priority:low` のラベルで残す。
-状態のラベルは mattpocock/skills の triage と同じ役割の名前を使い、`docs/agents/triage-labels.md` があればその対応表に従う。
+振り分けごとの状態のラベル（`ready-for-agent`、`ready-for-human`、`needs-triage`、`needs-info`、`wontfix`）と、価値のラベル（`priority:high` / `priority:medium` / `priority:low`）を付ける。
+状態のラベルの名前は mattpocock/skills の triage と同じにしてある。
+誰がいつどのラベルに付け替えるかは、[issue-triage の SKILL.md](skills/issue-triage/SKILL.md) の「ラベルの移り変わり」が定める。
 
 振り分けは、`next-issues` の前に毎回は回さない。
 新しい issue が無い回に振り分けても行き先は変わらず、人間の承認の手間だけがかかる。
@@ -69,7 +62,7 @@ grilling は mattpocock/skills のプラグインに入っている。入れて�
 ### 片付ける
 
 `next-issues` が、着手できる issue を選び、1回の本番リリースまでを終える。
-`next-issues` は振り分けのラベルに従い、`ready-for-human` と `needs-info` を候補から外し、`needs-triage` には `issue-triage <番号>` を勧める。価値のラベルは、候補を選ぶときの優先度として使う。
+`next-issues` は、振り分けのラベルを「ラベルの移り変わり」に従って扱い、価値のラベルを候補を選ぶときの優先度に使う。
 振り分けで次に片付けると決めた issue があれば、番号を引数で渡すと、ラベルより優先して候補の先頭に置く（例: `/dev-tools:next-issues 53`）。
 `next-issues` は、着手前の判定で詰める必要があると分かった issue と、着手できる候補が無いときの次の一手として、`issue-triage` を勧める。
 範囲外で見つけた問題は起票し、次の振り分けに回る。
