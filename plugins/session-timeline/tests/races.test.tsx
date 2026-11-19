@@ -41,7 +41,16 @@ type World = {
 function world(
   $: T[0],
   on: T[1],
-  opts: { label?: (n: number) => string; isModelDown?: boolean; history?: unknown[] | (() => unknown[]); modelDelay?: number; openDelay?: number; toolDelay?: number } = {},
+  opts: {
+    label?: (n: number) => string
+    isModelDown?: boolean
+    history?: unknown[] | (() => unknown[])
+    modelDelay?: number
+    openDelay?: number
+    toolDelay?: number
+    /** The regroup and the recap answer, and only the one named waits `modelDelay`. */
+    slow?: 'regroup' | 'recap'
+  } = {},
 ): World {
   const w: World = { judged: [], historyReads: 0 }
   let clock = Date.UTC(2026, 10, 17, 1, 0, 0)
@@ -52,7 +61,15 @@ function world(
     const isJudge = e.system !== REGROUP_SYSTEM && e.system !== RECAP_SYSTEM
     if (isJudge) w.judged.push(e.prompt)
     const label = opts.label?.(w.judged.length) ?? NAMES[(w.judged.length - 1) % NAMES.length]!
-    if (opts.modelDelay) await sleep(opts.modelDelay)
+    if (opts.slow) {
+      if (opts.modelDelay && (e.system === REGROUP_SYSTEM ? 'regroup' : e.system === RECAP_SYSTEM ? 'recap' : '') === opts.slow) {
+        await sleep(opts.modelDelay)
+      }
+      if (e.system === REGROUP_SYSTEM) return { value: { isAnswered: true, text: JSON.stringify([{ from: 1, label: 'まとまり' }]), usage } }
+      if (e.system === RECAP_SYSTEM) {
+        return { value: { isAnswered: true, text: JSON.stringify({ goal: '前の会話の目的', status: '', next: '', sides: [] }), usage } }
+      }
+    } else if (opts.modelDelay) await sleep(opts.modelDelay)
     if (!isJudge) {
       return { value: { isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage } as never }
     }
@@ -72,6 +89,8 @@ function world(
     return { value: (typeof h === 'function' ? h() : (h ?? [])) as never }
   })
   on('session.id', () => ({ value: 's' }))
+  on('session.cwd', () => ({ value: '/' }))
+  on('session.end', (_, e) => ({ sessionId: e.sessionId }))
   on('env.get', () => ({ value: undefined }) as never)
   on('fs.read', () => ({ deny: 'no transcript here' }) as never)
   on('ui.open', async () => {
@@ -164,4 +183,202 @@ test('opening twice at once backfills the history once', async ($, on) => {
   await sleep(400)
   expect(w.judged.length).toBe(2)
   expect((await labels($)).filter(t => /^(調査|実装)\s/.test(t)).length).toBe(2)
+})
+
+// /clear and /resume swap the conversation in the same process: `session.end` comes with
+// the reason, and no `session.start` after it. The engine starts the state afresh then;
+// the kit does not, and the plugin clears it itself as the next conversation is taken up.
+
+const end = (reason: 'clear' | 'resume') => ({ reason, sessionId: 's', resume: { id: 's' } }) as never
+const edit = (id: string) => ({ tool_use_id: id, tool: 'Edit', input: { file_path: `/${id}` } })
+/** The conversation /resume brings in: two turns, each with an edit. */
+const RESUMED = [
+  msg('user', '再開先の作業A'),
+  msg('assistant', '', [edit('ra')]),
+  msg('assistant', 'A 済み'),
+  msg('user', '再開先の作業B'),
+  msg('assistant', '', [edit('rb')]),
+  msg('assistant', 'B 済み'),
+]
+
+async function liveTurn($: T[0], text: string, toolId: string): Promise<void> {
+  await $.turn.start({ text, turnId: text })
+  await $.tool.call({ tool: 'Edit', file_path: `/${toolId}`, old_string: 'a', new_string: 'b', tool_use_id: toolId } as never)
+  await $.turn.complete({ answer: `${text} 済み`, durationMs: 1, isAborted: false, turnId: text, reason: 'completed' } as never)
+}
+
+test('after /resume, /timeline fills in the history of the conversation moved to', { options: { autoOpen: false } }, async ($, on) => {
+  let history: unknown[] = []
+  const w = world($, on, { history: () => history, label: n => ['前の作業', '調査', '実装'][n - 1] ?? 'その他' })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await liveTurn($, '前の会話の作業', 'old')
+  await sleep(300)
+  expect(w.judged.length).toBe(1)
+
+  await $.session.end(end('resume'))
+  history = RESUMED
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await sleep(400)
+  const judgedNow = w.judged.slice(1).join('\n')
+  expect(judgedNow).toContain('再開先の作業A')
+  expect(judgedNow).toContain('再開先の作業B')
+  expect(judgedNow).not.toContain('前の会話の作業')
+  const texts = await labels($)
+  // The phase of the conversation left behind is gone; the two resumed ones are there.
+  expect(texts.some(t => t.startsWith('前の作業'))).toBe(false)
+  expect(texts.filter(t => /^(調査|実装)\s/.test(t)).length).toBe(2)
+})
+
+test('a turn between /resume and /timeline is judged once, not again by the backfill', { options: { autoOpen: false } }, async ($, on) => {
+  let history: unknown[] = []
+  const w = world($, on, { history: () => history })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.session.end(end('resume'))
+  // The history holds the turn's prompt as it starts. A turn of text alone has no tool call to tell it by.
+  history = [...RESUMED, msg('user', '移ったあとの作業')]
+  await $.turn.start({ text: '移ったあとの作業', turnId: 't1' })
+  history = [...history, msg('assistant', '済み')]
+  await $.turn.complete({ answer: '済み', durationMs: 1, isAborted: false, turnId: 't1', reason: 'completed' } as never)
+  await sleep(300)
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await sleep(400)
+  expect(w.judged.filter(p => p.includes('移ったあとの作業')).length).toBe(1)
+  expect(w.judged.filter(p => p.includes('再開先の作業A')).length).toBe(1)
+  expect(w.judged.length).toBe(3)
+})
+
+test('with autoOpen, the history /resume brought fills in as the next turn starts', async ($, on) => {
+  let history: unknown[] = []
+  const w = world($, on, { history: () => history })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await sleep(100)
+  await $.session.end(end('resume'))
+  history = [...RESUMED, msg('user', '続きの作業')]
+  await liveTurn($, '続きの作業', 'next')
+  await sleep(500)
+  expect(w.judged.filter(p => p.includes('再開先の作業B')).length).toBe(1)
+  expect(w.judged.filter(p => p.includes('続きの作業')).length).toBe(1)
+  expect(w.judged.length).toBe(3)
+})
+
+test('after /clear, the record of the command is not filled in as a phase', { options: { autoOpen: false } }, async ($, on) => {
+  let history: unknown[] = []
+  const w = world($, on, { history: () => history })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await liveTurn($, '消す前の作業', 'old')
+  await sleep(300)
+  await $.session.end(end('clear'))
+  history = [msg('user', '<command-name>/clear</command-name>')]
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await sleep(300)
+  expect(w.judged.length).toBe(1)
+  expect((await labels($)).some(t => t.includes('まだ工程がありません'))).toBe(true)
+  await liveTurn($, '消したあとの作業', 'new')
+  await sleep(300)
+  expect(w.judged.length).toBe(2)
+  expect(w.judged[1]).toContain('消したあとの作業')
+})
+
+test('a stretch of the conversation left behind does not land in the next', { options: { autoOpen: false } }, async ($, on) => {
+  let history: unknown[] = []
+  let isMoved = false
+  world($, on, { history: () => history, modelDelay: 60, label: () => (isMoved ? '新' : '旧') })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await liveTurn($, '前の会話の作業', 'old')
+  // Its judgment is still out as the conversation is swapped.
+  await sleep(20)
+  await $.session.end(end('resume'))
+  isMoved = true
+  history = RESUMED
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await sleep(600)
+  const texts = await labels($)
+  expect(texts.some(t => t.startsWith('旧'))).toBe(false)
+  expect(texts.some(t => t.startsWith('新'))).toBe(true)
+})
+
+/** Every write of the conversation's derived state once `isOn` is set. */
+function writesOf(on: T[1]): { isOn: boolean; keys: string[] } {
+  const w = { isOn: false, keys: [] as string[] }
+  on('state.set', (_, e, next) => {
+    if (w.isOn && ['groups', 'recap', 'usage', 'phases', 'live'].includes(e.key)) w.keys.push(e.key)
+    return next(e)
+  })
+  return w
+}
+
+test('a recap still out as /clear comes writes nothing into the next conversation', { options: { autoOpen: false } }, async ($, on) => {
+  let history: unknown[] = []
+  const w = writesOf(on)
+  world($, on, { history: () => history, slow: 'recap', modelDelay: 150 })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  history = [msg('user', '前の会話の作業'), msg('assistant', '前の会話の作業 済み')]
+  await liveTurn($, '前の会話の作業', 'old')
+  // The turn is over and its recap waits on Haiku as the person types /clear.
+  await sleep(50)
+  await $.session.end(end('clear'))
+  history = [msg('user', '<command-name>/clear</command-name>')]
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  w.isOn = true
+  await sleep(400)
+  expect(w.keys).toEqual([])
+  expect((await labels($)).some(t => t.includes('前の会話の目的') || t.startsWith('Haiku'))).toBe(false)
+})
+
+test('a regroup still out as /clear comes writes nothing into the next conversation', { options: { autoOpen: false } }, async ($, on) => {
+  let history: unknown[] = []
+  const w = writesOf(on)
+  world($, on, { history: () => history, slow: 'regroup', modelDelay: 150 })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  for (const n of [1, 2]) {
+    history = [...history, msg('user', `作業${n}`), msg('assistant', `作業${n} 済み`)]
+    await liveTurn($, `作業${n}`, `a${n}`)
+    await sleep(100)
+  }
+  // The third phase makes the regroup ask Haiku.
+  history = [...history, msg('user', '作業3'), msg('assistant', '作業3 済み')]
+  await liveTurn($, '作業3', 'a3')
+  await sleep(50)
+  await $.session.end(end('clear'))
+  history = [msg('user', '<command-name>/clear</command-name>')]
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  w.isOn = true
+  await sleep(400)
+  expect(w.keys).toEqual([])
+})
+
+test('with autoOpen off, a pane opened by /timeline fills in what /resume brought as the next turn starts', { options: { autoOpen: false } }, async ($, on) => {
+  let history: unknown[] = []
+  const w = world($, on, { history: () => history })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  history = [msg('user', '前の会話の作業'), msg('assistant', '前の会話の作業 済み')]
+  await liveTurn($, '前の会話の作業', 'old')
+  await sleep(200)
+  // A /clear between leaves the pane up all the same.
+  await $.session.end(end('clear'))
+  history = [msg('user', '<command-name>/clear</command-name>')]
+  await $.session.end(end('resume'))
+  history = [...RESUMED, msg('user', '続きの作業')]
+  await liveTurn($, '続きの作業', 'next')
+  await sleep(500)
+  expect(w.judged.filter(p => p.includes('再開先の作業A')).length).toBe(1)
+  expect(w.judged.filter(p => p.includes('再開先の作業B')).length).toBe(1)
+  expect(w.judged.filter(p => p.includes('続きの作業')).length).toBe(1)
+})
+
+test('with autoOpen off and no pane opened, /resume fills in nothing until /timeline', { options: { autoOpen: false } }, async ($, on) => {
+  let history: unknown[] = []
+  const w = world($, on, { history: () => history })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.session.end(end('resume'))
+  history = [...RESUMED, msg('user', '続きの作業')]
+  await liveTurn($, '続きの作業', 'next')
+  await sleep(400)
+  expect(w.judged.filter(p => p.includes('再開先の作業A')).length).toBe(0)
 })

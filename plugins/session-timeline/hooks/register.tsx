@@ -47,19 +47,42 @@ let latestRow: string | undefined
 let latestTool: string | undefined
 let isReplying = false
 let repliedAt = 0
-/** When this module loaded: the rows drawn just after it are the ones on screen, the bottom as a rule. */
+/**
+ * When this module loaded or the conversation was switched: the rows drawn just
+ * after it are the ones on screen, the bottom as a rule.
+ */
 let loadedAt = 0
 const seenRows = new Set<string>()
 const FRESH_MS = 5000
 /** A turn ended (or the history came in) since the recap was last written. */
 let isRecapWanted = false
+/**
+ * Bumped as /clear or /resume swaps the conversation in this process: a live
+ * stretch of the one before writes nothing into the next.
+ */
+let conversation = 0
+/**
+ * How the conversation was swapped (/clear or /resume), until the next one's
+ * first event takes it up: no `session.start` comes for it.
+ */
+let switched: 'clear' | 'resume' | undefined
+let adopting: Promise<void> = Promise.resolve()
+/**
+ * Whether this module has opened the pane: it stays up through /clear and /resume,
+ * so the conversation moved to fills in as it is taken up.
+ */
+let isPaneOpened = false
 
 function enqueue(job: () => Promise<void>): void {
   queue = queue.then(job).catch(() => undefined)
 }
 
-/** Adds a model call's tokens to the running total, answered or not: a failed call can still cost. */
-async function track($: EngineInterface, r: ModelCompleteResult): Promise<void> {
+/**
+ * Adds a model call's tokens to the running total, answered or not: a failed call can still cost.
+ * `mine` is the conversation that asked: a call answered after /clear or /resume adds nothing to the next.
+ */
+async function track($: EngineInterface, r: ModelCompleteResult, mine: number): Promise<void> {
+  if (conversation !== mine) return
   const u = r.usage
   await update($, usage, t => ({
     calls: t.calls + 1,
@@ -76,17 +99,20 @@ function scheduleRegroup($: EngineInterface): void {
   isRegroupQueued = true
   enqueue(async () => {
     isRegroupQueued = false
-    await regroup($)
-    if (isRecapWanted) {
+    // Of the conversation it runs in: one swapped in under it writes nothing more.
+    const mine = conversation
+    await regroup($, mine)
+    if (isRecapWanted && conversation === mine) {
       isRecapWanted = false
-      await writeRecap($)
+      await writeRecap($, mine)
     }
   })
 }
 
 /** The whole session's fine phases, cut again into the phases a person would name. */
-async function regroup($: EngineInterface): Promise<void> {
+async function regroup($: EngineInterface, mine: number): Promise<void> {
   const list = await read($, phases)
+  if (conversation !== mine) return
   if (list.length <= 2) {
     await update($, groups, () => groupsByKind(list))
     return
@@ -100,7 +126,8 @@ async function regroup($: EngineInterface): Promise<void> {
     effort: 'low',
     timeoutMs: 45000,
   })
-  await track($, r)
+  await track($, r, mine)
+  if (conversation !== mine) return
   const parsed = r.isAnswered ? parseGroups(r.text, list) : undefined
   // A failed regroup keeps the last good one; new phases show as not yet grouped.
   if (!parsed && previous.length > 0) return
@@ -108,7 +135,7 @@ async function regroup($: EngineInterface): Promise<void> {
 }
 
 /** Where the session stands, from the phases, the person's prompts and the last answer. */
-async function writeRecap($: EngineInterface): Promise<void> {
+async function writeRecap($: EngineInterface, mine: number): Promise<void> {
   const grouped = await read($, groups)
   if (grouped.length === 0) return
   const messages = await $.session.messages()
@@ -126,9 +153,9 @@ async function writeRecap($: EngineInterface): Promise<void> {
     effort: 'low',
     timeoutMs: 45000,
   })
-  await track($, r)
+  await track($, r, mine)
   const next = r.isAnswered ? parseRecap(r.text) : null
-  if (next) await update($, recap, () => next)
+  if (next && conversation === mine) await update($, recap, () => next)
 }
 
 async function gather($: EngineInterface): Promise<Stretch> {
@@ -159,10 +186,11 @@ function close($: EngineInterface): void {
 function finish($: EngineInterface, done: Stretch): void {
   running.delete(done)
   if (done.steps.length === 0 && !done.prompt && !done.answer) return
-  enqueue(() => classifyLive($, done))
+  const mine = conversation
+  enqueue(() => classifyLive($, done, mine))
 }
 
-async function judge($: EngineInterface, done: Stretch, recent: readonly Phase[]): Promise<Verdict> {
+async function judge($: EngineInterface, done: Stretch, recent: readonly Phase[], mine: number): Promise<Verdict> {
   const r = await $.model.complete({
     model: 'haiku',
     system: SYSTEM,
@@ -171,7 +199,7 @@ async function judge($: EngineInterface, done: Stretch, recent: readonly Phase[]
     effort: 'low',
     timeoutMs: 30000,
   })
-  await track($, r)
+  await track($, r, mine)
   return (
     (r.isAnswered ? parseVerdict(r.text) : undefined) ?? {
       continues: recent.length > 0,
@@ -182,10 +210,12 @@ async function judge($: EngineInterface, done: Stretch, recent: readonly Phase[]
   )
 }
 
-async function classifyLive($: EngineInterface, done: Stretch): Promise<void> {
+async function classifyLive($: EngineInterface, done: Stretch, mine: number): Promise<void> {
+  if (conversation !== mine) return
   const ended: Stretch = { ...done, end: await $.clock.now() }
   await update($, live, l => (l ? { ...l, isClassifying: true } : { since: done.start ?? 0, steps: 0, isClassifying: true }))
-  const verdict = await judge($, ended, (await read($, phases)).slice(-6))
+  const verdict = await judge($, ended, (await read($, phases)).slice(-6), mine)
+  if (conversation !== mine) return
   await update($, phases, list => fold(list, ended, verdict, 'live'))
   scheduleRegroup($)
   const isGathering = stretch !== undefined
@@ -217,7 +247,7 @@ async function messageCount($: EngineInterface): Promise<number> {
  * Classifies the history before the live recording began and puts it ahead of the
  * live phases. Returns false where a reset made it stale before it finished.
  */
-async function fillHistory($: EngineInterface, mine: number): Promise<boolean> {
+async function fillHistory($: EngineInterface, mine: number, talk: number): Promise<boolean> {
   const all = await $.session.messages()
   if (!Array.isArray(all)) return true
   // Only what came before the live recording: a turn it saw, text alone included, is its own.
@@ -235,7 +265,7 @@ async function fillHistory($: EngineInterface, mine: number): Promise<boolean> {
   if (epoch !== mine) return false
   await update($, backfill, () => ({ done: 0, total: past.length }))
   for (const s of past) {
-    const verdict = await judge($, s, done.slice(-6))
+    const verdict = await judge($, s, done.slice(-6), talk)
     if (epoch !== mine) return false
     done = fold(done, s, verdict, 'past')
     const now = done
@@ -246,16 +276,24 @@ async function fillHistory($: EngineInterface, mine: number): Promise<boolean> {
 }
 
 async function openPane($: EngineInterface): Promise<boolean> {
+  isPaneOpened = true
   const { isPlaced } = await $.ui.open({ id: PANE, title: TITLE })
+  await askFill($)
+  return isPlaced
+}
+
+/** Asks for the backfill once per conversation; where it is done, makes the grouping or recap still missing. */
+async function askFill($: EngineInterface): Promise<void> {
   // Read and set with no await between: of two opens at once, one asks.
   const isFirstAsk = !isFillAsked
   isFillAsked = true
   if (isFirstAsk && !(await read($, isBackfilled))) {
     const mine = epoch
+    const talk = conversation
     enqueue(async () => {
       try {
         // Marked done only once it is: a backfill a reload cuts short runs again on the next open.
-        if (await fillHistory($, mine)) await update($, isBackfilled, () => true)
+        if (await fillHistory($, mine, talk)) await update($, isBackfilled, () => true)
       } finally {
         if (epoch === mine) {
           await update($, backfill, () => null)
@@ -270,7 +308,6 @@ async function openPane($: EngineInterface): Promise<boolean> {
     if (isMissingRecap) isRecapWanted = true
     if (isMissingRecap || (await read($, groups)).length === 0) scheduleRegroup($)
   }
-  return isPlaced
 }
 
 /** Forgets every phase, the grouping and the recap, so the next open rebuilds them from the history. */
@@ -288,6 +325,62 @@ async function reset($: EngineInterface): Promise<void> {
   await update($, isBackfilled, () => false)
 }
 
+/**
+ * Drops what this module holds of the conversation ending under /clear or
+ * /resume. The process goes on under another, whose first event takes it up.
+ */
+function forget(reason: 'clear' | 'resume'): void {
+  epoch += 1
+  conversation += 1
+  isFillAsked = false
+  stretch = undefined
+  running.clear()
+  isRecapWanted = false
+  latestRow = undefined
+  latestTool = undefined
+  isReplying = false
+  repliedAt = 0
+  seenRows.clear()
+  loadedAt = Date.now()
+  switched = reason
+}
+
+/**
+ * Takes up the conversation /clear or /resume swapped in, once, at its first
+ * event: no `session.start` comes for it. Where the live recording begins is set
+ * here; `prompt` is the turn that brought it, which the history may hold already.
+ * Waits for one taking it up already.
+ */
+function adopt($: EngineInterface, isFilled: boolean, prompt?: string): Promise<void> {
+  const reason = switched
+  if (!reason) return adopting
+  switched = undefined
+  adopting = (async () => {
+    const all = await $.session.messages().catch(() => undefined)
+    let count = Array.isArray(all) ? all.length : -1
+    const last = Array.isArray(all) ? all[all.length - 1] : undefined
+    if (prompt !== undefined && last?.role === 'user' && (last.toolResults?.length ?? 0) === 0 && last.text === prompt) {
+      count -= 1
+    }
+    // The engine starts the state afresh for the next conversation; cleared here too, so none of the last is kept.
+    await update($, liveFromIndex, () => count)
+    await update($, backfill, () => null)
+    await update($, live, () => null)
+    await update($, phases, () => [])
+    await update($, groups, () => [])
+    await update($, expanded, () => [])
+    await update($, recap, () => null)
+    await update($, savedLatest, () => '')
+    await update($, usage, () => ({ calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }))
+    const here = await $.session.cwd().catch(() => '')
+    if (here) await update($, cwd, () => here)
+    // After /clear there is nothing to fill: the one message before is the record of the command.
+    await update($, isBackfilled, () => reason === 'clear')
+    if (reason === 'resume' && isFilled) await askFill($)
+  })().catch(() => undefined)
+  return adopting
+}
+
 async function startTurn($: EngineInterface, text: string): Promise<void> {
   close($)
   const s = await gather($)
@@ -299,7 +392,9 @@ async function endTurn($: EngineInterface, answer: string): Promise<void> {
   s.answer = answer
   close($)
   // Asked once the turn's last stretch is classified, so the recap reads the regroup that takes it in.
+  const mine = conversation
   enqueue(async () => {
+    if (conversation !== mine) return
     isRecapWanted = true
     scheduleRegroup($)
   })
@@ -345,6 +440,12 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // /clear and /resume go on in this process under another conversation, and no session.start comes for it.
+  on('session.end', ($, e, next) => {
+    if (e.reason === 'clear' || e.reason === 'resume') forget(e.reason)
+    return next(e)
+  })
+
   // The transcript's own path, from the settings hooks' input, where they run.
   on('classic.UserPromptSubmit', async ($, e, next) => {
     await update($, transcriptPath, () => e.transcript_path).catch(() => undefined)
@@ -352,6 +453,7 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'timeline' }, async ($, e) => {
+    await adopt($, false)
     if (e.args.trim() === 'reset') await reset($)
     const isPlaced = await openPane($)
     return { text: isPlaced ? 'Timeline pane opened.' : 'Timeline pane is waiting for room (widen the terminal).' }
@@ -373,6 +475,8 @@ export const register: Register = (on, options) => {
 
   on('turn.start', async ($, e, next) => {
     if (!e.agentId) {
+      // Where the pane stands (autoOpen, or /timeline before the switch), the history /resume brought fills in as the turn begins.
+      await adopt($, isAutoOpen || isPaneOpened, e.text)
       isReplying = true
       await startTurn($, e.text).catch(() => undefined)
     }
