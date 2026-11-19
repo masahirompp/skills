@@ -1,6 +1,6 @@
 {
   "name": "dev-tools",
-  "description": "どのリポジトリでも使う開発作業の道具。review-loop(自分の PR のレビューループ)、housekeeping(マージ済みブランチと worktree の後片付け)、issue-check(着手前の課題の妥当性の判定)、next-issues(次のリリースで出す issue の選定から本番での確認まで)。",
+  "description": "どのリポジトリでも使う開発作業の道具。review-loop(自分の PR のレビューループ)、housekeeping(マージ済みブランチと worktree の後片付け)、issue-check(着手前の課題の妥当性の判定)、issue-triage(issue を価値と準備で振り分け、着手できる状態まで詰める)、next-issues(次のリリースで出す issue の選定から本番での確認まで)。",
   "author": {
     "name": "masahirompp",
     "url": "https://github.com/masahirompp"
