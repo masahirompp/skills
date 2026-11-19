@@ -78,9 +78,12 @@ export function linkOf(url: string): Omit<FoundLink, 'seen'> | undefined {
   return { key: href.replace(/\/$/, ''), href, kind: 'URL', label }
 }
 
+/** The keys `tool.call`'s input carries beside the tool's own arguments. */
+export const NOT_ARGUMENTS: readonly string[] = ['tool', 'tool_use_id', 'agentId', 'consent', 'requestMeta']
+
 /**
  * The arguments that hold what a tool writes into a file, not a target it
- * names: a page's script tags or a README's references are nobody's pick.
+ * names: an Edit that swaps one URL for another in a README is nobody's pick.
  */
 const CONTENT_ARGS: Readonly<Record<string, readonly string[]>> = {
   Write: ['content'],
@@ -89,19 +92,23 @@ const CONTENT_ARGS: Readonly<Record<string, readonly string[]>> = {
   NotebookEdit: ['new_source'],
 }
 
-/** The keys `tool.call`'s input carries beside the tool's own arguments. */
-export const NOT_ARGUMENTS: readonly string[] = ['tool', 'tool_use_id', 'agentId', 'consent', 'requestMeta']
-
 /**
- * Where a tool call says URLs: the arguments that name what it acts on (a
- * command, a URL to fetch), less what it writes into a file. Never its output:
- * a listing, a search or a page shows URLs nobody chose, and what the work
- * made (a PR) Claude names in its answer.
+ * The URLs a tool call names: its arguments whose value is a URL and nothing
+ * more (WebFetch's `url`), less what it writes into a file. A URL inside a
+ * command, a prompt or a file's text (a commit's trailer, a PR's body) rides
+ * along, nobody's pick; an argument holding a list or an object is not looked
+ * into. Never the call's output: a listing, a search or a page shows URLs
+ * nobody chose, and what the work made (a PR) Claude names in its answer.
  */
 export function callMentions(tool: string, args: Readonly<Record<string, unknown>>): string[] {
   const skip = CONTENT_ARGS[tool] ?? []
-  const named = Object.fromEntries(Object.entries(args).filter(([k]) => !skip.includes(k)))
-  return [JSON.stringify(named)]
+  const out: string[] = []
+  for (const [key, value] of Object.entries(args)) {
+    if (typeof value !== 'string' || skip.includes(key)) continue
+    const url = value.trim()
+    if (/^https?:\/\/\S+$/.test(url)) out.push(url)
+  }
+  return out
 }
 
 /** Every text a URL can be said in, in order: the messages' words and their tool calls' arguments. */

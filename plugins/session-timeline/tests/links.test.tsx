@@ -3,7 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
 import { REGROUP_SYSTEM, RECAP_SYSTEM } from '../hooks/group'
-import { addLinks, linkOf, rescanLinks, urlsIn } from '../hooks/links'
+import { addLinks, callMentions, linkOf, rescanLinks, urlsIn } from '../hooks/links'
 
 const PANE = {
   plugin: 'session-timeline',
@@ -414,4 +414,59 @@ test('the PRs a read-only command lists are not listed, live or read again', asy
   await $.command.run({ command: 'timeline', args: 'reset' } as never)
   await settle()
   expect(await listed($)).toEqual([])
+})
+
+test('of a call\'s arguments, only one that is a URL and nothing more is listed; a list or an object is not looked into', () => {
+  expect(
+    callMentions('WebFetch', {
+      url: ' https://docs.example.com/mods\n',
+      prompt: 'https://docs.example.com/other を読んで',
+      edits: [{ old_string: 'a', new_string: 'https://nested.example.com/x' }],
+      meta: { url: 'https://nested.example.com/y' },
+    }),
+  ).toEqual(['https://docs.example.com/mods'])
+  // What an Edit writes, though a URL alone, is the file's text.
+  expect(callMentions('Edit', { file_path: '/w/README.md', old_string: 'https://old.example.com/a', new_string: 'https://new.example.com/b' })).toEqual([])
+})
+
+// A commit as Claude runs it: the trailer's session URL rides in the command.
+const COMMIT =
+  'git commit -m "$(cat <<\'EOF\'\nsession-timeline: 直す\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_013k9798cevtHJTL3NQNrLus\nEOF\n)"'
+const PR_CREATE = 'gh pr create --title "x" --body "本文 https://github.com/o/r/issues/44 を直す"'
+const AGENT = { description: 'review', prompt: 'https://github.com/o/r/pull/58 を見て' }
+const FETCH = { url: 'https://docs.example.com/mods', prompt: 'read' }
+
+test('a URL inside a command or a prompt is not listed as the call goes; a URL argument is', async ($, on) => {
+  engine(on, () => [])
+  on('tool.call', () => ({ text: 'ok', result: {} }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: '続けて', turnId: 't1' })
+  await $.tool.call({ tool: 'Bash', command: COMMIT, tool_use_id: 'b1' })
+  await $.tool.call({ tool: 'Bash', command: PR_CREATE, tool_use_id: 'b2' })
+  await $.tool.call({ tool: 'Agent', ...AGENT, tool_use_id: 'a1' } as never)
+  await $.tool.call({ tool: 'WebFetch', ...FETCH, tool_use_id: 'f1' })
+  await $.turn.complete({ answer: 'できました', durationMs: 10, isAborted: false, turnId: 't1', reason: 'completed' } as never)
+  await settle()
+  expect(await listed($)).toEqual(['https://docs.example.com/mods'])
+})
+
+test('a URL inside a command or a prompt is not listed when the history is read again', { options: { autoOpen: false } }, async ($, on) => {
+  engine(on, () => [
+    { role: 'user', text: '続けて', toolUses: [] },
+    {
+      role: 'assistant',
+      text: '',
+      toolUses: [
+        { tool_use_id: 'b1', tool: 'Bash', input: { command: COMMIT }, text: 'ok' },
+        { tool_use_id: 'b2', tool: 'Bash', input: { command: PR_CREATE }, text: 'ok' },
+        { tool_use_id: 'a1', tool: 'Agent', input: AGENT, text: 'ok' },
+        { tool_use_id: 'f1', tool: 'WebFetch', input: FETCH, text: 'page' },
+      ],
+    },
+    { role: 'assistant', text: 'できました', toolUses: [] },
+  ])
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'timeline', args: '' } as never)
+  await settle()
+  expect(await listed($)).toEqual(['https://docs.example.com/mods'])
 })
