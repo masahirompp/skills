@@ -53,6 +53,8 @@ export type FoundLink = {
   kind: 'PR' | 'Issue' | 'Commit' | 'URL'
   /** owner/repo#51, or the host and path. */
   label: string
+  /** The words of the Markdown link it was said in (`[PR #58](…)`), drawn in place of `label`. */
+  text?: string
   /** When it was last said, as an ascending count: the newest first. */
   seen: number
 }

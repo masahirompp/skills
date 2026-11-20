@@ -581,3 +581,48 @@ test('a prompt said while the pane is still opening is kept after the history is
   await settle()
   expect(await listed($)).toEqual(['https://github.com/o/r/issues/9', 'https://github.com/o/r/issues/1'])
 })
+
+test("a Markdown link's words name it; the URL itself or blank words leave the made label", () => {
+  const list = addLinks(
+    [],
+    [
+      '[PR #58](https://github.com/o/r/pull/58) と [https://github.com/o/r/issues/9](https://github.com/o/r/issues/9)',
+      '[ ](https://docs.example.com/a) と https://docs.example.com/b',
+    ],
+  )
+  const byHref = Object.fromEntries(list.map(l => [l.href, l.text ?? l.label]))
+  expect(byHref['https://github.com/o/r/pull/58']).toBe('PR #58')
+  expect(byHref['https://github.com/o/r/issues/9']).toBe('o/r#9')
+  expect(byHref['https://docs.example.com/a']).toBe('docs.example.com/a')
+  expect(byHref['https://docs.example.com/b']).toBe('docs.example.com/b')
+})
+
+test('a link said bare after its Markdown link keeps the words; newer words replace older', () => {
+  const one = addLinks([], ['[レビューの PR](https://github.com/o/r/pull/58)'])
+  const two = addLinks(one, ['https://github.com/o/r/pull/58/files を見て'])
+  expect(two[0]?.text).toBe('レビューの PR')
+  const three = addLinks(two, ['[PR #58](https://github.com/o/r/pull/58)'])
+  expect(three[0]?.text).toBe('PR #58')
+  expect(three.length).toBe(1)
+})
+
+test("the pane draws a Markdown link's words as the link's label", async ($, on) => {
+  const u = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
+  on('session.messages', () => ({ value: [] }))
+  on('model.complete', () => ({ value: { isAnswered: false, reason: 'aborted', usage: u } }))
+  let clock = Date.UTC(2026, 10, 20, 1, 0, 0)
+  on('clock.now', () => ({ value: (clock += 60_000) }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('command.register', () => ({ value: { command: 'timeline' } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+  on('turn.complete', () => ({ text: '' }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: '続けて', turnId: 't1' })
+  await $.turn.complete({ answer: '[PR #58](https://github.com/o/r/pull/58) を作りました', durationMs: 10, isAborted: false, turnId: 't1', reason: 'completed' } as never)
+  await settle()
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const drawn = (await ui.findAll({ type: 'Link' })).map(l => [l.props.href, l.props.label])
+  expect(drawn).toEqual([['https://github.com/o/r/pull/58', 'PR #58']])
+  await ui.unmount()
+})

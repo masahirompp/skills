@@ -8,11 +8,11 @@ export const MAX_LINKS = 40
 const URL_RE = /https?:\/\/[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+/g
 
 /**
- * A Markdown link, `[text](URL)`, its URL the group: tried before a bare URL,
+ * A Markdown link, `[text](URL)`, its text and URL the groups: tried before a bare URL,
  * so a link whose text is the URL itself (`[https://…](https://…)`) is one URL,
  * not the two run together. The URL may hold balanced parentheses.
  */
-const MD_LINK_RE = /\[[^\]\n]*\]\((https?:\/\/[^\s()]*(?:\([^\s()]*\)[^\s()]*)*)\)/g
+const MD_LINK_RE = /\[([^\]\n]*)\]\((https?:\/\/[^\s()]*(?:\([^\s()]*\)[^\s()]*)*)\)/g
 
 const TOKEN_RE = new RegExp(`${MD_LINK_RE.source}|${URL_RE.source}`, 'g')
 
@@ -51,14 +51,33 @@ function trimEnd(url: string): string {
 /** A host to open: not a template (`https://${host}/x`) nor a bare word (`https://foo`). */
 const OPENABLE_RE = /^https?:\/\/[^/?#]+\.[^/?#]+|^https?:\/\/localhost/
 
-/** The URLs a text holds, in order, as written. */
-export function urlsIn(text: string): string[] {
-  const out: string[] = []
+/** A URL said in a text, with the words a Markdown link gives it (`[PR #58](…)`), where it has them. */
+export type Said = { url: string; text?: string }
+
+/**
+ * The words of a Markdown link, kept as written to name the link: none where
+ * they are blank or the URL itself (`[https://…](https://…)`), which say no more than it.
+ */
+function wordsOf(text: string | undefined): string | undefined {
+  const words = text?.replace(/\s+/g, ' ').trim()
+  return words && !/^https?:\/\//.test(words) ? words : undefined
+}
+
+/** The URLs a text holds, in order, each with its Markdown link's words where it has them. */
+export function saidIn(text: string): Said[] {
+  const out: Said[] = []
   for (const m of text.matchAll(TOKEN_RE)) {
-    const u = m[1] ?? trimEnd(m[0])
-    if (OPENABLE_RE.test(u)) out.push(u)
+    const url = m[2] ?? trimEnd(m[0])
+    if (!OPENABLE_RE.test(url)) continue
+    const words = m[2] !== undefined ? wordsOf(m[1]) : undefined
+    out.push(words ? { url, text: words } : { url })
   }
   return out
+}
+
+/** The URLs a text holds, in order, as written. */
+export function urlsIn(text: string): string[] {
+  return saidIn(text).map(s => s.url)
 }
 
 /**
@@ -144,24 +163,26 @@ export function mentionsOf(messages: readonly SessionMessage[]): Mention[] {
   return out
 }
 
-function urlsOf(mention: Mention): string[] {
-  if (typeof mention === 'string') return urlsIn(mention)
-  return OPENABLE_RE.test(mention.url) ? [mention.url] : []
+function saidOf(mention: Mention): Said[] {
+  if (typeof mention === 'string') return saidIn(mention)
+  return OPENABLE_RE.test(mention.url) ? [{ url: mention.url }] : []
 }
 
 /**
  * The links found in `mentions`, put ahead of `known`: a link said again moves
- * to the front, its `seen` raised. Newest first, at most MAX_LINKS.
+ * to the front, its `seen` raised. A Markdown link's words name it, the latest
+ * kept when it is said again bare. Newest first, at most MAX_LINKS.
  */
 export function addLinks(known: readonly FoundLink[], mentions: readonly Mention[]): FoundLink[] {
   const byKey = new Map(known.map(l => [l.key, l]))
   let seen = Math.max(0, ...known.map(l => l.seen))
   for (const mention of mentions) {
-    for (const url of urlsOf(mention)) {
+    for (const { url, text } of saidOf(mention)) {
       const link = linkOf(url)
       if (!link) continue
       seen += 1
-      byKey.set(link.key, { ...link, seen })
+      const words = text ?? byKey.get(link.key)?.text
+      byKey.set(link.key, words ? { ...link, text: words, seen } : { ...link, seen })
     }
   }
   return [...byKey.values()].sort((a, b) => b.seen - a.seen).slice(0, MAX_LINKS)

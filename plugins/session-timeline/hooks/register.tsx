@@ -608,12 +608,16 @@ export const register: Register = (on, options) => {
 
     const found = await read($, links)
     const linkW = Math.max(20, (e.props.bodyColumns ?? 70) - 8)
-    const linkRows = found.slice(0, SHOWN_LINKS).map(l => (
-      <Box key={'link-' + l.key} flexDirection="row">
-        <Text dimColor>{padCells(l.kind, 7)}</Text>
-        <Link href={l.href} label={cells(l.label) > linkW ? padCells(l.label, linkW - 1) + '…' : l.label} />
-      </Box>
-    ))
+    const linkRows = found.slice(0, SHOWN_LINKS).map(l => {
+      // A Markdown link's words, as written, name it; else the label made from its URL.
+      const name = l.text ?? l.label
+      return (
+        <Box key={'link-' + l.key} flexDirection="row">
+          <Text dimColor>{padCells(l.kind, 7)}</Text>
+          <Link href={l.href} label={cells(name) > linkW ? padCells(name, linkW - 1) + '…' : name} />
+        </Box>
+      )
+    })
     const linkSection =
       linkRows.length > 0 ? (
         <Box flexDirection="column" marginTop={1}>
