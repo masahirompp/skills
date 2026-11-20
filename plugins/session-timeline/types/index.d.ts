@@ -44,6 +44,21 @@ export type Usage = { calls: number; input: number; output: number; cacheRead: n
 /** How far filling in the history before the mod loaded has got. */
 export type Backfill = { done: number; total: number } | null
 
+/** A URL said in the conversation, listed in the pane to open. */
+export type FoundLink = {
+  /** What two mentions of one page share: a GitHub issue or PR however its URL went on. */
+  key: string
+  href: string
+  /** PR, Issue, Commit, or URL for any other page. */
+  kind: 'PR' | 'Issue' | 'Commit' | 'URL'
+  /** owner/repo#51, or the host and path. */
+  label: string
+  /** The words of the Markdown link it was said in (`[PR #58](…)`), drawn in place of `label`. */
+  text?: string
+  /** When it was last said, as an ascending count: the newest first. */
+  seen: number
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'session-timeline': {
@@ -59,6 +74,7 @@ declare module 'claude-code' {
       isBackfilled: boolean
       cwd: string
       transcriptPath: string
+      links: Shaped<FoundLink[]>
     }
   }
 }

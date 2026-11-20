@@ -1,12 +1,14 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ModelCompleteResult, Register } from 'claude-code'
 
-import type { Backfill, Group, Live, Phase, Recap, Usage } from '../types'
+import type { Backfill, FoundLink, Group, Live, Phase, Recap, Usage } from '../types'
 import { stretchesOf, timed, timesOf, transcriptPathOf } from './backfill'
 import type { Times } from './backfill'
 import { BOUNDARY_TOOLS, MAX_STEPS, SYSTEM, briefOf, fold, outcomeOf, parseVerdict, promptOf } from './classify'
 import type { Step, Stretch, Verdict } from './classify'
 import { RECAP_SYSTEM, REGROUP_SYSTEM, groupsByKind, mergeSameKind, parseGroups, parseRecap, recapPrompt, regroupPrompt } from './group'
+import type { Mention } from './links'
+import { addLinks, mentionsOf, NOT_ARGUMENTS, toolMentions } from './links'
 import { cells, clockOf, colorOf, durationOf, padCells, usageLine } from './view'
 
 const PANE = 'session-timeline'
@@ -23,6 +25,9 @@ const backfill = atom({ plugin: 'session-timeline', key: 'backfill' } as const, 
 const isBackfilled = atom({ plugin: 'session-timeline', key: 'isBackfilled' } as const, false)
 const cwd = atom({ plugin: 'session-timeline', key: 'cwd' } as const, '')
 const transcriptPath = atom({ plugin: 'session-timeline', key: 'transcriptPath' } as const, '')
+const links = atom({ plugin: 'session-timeline', key: 'links' } as const, [] as FoundLink[], { shape: 'links-1' })
+/** How many links the pane shows; the rest are counted. */
+const SHOWN_LINKS = 8
 /** How many messages the conversation held when the live recording began: the backfill covers those alone. -1 unknown. */
 const liveFromIndex = atom({ plugin: 'session-timeline', key: 'liveFromIndex' } as const, -1)
 
@@ -158,6 +163,46 @@ async function writeRecap($: EngineInterface, mine: number): Promise<void> {
   if (next && conversation === mine) await update($, recap, () => next)
 }
 
+/** The URLs said in the conversation `mine` as it goes: a prompt, an answer, a tool call's arguments. */
+async function noteLinks($: EngineInterface, mentions: readonly Mention[], mine: number): Promise<void> {
+  if (conversation !== mine) return
+  for (const said of saidDuringRescan) if (said.mine === mine) said.list.push(...mentions)
+  // Checked again as the change applies: the read beneath `update` (and its retry) can outlast a switch,
+  // whose clearing the change would otherwise fill with the last conversation's links.
+  await update($, links, known => (conversation === mine ? addLinks(known, mentions) : known))
+}
+
+/** What is said in conversation `mine` from when a rescan is on its way, the pane's opening included. */
+type Said = { readonly mine: number; readonly list: Mention[] }
+
+/** What is said while a rescan is on its way, one list per rescan: the messages it reads may not hold it yet. */
+const saidDuringRescan = new Set<Said>()
+
+/** Begins keeping what is said in this conversation, for a rescan to come; stopped by `saidDuringRescan.delete`. */
+function keepSaid(): Said {
+  const said: Said = { mine: conversation, list: [] }
+  saidDuringRescan.add(said)
+  return said
+}
+
+/**
+ * The links of the whole conversation, read again from its messages: the history before the mod loaded, or /resume's.
+ * They replace what was kept: a link the messages lack (gone with /compact, or seen live another way) is dropped.
+ * Only what was said after `said` began (a first prompt as the pane opens) stays ahead.
+ */
+async function rescan($: EngineInterface, from?: Said): Promise<void> {
+  // What was kept for another conversation is not this one's: the rescan keeps its own from here.
+  const said = from && from.mine === conversation ? from : keepSaid()
+  const mine = said.mine
+  try {
+    const messages = await $.session.messages().catch(() => undefined)
+    if (!Array.isArray(messages) || conversation !== mine) return
+    await update($, links, known => (conversation === mine ? addLinks(addLinks([], mentionsOf(messages)), said.list) : known))
+  } finally {
+    saidDuringRescan.delete(said)
+  }
+}
+
 async function gather($: EngineInterface): Promise<Stretch> {
   if (!stretch) {
     // Set before the first await: two calls arriving together share one stretch.
@@ -277,9 +322,16 @@ async function fillHistory($: EngineInterface, mine: number, talk: number): Prom
 
 async function openPane($: EngineInterface): Promise<boolean> {
   isPaneOpened = true
-  const { isPlaced } = await $.ui.open({ id: PANE, title: TITLE })
-  await askFill($)
-  return isPlaced
+  // Kept from before the pane opens: a prompt said while it does (autoOpen's first) is not in the messages the rescan reads.
+  const said = keepSaid()
+  try {
+    const { isPlaced } = await $.ui.open({ id: PANE, title: TITLE })
+    await rescan($, said)
+    await askFill($)
+    return isPlaced
+  } finally {
+    saidDuringRescan.delete(said)
+  }
 }
 
 /** Asks for the backfill once per conversation; where it is done, makes the grouping or recap still missing. */
@@ -310,7 +362,7 @@ async function askFill($: EngineInterface): Promise<void> {
   }
 }
 
-/** Forgets every phase, the grouping and the recap, so the next open rebuilds them from the history. */
+/** Forgets every phase, the grouping, the recap and the links, so the next open rebuilds them from the history. */
 async function reset($: EngineInterface): Promise<void> {
   // A backfill under way stops writing; the open after this asks for a new one over the whole history.
   epoch += 1
@@ -322,6 +374,8 @@ async function reset($: EngineInterface): Promise<void> {
   await update($, groups, () => [])
   await update($, expanded, () => [])
   await update($, recap, () => null)
+  // Read again from the history as the pane opens after this, none of the old kept ahead.
+  await update($, links, () => [])
   await update($, isBackfilled, () => false)
 }
 
@@ -371,12 +425,16 @@ function adopt($: EngineInterface, isFilled: boolean, prompt?: string): Promise<
     await update($, expanded, () => [])
     await update($, recap, () => null)
     await update($, savedLatest, () => '')
+    await update($, links, () => [])
     await update($, usage, () => ({ calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }))
     const here = await $.session.cwd().catch(() => '')
     if (here) await update($, cwd, () => here)
     // After /clear there is nothing to fill: the one message before is the record of the command.
     await update($, isBackfilled, () => reason === 'clear')
-    if (reason === 'resume' && isFilled) await askFill($)
+    if (reason === 'resume' && isFilled) {
+      await rescan($)
+      await askFill($)
+    }
   })().catch(() => undefined)
   return adopting
 }
@@ -478,9 +536,18 @@ export const register: Register = (on, options) => {
       // Where the pane stands (autoOpen, or /timeline before the switch), the history /resume brought fills in as the turn begins.
       await adopt($, isAutoOpen || isPaneOpened, e.text)
       isReplying = true
+      await noteLinks($, [e.text], conversation).catch(() => undefined)
       await startTurn($, e.text).catch(() => undefined)
     }
     return next(e)
+  })
+
+  // What Claude writes mid-turn, before a tool call, is said as each response ends: the turn's last words are not all of it.
+  on('turn.step', async function* ($, e, next) {
+    const mine = conversation
+    const r = yield* next(e)
+    if (!e.agentId && r.answer) await noteLinks($, [r.answer], mine).catch(() => undefined)
+    return r
   })
 
   on('turn.complete', async ($, e, next) => {
@@ -488,6 +555,7 @@ export const register: Register = (on, options) => {
     if (!e.agentId) {
       isReplying = false
       repliedAt = Date.now()
+      await noteLinks($, [e.answer], conversation).catch(() => undefined)
       await endTurn($, e.answer).catch(() => undefined)
       // Kept past a reload: the rows the reply drew may not be drawn again before the person asks.
       const row = latestRow ?? latestTool
@@ -504,7 +572,13 @@ export const register: Register = (on, options) => {
     const s = e.agentId ? undefined : await gather($).catch(() => undefined)
     if (s) running.set(s, (running.get(s) ?? 0) + 1)
     if (!e.agentId) latestTool = e.tool_use_id
+    const mine = conversation
     const ran = await next(e)
+    if (!e.agentId) {
+      // The tool's arguments alone: what rides beside them (consent, requestMeta) is no one's pick.
+      const args = Object.fromEntries(Object.entries(e).filter(([k]) => !NOT_ARGUMENTS.includes(k)))
+      await noteLinks($, toolMentions(e.tool, args), mine).catch(() => undefined)
+    }
     const outcome = outcomeOf(e.tool, ran.result ?? ran.text)
     const step: Step = {
       id: e.tool_use_id,
@@ -518,7 +592,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button } = $.ui.resolve(e)
+    const { Box, Text, Button, Link } = $.ui.resolve(e)
     const list = await read($, phases)
     const grouped = await read($, groups)
     const open = new Set(await read($, expanded))
@@ -532,11 +606,33 @@ export const register: Register = (on, options) => {
       </Text>
     ) : null
 
+    const found = await read($, links)
+    const linkW = Math.max(20, (e.props.bodyColumns ?? 70) - 8)
+    const linkRows = found.slice(0, SHOWN_LINKS).map(l => {
+      // A Markdown link's words, as written, name it; else the label made from its URL.
+      const name = l.text ?? l.label
+      return (
+        <Box key={'link-' + l.key} flexDirection="row">
+          <Text dimColor>{padCells(l.kind, 7)}</Text>
+          <Link href={l.href} label={cells(name) > linkW ? padCells(name, linkW - 1) + '…' : name} />
+        </Box>
+      )
+    })
+    const linkSection =
+      linkRows.length > 0 ? (
+        <Box flexDirection="column" marginTop={1}>
+          <Text bold>リンク</Text>
+          {linkRows}
+          {found.length > SHOWN_LINKS ? <Text dimColor>ほか {found.length - SHOWN_LINKS} 件</Text> : null}
+        </Box>
+      ) : null
+
     if (list.length === 0 && !current) {
       return (
         <Box flexDirection="column">
           {progress}
           <Text dimColor>まだ工程がありません。作業が進むと、区切りごとに工程名が付きます。</Text>
+          {linkSection}
         </Box>
       )
     }
@@ -678,6 +774,7 @@ export const register: Register = (on, options) => {
             {recapRows}
           </Box>
         ) : null}
+        {linkSection}
         {tokens.calls > 0 ? (
           <Box marginTop={1}>
             <Text dimColor wrap="truncate-end">
