@@ -43,9 +43,6 @@ open な issue は、振り分ける、詰める、片付ける、の3つの工�
 `/dev-tools:issue-triage` を引数なしで呼ぶと、open な issue を見比べ、解く価値（高、中、低）と準備の度合いで4つに振り分ける。
 価値と準備の付け方は [issue-triage の SKILL.md](skills/issue-triage/SKILL.md) が定める。
 
-同じ決定を前提にしている issue があれば、1つにまとめるか、共有する決定を別の issue に切り出す案を出す。
-別々に詰めると、同じ問いに2回答えて、答えが食い違うためである。
-
 振り分けごとの状態のラベル（`ready-for-agent`、`ready-for-human`、`needs-triage`、`needs-info`、`wontfix`）と、価値のラベル（`priority:high` / `priority:medium` / `priority:low`）を付ける。
 状態のラベルの名前は mattpocock/skills の triage と同じにしてある。
 誰がいつどのラベルに付け替えるかは、[issue-triage の SKILL.md](skills/issue-triage/SKILL.md) の「ラベルの移り変わり」が定める。
@@ -59,7 +56,7 @@ open な issue は、振り分ける、詰める、片付ける、の3つの工�
 issue-check で確かめ、読むだけでは分からない事実を観測し、grilling で人間が決め、決めたことを本文に反映して振り分け直す。
 終わりの条件と手順は [issue-triage の SKILL.md](skills/issue-triage/SKILL.md) の「1件を詰める」が定める。
 grilling は mattpocock/skills のプラグインに入っている。入れていなければ、同じ進め方で対話する。
-1回の呼び出しで扱うのは1件にする。
+1回の呼び出しで扱うのは1件にする。振り分けのときに「一緒に検討する」と申し送りに書かれた issue があれば、詰めるときにそれを伝え、一緒に詰めるかを人間が決める。
 詰める作業は人間の集中が要り、1件ずつ終わりの条件まで持っていくほうが、半端に決まった issue が残らない。
 
 ### 片付ける
