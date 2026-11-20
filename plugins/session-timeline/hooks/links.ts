@@ -163,6 +163,15 @@ export function mentionsOf(messages: readonly SessionMessage[]): Mention[] {
   return out
 }
 
+/**
+ * Whether `url` goes to the row `link` itself, not a part within it: GitHub's
+ * rows drop what follows their number (`#issuecomment-…`, `/files`), which a
+ * link's words then name (`[このコメント](…)`), not the PR. Only a trailing `/` is the same page.
+ */
+function isWhole(url: string, link: Omit<FoundLink, 'seen'>): boolean {
+  return new URL(url).href.replace(/\/$/, '') === link.key
+}
+
 function saidOf(mention: Mention): Said[] {
   if (typeof mention === 'string') return saidIn(mention)
   return OPENABLE_RE.test(mention.url) ? [{ url: mention.url }] : []
@@ -170,8 +179,9 @@ function saidOf(mention: Mention): Said[] {
 
 /**
  * The links found in `mentions`, put ahead of `known`: a link said again moves
- * to the front, its `seen` raised. A Markdown link's words name it, the latest
- * kept when it is said again bare. Newest first, at most MAX_LINKS.
+ * to the front, its `seen` raised. A Markdown link's words name it where the
+ * link goes to it whole, the latest kept when it is said again bare or by a
+ * link to a part of it. Newest first, at most MAX_LINKS.
  */
 export function addLinks(known: readonly FoundLink[], mentions: readonly Mention[]): FoundLink[] {
   const byKey = new Map(known.map(l => [l.key, l]))
@@ -181,7 +191,7 @@ export function addLinks(known: readonly FoundLink[], mentions: readonly Mention
       const link = linkOf(url)
       if (!link) continue
       seen += 1
-      const words = text ?? byKey.get(link.key)?.text
+      const words = (text !== undefined && isWhole(url, link) ? text : undefined) ?? byKey.get(link.key)?.text
       byKey.set(link.key, words ? { ...link, text: words, seen } : { ...link, seen })
     }
   }

@@ -606,6 +606,22 @@ test('a link said bare after its Markdown link keeps the words; newer words repl
   expect(three.length).toBe(1)
 })
 
+test('the words of a link to part of a PR, an issue or a commit do not name the row', () => {
+  const names = (text: string[]) => addLinks([], text).map(l => l.text ?? l.label)
+  // GitHub's own URL shapes: a comment's anchor, a PR's files and commits tabs.
+  expect(names(['[このコメント](https://github.com/o/r/pull/58#issuecomment-1)'])).toEqual(['o/r#58'])
+  expect(names(['[このコメント](https://github.com/o/r/pull/58#issuecomment-1)', 'https://github.com/o/r/pull/58'])).toEqual(['o/r#58'])
+  expect(names(['[差分](https://github.com/o/r/pull/58/files)'])).toEqual(['o/r#58'])
+  expect(names(['[コミット一覧](https://github.com/o/r/pull/58/commits)'])).toEqual(['o/r#58'])
+  expect(names(['[返信](https://github.com/o/r/issues/44#issuecomment-2)'])).toEqual(['o/r#44'])
+  expect(names(['[行](https://github.com/o/r/commit/e26d750abc#diff-1)'])).toEqual(['o/r@e26d750'])
+  // The words a link to the whole row gave it stay; a newer link to the whole row still renames it.
+  expect(names(['[PR #58](https://github.com/o/r/pull/58)', '[このコメント](https://github.com/o/r/pull/58#issuecomment-1)'])).toEqual(['PR #58'])
+  expect(names(['[PR #58](https://github.com/o/r/pull/58)', '[直し](https://github.com/o/r/pull/58/)'])).toEqual(['直し'])
+  // Elsewhere a URL's anchor makes its own row, so its words name it.
+  expect(names(['[手順](https://docs.example.com/a#setup)'])).toEqual(['手順'])
+})
+
 test("the pane draws a Markdown link's words as the link's label", async ($, on) => {
   const u = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
   on('session.messages', () => ({ value: [] }))
