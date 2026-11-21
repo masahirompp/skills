@@ -8,9 +8,10 @@ set -euo pipefail
 scripts=$(cd "$(dirname "$0")/../../plugins/dev-tools/skills/housekeeping/scripts" && pwd)
 root=$(cd "$(mktemp -d "${TMPDIR:-/tmp}/hk-test.XXXXXX")" && pwd -P)
 busy_pid=''
-# EXIT の trap の中で最後に失敗したコマンドの終了コードが、スクリプト全体の終了コードになる。
-# kill した子の wait は 143 を返し、set -e のもとではそこで止まる(後片付けにも届かない)ので、
-# 失敗を握りつぶしたうえで、trap に入る前の終了コードを戻す。
+# set -e のもとでは、EXIT の trap の中でコマンドが失敗すると、trap はそこで止まり、
+# スクリプトはそのコマンドの終了コードで終わる。kill した子の wait は 143 を返すので、
+# || true で握りつぶし、後片付けまで届かせる(これが直しの本体)。
+# trap が最後まで進めば trap に入る前の終了コードが残るが、念のため控えて戻す。
 cleanup() {
   local rc=$?
   if [ -n "$busy_pid" ]; then kill "$busy_pid" 2>/dev/null || true; wait "$busy_pid" 2>/dev/null || true; fi
