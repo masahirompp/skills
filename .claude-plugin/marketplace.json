@@ -9,11 +9,6 @@
       "name": "dev-tools",
       "source": "./plugins/dev-tools",
       "description": "開発作業の道具。review-loop(PR のレビューループ)、housekeeping(マージ済みブランチの後片付け)、issue-check(着手前の課題の判定)、issue-triage(issue の振り分けと詰める作業)、next-issues(次のリリースの issue の選定と出荷)。"
-    },
-    {
-      "name": "session-timeline",
-      "source": "./plugins/session-timeline",
-      "description": "セッションの工程(実装・レビュー・修正など)をタイムラインとまとめで表示する mod。工程を押すと会話のその位置へ移動する。"
     }
   ]
 }
