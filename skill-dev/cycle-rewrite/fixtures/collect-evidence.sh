@@ -43,8 +43,8 @@ dump() { # $1=repo-name $2=run-dir(iteration-N からの相対)
     for f in "$dir"/docs/adr/*.md; do
       test -f "$f" && { echo "[$f]"; cat "$f"; echo; }
     done
-    echo "--- CONTEXT.md ---"
-    test -f "$dir/CONTEXT.md" && cat "$dir/CONTEXT.md" || echo "(none)"
+    echo "--- GLOSSARY.md ---"
+    test -f "$dir/GLOSSARY.md" && cat "$dir/GLOSSARY.md" || echo "(none)"
     echo "--- CLAUDE.md ---"
     test -f "$dir/CLAUDE.md" && cat "$dir/CLAUDE.md" || echo "(none)"
     echo "--- .claude/skills/ ---"
@@ -71,9 +71,9 @@ dump() { # $1=repo-name $2=run-dir(iteration-N からの相対)
     local first
     first=$(git -C "$dir" rev-list --max-parents=0 HEAD | tail -1)
     git -C "$dir" diff --stat "$first"
-    git -C "$dir" diff "$first" -- . ':(exclude)docs' ':(exclude)CONTEXT.md' ':(exclude)CLAUDE.md' ':(exclude)AGENTS.md' ':(exclude).claude' | head -800
+    git -C "$dir" diff "$first" -- . ':(exclude)docs' ':(exclude)GLOSSARY.md' ':(exclude)CLAUDE.md' ':(exclude)AGENTS.md' ':(exclude).claude' | head -800
     echo "--- 永続層の差分 (聞かずに反映した内容と、確認なしに仕様を書き換えていないかの判定用) ---"
-    git -C "$dir" diff "$first" -- docs CONTEXT.md CLAUDE.md AGENTS.md .claude | head -600
+    git -C "$dir" diff "$first" -- docs GLOSSARY.md CLAUDE.md AGENTS.md .claude | head -600
     echo "--- git worktrees (作業ツリー外参照の後始末チェック) ---"
     git -C "$dir" worktree list
   } > "$out" 2>&1

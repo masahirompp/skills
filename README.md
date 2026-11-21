@@ -33,7 +33,7 @@ skill-dev/                  # 開発用資産（どのプラグインにも含�
 
 | スキル | プラグイン | 概要 |
 | --- | --- | --- |
-| [cycle-rewrite](plugins/cycle-rewrite/skills/cycle-rewrite/SKILL.md) | cycle-rewrite | サイクル型リライト開発ワークフロー。コードはいつでもゼロから作り直せるものとして扱い、仕様と学び（PRODUCT.md・ADR・CONTEXT.md・プロジェクトスキル）を永続資産として積み上げる。学びを issue に起票し、セッションごとに棚卸しして docs に反映する |
+| [cycle-rewrite](plugins/cycle-rewrite/skills/cycle-rewrite/SKILL.md) | cycle-rewrite | サイクル型リライト開発ワークフロー。コードはいつでもゼロから作り直せるものとして扱い、仕様と学び（PRODUCT.md・ADR・GLOSSARY.md・プロジェクトスキル）を永続資産として積み上げる。学びを issue に起票し、セッションごとに棚卸しして docs に反映する |
 | [housekeeping](plugins/dev-tools/skills/housekeeping/SKILL.md) | dev-tools | git リポジトリの後片付け。PR マージ済み・ローカルでマージ済みのブランチと worktree をまとめて削除する。作業中のものと監査用ブランチ（entire.io の `entire/*`）は残す |
 | [issue-check](plugins/dev-tools/skills/issue-check/SKILL.md) | dev-tools | 開発・企画・施策の依頼を着手前に判定する。課題は本物か、提案された手段はその課題を解くかを、依頼の重さに応じた深さで確かめ、判定だけを返す。作業自体は行わない |
 | [issue-triage](plugins/dev-tools/skills/issue-triage/SKILL.md) | dev-tools | issue を着手できる状態に持っていく。引数なしでは open な issue を見比べ、解く価値（起きたときの結果と起きやすさ）と準備の度合いで、着手できる・詰める・待つ・やらないに振り分ける。issue 番号を渡すと、その1件を issue-check、観測、grilling で詰めて本文に反映する。人間が承認した振り分けと価値を、ラベル（状態は mattpocock/skills の triage と同じ語彙、価値は `priority:high/medium/low`）とコメントで残す。`/dev-tools:issue-triage` と名指しで呼んだときだけ動く |

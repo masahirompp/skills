@@ -1,7 +1,7 @@
 ---
 name: cycle-rewrite
 description: >-
-  サイクル型リライト開発ワークフロー。コードはいつでもゼロから作り直せるものとして扱い、仕様と学び(docs/PRODUCT.md・ADR・CONTEXT.md・プロジェクトスキル)を永続資産として積み上げる。
+  サイクル型リライト開発ワークフロー。コードはいつでもゼロから作り直せるものとして扱い、仕様と学び(docs/PRODUCT.md・ADR・GLOSSARY.md・プロジェクトスキル)を永続資産として積み上げる。
   モード: init / capture / inventory(棚卸し) / rewrite(作り直し)。
   CLAUDE.md に cycle-rewrite 規約があるプロジェクトで、学びやバグの起票、issue の棚卸しと docs への反映、コードのリセット・作り直しを扱うときに使う。
   この方式を新たに導入したいという相談にも使う。
@@ -15,7 +15,7 @@ AI 開発ではコード生成速度が人間の理解速度を上回り、人�
 
 | 層 | 中身 | 扱い |
 | --- | --- | --- |
-| 永続層 | `docs/PRODUCT.md`、`docs/adr/`、`CONTEXT.md`、`.claude/skills/`、`CLAUDE.md` / `AGENTS.md` | 厳格に維持し、積み上げる |
+| 永続層 | `docs/PRODUCT.md`、`docs/adr/`、`GLOSSARY.md`、`.claude/skills/`、`CLAUDE.md` / `AGENTS.md` | 厳格に維持し、積み上げる |
 | 使い捨て層 | `src/` とテストコード | いつ消してもよい。品質は「動けばOK」 |
 
 コードは雑に、ドキュメントは厳格に。docs が常に最新なら、コードはいつでも捨てられる。そのために、学びは溜めずにセッションごとに docs へ反映する。
@@ -24,7 +24,7 @@ AI 開発ではコード生成速度が人間の理解速度を上回り、人�
 
 層の実パスは init で確定し、CLAUDE.md の規約ブロック「層の定義」に記録する。作り直しの削除対象はそこを正とする。本スキルの `src/` はその略記。
 
-前提: mattpocock-skills の grilling・domain-modeling と GitHub(issue・gh CLI)。仕様詰めは grilling を domain-modeling と併用して行う(ユーザー起動の /grill-with-docs と同じ組み合わせ。/grill-with-docs は Claude からは起動できない)。
+前提: mattpocock-skills(1.3.0 以降。用語集のファイル名が `GLOSSARY.md`)の grilling・domain-modeling と GitHub(issue・gh CLI)。仕様詰めは grilling を domain-modeling と併用して行う(ユーザー起動の /grill-with-docs と同じ組み合わせ。/grill-with-docs は Claude からは起動できない)。
 
 CLAUDE.md に cycle-rewrite 規約が無く、ユーザーが導入を求めてもいないプロジェクトには勝手に適用しない。方式を短く紹介し、導入の意思を確認してから init に進む。
 
@@ -54,7 +54,7 @@ gh issue list --state open --limit 500 --json number,title,labels,body \
 - ラベル: `learning`(コードを捨てても再発しうるハマり・想定外挙動)、`spec-change`(仕様変更、暗黙の要件の発覚)、`decision-log`(AI の内部設計判断)
 - 本文の最後に、起票したときの作業ブランチを `branch: <ブランチ名>` の1行で書く(`git branch --show-current`。worktree で動くサブエージェントは、自分のブランチではなく親の作業ブランチを書く)。棚卸しが自分の作業の分を選ぶのに使う
 - 形式は雑でよいが、内容は正確に書く。未決の設計選択を確定済みとして書いたり、原因を推測で断定したりしない
-- バグは、まず PRODUCT.md・ADR・CONTEXT.md にその挙動の仕様があるか照合する。無ければ暗黙の要件の発覚で、正しい挙動そのものが未決。期待動作を決め打ちせず、ドメイン語の選択肢(例: 重複は冪等に無視 / エラーで拒否)を併記して `spec-change` で起票する。作業を進めるために暫定の挙動で直したなら、タイトルを `暫定:` で始め、どの案を暫定で採ったかを書く(層2)
+- バグは、まず PRODUCT.md・ADR・GLOSSARY.md にその挙動の仕様があるか照合する。無ければ暗黙の要件の発覚で、正しい挙動そのものが未決。期待動作を決め打ちせず、ドメイン語の選択肢(例: 重複は冪等に無視 / エラーで拒否)を併記して `spec-change` で起票する。作業を進めるために暫定の挙動で直したなら、タイトルを `暫定:` で始め、どの案を暫定で採ったかを書く(層2)
 - 起票に承認は要らない。人間の回答を待たずに起票してから作業を続ける。その場で docs を直さない。起票のたびに蒸留や確認を挟むと捕捉が律速され、学びが漏れ始める。蒸留と人間への確認は、応答を終える前の棚卸しで行う
 - 直し残したバグや後でやる作業は受信箱に入れない(受信箱のラベルを付けない普通の issue にする)。受信箱は docs に反映したら閉じるもので、作業の管理には使わない
 
@@ -83,13 +83,13 @@ gh issue list --state open --limit 500 --json number,title,labels,body \
 | 学びの種別 | 宛先 |
 | --- | --- |
 | 仕様: 判明した要件、やらないと決めた機能 | `docs/PRODUCT.md`(やらないことは Out of Scope に理由付きで。受け入れ条件は Testing Decisions) |
-| 用語: ドメインの言葉の追加・変更・廃止 | `CONTEXT.md` |
+| 用語: ドメインの言葉の追加・変更・廃止 | `GLOSSARY.md` |
 | 設計判断: 作り直しても覆らない判断、採用しなかった案とその理由 | `docs/adr/`(新規、または既存 ADR のステータス遷移) |
 | 実装・環境のハマり | `.claude/skills/`(ライブラリ・ツール単位で1スキルに集約。既存があれば追記) |
 | プロセス: 進め方のルール | `CLAUDE.md` / `AGENTS.md` |
 | 捨てるコードに紐づくだけの判断 | 反映せず閉じる |
 
-**人間が決めるのは、仕様(PRODUCT.md の要件と CONTEXT.md の用語)・`暫定:` の確定・ADR の新規作成と遷移だけ。** これらは issue ごとにドメイン語の選択肢で聞き、決まってから docs に反映して閉じる。issue の本文に結論が書いてあっても、反映の前に確かめる(書いたのが人間か AI かを、本文からは見分けられない)。それ以外(スキルや CLAUDE.md への追記、反映不要の close)は聞かずに反映して閉じ、何をどこへ反映したかを報告する。3層の自律判断と同じ線で、戻す手段は git 履歴。
+**人間が決めるのは、仕様(PRODUCT.md の要件と GLOSSARY.md の用語)・`暫定:` の確定・ADR の新規作成と遷移だけ。** これらは issue ごとにドメイン語の選択肢で聞き、決まってから docs に反映して閉じる。issue の本文に結論が書いてあっても、反映の前に確かめる(書いたのが人間か AI かを、本文からは見分けられない)。それ以外(スキルや CLAUDE.md への追記、反映不要の close)は聞かずに反映して閉じ、何をどこへ反映したかを報告する。3層の自律判断と同じ線で、戻す手段は git 履歴。
 
 人間の回答が要る issue は、完了報告の中でまとめて聞く。答えが出なかったものは open のまま残してよい(次の棚卸しか作り直しの前に拾う)。
 
@@ -97,12 +97,12 @@ gh issue list --state open --limit 500 --json number,title,labels,body \
 - 「既存 docs と矛盾しない」は close の理由にならない。ライブラリのハマりのような加算的な知見こそ置き場を必要とする
 - 採用可否に関わるライブラリの学び(例: 「Fuse.js は5000件超で破綻」)は ADR へ、使い方の罠(例: 「dexie はトランザクション内 await で即コミット」)はスキルへ。前者をスキルにすると、覆った ADR が accepted のまま尊重され続ける
 - 覆った ADR は削除せず、frontmatter の `status` を `superseded by ADR-NNNN` か `deprecated` に変える(既存の ADR が本文の `Status:` 行を使っていれば、その書式に合わせる)。削除すると「なぜ捨てたか」が消え、同じ案が再採用される
-- 仕様が変わったら、旧方向の記述(CONTEXT.md の用語、スキル、README 等)も同じ棚卸しで落とす。残すと docs だけを読む次のセッションが汚染される
+- 仕様が変わったら、旧方向の記述(GLOSSARY.md の用語、スキル、README 等)も同じ棚卸しで落とす。残すと docs だけを読む次のセッションが汚染される
 - 反映はコミットしてから issue を閉じ、反映先を1行コメントで残す。コミットが無いと、戻す手段が git 履歴に残らない
 
 ## 実装の規律
 
-- **インプットは docs**: 仕様は PRODUCT.md・ADR・CONTEXT.md を正とする。完了条件は PRODUCT.md の Testing Decisions。docs の書き漏れで詰まったら、それ自体が capture 対象の学び
+- **インプットは docs**: 仕様は PRODUCT.md・ADR・GLOSSARY.md を正とする。完了条件は PRODUCT.md の Testing Decisions。docs の書き漏れで詰まったら、それ自体が capture 対象の学び
 - **停止条件**: 完了条件を満たすまで自律で進める。途中で人間に止めてよいのは、層2のうち docs に定めた挙動の変更と、層3だけ
 - **完了報告**: 棚卸しを済ませ、反映した内容と、人間の回答が要る issue(`暫定:` を含む)を示す
 

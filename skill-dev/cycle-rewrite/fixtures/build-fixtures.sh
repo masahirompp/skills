@@ -45,7 +45,7 @@ The five canonical roles map 1:1 to label strings (`needs-triage`, `needs-info`,
 
 ### Domain docs
 
-Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.'
+Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.'
 
 # init が CLAUDE.md に追記する規約ブロック。スキルの references/init.md から取り出すので、文言はスキルと常に一致する
 SKILL_DIR="$(cd "$(dirname "$0")/../../../plugins/cycle-rewrite/skills/cycle-rewrite" && pwd)"
@@ -78,8 +78,8 @@ EOF
 
 printf '%s\n\n%s\n' "$AGENT_SKILLS_BLOCK" "$CYCLE_REWRITE_BLOCK" > "$M/CLAUDE.md"
 
-cat > "$M/CONTEXT.md" <<'EOF'
-# CONTEXT
+cat > "$M/GLOSSARY.md" <<'EOF'
+# Shiori 用語集
 
 ## ブックマーク
 
@@ -361,7 +361,7 @@ EOF
 
 # ---------------------------------------------------------------
 # テンプレート 3: postend (Shiori、棚卸しを済ませて使い捨て層を消した直後) — goal 用
-# 反映済み: src/tests 削除、CONTEXT.md からフォルダ剪定、
+# 反映済み: src/tests 削除、GLOSSARY.md からフォルダ剪定、
 # Out of Scope に CSV/フォルダ、ADR-0002 は Deprecated、dexie スキル抽出、並列2ルール
 # ---------------------------------------------------------------
 P="$TPL/postend"
@@ -386,8 +386,8 @@ cp "$M/.prettierrc" "$P/.prettierrc"
 printf '%s\n\n%s\n\n### プロセスルール\n\n- エージェントの並列作業は2並列まで(3並列以上で main が壊れた実績があるため)\n' \
   "$AGENT_SKILLS_BLOCK" "$CYCLE_REWRITE_BLOCK" > "$P/CLAUDE.md"
 
-cat > "$P/CONTEXT.md" <<'EOF'
-# CONTEXT
+cat > "$P/GLOSSARY.md" <<'EOF'
+# Shiori 用語集
 
 ## ブックマーク
 
@@ -556,7 +556,7 @@ for kind in inbox capture impl clean; do
         seed_midcycle_issues "$name"
         # 実装セッションが層2で暫定の挙動を採った記録(#8)。確定を人間に聞くかを見る
         issue "$name" spec-change "暫定: ブックマークHTMLの再インポートで、同じURLは重複して追加する" \
-          "実装中に、保存済みと同じURLを含むHTMLをインポートしたときの挙動が PRODUCT.md・ADR・CONTEXT.md のどこにも定められていないと判明した(暗黙の要件の発覚)。
+          "実装中に、保存済みと同じURLを含むHTMLをインポートしたときの挙動が PRODUCT.md・ADR・GLOSSARY.md のどこにも定められていないと判明した(暗黙の要件の発覚)。
 
 選択肢:
 - 案A: 既存を残して、同じURLはスキップする
