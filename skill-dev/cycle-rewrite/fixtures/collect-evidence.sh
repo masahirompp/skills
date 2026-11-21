@@ -25,7 +25,7 @@ dump() { # $1=repo-name $2=run-dir(iteration-N からの相対)
     git -C "$dir" status -sb
     echo "--- git log ---"
     git -C "$dir" log --oneline
-    echo "--- git tags (指すコミットと作成日) ---"
+    echo "--- git tags (指すコミットとそのコミット日) ---"
     for t in $(git -C "$dir" tag -l); do echo "$t $(git -C "$dir" rev-list -n1 --abbrev-commit "$t") $(git -C "$dir" log -1 --format=%cs "$t")"; done
     echo "--- 各タグのコミットにあるルートの項目 (タグが削除より先に打たれたかの判定用) ---"
     for t in $(git -C "$dir" tag -l); do echo "[$t]"; git -C "$dir" ls-tree --name-only "$t"; done

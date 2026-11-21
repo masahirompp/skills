@@ -362,7 +362,7 @@ EOF
 # ---------------------------------------------------------------
 # テンプレート 3: postend (Shiori、棚卸しを済ませて使い捨て層を消した直後) — goal 用
 # 反映済み: src/tests 削除、CONTEXT.md からフォルダ剪定、
-# Out of Scope に CSV/フォルダ、ADR-0002 は Rejected、dexie スキル抽出、並列2ルール
+# Out of Scope に CSV/フォルダ、ADR-0002 は Deprecated、dexie スキル抽出、並列2ルール
 # ---------------------------------------------------------------
 P="$TPL/postend"
 mkdir -p "$P/docs/adr" "$P/.claude/skills/working-with-dexie"
@@ -425,7 +425,7 @@ cat > "$P/docs/PRODUCT.md" <<'EOF'
 
 - クライアントサイドのみ、サーバーなし(ADR-0001)
 - 保存は IndexedDB(dexie.js)
-- 全文検索の方式は未決 — Fuse.js のインメモリ検索は不採用(ADR-0002 Rejected。5000件超でUIブロック)。次の作り直しで再設計する
+- 全文検索の方式は未決 — Fuse.js のインメモリ検索は不採用(ADR-0002 Deprecated。5000件超でUIブロック)。次の作り直しで再設計する
 
 ## Testing Decisions
 
@@ -451,7 +451,7 @@ EOF
 cat > "$P/docs/adr/0002-fuse-js-for-search.md" <<'EOF'
 # ADR-0002: 全文検索は Fuse.js を使う
 
-Status: Rejected
+Status: Deprecated
 
 ## Context
 

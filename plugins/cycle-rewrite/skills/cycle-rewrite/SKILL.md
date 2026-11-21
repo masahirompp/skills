@@ -38,12 +38,12 @@ CLAUDE.md に cycle-rewrite 規約が無く、ユーザーが導入を求めて�
 | リセットしたい・作り直したい・最初の仕様を詰めたい | rewrite | [references/rewrite.md](references/rewrite.md) |
 | docs を正に実装を始める・続ける | — | 下記 [実装の規律](#実装の規律)(作り直しの手順は通らない) |
 
-状態ファイルは持たない。見るのは2つだけ: 受信箱に open な issue があるか、使い捨て層が存在するか。
+状態ファイルは持たない。受信箱に open な issue があるか、使い捨て層があるかは、その都度見る。
 
 受信箱 = ラベル `learning` / `spec-change` / `decision-log` のどれかが付いた open な issue。一覧は検索(`--search`)ではなく、open の一覧をラベルで絞って取る。検索は起票の直後の issue を返さないことがある。
 
 ```bash
-gh issue list --state open --limit 200 --json number,title,labels,body \
+gh issue list --state open --limit 500 --json number,title,labels,body \
   | jq '[.[] | select(any(.labels[]; .name == "learning" or .name == "spec-change" or .name == "decision-log"))]'
 ```
 
@@ -73,8 +73,9 @@ gh issue list --state open --limit 200 --json number,title,labels,body \
 完了報告の前の対象をブランチで絞るのは、並行して動くほかの作業の issue を、経緯を知らないセッションが確定させないため。`branch:` の無い issue と、もう無いブランチの issue は、全件を対象にする棚卸しで拾う。
 
 ```bash
-gh issue list --state open --limit 200 --json number,title,labels,body \
-  | jq --arg b "branch: $(git branch --show-current)" '.[] | select(any(.labels[]; .name == "learning" or .name == "spec-change" or .name == "decision-log")) | select(.body | split("\n") | map(sub("\\s+$"; "")) | index($b)) | {number, title}'
+B="$(git branch --show-current)"   # 起票の後でブランチを切り替えたなら、起票に書いたブランチ名を入れる
+gh issue list --state open --limit 500 --json number,title,labels,body \
+  | jq --arg b "branch: $B" '.[] | select(any(.labels[]; .name == "learning" or .name == "spec-change" or .name == "decision-log")) | select((.body // "") | split("\n") | map(sub("\\s+$"; "")) | index($b)) | {number, title}'
 ```
 
 1件ごとに宛先を決める。判断基準は「コードを全部捨てた後も、この知見は真か」。
@@ -88,7 +89,7 @@ gh issue list --state open --limit 200 --json number,title,labels,body \
 | プロセス: 進め方のルール | `CLAUDE.md` / `AGENTS.md` |
 | 捨てるコードに紐づくだけの判断 | 反映せず閉じる |
 
-**人間が決めるのは、仕様(PRODUCT.md の要件と CONTEXT.md の用語)・`暫定:` の確定・ADR の新規作成と遷移だけ。** これらは issue ごとにドメイン語の選択肢で聞き、決まってから docs に反映して閉じる。それ以外(スキルや CLAUDE.md への追記、反映不要の close)は聞かずに反映して閉じ、何をどこへ反映したかを報告する。3層の自律判断と同じ線で、戻す手段は git 履歴。
+**人間が決めるのは、仕様(PRODUCT.md の要件と CONTEXT.md の用語)・`暫定:` の確定・ADR の新規作成と遷移だけ。** これらは issue ごとにドメイン語の選択肢で聞き、決まってから docs に反映して閉じる。issue の本文に結論が書いてあっても、反映の前に確かめる(書いたのが人間か AI かを、本文からは見分けられない)。それ以外(スキルや CLAUDE.md への追記、反映不要の close)は聞かずに反映して閉じ、何をどこへ反映したかを報告する。3層の自律判断と同じ線で、戻す手段は git 履歴。
 
 人間の回答が要る issue は、完了報告の中でまとめて聞く。答えが出なかったものは open のまま残してよい(次の棚卸しか作り直しの前に拾う)。
 
@@ -97,7 +98,7 @@ gh issue list --state open --limit 200 --json number,title,labels,body \
 - 採用可否に関わるライブラリの学び(例: 「Fuse.js は5000件超で破綻」)は ADR へ、使い方の罠(例: 「dexie はトランザクション内 await で即コミット」)はスキルへ。前者をスキルにすると、覆った ADR が accepted のまま尊重され続ける
 - 覆った ADR は削除せず、frontmatter の `status` を `superseded by ADR-NNNN` か `deprecated` に変える(既存の ADR が本文の `Status:` 行を使っていれば、その書式に合わせる)。削除すると「なぜ捨てたか」が消え、同じ案が再採用される
 - 仕様が変わったら、旧方向の記述(CONTEXT.md の用語、スキル、README 等)も同じ棚卸しで落とす。残すと docs だけを読む次のセッションが汚染される
-- 閉じるときは、反映先を1行コメントで残す
+- 反映はコミットしてから issue を閉じ、反映先を1行コメントで残す。コミットが無いと、戻す手段が git 履歴に残らない
 
 ## 実装の規律
 
