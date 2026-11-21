@@ -2,8 +2,8 @@
 
 新規プロジェクト(グリーンフィールド)のセットアップ。
 
-1. **前提確認**: git リポジトリであること、`gh auth status` が通ること。issue トラッカー等の設定(`docs/agents/issue-tracker.md` 等)が無ければ、先に /setup-matt-pocock-skills を促す(issue トラッカーは GitHub。目的は grilling と capture の前提整備)。旧名の `CONTEXT.md` が残っていれば、同じスキルが `GLOSSARY.md` への改名を持ちかける。domain-modeling は `GLOSSARY.md` しか読み書きしないので、改名しておく。既存の README や構想メモがあれば、最初の grilling の入力候補として提示し、扱いを人間に確認する
-2. **`docs/adr/`・`GLOSSARY.md`・`docs/PRODUCT.md` は作らない。** 空の器を先に置くと grilling 前に推測で埋められ、仕様が汚染される。`docs/adr/` と `GLOSSARY.md` は grilling と併用する domain-modeling が最初の ADR・用語と共に作り、PRODUCT.md は最初の grilling の結果から合成する
+1. **前提確認**: git リポジトリであること、`gh auth status` が通ること。既存の README や構想メモがあれば、最初の仕様詰めの入力候補として提示し、扱いを人間に確認する
+2. **`docs/adr/`・`GLOSSARY.md`・`docs/PRODUCT.md` は作らない。** 空の器を先に置くと、仕様を詰める前に推測で埋められ、仕様が汚染される。`docs/adr/` と `GLOSSARY.md` は最初の仕様詰めで、最初の ADR・用語と一緒に作り、PRODUCT.md はその結果から合成する
 3. **層のパスを確定し、CLAUDE.md に規約ブロックを追記する**(下記テンプレート)。既定(使い捨て層 = `src/` とテストコード)で足りるなら聞かずに進む。monorepo や `src/` を使わない構成など既定が合わないときだけ、削除対象パスを人間と合意する
 4. **ラベル**: `learning` / `spec-change` / `decision-log` を作る。この3つの付いた open な issue が受信箱になる
 5. **コミット**: 作成・変更したファイルをコミットする
@@ -49,7 +49,7 @@ CLAUDE.md の末尾に追記する(CLAUDE.md が無く AGENTS.md があればそ
 
 ### ADR の基準
 
-ADR を書く3条件(覆すのが難しい・文脈なしでは意外・本当のトレードオフの結果)のうち、「覆すのが難しい」は本プロジェクトでは「**コードを作り直しても覆らないか**」で解釈する。捨てる予定のコードに紐づく実装レベルの判断は ADR にしない(`decision-log` issue でよい)。
+ADR にするのは、「**コードを作り直しても覆らないか**」に当てはまる判断だけ。捨てる予定のコードに紐づく実装レベルの判断は ADR にしない(`decision-log` issue でよい)。
 
 ### 作り直す前のコードの参照
 

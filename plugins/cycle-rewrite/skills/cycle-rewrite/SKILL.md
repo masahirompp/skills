@@ -24,7 +24,7 @@ AI 開発ではコード生成速度が人間の理解速度を上回り、人�
 
 層の実パスは init で確定し、CLAUDE.md の規約ブロック「層の定義」に記録する。作り直しの削除対象はそこを正とする。本スキルの `src/` はその略記。
 
-前提: mattpocock-skills(1.3.0 以降。用語集のファイル名が `GLOSSARY.md`)の grilling・domain-modeling と GitHub(issue・gh CLI)。仕様詰めは grilling を domain-modeling と併用して行う(ユーザー起動の /grill-with-docs と同じ組み合わせ。/grill-with-docs は Claude からは起動できない)。
+前提: GitHub(issue・gh CLI)。仕様を詰める対話に使えるスキル(mattpocock-skills の grilling・domain-modeling など)が入っていれば使い、無ければ同じ進め方で対話する。docs のファイル名(用語集の `GLOSSARY.md` など)は、プロジェクトに既にあるものがあればそれに合わせる。
 
 CLAUDE.md に cycle-rewrite 規約が無く、ユーザーが導入を求めてもいないプロジェクトには勝手に適用しない。方式を短く紹介し、導入の意思を確認してから init に進む。
 

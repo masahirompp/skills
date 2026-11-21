@@ -18,35 +18,6 @@ rm -rf "$TPL"
 [ -z "$ONLY" ] && rm -rf "$REPOS"
 mkdir -p "$TPL"/{init,midcycle,postend} "$REPOS"
 
-# ---------------------------------------------------------------
-# 共通: docs/agents/ (setup-matt-pocock-skills 実行済み相当)
-# ---------------------------------------------------------------
-seed_agents_docs() {
-  local dir="$1"
-  # setup-matt-pocock-skills はプラグイン配布に移行済み — キャッシュ内の最新バージョンを使う
-  local mps
-  mps="$(ls -d "$HOME/.claude/plugins/cache/mattpocock/mattpocock-skills"/*/skills/engineering/setup-matt-pocock-skills 2>/dev/null | sort -V | tail -1 || true)"
-  [ -n "$mps" ] || { echo "setup-matt-pocock-skills が見つからない (mattpocock-skills プラグインをインストールすること)" >&2; exit 1; }
-  mkdir -p "$dir/docs/agents"
-  cp "$mps/issue-tracker-github.md" "$dir/docs/agents/issue-tracker.md"
-  cp "$mps/triage-labels.md" "$dir/docs/agents/triage-labels.md"
-  cp "$mps/domain.md" "$dir/docs/agents/domain.md"
-}
-
-AGENT_SKILLS_BLOCK='## Agent skills
-
-### Issue tracker
-
-Issues live in this repo'"'"'s GitHub Issues (uses the `gh` CLI). External PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-The five canonical roles map 1:1 to label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.'
-
 # init が CLAUDE.md に追記する規約ブロック。スキルの references/init.md から取り出すので、文言はスキルと常に一致する
 SKILL_DIR="$(cd "$(dirname "$0")/../../../plugins/cycle-rewrite/skills/cycle-rewrite" && pwd)"
 CYCLE_REWRITE_BLOCK="$(awk '/^```markdown$/{f=1;next} /^```$/{if(f)exit} f' "$SKILL_DIR/references/init.md")"
@@ -60,15 +31,12 @@ cat > "$TPL/init/README.md" <<'EOF'
 
 毎日の習慣を記録するWebアプリ(構想段階)。
 EOF
-seed_agents_docs "$TPL/init"
-printf '%s\n' "$AGENT_SKILLS_BLOCK" > "$TPL/init/CLAUDE.md"
 
 # ---------------------------------------------------------------
 # テンプレート 2: midcycle (Shiori、実装の途中) — inbox / capture / impl / clean 用
 # ---------------------------------------------------------------
 M="$TPL/midcycle"
 mkdir -p "$M/docs/adr" "$M/src/import" "$M/tests"
-seed_agents_docs "$M"
 
 cat > "$M/README.md" <<'EOF'
 # Shiori
@@ -76,7 +44,7 @@ cat > "$M/README.md" <<'EOF'
 タグとピン留めで整理するクライアントサイドのブックマーク管理Webアプリ。
 EOF
 
-printf '%s\n\n%s\n' "$AGENT_SKILLS_BLOCK" "$CYCLE_REWRITE_BLOCK" > "$M/CLAUDE.md"
+printf '%s\n' "$CYCLE_REWRITE_BLOCK" > "$M/CLAUDE.md"
 
 cat > "$M/GLOSSARY.md" <<'EOF'
 # Shiori 用語集
@@ -366,7 +334,6 @@ EOF
 # ---------------------------------------------------------------
 P="$TPL/postend"
 mkdir -p "$P/docs/adr" "$P/.claude/skills/working-with-dexie"
-seed_agents_docs "$P"
 cp "$M/README.md" "$P/README.md"
 cp "$M/docs/adr/0001-client-side-only.md" "$P/docs/adr/0001-client-side-only.md"
 cat > "$P/.claude/skills/working-with-dexie/SKILL.md" <<'EOF'
@@ -383,8 +350,8 @@ description: dexie.js(IndexedDB)を扱うときの注意点。src/db.ts など d
 EOF
 cp "$M/.prettierrc" "$P/.prettierrc"
 
-printf '%s\n\n%s\n\n### プロセスルール\n\n- エージェントの並列作業は2並列まで(3並列以上で main が壊れた実績があるため)\n' \
-  "$AGENT_SKILLS_BLOCK" "$CYCLE_REWRITE_BLOCK" > "$P/CLAUDE.md"
+printf '%s\n\n### プロセスルール\n\n- エージェントの並列作業は2並列まで(3並列以上で main が壊れた実績があるため)\n' \
+  "$CYCLE_REWRITE_BLOCK" > "$P/CLAUDE.md"
 
 cat > "$P/GLOSSARY.md" <<'EOF'
 # Shiori 用語集
@@ -486,9 +453,6 @@ seed_workflow_labels() { # $1=repo-name
   gh label create learning --color FBCA04 --description "実装・確認で得た学び" -R "$r" >/dev/null
   gh label create spec-change --color D93F0B --description "仕様変更・要件の判明" -R "$r" >/dev/null
   gh label create decision-log --color 0E8A16 --description "AI の内部設計判断の記録(自律判断 層1)" -R "$r" >/dev/null
-  for l in needs-triage needs-info ready-for-agent ready-for-human; do
-    gh label create "$l" --color CCCCCC -R "$r" >/dev/null
-  done
 }
 
 # 受信箱の issue は、本文の最後に起票したときの作業ブランチを `branch: <名前>` の1行で持つ
