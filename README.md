@@ -83,10 +83,10 @@ ln -s ../../ghq/github.com/masahirompp/skills/plugins/cycle-rewrite/skills/cycle
 
 スキルの改善は skill-creator の eval で計測しながら行う。資産は `skill-dev/<skill-name>/` にある:
 
-cycle-rewrite の eval 定義・fixture・履歴は、サイクル末にまとめて棚卸しする旧構成（cycle-start / cycle-end / transition-check）のもので、いまのスキル（棚卸しをセッションごとに行い、作り直しを任意の時点で行う構成）にはまだ合わせていない。
+cycle-rewrite の eval は 0 init / 1 rewrite-inbox / 2 capture / 4 rewrite-goal / 6 impl / 7 rewrite-clean の6本（番号は旧構成から引き継ぎ、やめた 3 transition-check と 5 cycle-audit は欠番）。`history/iteration-1`〜`20` は、サイクル末にまとめて棚卸しする旧構成（cycle-start / cycle-end / cycle-audit / transition-check）での結果で、いまの構成とは assertion が違う。
 
 - `evals/evals.json` — eval 定義（プロンプト・assertion）
-- `fixtures/build-fixtures.sh` — eval 用の使い捨て GitHub リポジトリ（`cycle-rewrite-eval-*`）を生成・シードする。イテレーション番号をサフィックスに渡す（例: `build-fixtures.sh -i7`）。一部の eval だけ回すときは `ONLY` で作る種類を絞る（例: `ONLY="end impl" build-fixtures.sh -i20`）。GitHub はリポジトリの連続作成を制限するので、全種類を一度に作ると途中で失敗することがある
+- `fixtures/build-fixtures.sh` — eval 用の使い捨て GitHub リポジトリ（`cycle-rewrite-eval-*`）を生成・シードする。イテレーション番号をサフィックスに渡す（例: `build-fixtures.sh -i7`）。一部の eval だけ回すときは `ONLY` で作る種類を絞る（種類は init inbox capture goal impl clean。例: `ONLY="clean impl" build-fixtures.sh -i21`）。GitHub はリポジトリの連続作成を制限するので、全種類を一度に作ると途中で失敗することがある
 - `fixtures/collect-evidence.sh` — 実行後の各 fixture リポの状態を evidence.txt にダンプする（例: `collect-evidence.sh 7`）
 - `history/iteration-N/` — 過去イテレーションのベンチマーク結果とフィードバック
 

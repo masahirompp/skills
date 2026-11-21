@@ -24,8 +24,14 @@ dump() { # $1=repo-name $2=run-dir(iteration-N からの相対)
     git -C "$dir" status -sb
     echo "--- git log ---"
     git -C "$dir" log --oneline
-    echo "--- git tags ---"
-    git -C "$dir" tag -l
+    echo "--- git tags (指すコミットと作成日) ---"
+    git -C "$dir" tag -l --format='%(refname:short) %(objectname:short) %(creatordate:short)'
+    echo "--- 各タグのコミットにあるルートの項目 (タグが削除より先に打たれたかの判定用) ---"
+    for t in $(git -C "$dir" tag -l); do echo "[$t]"; git -C "$dir" ls-tree --name-only "$t"; done
+    echo "--- remote のブランチとタグ (push 済みかの判定用) ---"
+    git -C "$dir" ls-remote --heads --tags origin
+    echo "--- 現在のブランチとローカルブランチ ---"
+    git -C "$dir" branch -vv
     echo "--- tree (2 levels, excluding .git) ---"
     (cd "$dir" && find . -maxdepth 2 -not -path './.git*' | sort)
     echo "--- docs/PRODUCT.md exists? ---"
@@ -50,30 +56,23 @@ dump() { # $1=repo-name $2=run-dir(iteration-N からの相対)
     test -d "$dir/src" && echo YES || echo NO
     echo "--- tests/ exists? ---"
     test -d "$dir/tests" && echo YES || echo NO
-    echo "--- lib/ (昇格モジュール) ---"
-    if [ -d "$dir/lib" ]; then (cd "$dir" && find lib -type f | sort); else echo "(none)"; fi
-    echo "--- docs/modules/ (インターフェース契約) ---"
-    if compgen -G "$dir/docs/modules/*.md" > /dev/null; then
-      for f in "$dir"/docs/modules/*.md; do echo "[$f]"; cat "$f"; done
-    else
-      echo "(none)"
-    fi
     echo "--- GitHub labels ---"
     gh label list -R "$r" --json name --jq '.[].name'
-    echo "--- GitHub milestones (all states, with issue counts & timestamps) ---"
-    # open/closed の実数と作成時刻まで出す: 「作成した」と申告しつつ実行していないケースを、申告ではなく実体で検証するため
-    gh api "repos/$r/milestones?state=all" --jq '.[] | "\(.title): \(.state) open=\(.open_issues) closed=\(.closed_issues) created_at=\(.created_at)"'
+    echo "--- GitHub milestones (作っていないことの判定用。空が期待値) ---"
+    gh api "repos/$r/milestones?state=all" --jq '.[] | "\(.title): \(.state)"'
     echo "--- GitHub issues (all states) ---"
-    gh issue list -R "$r" --state all --limit 50 --json number,title,state,labels,milestone \
-      --jq '.[] | "#\(.number) [\(.state)] labels=\([.labels[].name] | join(",")) ms=\(.milestone.title // "none") \(.title)"'
-    echo "--- GitHub open issue bodies and comments (本文の判定用: 二択併記・照合結果の反映・ジャーナルの追記など) ---"
-    gh issue list -R "$r" --state open --limit 50 --json number,title,body,comments \
-      --jq '.[] | "### #\(.number) \(.title)\n\(.body)\n\([.comments[] | "[comment] \(.body)"] | join("\n"))\n"'
+    gh issue list -R "$r" --state all --limit 50 --json number,title,state,labels \
+      --jq '.[] | "#\(.number) [\(.state)] labels=\([.labels[].name] | join(",")) \(.title)"'
+    echo "--- GitHub issue bodies and comments, all states (本文の判定用: 選択肢の併記・branch: の行・close 時の反映先コメントなど) ---"
+    gh issue list -R "$r" --state all --limit 50 --json number,title,state,body,comments \
+      --jq '.[] | "### #\(.number) [\(.state)] \(.title)\n\(.body)\n\([.comments[] | "[comment] \(.body)"] | join("\n"))\n"'
     echo "--- changes since the initial commit (実装の判定用) ---"
     local first
     first=$(git -C "$dir" rev-list --max-parents=0 HEAD | tail -1)
     git -C "$dir" diff --stat "$first"
     git -C "$dir" diff "$first" -- src tests | head -300
+    echo "--- 永続層の差分 (聞かずに反映した内容と、確認なしに仕様を書き換えていないかの判定用) ---"
+    git -C "$dir" diff "$first" -- docs CONTEXT.md CLAUDE.md AGENTS.md .claude | head -300
     echo "--- git worktrees (作業ツリー外参照の後始末チェック) ---"
     git -C "$dir" worktree list
   } > "$out" 2>&1
@@ -82,15 +81,13 @@ dump() { # $1=repo-name $2=run-dir(iteration-N からの相対)
 
 dump "cycle-rewrite-eval-init-with-i$N"    "eval-0-init/$WITH_CFG/run-1"
 dump "cycle-rewrite-eval-init-base-i$N"    "eval-0-init/$BASE_CFG/run-1"
-dump "cycle-rewrite-eval-end-with-i$N"     "eval-1-cycle-end/$WITH_CFG/run-1"
-dump "cycle-rewrite-eval-end-base-i$N"     "eval-1-cycle-end/$BASE_CFG/run-1"
+dump "cycle-rewrite-eval-inbox-with-i$N"   "eval-1-rewrite-inbox/$WITH_CFG/run-1"
+dump "cycle-rewrite-eval-inbox-base-i$N"   "eval-1-rewrite-inbox/$BASE_CFG/run-1"
 dump "cycle-rewrite-eval-capture-with-i$N" "eval-2-capture/$WITH_CFG/run-1"
 dump "cycle-rewrite-eval-capture-base-i$N" "eval-2-capture/$BASE_CFG/run-1"
-dump "cycle-rewrite-eval-trans-with-i$N"   "eval-3-transition/$WITH_CFG/run-1"
-dump "cycle-rewrite-eval-trans-base-i$N"   "eval-3-transition/$BASE_CFG/run-1"
-dump "cycle-rewrite-eval-start-with-i$N"   "eval-4-cycle-start/$WITH_CFG/run-1"
-dump "cycle-rewrite-eval-start-base-i$N"   "eval-4-cycle-start/$BASE_CFG/run-1"
-dump "cycle-rewrite-eval-audit-with-i$N"   "eval-5-cycle-audit/$WITH_CFG/run-1"
-dump "cycle-rewrite-eval-audit-base-i$N"   "eval-5-cycle-audit/$BASE_CFG/run-1"
-dump "cycle-rewrite-eval-impl-with-i$N"    "eval-6-impl-provisional/$WITH_CFG/run-1"
-dump "cycle-rewrite-eval-impl-base-i$N"    "eval-6-impl-provisional/$BASE_CFG/run-1"
+dump "cycle-rewrite-eval-goal-with-i$N"    "eval-4-rewrite-goal/$WITH_CFG/run-1"
+dump "cycle-rewrite-eval-goal-base-i$N"    "eval-4-rewrite-goal/$BASE_CFG/run-1"
+dump "cycle-rewrite-eval-impl-with-i$N"    "eval-6-impl/$WITH_CFG/run-1"
+dump "cycle-rewrite-eval-impl-base-i$N"    "eval-6-impl/$BASE_CFG/run-1"
+dump "cycle-rewrite-eval-clean-with-i$N"   "eval-7-rewrite-clean/$WITH_CFG/run-1"
+dump "cycle-rewrite-eval-clean-base-i$N"   "eval-7-rewrite-clean/$BASE_CFG/run-1"
