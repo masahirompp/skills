@@ -1,10 +1,9 @@
 # skills
 
-masahirompp の Claude Code 用 [Agent Skills](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview) 集。[Claude Code plugin](https://code.claude.com/docs/en/plugins) として配布している。このリポジトリは plugin marketplace で、系統ごとに3つのプラグインを載せている。
+masahirompp の Claude Code 用 [Agent Skills](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview) 集。[Claude Code plugin](https://code.claude.com/docs/en/plugins) として配布している。このリポジトリは plugin marketplace で、系統ごとに2つのプラグインを載せている。
 
 | プラグイン | 中身 |
 | --- | --- |
-| `cycle-rewrite` | サイクル型リライト開発ワークフロー（スキル cycle-rewrite） |
 | `dev-tools` | どのリポジトリでも使う開発作業の道具（スキル review-loop・housekeeping・issue-check・issue-triage・next-issues） |
 | `session-timeline` | Claude Code の画面を拡張する mod（関数フック） |
 
@@ -14,26 +13,24 @@ masahirompp の Claude Code 用 [Agent Skills](https://docs.claude.com/en/docs/a
 
 ```
 .claude-plugin/
-└── marketplace.json        # マーケットプレイス定義（名前 "masahirompp"。plugins/ の3つを載せる）
+└── marketplace.json        # マーケットプレイス定義（名前 "masahirompp"。plugins/ の2つを載せる）
 plugins/
-├── cycle-rewrite/          # スキルのプラグイン
+├── dev-tools/              # スキルのプラグイン（README.md に issue を片付ける流れ）
 │   ├── .claude-plugin/plugin.json   # skills/ を参照
 │   └── skills/
 │       └── <skill-name>/
 │           ├── SKILL.md    # frontmatter (name, description) + 本文
-│           └── references/ # 必要時に読み込まれる詳細ドキュメント
-├── dev-tools/              # スキルのプラグイン（構成は cycle-rewrite と同じ。README.md に issue を片付ける流れ）
+│           └── scripts/    # スキルが実行するスクリプト（必要なスキルだけ）
 └── session-timeline/       # mod（独自の .claude-plugin/plugin.json と hooks/ を持つ）
 skill-dev/                  # 開発用資産（どのプラグインにも含まれない）
 ```
 
-`skill-dev/` はスキル本体ではなく開発用資産（eval 定義・fixture 生成スクリプト・ベンチマーク履歴、スクリプトのテストと偽コマンド）。プラグインのディレクトリの外にあるので、インストール時にプラグインのキャッシュへ複製されず、Claude Code にも読み込まれない。
+`skill-dev/` はスキル本体ではなく開発用資産（スクリプトのテストと偽コマンド、レビュー役の構成を比べた記録）。プラグインのディレクトリの外にあるので、インストール時にプラグインのキャッシュへ複製されず、Claude Code にも読み込まれない。
 
 ## スキル一覧
 
 | スキル | プラグイン | 概要 |
 | --- | --- | --- |
-| [cycle-rewrite](plugins/cycle-rewrite/skills/cycle-rewrite/SKILL.md) | cycle-rewrite | サイクル型リライト開発ワークフロー。コードはいつでもゼロから作り直せるものとして扱い、仕様と学び（PRODUCT.md・ADR・GLOSSARY.md・プロジェクトスキル）を永続資産として積み上げる。学びは分かった時点で docs に書き、仕様の未決は完了報告で人間に確かめる |
 | [housekeeping](plugins/dev-tools/skills/housekeeping/SKILL.md) | dev-tools | git リポジトリの後片付け。PR マージ済み・ローカルでマージ済みのブランチと worktree をまとめて削除する。作業中のものと監査用ブランチ（entire.io の `entire/*`）は残す |
 | [issue-check](plugins/dev-tools/skills/issue-check/SKILL.md) | dev-tools | 開発・企画・施策の依頼を着手前に判定する。課題は本物か、提案された手段はその課題を解くかを、依頼の重さに応じた深さで確かめ、判定だけを返す。作業自体は行わない |
 | [issue-triage](plugins/dev-tools/skills/issue-triage/SKILL.md) | dev-tools | issue を着手できる状態に持っていく。引数なしでは open な issue を見比べ、解く価値（起きたときの結果と起きやすさ）と準備の度合いで、着手できる・詰める・待つ・やらないに振り分ける。issue 番号を渡すと、その1件を issue-check、観測、grilling で詰めて本文に反映する。人間が承認した振り分けと価値を、ラベル（状態は mattpocock/skills の triage と同じ語彙、価値は `priority:high/medium/low`）とコメントで残す。`/dev-tools:issue-triage` と名指しで呼んだときだけ動く |
@@ -66,31 +63,21 @@ Claude Code のプラグインとしてインストールする。使うもの�
 
 ```
 /plugin marketplace add masahirompp/skills
-/plugin install cycle-rewrite@masahirompp
 /plugin install dev-tools@masahirompp
 /plugin install session-timeline@masahirompp
 ```
 
-インストール後、各スキルは `<プラグイン名>:<スキル名>`（例: `/cycle-rewrite:cycle-rewrite`、`/dev-tools:review-loop`）として呼び出せる。更新は `/plugin marketplace update masahirompp`。mod（session-timeline）は skills CLI では入らない。
+インストール後、各スキルは `<プラグイン名>:<スキル名>`（例: `/dev-tools:review-loop`）として呼び出せる。更新は `/plugin marketplace update masahirompp`。mod（session-timeline）は skills CLI では入らない。
 
 プラグインを使わず user scope に直接置く場合はシンボリックリンクを張る:
 
 ```sh
-ln -s ../../ghq/github.com/masahirompp/skills/plugins/cycle-rewrite/skills/cycle-rewrite ~/.claude/skills/cycle-rewrite
+ln -s ../../ghq/github.com/masahirompp/skills/plugins/dev-tools/skills/review-loop ~/.claude/skills/review-loop
 ```
 
-## 開発（eval の回し方）
+## 開発（検証の仕方）
 
-スキルの改善は skill-creator の eval で計測しながら行う。資産は `skill-dev/<skill-name>/` にある:
-
-cycle-rewrite の eval は 0 init / 1 inventory / 2 capture / 4 rewrite-goal / 6 impl / 7 rewrite-clean の6本（番号は旧構成から引き継ぎ、やめた 3 transition-check と 5 cycle-audit は欠番）。`history/iteration-1`〜`20` は、サイクル末にまとめて棚卸しする旧構成（cycle-start / cycle-end / cycle-audit / transition-check）での結果で、いまの構成とは assertion が違う。
-
-- `evals/evals.json` — eval 定義（プロンプト・assertion）
-- `fixtures/build-fixtures.sh` — eval 用の使い捨て GitHub リポジトリ（`cycle-rewrite-eval-*`）を生成・シードする。イテレーション番号をサフィックスに渡す（例: `build-fixtures.sh -i7`）。一部の eval だけ回すときは `ONLY` で作る種類を絞る（種類は init inbox capture goal impl clean。例: `ONLY="clean impl" build-fixtures.sh -i21`）。GitHub はリポジトリの連続作成を制限するので、全種類を一度に作ると途中で失敗することがある
-- `fixtures/collect-evidence.sh` — 実行後の各 fixture リポの状態を evidence.txt にダンプする（例: `collect-evidence.sh 7`）
-- `history/iteration-N/` — 過去イテレーションのベンチマーク結果とフィードバック
-
-実行時の作業ディレクトリ（fixture リポのクローンや eval 出力）は `~/.claude/skill-dev/cycle-rewrite-workspace/` に作られる（`CYCLE_REWRITE_WS` で変更可）。生成物はコミットせず、結果の要約（benchmark.md 等）だけを `history/` に取り込む。
+検証用の資産は `skill-dev/<skill-name>/` にある。
 
 housekeeping は判定と削除をスクリプトで行うので、スクリプトのテストで検証する。`skill-dev/housekeeping/test.sh` を実行すると、使い捨てのリポジトリを作り、そこでマージ済み・作業中・監査用などの各ケースを走査・削除して結果を照合する。origin にはローカルの bare リポジトリを、PR 一覧には偽の JSON を使うので、GitHub には触れない。
 

@@ -6,11 +6,6 @@
   },
   "plugins": [
     {
-      "name": "cycle-rewrite",
-      "source": "./plugins/cycle-rewrite",
-      "description": "サイクル型リライト開発ワークフロー。コードはいつでもゼロから作り直せるものとして扱い、仕様と学びを永続資産として積み上げる。"
-    },
-    {
       "name": "dev-tools",
       "source": "./plugins/dev-tools",
       "description": "開発作業の道具。review-loop(PR のレビューループ)、housekeeping(マージ済みブランチの後片付け)、issue-check(着手前の課題の判定)、issue-triage(issue の振り分けと詰める作業)、next-issues(次のリリースの issue の選定と出荷)。"
