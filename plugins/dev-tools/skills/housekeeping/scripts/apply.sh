@@ -2,7 +2,9 @@
 # scan.sh の出力のうち、ユーザーが承認した行だけを標準入力で受け取って削除する。
 # 走査から削除までの間に作業が再開されていないか、各行を削除直前に確かめ直す。
 #   worktree: HEAD が走査時の sha のままか、使用中のプロセスが無いか。未コミットの変更・未追跡ファイル・ロックは
-#             git worktree remove(--force なし)自身が拒否する
+#             git worktree remove(--force なし)自身が拒否する。未追跡ファイルを見落とさないよう、
+#             status.showUntrackedFiles の設定を上書きする(remove が中で動かす git status にも効く)。
+#             走査のあとにできた ignored ファイルは確かめ直さない(承認済みとして一緒に消す)
 #   branch:   先端が走査時の sha のままか。チェックアウト中なら git branch -D が拒否する
 #   remote:   リモートの先端が走査時の sha のままのときだけ消す(--force-with-lease)
 # 保護対象(entire/* など)は入力に含まれていても消さない。
@@ -41,7 +43,7 @@ while IFS=$'\t' read -r action kind name sha path reason; do
   [ "$cur" = "$sha" ] || { skip "worktree $path: HEAD が走査時から変わっている"; continue; }
   proc=$(hk_path_in_use "$(cd "$path" && pwd -P)" "$cwds")
   [ -z "$proc" ] || { skip "worktree $path: プロセスが使用中か、確かめられない($proc)"; continue; }
-  if out=$(git worktree remove "$path" 2>&1); then
+  if out=$(git -c status.showUntrackedFiles=normal worktree remove "$path" 2>&1); then
     ok "worktree $path"
   else
     skip "worktree $path: $out"

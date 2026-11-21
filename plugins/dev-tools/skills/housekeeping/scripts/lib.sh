@@ -109,11 +109,13 @@ hk_path_in_use() {
     !found && $1 != self && ($3 == p || index($3, p "/") == 1) { print "pid " $1 " " $2; found = 1 }'
 }
 
-# hk_in_progress_op <worktree-path>: 進行中の rebase / merge / cherry-pick / revert / bisect を返す
+# hk_in_progress_op <worktree-path>: 進行中の rebase / merge / cherry-pick / revert / bisect を返す。
+# 調べる場所を git から得られなければ、「進行中の操作なし」と区別するため失敗を返す(呼び出し側が残す側に倒す)
 hk_in_progress_op() {
-  local f
+  local f p
   for f in rebase-merge rebase-apply MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
-    if [ -e "$(git -C "$1" rev-parse --path-format=absolute --git-path "$f" 2>/dev/null)" ]; then
+    p=$(git -C "$1" rev-parse --path-format=absolute --git-path "$f" 2>/dev/null) && [ -n "$p" ] || return 1
+    if [ -e "$p" ]; then
       printf '%s\n' "$f"
       return
     fi

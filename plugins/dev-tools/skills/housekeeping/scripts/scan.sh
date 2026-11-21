@@ -163,9 +163,11 @@ handle_wt() {
     action=keep reason="このスキャンを実行している作業ディレクトリ"
   elif proc=$(hk_path_in_use "$rp" "$cwds") && [ -n "$proc" ]; then
     action=keep reason="プロセスがカレントディレクトリとして使用中か、確かめられない($proc)"
-  elif op=$(hk_in_progress_op "$path") && [ -n "$op" ]; then
+  elif ! op=$(hk_in_progress_op "$path"); then
+    action=keep reason="進行中の操作を確かめられない(git rev-parse --git-path が失敗した)"
+  elif [ -n "$op" ]; then
     action=keep reason="進行中の操作がある($op)"
-  elif ! dirty=$(git -C "$path" status --porcelain 2>/dev/null); then
+  elif ! dirty=$(git -C "$path" -c status.showUntrackedFiles=normal status --porcelain 2>/dev/null); then
     action=keep reason="git status を読めない"
   elif [ -n "$dirty" ]; then
     action=keep reason="未コミットの変更・未追跡ファイルが $(printf '%s\n' "$dirty" | wc -l | tr -d ' ') 件ある"
@@ -176,9 +178,15 @@ handle_wt() {
   else
     action=keep reason="detached HEAD が $default 未取り込みのコミットを指している"
   fi
+  # 未追跡ファイルと ignored ファイルは、status.showUntrackedFiles=no の設定のもとでは git status に出ないので、設定を上書きする
+  # (all はディレクトリの中まで展開して重いので normal)。ignored ファイルを読めなければ、警告を落としたまま消さないよう残す
   if [ "$action" != keep ]; then
-    ign=$(git -C "$path" status --porcelain --ignored 2>/dev/null | sed -n 's/^!! //p' | head -5 | paste -sd, -)
-    [ -n "$ign" ] && reason="${reason}。一緒に消える ignored ファイル: $ign"
+    if ! ign=$(git -C "$path" -c status.showUntrackedFiles=normal status --porcelain --ignored 2>/dev/null); then
+      action=keep reason="一緒に消える ignored ファイルを確かめられない(git status --ignored を読めない)"
+    else
+      ign=$(printf '%s\n' "$ign" | sed -n 's/^!! //p' | head -5 | paste -sd, -)
+      [ -n "$ign" ] && reason="${reason}。一緒に消える ignored ファイル: $ign"
+    fi
   fi
   emit "$action" worktree "$name" "$head" "$path" "$reason"
   [ -n "$branch" ] && printf '%s\t%s\t%s\n' "$branch" "$action" "$path" >>"$tmp/wt-branches"

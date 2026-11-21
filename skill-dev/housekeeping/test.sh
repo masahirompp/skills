@@ -175,6 +175,42 @@ got=$(awk -F'\t' '$2 == "worktree" && $3 == "wt-merged" { print $1 "\t" $6 }' "$
 got=$(awk -F'\t' '$2 == "branch" && $3 == "wt-merged" { print $1 "\t" $6 }' "$root/scan-nolsof.tsv")
 [ "${got%%$'\t'*}" = keep ] && pass "scan: 残した worktree のブランチも残す" || fail "scan: 残した worktree のブランチ → ${got:-(出力なし)}"
 
+# 判定の入力を読めないときは、worktree を delete にせず残すこと(失敗は、git の包みを PATH の先頭に置いて注入する)
+# wrap_git <dir> <引数に含まれたら失敗させる文字列>
+real_git=$(command -v git)
+wrap_git() {
+  mkdir -p "$1"
+  printf '#!/bin/sh\ncase " $* " in *"%s"*) echo "injected failure" >&2; exit 128 ;; esac\nexec "%s" "$@"\n' "$2" "$real_git" >"$1/git"
+  chmod +x "$1/git"
+}
+row() { awk -F'\t' -v k="$2" -v n="$3" '$2 == k && $3 == n { print $1 "\t" $6 }' "$root/$1.tsv"; }
+# 進行中の操作の場所(git rev-parse --git-path)を得られなければ残す
+wrap_git "$root/fail-gitpath" --git-path
+PATH="$root/fail-gitpath:$PATH" "$scripts/scan.sh" >"$root/scan-gitpath.tsv" 2>/dev/null || true
+got=$(row scan-gitpath worktree wt-merged)
+[ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"進行中の操作を確かめられない"* ]] &&
+  pass "scan: 進行中の操作を確かめられなければ worktree を残す" || fail "scan: --git-path が失敗すると wt-merged → ${got:-(出力なし)}"
+got=$(row scan-gitpath branch wt-merged)
+[ "${got%%$'\t'*}" = keep ] && pass "scan: 進行中の操作を確かめられない worktree のブランチも残す" || fail "scan: --git-path が失敗すると branch wt-merged → ${got:-(出力なし)}"
+# 一緒に消える ignored ファイル(git status --ignored)を読めなければ、警告を落としたまま delete にせず残す
+wrap_git "$root/fail-ignored" --ignored
+PATH="$root/fail-ignored:$PATH" "$scripts/scan.sh" >"$root/scan-ignored.tsv" 2>/dev/null || true
+got=$(row scan-ignored worktree wt-merged)
+[ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"ignored ファイルを確かめられない"* ]] &&
+  pass "scan: git status --ignored を読めなければ worktree を残す" || fail "scan: --ignored が失敗すると wt-merged → ${got:-(出力なし)}"
+got=$(row scan-ignored branch wt-merged)
+[ "${got%%$'\t'*}" = keep ] && pass "scan: ignored ファイルを確かめられない worktree のブランチも残す" || fail "scan: --ignored が失敗すると branch wt-merged → ${got:-(出力なし)}"
+# status.showUntrackedFiles=no の設定のもとでも、未追跡ファイルのある worktree を残し、ignored ファイルの警告を出す
+git config status.showUntrackedFiles no
+"$scripts/scan.sh" >"$root/scan-nountracked.tsv" 2>/dev/null || true
+git config --unset status.showUntrackedFiles
+got=$(row scan-nountracked worktree wt-untracked)
+[ "${got%%$'\t'*}" = keep ] && [[ "$got" == *"未追跡ファイル"* ]] &&
+  pass "scan: status.showUntrackedFiles=no でも未追跡ファイルのある worktree を残す" || fail "scan: status.showUntrackedFiles=no で wt-untracked → ${got:-(出力なし)}"
+got=$(row scan-nountracked worktree wt-merged)
+[ "${got%%$'\t'*}" = delete ] && [[ "$got" == *".env.local"* ]] &&
+  pass "scan: status.showUntrackedFiles=no でも ignored ファイルの警告を出す" || fail "scan: status.showUntrackedFiles=no で wt-merged → ${got:-(出力なし)}"
+
 # 一時ディレクトリを作れないときは、空のパスのまま進まずに、fetch より前に止まること。
 # fetch に進めば、存在しないリモートへの fetch で warn が出る。
 # テンプレートを付けない mktemp は macOS では TMPDIR を見ないので、TMPDIR に従うことの確認にもなる。
@@ -299,6 +335,19 @@ grep -q 'branch nopr-merge: 先端が走査時から変わっている' "$root/a
   pass "apply: 走査後に更新されたブランチを飛ばす" || fail "apply: 走査後の更新を検知していない"
 grep -q 'branch entire/checkpoints/v1: 保護対象' "$root/apply.out" &&
   pass "apply: 偽装した保護対象の行を拒否" || fail "apply: 保護対象を拒否していない"
+
+# 走査のあとにできた未追跡ファイルは、status.showUntrackedFiles=no の設定のもとでも、消す直前に確かめ直して残すこと
+git worktree add -q --detach "$root/wt/wt-late" main
+late_row=$(printf 'delete\tworktree\t(detached)\t%s\t%s\tdetached HEAD\n' "$(git -C "$root/wt/wt-late" rev-parse HEAD)" "$root/wt/wt-late")
+echo secret >"$root/wt/wt-late/.env"
+git config status.showUntrackedFiles no
+set +e
+printf '%s\n' "$late_row" | "$scripts/apply.sh" >"$root/apply-late.out" 2>&1
+set -e
+git config --unset status.showUntrackedFiles
+grep -q "^skipped	worktree $root/wt/wt-late:" "$root/apply-late.out" && [ -e "$root/wt/wt-late/.env" ] &&
+  pass "apply: status.showUntrackedFiles=no でも走査のあとにできた未追跡ファイルのある worktree を残す" ||
+  fail "apply: status.showUntrackedFiles=no で wt-late を処理した: $(cat "$root/apply-late.out")"
 
 echo
 if [ "$fails" = 0 ]; then echo "全件成功"; else echo "失敗 $fails 件"; exit 1; fi
