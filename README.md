@@ -1,11 +1,10 @@
 # skills
 
-masahirompp の Claude Code 用 [Agent Skills](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview) 集。[Claude Code plugin](https://code.claude.com/docs/en/plugins) として配布している。このリポジトリは plugin marketplace で、系統ごとに2つのプラグインを載せている。
+masahirompp の Claude Code 用 [Agent Skills](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview) 集。[Claude Code plugin](https://code.claude.com/docs/en/plugins) として配布している。このリポジトリは plugin marketplace で、プラグイン dev-tools を載せている。
 
 | プラグイン | 中身 |
 | --- | --- |
 | `dev-tools` | どのリポジトリでも使う開発作業の道具（スキル review-loop・housekeeping・issue-check・issue-triage・next-issues） |
-| `session-timeline` | Claude Code の画面を拡張する mod（関数フック） |
 
 ## 構成
 
@@ -13,15 +12,14 @@ masahirompp の Claude Code 用 [Agent Skills](https://docs.claude.com/en/docs/a
 
 ```
 .claude-plugin/
-└── marketplace.json        # マーケットプレイス定義（名前 "masahirompp"。plugins/ の2つを載せる）
+└── marketplace.json        # マーケットプレイス定義（名前 "masahirompp"。plugins/dev-tools を載せる）
 plugins/
-├── dev-tools/              # スキルのプラグイン（README.md に issue を片付ける流れ）
-│   ├── .claude-plugin/plugin.json   # skills/ を参照
-│   └── skills/
-│       └── <skill-name>/
-│           ├── SKILL.md    # frontmatter (name, description) + 本文
-│           └── scripts/    # スキルが実行するスクリプト（必要なスキルだけ）
-└── session-timeline/       # mod（独自の .claude-plugin/plugin.json と hooks/ を持つ）
+└── dev-tools/              # スキルのプラグイン（README.md に issue を片付ける流れ）
+    ├── .claude-plugin/plugin.json   # skills/ を参照
+    └── skills/
+        └── <skill-name>/
+            ├── SKILL.md    # frontmatter (name, description) + 本文
+            └── scripts/    # スキルが実行するスクリプト（必要なスキルだけ）
 skill-dev/                  # 開発用資産（どのプラグインにも含まれない）
 ```
 
@@ -39,12 +37,6 @@ skill-dev/                  # 開発用資産（どのプラグインにも含�
 
 dev-tools の issue を扱うスキル（issue-triage・issue-check・next-issues・review-loop）を、どの順でどのセッションで使うかは [plugins/dev-tools/README.md](plugins/dev-tools/README.md) にまとめている。
 
-## mod 一覧
-
-| mod | 概要 |
-| --- | --- |
-| [session-timeline](plugins/session-timeline/README.md) | セッションで何をしているかを、LLM が名付けた工程（実装・レビュー・修正など）の縦のタイムラインとまとめで表示する。工程を押すと会話のその位置へ移動し、本題と関係ない脇道は薄く表示する |
-
 ## インストール
 
 ### skills CLI（Claude Code 以外のエージェントにも対応）
@@ -59,15 +51,14 @@ npx skills add masahirompp/skills
 
 ### Claude Code プラグイン
 
-Claude Code のプラグインとしてインストールする。使うものだけを入れればよい:
+Claude Code のプラグインとしてインストールする:
 
 ```
 /plugin marketplace add masahirompp/skills
 /plugin install dev-tools@masahirompp
-/plugin install session-timeline@masahirompp
 ```
 
-インストール後、各スキルは `<プラグイン名>:<スキル名>`（例: `/dev-tools:review-loop`）として呼び出せる。更新は `/plugin marketplace update masahirompp`。mod（session-timeline）は skills CLI では入らない。
+インストール後、各スキルは `<プラグイン名>:<スキル名>`（例: `/dev-tools:review-loop`）として呼び出せる。更新は `/plugin marketplace update masahirompp`。
 
 プラグインを使わず user scope に直接置く場合はシンボリックリンクを張る:
 
