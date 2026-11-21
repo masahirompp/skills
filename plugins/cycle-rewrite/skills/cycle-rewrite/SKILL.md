@@ -2,8 +2,8 @@
 name: cycle-rewrite
 description: >-
   サイクル型リライト開発ワークフロー。コードはいつでもゼロから作り直せるものとして扱い、仕様と学び(docs/PRODUCT.md・ADR・CONTEXT.md・プロジェクトスキル)を永続資産として積み上げる。
-  モード: init / capture / inventory(棚卸し) / rewrite(作り直し) / audit(蒸留監査)。
-  CLAUDE.md に cycle-rewrite 規約があるプロジェクトで、学びやバグの起票、issue の棚卸しと docs への反映、コードのリセット・作り直し、作り直す前の実装との突き合わせを扱うときに使う。
+  モード: init / capture / inventory(棚卸し) / rewrite(作り直し)。
+  CLAUDE.md に cycle-rewrite 規約があるプロジェクトで、学びやバグの起票、issue の棚卸しと docs への反映、コードのリセット・作り直しを扱うときに使う。
   この方式を新たに導入したいという相談にも使う。
 ---
 
@@ -36,7 +36,6 @@ CLAUDE.md に cycle-rewrite 規約が無く、ユーザーが導入を求めて�
 | 実装・動作確認中に学び/バグ/仕様変更/ハマりが出た | capture | 下記 [capture](#capture) |
 | 作業を終える・溜まった issue を整理して docs に反映したい | inventory | 下記 [棚卸し](#棚卸し) |
 | リセットしたい・作り直したい・最初の実装を始めたい | rewrite | [references/rewrite.md](references/rewrite.md) |
-| 作り直した後、前の実装から失われた仕様・機能がないか点検したい | audit | [references/audit.md](references/audit.md) |
 
 状態ファイルは持たない。見るのは2つだけ: 受信箱に open な issue があるか、使い捨て層が存在するか。
 
