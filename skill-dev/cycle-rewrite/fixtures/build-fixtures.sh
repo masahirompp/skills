@@ -448,20 +448,20 @@ create_repo() { # $1=template $2=repo-name
   echo "created $OWNER/$2"
 }
 
-seed_workflow_labels() { # $1=repo-name
+# 旧構成で起票された issue を再現するためのラベル(いまのスキルはラベルを作らない)
+seed_legacy_labels() { # $1=repo-name
   local r="$OWNER/$1"
   gh label create learning --color FBCA04 --description "実装・確認で得た学び" -R "$r" >/dev/null
   gh label create spec-change --color D93F0B --description "仕様変更・要件の判明" -R "$r" >/dev/null
   gh label create decision-log --color 0E8A16 --description "AI の内部設計判断の記録(自律判断 層1)" -R "$r" >/dev/null
 }
 
-# 受信箱の issue は、本文の最後に起票したときの作業ブランチを `branch: <名前>` の1行で持つ
-issue() { # $1=repo $2=label $3=title $4=body $5=branch(省略時 main。"-" なら branch: の行を付けない)
-  local body="$4" b="${5:-main}"
-  [ "$b" = "-" ] || body="$body
-
-branch: $b"
-  gh issue create -R "$OWNER/$1" --label "$2" --title "$3" --body "$body" >/dev/null
+issue() { # $1=repo $2=label("-" ならラベル無し) $3=title $4=body
+  if [ "$2" = "-" ]; then
+    gh issue create -R "$OWNER/$1" --title "$3" --body "$4" >/dev/null
+  else
+    gh issue create -R "$OWNER/$1" --label "$2" --title "$3" --body "$4" >/dev/null
+  fi
 }
 
 # issue list は作成直後に反映が遅れることがあるため、closed が期待の件数になるまで再試行する
@@ -479,7 +479,7 @@ close_all_issues() { # $1=repo-name $2=comment $3=期待する件数
   return 1
 }
 
-# 番号は起票順(#1〜#7)。eval の assertion がこの番号を参照する
+# 旧構成で溜まった issue。番号は起票順(#1〜#7)で、eval の assertion がこの番号を参照する
 seed_midcycle_issues() { # $1=repo-name
   local r="$1"
   issue "$r" spec-change "CSVインポートは不要と判明" \
@@ -498,27 +498,27 @@ seed_midcycle_issues() { # $1=repo-name
     "バンドルサイズ削減のためdate-fnsをやめてIntl.DateTimeFormatに内部変更した。外部から見える挙動は変わらない。"
 }
 
-# --- init 用 (シードは repo のみ。ラベルは init モードが作るのが期待動作) ---
+# --- init 用 (シードは repo のみ) ---
 if want init; then
   create_repo init "cycle-rewrite-eval-init-with$SUFFIX"
   create_repo init "cycle-rewrite-eval-init-base$SUFFIX"
 fi
 
 # --- midcycle を使う4種 ---
-#   inbox:   受信箱に8件(うち1件は暫定)が残ったまま、作り直しを頼まれる
-#   capture: 受信箱は空。動作確認で見つけたバグを起票する
-#   impl:    実装して完了報告の前に棚卸しをする。別のブランチの issue が1件ある
-#   clean:   受信箱は空。今の仕様のまま作り直しを頼まれる。受信箱ではない普通の issue が1件ある
+#   inbox:   旧構成で溜まった issue が8件(うち1件は暫定の挙動の記録)ある。整理を頼まれる
+#   capture: issue は無い。動作確認で見つけたバグを報告される
+#   impl:    実装を頼まれる。既にある open な issue が1件ある
+#   clean:   今の仕様のまま作り直しを頼まれる。open な issue が1件ある
 for kind in inbox capture impl clean; do
   want "$kind" || continue
   for cfg in with base; do
     name="cycle-rewrite-eval-$kind-$cfg$SUFFIX"
     create_repo midcycle "$name"
-    seed_workflow_labels "$name"
     case "$kind" in
       inbox)
+        seed_legacy_labels "$name"
         seed_midcycle_issues "$name"
-        # 実装セッションが層2で暫定の挙動を採った記録(#8)。確定を人間に聞くかを見る
+        # 暫定の挙動を採った記録(#8)。確定を人間に聞くかを見る
         issue "$name" spec-change "暫定: ブックマークHTMLの再インポートで、同じURLは重複して追加する" \
           "実装中に、保存済みと同じURLを含むHTMLをインポートしたときの挙動が PRODUCT.md・ADR・GLOSSARY.md のどこにも定められていないと判明した(暗黙の要件の発覚)。
 
@@ -530,23 +530,22 @@ for kind in inbox capture impl clean; do
 暫定で案C(今の実装のまま)を採った。確定は人間が行う。"
         ;;
       impl)
-        # 並行して動く別の作業の issue(#1)。完了報告の前の棚卸しが触らないことを見る
-        issue "$name" learning "同期の再試行はexponential backoffが必要" \
-          "同期の試作で、オフライン復帰直後に同期リクエストが連続失敗した。再試行はexponential backoffにする必要がある。" \
-          spike/sync
+        # 人間が残した問い(#1)。頼まれていないので、実装セッションが触らないことを見る
+        issue "$name" - "同期の再試行はexponential backoffにするか" \
+          "同期の試作で、オフライン復帰直後に同期リクエストが連続失敗した。再試行をexponential backoffにするかは未決。"
         ;;
       clean)
-        # 受信箱のラベルが無い普通の issue(#1)。作り直しを止めず、閉じられもしないことを見る
+        # 直す作業の issue(#1)。作り直しを止めず、閉じられもしないことを見る
         gh label create bug --color D73A4A --force -R "$OWNER/$name" >/dev/null
         issue "$name" bug "ピン留めしたブックマークが一覧の先頭に来ないことがある" \
-          "再現条件は未調査。あとで直す。" -
+          "再現条件は未調査。あとで直す。"
         ;;
     esac
   done
 done
 
 # --- postend 用 (goal: 目的のある作り直し) ---
-# 使い捨て層は消してあり、受信箱は空。旧構成のタグ cycle-1 が残っている(既存プロジェクトの移行後を再現)。
+# 使い捨て層は消してあり、open な issue は無い。旧構成のタグ cycle-1 が残っている(既存プロジェクトの移行後を再現)。
 # close 済みの issue に以前の情報(検索インデックス案等)を意図的に残し、閉じた issue を仕様のインプットにしないことを見る
 for name in "cycle-rewrite-eval-goal-with$SUFFIX" "cycle-rewrite-eval-goal-base$SUFFIX"; do
   want goal || continue
@@ -554,7 +553,7 @@ for name in "cycle-rewrite-eval-goal-with$SUFFIX" "cycle-rewrite-eval-goal-base$
   cd "$REPOS/$name"
   git tag cycle-1
   git push -q --tags
-  seed_workflow_labels "$name"
+  seed_legacy_labels "$name"
   seed_midcycle_issues "$name"
   close_all_issues "$name" "棚卸し済み" 7
 done

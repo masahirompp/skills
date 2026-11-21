@@ -59,7 +59,7 @@ dump() { # $1=repo-name $2=run-dir(iteration-N からの相対)
     test -d "$dir/tests" && echo YES || echo NO
     echo "--- GitHub labels ---"
     gh label list -R "$r" --json name --jq '.[].name'
-    echo "--- GitHub milestones (作っていないことの判定用。空が期待値) ---"
+    echo "--- GitHub milestones (作っていないことの判定用。空が期待値。ラベルは上の一覧で見る) ---"
     gh api "repos/$r/milestones?state=all" --jq '.[] | "\(.title): \(.state)"'
     echo "--- GitHub issues (all states) ---"
     gh issue list -R "$r" --state all --limit 50 --json number,title,state,labels \
@@ -67,6 +67,8 @@ dump() { # $1=repo-name $2=run-dir(iteration-N からの相対)
     echo "--- GitHub issue bodies and comments, all states (本文の判定用: 選択肢の併記・branch: の行・close 時の反映先コメントなど) ---"
     gh issue list -R "$r" --state all --limit 50 --json number,title,state,body,comments \
       --jq '.[] | "### #\(.number) [\(.state)] \(.title)\n\(.body)\n\([.comments[] | "[comment] \(.body)"] | join("\n"))\n"'
+    echo "--- commit messages, full (暫定で採った案をコミットメッセージに書いたかの判定用) ---"
+    git -C "$dir" log --format='[%h] %s%n%b'
     echo "--- changes since the initial commit (実装の判定用) ---"
     local first
     first=$(git -C "$dir" rev-list --max-parents=0 HEAD | tail -1)
@@ -82,8 +84,8 @@ dump() { # $1=repo-name $2=run-dir(iteration-N からの相対)
 
 dump "cycle-rewrite-eval-init-with-i$N"    "eval-0-init/$WITH_CFG/run-1"
 dump "cycle-rewrite-eval-init-base-i$N"    "eval-0-init/$BASE_CFG/run-1"
-dump "cycle-rewrite-eval-inbox-with-i$N"   "eval-1-rewrite-inbox/$WITH_CFG/run-1"
-dump "cycle-rewrite-eval-inbox-base-i$N"   "eval-1-rewrite-inbox/$BASE_CFG/run-1"
+dump "cycle-rewrite-eval-inbox-with-i$N"   "eval-1-inventory/$WITH_CFG/run-1"
+dump "cycle-rewrite-eval-inbox-base-i$N"   "eval-1-inventory/$BASE_CFG/run-1"
 dump "cycle-rewrite-eval-capture-with-i$N" "eval-2-capture/$WITH_CFG/run-1"
 dump "cycle-rewrite-eval-capture-base-i$N" "eval-2-capture/$BASE_CFG/run-1"
 dump "cycle-rewrite-eval-goal-with-i$N"    "eval-4-rewrite-goal/$WITH_CFG/run-1"
