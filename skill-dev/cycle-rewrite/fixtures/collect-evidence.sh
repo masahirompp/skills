@@ -18,6 +18,7 @@ OWNER="masahirompp"
 
 dump() { # $1=repo-name $2=run-dir(iteration-N からの相対)
   local dir="$REPOS/$1" out="$IT/$2/evidence.txt" r="$OWNER/$1"
+  [ -d "$IT/$2" ] || { echo "skip $1: $IT/$2 が無い" >&2; return 0; }
   {
     echo "=== repo: $1 ==="
     echo "--- git status ---"
@@ -25,7 +26,7 @@ dump() { # $1=repo-name $2=run-dir(iteration-N からの相対)
     echo "--- git log ---"
     git -C "$dir" log --oneline
     echo "--- git tags (指すコミットと作成日) ---"
-    git -C "$dir" tag -l --format='%(refname:short) %(objectname:short) %(creatordate:short)'
+    for t in $(git -C "$dir" tag -l); do echo "$t $(git -C "$dir" rev-list -n1 --abbrev-commit "$t") $(git -C "$dir" log -1 --format=%cs "$t")"; done
     echo "--- 各タグのコミットにあるルートの項目 (タグが削除より先に打たれたかの判定用) ---"
     for t in $(git -C "$dir" tag -l); do echo "[$t]"; git -C "$dir" ls-tree --name-only "$t"; done
     echo "--- remote のブランチとタグ (push 済みかの判定用) ---"
@@ -70,9 +71,9 @@ dump() { # $1=repo-name $2=run-dir(iteration-N からの相対)
     local first
     first=$(git -C "$dir" rev-list --max-parents=0 HEAD | tail -1)
     git -C "$dir" diff --stat "$first"
-    git -C "$dir" diff "$first" -- src tests | head -300
+    git -C "$dir" diff "$first" -- . ':(exclude)docs' ':(exclude)CONTEXT.md' ':(exclude)CLAUDE.md' ':(exclude)AGENTS.md' ':(exclude).claude' | head -800
     echo "--- 永続層の差分 (聞かずに反映した内容と、確認なしに仕様を書き換えていないかの判定用) ---"
-    git -C "$dir" diff "$first" -- docs CONTEXT.md CLAUDE.md AGENTS.md .claude | head -300
+    git -C "$dir" diff "$first" -- docs CONTEXT.md CLAUDE.md AGENTS.md .claude | head -600
     echo "--- git worktrees (作業ツリー外参照の後始末チェック) ---"
     git -C "$dir" worktree list
   } > "$out" 2>&1

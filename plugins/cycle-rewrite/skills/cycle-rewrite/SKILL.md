@@ -35,14 +35,16 @@ CLAUDE.md に cycle-rewrite 規約が無く、ユーザーが導入を求めて�
 | 新規プロジェクトのセットアップ | init | [references/init.md](references/init.md) |
 | 実装・動作確認中に学び/バグ/仕様変更/ハマりが出た | capture | 下記 [capture](#capture) |
 | 作業を終える・溜まった issue を整理して docs に反映したい | inventory | 下記 [棚卸し](#棚卸し) |
-| リセットしたい・作り直したい・最初の実装を始めたい | rewrite | [references/rewrite.md](references/rewrite.md) |
+| リセットしたい・作り直したい・最初の仕様を詰めたい | rewrite | [references/rewrite.md](references/rewrite.md) |
+| docs を正に実装を始める・続ける | — | 下記 [実装の規律](#実装の規律)(作り直しの手順は通らない) |
 
 状態ファイルは持たない。見るのは2つだけ: 受信箱に open な issue があるか、使い捨て層が存在するか。
 
-受信箱 = ラベル `learning` / `spec-change` / `decision-log` の付いた open な issue。
+受信箱 = ラベル `learning` / `spec-change` / `decision-log` のどれかが付いた open な issue。一覧は検索(`--search`)ではなく、open の一覧をラベルで絞って取る。検索は起票の直後の issue を返さないことがある。
 
 ```bash
-gh issue list --state open --search "label:learning,spec-change,decision-log" --limit 200
+gh issue list --state open --limit 200 --json number,title,labels,body \
+  | jq '[.[] | select(any(.labels[]; .name == "learning" or .name == "spec-change" or .name == "decision-log"))]'
 ```
 
 ## capture
@@ -53,7 +55,7 @@ gh issue list --state open --search "label:learning,spec-change,decision-log" --
 - 本文の最後に、起票したときの作業ブランチを `branch: <ブランチ名>` の1行で書く(`git branch --show-current`。worktree で動くサブエージェントは、自分のブランチではなく親の作業ブランチを書く)。棚卸しが自分の作業の分を選ぶのに使う
 - 形式は雑でよいが、内容は正確に書く。未決の設計選択を確定済みとして書いたり、原因を推測で断定したりしない
 - バグは、まず PRODUCT.md・ADR・CONTEXT.md にその挙動の仕様があるか照合する。無ければ暗黙の要件の発覚で、正しい挙動そのものが未決。期待動作を決め打ちせず、ドメイン語の選択肢(例: 重複は冪等に無視 / エラーで拒否)を併記して `spec-change` で起票する。作業を進めるために暫定の挙動で直したなら、タイトルを `暫定:` で始め、どの案を暫定で採ったかを書く(層2)
-- 起票に承認は要らない。人間の回答を待たずに起票してから作業を続ける。その場で docs を直さない。起票のたびに蒸留や確認を挟むと捕捉が律速され、学びが漏れ始める。蒸留は棚卸しで行う
+- 起票に承認は要らない。人間の回答を待たずに起票してから作業を続ける。その場で docs を直さない。起票のたびに蒸留や確認を挟むと捕捉が律速され、学びが漏れ始める。蒸留と人間への確認は、応答を終える前の棚卸しで行う
 - 直し残したバグや後でやる作業は受信箱に入れない(受信箱のラベルを付けない普通の issue にする)。受信箱は docs に反映したら閉じるもので、作業の管理には使わない
 
 ## 棚卸し
@@ -62,15 +64,17 @@ gh issue list --state open --search "label:learning,spec-change,decision-log" --
 
 | いつ | 対象 |
 | --- | --- |
-| 完了報告の前 | `branch:` が今の作業ブランチの issue(前のセッションが同じブランチに残した分も拾う) |
+| 完了報告の前 | `branch:` がこのセッションの作業ブランチの issue(前のセッションが同じブランチに残した分も拾う) |
 | 人間に整理を頼まれたとき | 受信箱の open 全件(頼まれた範囲があればその範囲) |
 | 作り直しの前 | 受信箱の open 全件 |
+
+完了報告は、頼まれた作業を終えて人間に応答を返すとき。バグの報告を受けて起票しただけの短いやり取りでも、応答を終える前に棚卸しをする。途中でブランチを切り替えたり統合したりしていても、対象はこのセッションが起票に書いたブランチで選ぶ。
 
 完了報告の前の対象をブランチで絞るのは、並行して動くほかの作業の issue を、経緯を知らないセッションが確定させないため。`branch:` の無い issue と、もう無いブランチの issue は、全件を対象にする棚卸しで拾う。
 
 ```bash
-gh issue list --state open --search "label:learning,spec-change,decision-log" --limit 200 --json number,title,body \
-  | jq --arg b "branch: $(git branch --show-current)" '.[] | select(.body | split("\n") | map(sub("\\s+$"; "")) | index($b)) | {number, title}'
+gh issue list --state open --limit 200 --json number,title,labels,body \
+  | jq --arg b "branch: $(git branch --show-current)" '.[] | select(any(.labels[]; .name == "learning" or .name == "spec-change" or .name == "decision-log")) | select(.body | split("\n") | map(sub("\\s+$"; "")) | index($b)) | {number, title}'
 ```
 
 1件ごとに宛先を決める。判断基準は「コードを全部捨てた後も、この知見は真か」。
@@ -78,18 +82,20 @@ gh issue list --state open --search "label:learning,spec-change,decision-log" --
 | 学びの種別 | 宛先 |
 | --- | --- |
 | 仕様: 判明した要件、やらないと決めた機能 | `docs/PRODUCT.md`(やらないことは Out of Scope に理由付きで。受け入れ条件は Testing Decisions) |
+| 用語: ドメインの言葉の追加・変更・廃止 | `CONTEXT.md` |
 | 設計判断: 作り直しても覆らない判断、採用しなかった案とその理由 | `docs/adr/`(新規、または既存 ADR のステータス遷移) |
 | 実装・環境のハマり | `.claude/skills/`(ライブラリ・ツール単位で1スキルに集約。既存があれば追記) |
 | プロセス: 進め方のルール | `CLAUDE.md` / `AGENTS.md` |
 | 捨てるコードに紐づくだけの判断 | 反映せず閉じる |
 
-**人間が決めるのは、仕様・`暫定:` の確定・ADR の新規作成と遷移だけ。** これらは issue ごとにドメイン語の選択肢で聞き、決まってから docs に反映して閉じる。それ以外(スキルや CLAUDE.md への追記、反映不要の close)は聞かずに反映して閉じ、何をどこへ反映したかを報告する。3層の自律判断と同じ線で、戻す手段は git 履歴。
+**人間が決めるのは、仕様(PRODUCT.md の要件と CONTEXT.md の用語)・`暫定:` の確定・ADR の新規作成と遷移だけ。** これらは issue ごとにドメイン語の選択肢で聞き、決まってから docs に反映して閉じる。それ以外(スキルや CLAUDE.md への追記、反映不要の close)は聞かずに反映して閉じ、何をどこへ反映したかを報告する。3層の自律判断と同じ線で、戻す手段は git 履歴。
 
 人間の回答が要る issue は、完了報告の中でまとめて聞く。答えが出なかったものは open のまま残してよい(次の棚卸しか作り直しの前に拾う)。
 
+- 1件が複数の宛先を持つことがある(例: 環境のハマりが、新しい要件も含む)。聞かずに済む分は先に反映し、人間が決める分が残る間は open のままにする
 - 「既存 docs と矛盾しない」は close の理由にならない。ライブラリのハマりのような加算的な知見こそ置き場を必要とする
 - 採用可否に関わるライブラリの学び(例: 「Fuse.js は5000件超で破綻」)は ADR へ、使い方の罠(例: 「dexie はトランザクション内 await で即コミット」)はスキルへ。前者をスキルにすると、覆った ADR が accepted のまま尊重され続ける
-- 覆った ADR は削除せず、frontmatter の `status` を `superseded by ADR-NNNN` か `deprecated` に変える。削除すると「なぜ捨てたか」が消え、同じ案が再採用される
+- 覆った ADR は削除せず、frontmatter の `status` を `superseded by ADR-NNNN` か `deprecated` に変える(既存の ADR が本文の `Status:` 行を使っていれば、その書式に合わせる)。削除すると「なぜ捨てたか」が消え、同じ案が再採用される
 - 仕様が変わったら、旧方向の記述(CONTEXT.md の用語、スキル、README 等)も同じ棚卸しで落とす。残すと docs だけを読む次のセッションが汚染される
 - 閉じるときは、反映先を1行コメントで残す。専用の学びファイル(LEARNINGS.md 等)は作らない
 
@@ -110,6 +116,6 @@ init が CLAUDE.md に書き込むルール。
 
 ## 共通の規律
 
-- **テスト**: 人間が手動確認できる規模の間は省略してよい。追いつかなくなったら PRODUCT.md の Testing Decisions から生成する。作り直しでテストコードは持ち越さない(精査コストが再利用の利益を上回る)
+- **テスト**: 人間が手動確認できる規模の間は省略してよい。追いつかなくなったら PRODUCT.md の Testing Decisions から生成する。作り直しでテストコードは持ち越さない(精査コストが再利用の利益を上回る)。残すと決めたコードのテストは例外で、コードと一緒に残す
 - **コンテキスト汚染防止**: 作り直す前のコードを作業ツリーに置かない(AI が読んで流用する)。参照は `git show <タグ>:src/...` か作業ツリー外の `git worktree`
 - 作り直しの区切りはタグで行い、リポジトリ・サブフォルダでは分けない(資産の分断、コンテキスト汚染のため)

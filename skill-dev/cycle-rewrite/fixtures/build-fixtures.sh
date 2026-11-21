@@ -25,7 +25,7 @@ seed_agents_docs() {
   local dir="$1"
   # setup-matt-pocock-skills はプラグイン配布に移行済み — キャッシュ内の最新バージョンを使う
   local mps
-  mps="$(ls -d "$HOME/.claude/plugins/cache/mattpocock/mattpocock-skills"/*/skills/engineering/setup-matt-pocock-skills 2>/dev/null | sort -V | tail -1)"
+  mps="$(ls -d "$HOME/.claude/plugins/cache/mattpocock/mattpocock-skills"/*/skills/engineering/setup-matt-pocock-skills 2>/dev/null | sort -V | tail -1 || true)"
   [ -n "$mps" ] || { echo "setup-matt-pocock-skills が見つからない (mattpocock-skills プラグインをインストールすること)" >&2; exit 1; }
   mkdir -p "$dir/docs/agents"
   cp "$mps/issue-tracker-github.md" "$dir/docs/agents/issue-tracker.md"
@@ -500,15 +500,19 @@ branch: $b"
   gh issue create -R "$OWNER/$1" --label "$2" --title "$3" --body "$body" >/dev/null
 }
 
-# issue list は作成直後に反映が遅れることがあるため、open が 0 になるまで再試行する
-close_all_issues() { # $1=repo-name $2=comment
-  local nums
-  for _ in 1 2 3 4 5; do
+# issue list は作成直後に反映が遅れることがあるため、closed が期待の件数になるまで再試行する
+# (open が空かどうかで終えると、一覧にまだ出ていないだけの issue を閉じ残す)
+close_all_issues() { # $1=repo-name $2=comment $3=期待する件数
+  local nums closed
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
     nums=$(gh issue list -R "$OWNER/$1" --state open --json number --jq '.[].number')
-    [ -z "$nums" ] && break
-    echo "$nums" | xargs -I{} gh issue close {} -R "$OWNER/$1" -c "$2" >/dev/null
+    [ -z "$nums" ] || echo "$nums" | xargs -I{} gh issue close {} -R "$OWNER/$1" -c "$2" >/dev/null
+    closed=$(gh issue list -R "$OWNER/$1" --state closed --json number --jq 'length')
+    [ "${closed:-0}" -ge "$3" ] && return 0
     sleep 2
   done
+  echo "close_all_issues: $1 の closed が $3 件に届かない(${closed:-0} 件)" >&2
+  return 1
 }
 
 # 番号は起票順(#1〜#7)。eval の assertion がこの番号を参照する
@@ -569,6 +573,7 @@ for kind in inbox capture impl clean; do
         ;;
       clean)
         # 受信箱のラベルが無い普通の issue(#1)。作り直しを止めず、閉じられもしないことを見る
+        gh label create bug --color D73A4A --force -R "$OWNER/$name" >/dev/null
         issue "$name" bug "ピン留めしたブックマークが一覧の先頭に来ないことがある" \
           "再現条件は未調査。あとで直す。" -
         ;;
@@ -587,7 +592,7 @@ for name in "cycle-rewrite-eval-goal-with$SUFFIX" "cycle-rewrite-eval-goal-base$
   git push -q --tags
   seed_workflow_labels "$name"
   seed_midcycle_issues "$name"
-  close_all_issues "$name" "棚卸し済み"
+  close_all_issues "$name" "棚卸し済み" 7
 done
 
 echo "done"
