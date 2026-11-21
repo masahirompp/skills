@@ -24,7 +24,7 @@ AI 開発ではコード生成速度が人間の理解速度を上回り、人�
 
 層の実パスは init で確定し、CLAUDE.md の規約ブロック「層の定義」に記録する。作り直しの削除対象はそこを正とする。本スキルの `src/` はその略記。
 
-前提: mattpocock-skills の grilling・domain-modeling(補助に prototype)と GitHub(issue・gh CLI)。仕様詰めは grilling を domain-modeling と併用して行う(ユーザー起動の /grill-with-docs と同じ組み合わせ。/grill-with-docs は Claude からは起動できない)。
+前提: mattpocock-skills の grilling・domain-modeling と GitHub(issue・gh CLI)。仕様詰めは grilling を domain-modeling と併用して行う(ユーザー起動の /grill-with-docs と同じ組み合わせ。/grill-with-docs は Claude からは起動できない)。
 
 CLAUDE.md に cycle-rewrite 規約が無く、ユーザーが導入を求めてもいないプロジェクトには勝手に適用しない。方式を短く紹介し、導入の意思を確認してから init に進む。
 
@@ -102,7 +102,7 @@ gh issue list --state open --limit 200 --json number,title,labels,body \
 ## 実装の規律
 
 - **インプットは docs**: 仕様は PRODUCT.md・ADR・CONTEXT.md を正とする。完了条件は PRODUCT.md の Testing Decisions。docs の書き漏れで詰まったら、それ自体が capture 対象の学び
-- **進め方は委ねる**: 受け入れシナリオなら直接実装、設計上の問いなら /prototype(得た答えと試作ブランチの場所は capture で起票する)。分割・並列化はセッション内で自律に行い、受信箱の issue を作業の割り振りに使わない
+- **進め方は委ねる**: 分割・並列化はセッション内で自律に行い、受信箱の issue を作業の割り振りに使わない
 - **停止条件**: 完了条件を満たすまで自律で進める。途中で人間に止めてよいのは、層2のうち docs に定めた挙動の変更と、層3だけ
 - **完了報告**: 棚卸しを済ませ、反映した内容と、人間の回答が要る issue(`暫定:` を含む)を示す
 
