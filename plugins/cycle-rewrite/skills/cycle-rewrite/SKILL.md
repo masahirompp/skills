@@ -50,6 +50,7 @@ gh issue list --state open --search "label:learning,spec-change,decision-log" --
 学びを、発見の都度 GitHub issue に起票する。
 
 - ラベル: `learning`(コードを捨てても再発しうるハマり・想定外挙動)、`spec-change`(仕様変更、暗黙の要件の発覚)、`decision-log`(AI の内部設計判断)
+- 本文の最後に、起票したときの作業ブランチを `branch: <ブランチ名>` の1行で書く(`git branch --show-current`。worktree で動くサブエージェントは、自分のブランチではなく親の作業ブランチを書く)。棚卸しが自分の作業の分を選ぶのに使う
 - 形式は雑でよいが、内容は正確に書く。未決の設計選択を確定済みとして書いたり、原因を推測で断定したりしない
 - バグは、まず PRODUCT.md・ADR・CONTEXT.md にその挙動の仕様があるか照合する。無ければ暗黙の要件の発覚で、正しい挙動そのものが未決。期待動作を決め打ちせず、ドメイン語の選択肢(例: 重複は冪等に無視 / エラーで拒否)を併記して `spec-change` で起票する。作業を進めるために暫定の挙動で直したなら、タイトルを `暫定:` で始め、どの案を暫定で採ったかを書く(層2)
 - 起票に承認は要らない。人間の回答を待たずに起票してから作業を続ける。その場で docs を直さない。起票のたびに蒸留や確認を挟むと捕捉が律速され、学びが漏れ始める。蒸留は棚卸しで行う
@@ -57,7 +58,20 @@ gh issue list --state open --search "label:learning,spec-change,decision-log" --
 
 ## 棚卸し
 
-受信箱の issue を docs に反映して閉じる。完了報告の前に行う。人間に頼まれたときと、作り直しの前にも行う。対象は受信箱の open 全件で、前のセッションが残した分もここで拾う。
+受信箱の issue を docs に反映して閉じる。行うのは次の3つのとき。
+
+| いつ | 対象 |
+| --- | --- |
+| 完了報告の前 | `branch:` が今の作業ブランチの issue(前のセッションが同じブランチに残した分も拾う) |
+| 人間に整理を頼まれたとき | 受信箱の open 全件(頼まれた範囲があればその範囲) |
+| 作り直しの前 | 受信箱の open 全件 |
+
+完了報告の前の対象をブランチで絞るのは、並行して動くほかの作業の issue を、経緯を知らないセッションが確定させないため。`branch:` の無い issue と、もう無いブランチの issue は、全件を対象にする棚卸しで拾う。
+
+```bash
+gh issue list --state open --search "label:learning,spec-change,decision-log" --limit 200 --json number,title,body \
+  | jq --arg b "branch: $(git branch --show-current)" '.[] | select(.body | split("\n") | map(sub("\\s+$"; "")) | index($b)) | {number, title}'
+```
 
 1件ごとに宛先を決める。判断基準は「コードを全部捨てた後も、この知見は真か」。
 
