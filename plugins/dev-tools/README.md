@@ -18,7 +18,7 @@ open な issue は、振り分ける、詰める、片付ける、の3つの工�
 | 片付ける | `/dev-tools:next-issues`（中で `issue-check` と `review-loop` を使う） | 計画、マージ、本番リリースの直前に承認する | 本番リリース1回 | 着手できる issue があるとき |
 
 ```
-新しい issue（人間の起票、next-issues が範囲外で見つけた問題、review-loop で直さなかった指摘）
+新しい issue（人間の起票、next-issues や review-loop がそのセッションで直せなかった、実害のある問題）
   │
   ▼
 振り分ける（issue-triage）
@@ -32,7 +32,7 @@ open な issue は、振り分ける、詰める、片付ける、の3つの工�
 
 片付ける（next-issues）
   issue-check → 実装 → review-loop → マージ → 本番リリース → 本番での確認
-  └─ 範囲外で見つけた問題を起票する → 新しい issue
+  └─ 見つけた問題はその場で直す。直せなかった実害のある問題だけ起票する → 新しい issue
 ```
 
 工程は一方向に1回ずつ流れるのではなく、振り分けが issue ごとの行き先を決める。
@@ -63,7 +63,9 @@ grilling は mattpocock/skills のプラグインに入っている。入れて�
 `next-issues` はラベルを読むだけで書き換えない。状態のラベルが無い issue と `ready-for-agent` だけを候補にし、価値のラベルを優先度に使う。
 振り分けで次に片付けると決めた issue があれば、番号を引数で渡すと、ラベルより優先して候補の先頭に置く（例: `/dev-tools:next-issues 53`）。
 `next-issues` は、`needs-triage` のうち価値が最も高い issue（まだ評価していないものが多ければ、全体の振り分けも添える）、着手前の判定で詰める必要があると分かった issue（やらない候補を含む）、着手できる候補が無いときの次の一手として、`issue-triage` を勧める。
-範囲外で見つけた問題は起票し、次の振り分けに回る。
+作業の途中で見つけた問題（範囲外の問題、`review-loop` が直さなかった指摘）は、`next-issues` が裁定して、そのセッションの中で直すか、残さないかに決める。
+起票するのは、実害が確かめられていて、そのセッションでは直せなかったものだけで、それが次の振り分けに回る。
+裁定の基準は [next-issues の SKILL.md](skills/next-issues/SKILL.md) の「見つけた問題の扱い」が定める。
 
 ## issue-check を呼ぶ場所
 
