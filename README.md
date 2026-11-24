@@ -32,7 +32,7 @@ skill-dev/                  # 開発用資産（どのプラグインにも含�
 | [housekeeping](plugins/dev-tools/skills/housekeeping/SKILL.md) | dev-tools | git リポジトリの後片付け。PR マージ済み・ローカルでマージ済みのブランチと worktree をまとめて削除する。作業中のものと監査用ブランチ（entire.io の `entire/*`）は残す |
 | [issue-check](plugins/dev-tools/skills/issue-check/SKILL.md) | dev-tools | 開発・企画・施策の依頼を着手前に判定する。課題は本物か、提案された手段はその課題を解くかを、依頼の重さに応じた深さで確かめ、判定だけを返す。作業自体は行わない |
 | [issue-triage](plugins/dev-tools/skills/issue-triage/SKILL.md) | dev-tools | issue を着手できる状態に持っていく。引数なしでは open な issue を見比べ、解く価値（起きたときの結果と起きやすさ）と準備の度合いで、着手できる・詰める・待つ・やらないに振り分ける。issue 番号を渡すと、その1件を issue-check、観測、grilling で詰めて本文に反映する。人間が承認した振り分けと価値を、ラベル（状態は mattpocock/skills の triage と同じ語彙、価値は `priority:high/medium/low`）とコメントで残す。`/dev-tools:issue-triage` と名指しで呼んだときだけ動く |
-| [next-issues](plugins/dev-tools/skills/next-issues/SKILL.md) | dev-tools | 次の1回の本番リリースで出す issue を選び、計画の承認、PR 作成とレビュー、マージ、本番リリースと本番での確認までを一続きで終わらせる。選ぶ前に候補を issue-check で判定する。`/dev-tools:next-issues` と名指しで呼んだときだけ動く |
+| [next-issues](plugins/dev-tools/skills/next-issues/SKILL.md) | dev-tools | 次の1回の本番リリースで出す issue を選び、計画の承認、PR 作成とレビュー、マージ、本番リリースと本番での確認までを一続きで終わらせる。選ぶ前に候補を issue-check で判定し、詰める必要のある issue は issue-triage で詰める。`/dev-tools:next-issues` と名指しで呼んだときだけ動く |
 | [review-loop](plugins/dev-tools/skills/review-loop/SKILL.md) | dev-tools | 自分の PR のレビューループ。レビュースキルを並行に実行し、指摘のうち再現できたものだけを直す、を直す対象が無くなるまで回す |
 
 dev-tools の issue を扱うスキル（issue-triage・issue-check・next-issues・review-loop）を、どの順でどのセッションで使うかは [plugins/dev-tools/README.md](plugins/dev-tools/README.md) にまとめている。
