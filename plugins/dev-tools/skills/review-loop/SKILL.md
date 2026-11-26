@@ -33,7 +33,7 @@ description: >-
 1. 作業ツリーがクリーンで、HEAD が PR の head と同じことを確かめる(`git status --short` が空、`gh pr view <PR番号> --json headRefOid,state,author`)。経緯を読み、これが何回目の反復かと、以前に採らなかった指摘を把握する
 2. レビュー役を、同じターンで全て呼ぶ。過去の指摘や採否は、引数にも指示にも書かない
    - `code-review` と `security-review` は、Skill ツールで呼ぶ。引数は `high <PR番号>`(`security-review` は引数なし)
-   - Codex は、Bash ツールのバックグラウンドで `git fetch origin <base> && codex review --base origin/<base> > <出力のファイル> 2>&1` を流す(`<base>` は `gh pr view <PR番号> --json baseRefName` の値。出力のファイルは `mktemp` で作業ツリーの外に作る)。終了コードが 0 なら、出力のファイルを読んで指摘を取り出す。0 以外は失敗として扱う
+   - Codex は、Bash ツールのバックグラウンドで `git fetch origin <base> && codex review -c model_reasoning_effort=high --base origin/<base> > <出力のファイル> 2>&1` を流す(effort は各自の `~/.codex/config.toml` に任せず、ここで high にする。モデルは指定しない。`<base>` は `gh pr view <PR番号> --json baseRefName` の値。出力のファイルは `mktemp` で作業ツリーの外に作る)。終了コードが 0 なら、出力のファイルを読んで指摘を取り出し、冒頭の `model:` と `reasoning effort:` の値を控える(経緯に残す)。0 以外は失敗として扱う
 3. `security-review` は、手順の本文があなたの文脈に読み込まれる。その手順に、段を省かずに従う(サブタスクの起動を求めていれば、そのとおりに起動する)。従うあいだは、経緯にある以前の採否を使わない(候補を落とす理由にしない)。採否は手順2で決める。その手順が「最後の返答はレポートだけ」と求めていても、レポートを出したら、このループの手順を続ける
 4. 完了の通知で届く分も含めて、全ての結果がそろうまで待つ。そろったら、`git status --short` が空で、HEAD が変わっていないことを確かめる。変わっていれば、変更を取り除いて、この手順をやり直す
 
@@ -107,6 +107,7 @@ tar -xf <F>/before.tar -C <F>/before
 ## レビューループの経緯
 
 ### 反復 2(レビューした SHA: f5acefd)
+- Codex: <出力の `model:`> / <出力の `reasoning effort:`>(例: gpt-6-astra / high。Codex なしなら「Codex なし」と理由)
 - 直した: <指摘の要約>(<コミットの SHA>。再現: <1行>)
 - 直さなかった: <対象だった指摘の要約> — <起きなかった / 再現を作れなかった / 以前に採らなかった / 利用者の判断>と、理由
 - 未決: <判断を仰いでいること>
