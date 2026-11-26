@@ -51,7 +51,7 @@ Opus 5.5 で測った。数字の出どころは `results/` の各 `report.md` �
 
 - code-review high が単独で最も多く見つけた(54%)。観点明示型 44%、観点を書かない形 38%。後の2つの差は誤差の範囲
 - security-review と mattpocock-skills:code-review は、それだけが見つけた不具合が0〜1件だった。ただし、題材にセキュリティの不具合がほとんど無い
-- code-review high を2回流して合わせると、28〜32件(68〜78%)。前の既定(code-review、security-review、mattpocock-skills:code-review を1回ずつ)は 21〜27件(51〜66%)で、本物でない余計な指摘は題材あたり 7.0〜7.7件に対し 11.1〜11.5件、費用は $1.22 に対し $2.09 だった(`results/pr/repeat.md`)。`results/pr` では、code-review の3回を全て合わせても見つからず、この2つのスキル(各1回)が見つけた不具合は無い。これをもとに、既定を code-review high 2つと security-review にした
+- code-review high を2回流して合わせると、28〜32件(68〜78%)。前の既定(code-review、security-review、mattpocock-skills:code-review を1回ずつ)は 21〜27件(51〜66%)で、本物でない余計な指摘は題材あたり 7.0〜7.7件に対し 11.1〜11.5件、費用は $1.22 に対し $2.09 だった(`results/pr/repeat.md`)。`results/pr` では、code-review の3回を全て合わせても見つからず、この2つのスキル(各1回)が見つけた不具合は無い。これをもとに、既定を code-review high 2つと security-review にした(その後、2026-11-26 に利用者の指示で、code-review high 1つ、security-review、Codex のレビューに改めた。この構成はこの表では測っていない)
 - 上の差は、PR なしの形(`results/main`)では小さい。2回分が 21〜26件、前の既定が 20〜24件で、幅が重なる。そこでは、code-review の3回が見つけず、mattpocock-skills:code-review だけが見つけた不具合が1件(W306-7)、security-review だけが1件(W306-6)ある
 - mattpocock-skills:code-review を外したのは、費用(題材あたり $1.08)と余計な指摘(単独で 7.9件)のため。失うものが無いとは言えない。設計・方針の水準の問題は、この表では測っていない。別に、`trials/2026-11-16-policy-overview/policy-review/criteria/` の基準(sk-13、sk-14、sk-16 の18項目)で `results/pr` の出力(1回分)を採点すると、○ は2件で、どちらも code-review high が3回のうち2回以上で挙げていた(3題材、1回分、採点は LLM の判断で、どの出力かを知っている)
 - security-review を残したのは、同じく外す影響を測れておらず、こちらは安い(題材あたり $0.40、余計な指摘0件)ため
