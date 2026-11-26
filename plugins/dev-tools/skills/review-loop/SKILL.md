@@ -24,20 +24,20 @@ description: >-
 
 - 対象は、自分が作成した、オープンな PR
 - セッションの作業ディレクトリが、PR のブランチの worktree のトップ(レビュー役はそこで動くので、ほかの場所から呼ぶと別のリポジトリをレビューする)
-- 既定のレビュー役は、Claude の `code-review high <PR番号>`、Claude の `security-review`、Codex のレビュー(`codex review`)を1回ずつ。`code-review` のレベルは毎回書く(書かないと、利用者が最後に使ったレベルを引き継ぐ)。`command -v codex` で codex が見つからない環境では、Codex のレビューは無しで、残りの2つで進める(経緯に「Codex なし」と残す)。利用者が別の構成を指示したら、それに従う
+- 既定のレビュー役は、Claude の `code-review high <PR番号>`、Claude の `security-review`、Codex のレビュー(`codex review`)を1回ずつ。`code-review` のレベルは毎回書く(書かないと、利用者が最後に使ったレベルを引き継ぐ)。`command -v codex` で codex が見つからない環境では、Codex のレビューは無しで、残りの2つで進める(経緯に「Codex なし」と残す)。「Codex なし」にするのは codex が見つからないときだけで、codex が起動に失敗したときは、ほかのレビュー役と同じく失敗として扱う(手順1)。利用者が別の構成を指示したら、それに従う
 
 ## 手順
 
 ### 1. レビューする
 
-1. 作業ツリーがクリーンで、HEAD が PR の head と同じことを確かめる(`git status --short` が空、`gh pr view <PR番号> --json headRefOid,state,author`)。経緯を読み、これが何回目の反復かと、以前に採らなかった指摘を把握する
+1. 作業ディレクトリが PR のブランチの worktree のトップで、作業ツリーがクリーンで、HEAD が PR の head と同じことを確かめる(`git rev-parse --show-toplevel` が作業ディレクトリと同じ、`git branch --show-current` が PR の `headRefName`、`git status --short` が空、`gh pr view <PR番号> --json headRefName,headRefOid,state,author`)。作業ディレクトリが違えば、レビュー役を呼ばずに判断を仰ぐ(レビュー役の向け先を変えて合わせない。ほかのレビュー役が別の場所をレビューしているのが隠れる)。経緯を読み、これが何回目の反復かと、以前に採らなかった指摘を把握する
 2. レビュー役を、同じターンで全て呼ぶ。過去の指摘や採否は、引数にも指示にも書かない
    - `code-review` と `security-review` は、Skill ツールで呼ぶ。引数は `high <PR番号>`(`security-review` は引数なし)
-   - Codex は、Bash ツールのバックグラウンドで `git fetch origin <base> && codex review -c model_reasoning_effort=high --base origin/<base> > <出力のファイル> 2>&1` を流す(effort は各自の `~/.codex/config.toml` に任せず、ここで high にする。モデルは指定しない。`<base>` は `gh pr view <PR番号> --json baseRefName` の値。出力のファイルは `mktemp` で作業ツリーの外に作る)。終了コードが 0 なら、出力のファイルを読んで指摘を取り出し、冒頭の `model:` と `reasoning effort:` の値を控える(経緯に残す)。0 以外は失敗として扱う
+   - Codex は、先に `git fetch origin <base>` を単体で流してから、Bash ツールのバックグラウンドで `codex review -c model_reasoning_effort=high --base origin/<base>` を**単体で**流す(effort は各自の `~/.codex/config.toml` に任せず、ここで high にする。モデルは指定しない。`<base>` は `gh pr view <PR番号> --json baseRefName` の値)。ファイルへの書き出し(`>`)、`&&`、`;`、`$(...)` と組み合わせない。組み合わせると、sandbox の外で動かす設定(`sandbox.excludedCommands`)が効かずに sandbox の中で動き、`failed to initialize in-process app-server client: Operation not permitted` で落ちる。worktree に入ったセッションでは、git を含む複合コマンドとして拒まれもする。終了コードが 0 なら、バックグラウンド実行の出力ファイルを読んで指摘を取り出し、冒頭の `model:` と `reasoning effort:` の値を控える(経緯に残す)。0 以外は失敗として扱う
 3. `security-review` は、手順の本文があなたの文脈に読み込まれる。その手順に、段を省かずに従う(サブタスクの起動を求めていれば、そのとおりに起動する)。従うあいだは、経緯にある以前の採否を使わない(候補を落とす理由にしない)。採否は手順2で決める。その手順が「最後の返答はレポートだけ」と求めていても、レポートを出したら、このループの手順を続ける
 4. 完了の通知で届く分も含めて、全ての結果がそろうまで待つ。そろったら、`git status --short` が空で、HEAD が変わっていないことを確かめる。変わっていれば、変更を取り除いて、この手順をやり直す
 
-レビュー役が失敗したら(エラー、対象の取り違え)、1回だけやり直す。同じ原因で2回続けて失敗したら、判断を仰ぐ。
+レビュー役が失敗したら(エラー、対象の取り違え)、1回だけやり直す。同じ原因で2回続けて失敗したら、判断を仰ぐ。そのときは、エラーの文言を経緯に残す。`Operation not permitted` のように環境から来る失敗は、次の PR でも起きるので、そう添える。
 
 **完了**: 全てのレビュー役の結果が手元にあり、作業ツリーと HEAD がレビューの前と同じ。
 
